@@ -7,12 +7,12 @@ use crate::header::MAGIC_RAW;
 pub struct RawStream {
     output_stream: Option<BufWriter<File>>,
     input_stream: Option<BufReader<File>>,
-    width: u16,
-    height: u16,
-    tps: DeltaT,
-    ref_interval: DeltaT,
-    delta_t_max: DeltaT,
-    channels: u8,
+    pub width: u16,
+    pub height: u16,
+    pub tps: DeltaT,
+    pub ref_interval: DeltaT,
+    pub delta_t_max: DeltaT,
+    pub channels: u8,
     event_size: u8,
 }
 
