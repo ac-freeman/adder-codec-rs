@@ -21,7 +21,7 @@ pub type Intensity = f32;
 /// Pixel x- or y- coordinate address in the ADΔER model
 pub type PixelAddress = u16;
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub struct Coord {
     pub x: PixelAddress,
     pub y: PixelAddress,
@@ -29,7 +29,7 @@ pub struct Coord {
 }
 
 /// An ADΔER event representation
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub struct Event {
     pub coord: Coord,
     pub d: D,
@@ -80,28 +80,35 @@ pub trait Codec {
     }
 
     fn open_reader<P: AsRef<Path>>(&mut self, path: P) -> Result<(), std::io::Error>{
-        let file = File::create(&path)?;
+        let file = File::open(&path)?;
         self.set_input_stream(Some(BufReader::new(file)));
         Ok(())
     }
 
     /// Flush the stream so that program can be exited safely
+    fn flush_writer(&mut self);
     fn close_writer(&mut self);
 
-    /// Flush the stream so that program can be exited safely
+    /// Close the stream so that program can be exited safely
     fn close_reader(&mut self);
 
     fn set_output_stream(&mut self, stream: Option<BufWriter<File>>);
     fn set_input_stream(&mut self, stream: Option<BufReader<File>>);
 
-    fn serialize_header(&mut self,
-                        width: u16,
-                        height: u16,
-                        tps: u32,
-                        ref_interval: u32,
-                        delta_t_max: u32,
-                        channels: u8);
+    fn encode_header(&mut self,
+                     width: u16,
+                     height: u16,
+                     tps: u32,
+                     ref_interval: u32,
+                     delta_t_max: u32,
+                     channels: u8);
+
+    fn decode_header(&mut self);
+
     fn encode_event(&mut self, event: &Event);
+    fn decode_event(&mut self) -> Result<Event, std::io::Error>;
+
+
 }
 
 

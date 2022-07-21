@@ -9,16 +9,16 @@ pub(crate) const MAGIC_COMPRESSED: Magic = ['a' as u8,'d' as u8,'d' as u8,'e' as
 /// of the compressed format.
 #[derive(Debug, Default, Clone)]
 pub(crate) struct EventStreamHeader {
-    pub magic: Magic,
-    version: u8,
-    endianness: u8, // 'b' = big endian
-    width: u16,
-    height: u16,
-    tps: u32,
-    ref_interval: u32,
-    delta_t_max: u32,
-    event_size: u8,
-    channels: u8,
+    pub(crate) magic: Magic,
+    pub(crate) version: u8,
+    pub(crate) endianness: u8, // 'b' = big endian
+    pub(crate) width: u16,
+    pub(crate) height: u16,
+    pub(crate) tps: u32,
+    pub(crate) ref_interval: u32,
+    pub(crate) delta_t_max: u32,
+    pub(crate) event_size: u8,
+    pub(crate) channels: u8,
 }
 
 use std::io::{BufReader, Read};
@@ -68,7 +68,7 @@ impl EventStreamHeader {
         header.magic = [
             byte_buffer.get_u8(), byte_buffer.get_u8(), byte_buffer.get_u8(), byte_buffer.get_u8(), byte_buffer.get_u8()
             ];
-        assert_eq!(header.magic, MAGIC_RAW);
+        assert!(header.magic == MAGIC_RAW || header.magic == MAGIC_COMPRESSED);
         header.version = byte_buffer.get_u8();
         header.endianness = byte_buffer.get_u8();
         header.width = byte_buffer.get_u16();
