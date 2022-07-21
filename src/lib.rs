@@ -1,5 +1,5 @@
 use std::fs::File;
-use std::io::BufWriter;
+use std::io::{BufReader, BufWriter};
 use std::path::Path;
 use bytes::Bytes;
 use crate::header::EventStreamHeader;
@@ -81,11 +81,18 @@ pub trait Codec {
 
     fn open_reader<P: AsRef<Path>>(&mut self, path: P) -> Result<(), std::io::Error>{
         let file = File::create(&path)?;
-        self.set_input_stream(Some(BufWriter::new(file)));
+        self.set_input_stream(Some(BufReader::new(file)));
         Ok(())
     }
+
+    /// Flush the stream so that program can be exited safely
+    fn close_writer(&mut self);
+
+    /// Flush the stream so that program can be exited safely
+    fn close_reader(&mut self);
+
     fn set_output_stream(&mut self, stream: Option<BufWriter<File>>);
-    fn set_input_stream(&mut self, stream: Option<BufWriter<File>>);
+    fn set_input_stream(&mut self, stream: Option<BufReader<File>>);
 
     fn serialize_header(&mut self,
                         width: u16,

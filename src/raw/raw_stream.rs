@@ -1,17 +1,17 @@
 use std::fs::File;
-use std::io::{BufWriter, Write};
+use std::io::{BufReader, BufWriter, Write};
 use bytes::Bytes;
 use crate::{Codec, DeltaT, Event, EventStreamHeader};
 use crate::header::MAGIC_RAW;
 
 pub struct RawStream {
     output_stream: Option<BufWriter<File>>,
-    input_stream: Option<BufWriter<File>>,
+    input_stream: Option<BufReader<File>>,
     width: u16,
     height: u16,
-    tps: u32,
-    ref_interval: u32,
-    delta_t_max: u32,
+    tps: DeltaT,
+    ref_interval: DeltaT,
+    delta_t_max: DeltaT,
     channels: u8,
 }
 
@@ -29,20 +29,39 @@ impl Codec for RawStream {
         }
     }
 
+    fn close_writer(&mut self) {
+        match &mut self.output_stream {
+            None => {}
+            Some(stream) => {
+                stream.flush().unwrap();
+                std::mem::drop(stream);
+            }
+        }
+    }
+
+    fn close_reader(&mut self) {
+        match &mut self.input_stream {
+            None => {}
+            Some(stream) => {
+                std::mem::drop(stream);
+            }
+        }
+    }
+
     fn set_output_stream(&mut self, stream: Option<BufWriter<File>>) {
         self.output_stream = stream;
     }
 
-    fn set_input_stream(&mut self, stream: Option<BufWriter<File>>) {
+    fn set_input_stream(&mut self, stream: Option<BufReader<File>>) {
         self.input_stream = stream;
     }
 
     fn serialize_header(&mut self,
                         width: u16,
                         height: u16,
-                        tps: u32,
-                        ref_interval: u32,
-                        delta_t_max: u32,
+                        tps: DeltaT,
+                        ref_interval: DeltaT,
+                        delta_t_max: DeltaT,
                         channels: u8) {
         self.width = width;
         self.height = height;

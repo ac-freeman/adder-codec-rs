@@ -14,8 +14,8 @@ fn test_encode_header_non_init() {
 
 #[test]
 fn test_encode_header() {
-    setup_raw_writer();
-    cleanup_raw_writer();
+    let mut stream = setup_raw_writer();
+    cleanup_raw_writer(&mut stream);
 }
 
 fn setup_raw_writer() -> RawStream {
@@ -25,8 +25,8 @@ fn setup_raw_writer() -> RawStream {
     stream
 }
 
-fn cleanup_raw_writer() {
-    // TODO: close the file
+fn cleanup_raw_writer(stream: &mut RawStream) {
+    stream.close_writer();
     fs::remove_file("./test_output.addr");  // Don't check the error
 }
 
@@ -43,7 +43,7 @@ fn test_encode_event() {
         delta_t: 1000
     };
     stream.encode_event(&event);
-    cleanup_raw_writer()
+    cleanup_raw_writer(&mut stream)
 }
 
 #[test]
@@ -60,7 +60,7 @@ fn test_encode_bad_event1() {
         delta_t: 1000
     };
     stream.encode_event(&event);
-    cleanup_raw_writer()
+    cleanup_raw_writer(&mut stream)
 }
 
 #[test]
@@ -77,7 +77,7 @@ fn test_encode_bad_event2() {
         delta_t: 1000
     };
     stream.encode_event(&event);
-    cleanup_raw_writer()
+    cleanup_raw_writer(&mut stream)
 }
 
 #[test]
@@ -94,5 +94,5 @@ fn test_encode_bad_event3() {
         delta_t: 1000000
     };
     stream.encode_event(&event);
-    cleanup_raw_writer()
+    cleanup_raw_writer(&mut stream)
 }

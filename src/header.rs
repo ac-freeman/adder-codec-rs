@@ -4,15 +4,6 @@ pub(crate) type Magic = [u8; 5];
 pub(crate) const MAGIC_RAW: Magic = ['a' as u8,'d' as u8,'d' as u8,'e' as u8,'r' as u8];
 pub(crate) const MAGIC_COMPRESSED: Magic = ['a' as u8,'d' as u8,'d' as u8,'e' as u8,'c' as u8];
 
-// pub trait AdderHeader {
-//     fn new(width: u16,
-//            height: u16,
-//            tps: u32,
-//            ref_interval: u32,
-//            delta_t_max: u32,
-//            channels: u8)
-// }
-
 /// Both the raw (uncompressed) and compressed ADDER streams have the same header structure. All
 /// that changes is [magic]. A new [version] of the raw stream format necessitates a new [version]
 /// of the compressed format.
