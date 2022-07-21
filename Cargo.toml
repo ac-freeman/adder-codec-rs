@@ -2,6 +2,18 @@
 name = "adder-codec-rs"
 version = "0.1.0"
 edition = "2021"
+authors = ["Andrew C. Freeman"]
+description = "Encoder/decoder for ADΔER (Address, Decimation, Δt Event Representation) streams. Currently, only implemented for raw (uncompressed) streams."
+homepage = "https://github.com/ac-freeman/adder-codec-rs"
+documentation = "https://github.com/ac-freeman/adder-codec-rs"
+repository = "https://github.com/ac-freeman/adder-codec-rs"
+readme = "README.md"
+license-file = "LICENSE"
+keywords = ["neuromorphic", "decoding", "event", "asynchronous", "video"]
+categories = ["multimedia::encoding", "science"]
+
+[profile.release]
+lto = true
 
 [dependencies]
 bytes = "1"
