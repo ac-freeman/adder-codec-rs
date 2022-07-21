@@ -23,17 +23,17 @@ pub type PixelAddress = u16;
 
 #[derive(Debug, Copy, Clone)]
 pub struct Coord {
-    pub(crate) x: PixelAddress,
-    pub(crate) y: PixelAddress,
-    pub(crate) c: Option<u8>,
+    pub x: PixelAddress,
+    pub y: PixelAddress,
+    pub c: Option<u8>,
 }
 
 /// An ADΔER event representation
 #[derive(Debug, Copy, Clone)]
 pub struct Event {
-    pub(crate) coord: Coord,
-    pub(crate) d: D,
-    pub(crate) delta_t: DeltaT,
+    pub coord: Coord,
+    pub d: D,
+    pub delta_t: DeltaT,
 }
 
 impl From<&Coord> for Bytes {
