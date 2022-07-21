@@ -118,6 +118,7 @@ fn test_encode_events() {
     };
     let events = vec![event, event, event];
     stream.encode_events(&events);
+    stream.flush_writer();
     cleanup_raw_writer(n, &mut stream)
 }
 
