@@ -1,7 +1,6 @@
 extern crate adder_codec_rs;
 
 use std::fs;
-use std::io::Error;
 use adder_codec_rs::{Codec, Coord, Event};
 use adder_codec_rs::raw::raw_stream::RawStream;
 use rand::Rng;
@@ -30,7 +29,7 @@ fn setup_raw_writer(rand_num: u32) -> RawStream {
 
 fn cleanup_raw_writer(rand_num: u32, stream: &mut RawStream) {
     stream.close_writer();
-    fs::remove_file("./TEST_".to_owned() + rand_num.to_string().as_str() + ".addr");  // Don't check the error
+    fs::remove_file("./TEST_".to_owned() + rand_num.to_string().as_str() + ".addr").unwrap();  // Don't check the error
 }
 
 #[test]
@@ -104,6 +103,24 @@ fn test_encode_event() {
     cleanup_raw_writer(n, &mut stream)
 }
 
+#[test]
+fn test_encode_events() {
+    let n = 0;
+    let mut stream = setup_raw_writer(n);
+    let event: Event = Event {
+        coord: Coord {
+            x: 10,
+            y: 30,
+            c: None
+        },
+        d: 5,
+        delta_t: 1000
+    };
+    let events = vec![event, event, event];
+    stream.encode_events(&events);
+    cleanup_raw_writer(n, &mut stream)
+}
+
 fn setup_raw_reader(rand_num: u32, stream: &mut RawStream) {
     stream.open_reader("./TEST_".to_owned() + rand_num.to_string().as_str() + ".addr").expect("Couldn't open file");
     stream.decode_header();
@@ -116,7 +133,7 @@ fn rand_u32() -> u32 {
 
 #[test]
 fn read_header() {
-    let mut n: u32 = rand::thread_rng().gen();
+    let n: u32 = rand::thread_rng().gen();
     let mut stream = setup_raw_writer(n);
     stream.flush_writer();
     setup_raw_reader(n, &mut stream);
@@ -125,7 +142,7 @@ fn read_header() {
 
 #[test]
 fn read_event() {
-    let mut n: u32 = rand::thread_rng().gen();
+    let n: u32 = rand::thread_rng().gen();
     let mut stream = setup_raw_writer(n);
     let event: Event = Event {
         coord: Coord {

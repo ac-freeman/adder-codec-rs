@@ -1,6 +1,5 @@
 use std::fs::File;
 use std::io::{BufReader, BufWriter, Read, Write};
-use std::panic::UnwindSafe;
 use bytes::{Buf, Bytes};
 use crate::{Codec, Coord, DeltaT, Event, EventStreamHeader};
 use crate::header::MAGIC_RAW;
@@ -149,6 +148,37 @@ impl Codec for RawStream {
         }
     }
 
+    fn encode_events(&mut self, events: &Vec<Event>) {
+        match &mut self.output_stream {
+            None => {
+                panic!("Output stream not initialized");
+            }
+            Some(stream) => {
+                // NOTE: for speed, the following checks only run in debug builds. It's entirely
+                // possibly to encode non-sensical events if you want to.
+                for event in events {
+                    debug_assert!(event.coord.x < self.width);
+                    debug_assert!(event.coord.y < self.height);
+                    match event.coord.c {
+                        None => {
+                            debug_assert_eq!(self.channels, 1);
+                        }
+                        Some(c) => {
+                            debug_assert!(c > 0);
+                            debug_assert!(c <= self.channels);
+                            if c == 1 {
+                                debug_assert!(self.channels > 1);
+                            }
+                        }
+                    }
+                    debug_assert!(event.delta_t <= self.delta_t_max);
+                    stream.write_all(&Bytes::from(event).to_vec())
+                        .expect("Unable to write event");
+                }
+            }
+        }
+    }
+
     fn decode_event(&mut self) -> Result<Event, std::io::Error> {
         let mut buf = vec![0u8; self.event_size as usize];
         match &mut self.input_stream {
@@ -160,7 +190,7 @@ impl Codec for RawStream {
                     Ok(_) => {
 
                         let mut byte_buffer = &buf[..];
-                        let mut event = Event {
+                        let event = Event {
                             coord: Coord {
                                 x: byte_buffer.get_u16(),
                                 y: byte_buffer.get_u16(),
@@ -192,7 +222,7 @@ mod tests {
 
     #[test]
     fn ttt() {
-        let mut n: u32 = rand::thread_rng().gen();
+        let n: u32 = rand::thread_rng().gen();
         let mut stream: RawStream = Codec::new();
         stream.open_writer("./TEST_".to_owned() + n.to_string().as_str() + ".addr").expect("Couldn't open file");
         stream.encode_header(50, 100, 53000, 4000, 50000, 1);
@@ -223,6 +253,6 @@ mod tests {
 
 
         stream.close_writer();
-        fs::remove_file("./TEST_".to_owned() + n.to_string().as_str() + ".addr");  // Don't check the error
+        fs::remove_file("./TEST_".to_owned() + n.to_string().as_str() + ".addr").unwrap();  // Don't check the error
     }
 }

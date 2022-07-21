@@ -10,8 +10,6 @@ pub mod raw;
 /// Decimation value; a pixel's sensitivity.
 pub type D = u8;
 
-type Integration = f32;
-
 /// Number of ticks elapsed since a given pixel last fired an [`pixel::Event`]
 pub type DeltaT = u32;
 
@@ -106,6 +104,7 @@ pub trait Codec {
     fn decode_header(&mut self);
 
     fn encode_event(&mut self, event: &Event);
+    fn encode_events(&mut self, events: &Vec<Event>);
     fn decode_event(&mut self) -> Result<Event, std::io::Error>;
 
 
