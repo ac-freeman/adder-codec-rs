@@ -1,6 +1,5 @@
-use std::borrow::BorrowMut;
 use std::fs::File;
-use std::io::{BufWriter, Error, Write};
+use std::io::{BufWriter, Write};
 use bytes::Bytes;
 use crate::{Codec, Event, EventStreamHeader};
 use crate::header::MAGIC_RAW;

@@ -1,5 +1,6 @@
 use std::fs::File;
 use std::io::BufWriter;
+use std::path::Path;
 use bytes::Bytes;
 use crate::header::EventStreamHeader;
 
@@ -72,13 +73,13 @@ impl From<&Event> for Bytes {
 pub trait Codec {
     fn new() -> Self;
 
-    fn open_writer(&mut self, path: String) -> Result<(), std::io::Error>{
+    fn open_writer<P: AsRef<Path>>(&mut self, path: P) -> Result<(), std::io::Error>{
         let file = File::create(&path)?;
         self.set_output_stream(Some(BufWriter::new(file)));
         Ok(())
     }
 
-    fn open_reader(&mut self, path: String) -> Result<(), std::io::Error>{
+    fn open_reader<P: AsRef<Path>>(&mut self, path: P) -> Result<(), std::io::Error>{
         let file = File::create(&path)?;
         self.set_input_stream(Some(BufWriter::new(file)));
         Ok(())
@@ -103,8 +104,8 @@ pub trait Codec {
 
 #[cfg(test)]
 mod tests {
-    use crate::EventStreamHeader;
-    use crate::header::MAGIC_RAW;
+    // use crate::EventStreamHeader;
+    // use crate::header::MAGIC_RAW;
 
     #[test]
     fn encode_raw() {
