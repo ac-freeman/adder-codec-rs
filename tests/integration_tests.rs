@@ -4,6 +4,7 @@ use std::fs;
 use adder_codec_rs::{Codec, Coord, Event};
 use adder_codec_rs::raw::raw_stream::RawStream;
 use rand::Rng;
+use adder_codec_rs::framer::framer::SourceType::U8;
 
 #[test]
 #[should_panic]
@@ -203,7 +204,7 @@ fn test_ingest_event_for_framer() {
     use adder_codec_rs::framer::framer::{FrameSequence, Framer};
     // Left parameter is the destination format, right parameter is the source format (before
     // transcoding to ADDER)
-    let mut frame_sequence: FrameSequence<u16, u8> = Framer::<u16, u8>::new(10, 10, 3, 50000, 10, 15, 50000, INSTANTANEOUS);
+    let mut frame_sequence: FrameSequence<u8> = FrameSequence::<u8>::new(10, 10, 3, 50000, 10, 15, 50000, INSTANTANEOUS, U8);
     let event: Event = Event {
             coord: Coord {
                 x: 5,
@@ -213,6 +214,5 @@ fn test_ingest_event_for_framer() {
             d: 5,
             delta_t: 1000
         };
-    let f = frame_sequence as FrameSequence<u16, u8>;
-    let t = frame_sequence.ingest_event(&event);
+    frame_sequence.ingest_event(&event);
 }
