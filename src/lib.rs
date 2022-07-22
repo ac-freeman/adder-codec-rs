@@ -11,6 +11,10 @@ pub mod framer;
 /// Decimation value; a pixel's sensitivity.
 pub type D = u8;
 
+pub(crate) const D_SHIFT: [u32; 16] = [
+    1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768,
+];
+
 /// Number of ticks elapsed since a given pixel last fired an [`pixel::Event`]
 pub type DeltaT = u32;
 
