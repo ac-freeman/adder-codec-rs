@@ -6,7 +6,7 @@ use crate::header::EventStreamHeader;
 
 mod header;
 pub mod raw;
-mod framer;
+pub mod framer;
 
 /// Decimation value; a pixel's sensitivity.
 pub type D = u8;
@@ -20,7 +20,7 @@ pub type Intensity = f32;
 /// Pixel x- or y- coordinate address in the ADΔER model
 pub type PixelAddress = u16;
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Default)]
 pub struct Coord {
     pub x: PixelAddress,
     pub y: PixelAddress,
@@ -28,7 +28,7 @@ pub struct Coord {
 }
 
 /// An ADΔER event representation
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Default)]
 pub struct Event {
     pub coord: Coord,
     pub d: D,

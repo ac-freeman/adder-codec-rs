@@ -1,4 +1,7 @@
 use std::ops::{Index, IndexMut};
+use std::slice::Iter;
+use std::vec::IntoIter;
+use itertools::{IntoChunks, Itertools};
 use crate::framer::array3d::Array3DError::InvalidIndex;
 
 pub struct Array3D<T> {
@@ -17,8 +20,23 @@ pub enum Array3DError {
 impl<T: Default + std::clone::Clone> Array3D<T> {
 
     /// Allocates a new [`Array3D`], initializing all elements with defaults
-    pub fn new(item: T, num_rows: usize, num_cols: usize, channels: usize) {
-        let arr: Vec<T> = vec![T::default(); num_rows * num_cols * channels];
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use adder_codec_rs::Event;
+    /// # use adder_codec_rs::framer::array3d::{Array3D};
+    /// let arr: Array3D<Event> = Array3D::new(10, 10, 3);
+    /// ```
+    pub fn new(num_rows: usize, num_cols: usize, num_channels: usize) -> Self {
+        let arr: Vec<T> = vec![T::default(); num_rows * num_cols * num_channels];
+
+        Array3D {
+            array: arr,
+            num_rows,
+            num_cols,
+            num_channels
+        }
     }
 
     pub fn num_rows(&self) -> usize {
@@ -79,6 +97,10 @@ impl<T: Default + std::clone::Clone> Array3D<T> {
                 return Err(e)
             }
         }
+    }
+
+    pub fn iter_2d(&self) -> IntoChunks<Iter<'_, T>> {
+        self.array.iter().chunks(self.num_channels)
     }
 }
 
