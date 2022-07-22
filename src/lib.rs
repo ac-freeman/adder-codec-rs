@@ -6,6 +6,7 @@ use crate::header::EventStreamHeader;
 
 mod header;
 pub mod raw;
+mod framer;
 
 /// Decimation value; a pixel's sensitivity.
 pub type D = u8;
