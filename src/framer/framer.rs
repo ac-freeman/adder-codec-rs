@@ -46,6 +46,7 @@ pub trait Framer {
 
     fn ingest_event(&mut self, event: &Event) -> Result<(), Array3DError>;
 
+
     // fn event_to_scaled_intensity(&self, event: &Event) -> Intensity {
     //     let intensity = event_to_intensity(event);
     //     (((D_SHIFT[event.d as usize] as f32) / (u8::MAX as f32))
@@ -55,13 +56,13 @@ pub trait Framer {
     // fn get_instant_frame(&mut self) ->
 }
 
-pub struct Frame<T> {
-    pub array: Array3D<T>,
+pub(crate) struct Frame<T> {
+    pub(crate) array: Array3D<T>,
     start_ts: BigT,
 }
 
 pub struct FrameSequence<T> {
-    pub frames: Vec<Frame<T>>,
+    pub(crate) frames: Vec<Frame<T>>,
     mode: FramerMode,
     running_ts: BigT,
     tps: DeltaT,
@@ -133,6 +134,10 @@ impl Framer for FrameSequence<EventCoordless> {
 
         Ok(())
     }
+
+    // fn at_current(&self, row: usize, col: usize, channel: usize) -> Option<&T> {
+    //     todo!()
+    // }
 }
 use duplicate::duplicate_item;
 #[duplicate_item(name; [u8]; [u16])]
@@ -158,22 +163,24 @@ impl Framer for FrameSequence<name>
     /// # Examples
     ///
     /// ```
-    // # use adder_codec_rs::{Coord, Event};
-    // # use adder_codec_rs::framer::framer::FramerMode::INSTANTANEOUS;
-    // # use adder_codec_rs::framer::framer::{FrameSequence, Framer};
-    // // Left parameter is the destination format, right parameter is the source format (before
-    // // transcoding to ADDER)
-    // let mut frame_sequence: FrameSequence<u16, u8> = Framer::<u16, u8>::new(10, 10, 3, 50000, 10, 15, 50000, INSTANTANEOUS);
-    // let event: Event = Event {
-    //         coord: Coord {
-    //             x: 5,
-    //             y: 5,
-    //             c: Some(1)
-    //         },
-    //         d: 5,
-    //         delta_t: 1000
-    //     };
-    // let t = frame_sequence.ingest_event(&event);
+    /// # use adder_codec_rs::{Coord, Event};
+    /// # use adder_codec_rs::framer::framer::FramerMode::INSTANTANEOUS;
+    /// # use adder_codec_rs::framer::framer::{FrameSequence, Framer};
+    /// # use adder_codec_rs::framer::framer::SourceType::U8;
+    ///
+    /// let mut frame_sequence: FrameSequence<u8> = FrameSequence::<u8>::new(10, 10, 3, 50000, 50, 15, 50000, INSTANTANEOUS, U8);
+    /// let event: Event = Event {
+    ///         coord: Coord {
+    ///             x: 5,
+    ///             y: 5,
+    ///             c: Some(1)
+    ///         },
+    ///         d: 5,
+    ///         delta_t: 1000
+    ///     };
+    /// frame_sequence.ingest_event(&event);
+    /// let elem = frame_sequence.at_current(5, 5, 1).unwrap();
+    /// assert_eq!(*elem, 32);
     /// ```
     fn ingest_event(&mut self, event: &crate::Event) -> Result<(), Array3DError> {
         let channel = match event.coord.c {
@@ -195,6 +202,8 @@ impl Framer for FrameSequence<name>
                     // SourceType::F64 => {<u8 as ScaleIntensity<T>>::scale_intensity(intensity, (self.tps / self.output_fps) as BigT}
                     _ => {panic!("jkl")}
                 };
+
+                // Since we're only looking at the most recent event for each pixel, never need more than one frame
                 self.frames[0].array.set_at(scaled_intensity, event.coord.y.into(), event.coord.x.into(), channel.into())?;
 
 
@@ -213,6 +222,14 @@ impl Framer for FrameSequence<name>
             }
         }
         Ok(())
+    }
+
+}
+
+#[duplicate_item(name; [u8]; [u16])]
+impl FrameSequence<name> {
+    pub fn at_current(&self, row: usize, col: usize, channel: usize) -> Option<&name> {
+        self.frames[0].array.at(row, col, channel)
     }
 }
 
