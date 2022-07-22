@@ -204,7 +204,7 @@ fn test_ingest_event_for_framer() {
     use adder_codec_rs::framer::framer::{FrameSequence, Framer};
     // Left parameter is the destination format, right parameter is the source format (before
     // transcoding to ADDER)
-    let mut frame_sequence: FrameSequence<u8> = FrameSequence::<u8>::new(10, 10, 3, 50000, 10, 15, 50000, INSTANTANEOUS, U8);
+    let mut frame_sequence: FrameSequence<u8> = FrameSequence::<u8>::new(10, 10, 3, 50000, 50, 15, 50000, INSTANTANEOUS, U8);
     let event: Event = Event {
             coord: Coord {
                 x: 5,
@@ -215,4 +215,7 @@ fn test_ingest_event_for_framer() {
             delta_t: 1000
         };
     frame_sequence.ingest_event(&event);
+    let elem = frame_sequence.frames[0].array.at(5, 5, 1).unwrap();
+    assert_eq!(*elem, 32);
+
 }

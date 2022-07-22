@@ -2,6 +2,7 @@ use crate::{BigT, D, D_SHIFT, DeltaT, Event, Intensity};
 use crate::framer::array3d::{Array3D, Array3DError};
 use crate::framer::array3d::Array3DError::InvalidIndex;
 use crate::framer::framer::FramerMode::INSTANTANEOUS;
+use crate::framer::scale_intensity::ScaleIntensity;
 
 // type EventFrame = Array3D<Event>;
 // type Intensity8Frame = Array3D<u8>;
@@ -54,13 +55,13 @@ pub trait Framer {
     // fn get_instant_frame(&mut self) ->
 }
 
-struct Frame<T> {
-    array: Array3D<T>,
+pub struct Frame<T> {
+    pub array: Array3D<T>,
     start_ts: BigT,
 }
 
 pub struct FrameSequence<T> {
-    frames: Vec<Frame<T>>,
+    pub frames: Vec<Frame<T>>,
     mode: FramerMode,
     running_ts: BigT,
     tps: DeltaT,
@@ -194,6 +195,7 @@ impl Framer for FrameSequence<name>
                     // SourceType::F64 => {<u8 as ScaleIntensity<T>>::scale_intensity(intensity, (self.tps / self.output_fps) as BigT}
                     _ => {panic!("jkl")}
                 };
+                self.frames[0].array.set_at(scaled_intensity, event.coord.y.into(), event.coord.x.into(), channel.into())?;
 
 
             }
@@ -217,122 +219,4 @@ impl Framer for FrameSequence<name>
 
 fn event_to_intensity(event: &Event) -> Intensity {
     D_SHIFT[event.d as usize] as Intensity / event.delta_t as Intensity
-}
-
-
-trait ScaleIntensity <T> {
-    fn scale_intensity(intensity: Intensity, tpf: BigT) -> T;
-}
-
-/// Scales the event's intensity for a u8 source to a u16 output
-impl ScaleIntensity<u8> for u8 {
-    fn scale_intensity(intensity: Intensity, tpf: BigT) -> u8 {
-        (intensity * tpf as f64) as u8
-    }
-}
-
-/// Scales the event's intensity for a u8 source to a u16 output
-impl ScaleIntensity<u16> for u8 {
-    fn scale_intensity(intensity: Intensity, tpf: BigT) -> u16 {
-        (intensity / u8::MAX as f64 * tpf as f64 * u16::MAX as f64) as u16
-    }
-}
-
-/// Scales the event's intensity for a u8 source to a u32 output
-impl ScaleIntensity<u32> for u8 {
-    fn scale_intensity(intensity: Intensity, tpf: BigT) -> u32 {
-        (intensity / u8::MAX as f64 * tpf as f64 * u32::MAX as f64) as u32
-    }
-}
-
-/// Scales the event's intensity for a u8 source to a u32 output
-impl ScaleIntensity<u64> for u8 {
-    fn scale_intensity(intensity: Intensity, tpf: BigT) -> u64 {
-        (intensity / u8::MAX as f64 * tpf as f64 * u64::MAX as f64) as u64
-    }
-}
-
-/// Scales the event's intensity for a u8 source to a u16 output
-impl ScaleIntensity<u8> for u16 {
-    fn scale_intensity(intensity: Intensity, tpf: BigT) -> u8 {
-        (intensity / u16::MAX as f64 * tpf as f64 * u8::MAX as f64) as u8
-    }
-}
-
-/// Scales the event's intensity for a u8 source to a u16 output
-impl ScaleIntensity<u16> for u16 {
-    fn scale_intensity(intensity: Intensity, tpf: BigT) -> u16 {
-        (intensity * tpf as f64) as u16
-    }
-}
-
-/// Scales the event's intensity for a u8 source to a u32 output
-impl ScaleIntensity<u32> for u16 {
-    fn scale_intensity(intensity: Intensity, tpf: BigT) -> u32 {
-        (intensity / u16::MAX as f64 * tpf as f64 * u32::MAX as f64) as u32
-    }
-}
-
-/// Scales the event's intensity for a u8 source to a u32 output
-impl ScaleIntensity<u64> for u16 {
-    fn scale_intensity(intensity: Intensity, tpf: BigT) -> u64 {
-        (intensity / u16::MAX as f64 * tpf as f64 * u64::MAX as f64) as u64
-    }
-}
-
-
-/// Scales the event's intensity for a u8 source to a u16 output
-impl ScaleIntensity<u8> for u32 {
-    fn scale_intensity(intensity: Intensity, tpf: BigT) -> u8 {
-        0
-    }
-}
-
-/// Scales the event's intensity for a u8 source to a u16 output
-impl ScaleIntensity<u16> for u32 {
-    fn scale_intensity(intensity: Intensity, tpf: BigT) -> u16 {
-        0
-    }
-}
-
-/// Scales the event's intensity for a u8 source to a u32 output
-impl ScaleIntensity<u32> for u32 {
-    fn scale_intensity(intensity: Intensity, tpf: BigT) -> u32 {
-        0
-    }
-}
-
-/// Scales the event's intensity for a u8 source to a u32 output
-impl ScaleIntensity<u64> for u32 {
-    fn scale_intensity(intensity: Intensity, tpf: BigT) -> u64 {
-        0
-    }
-}
-
-/// Scales the event's intensity for a u8 source to a u16 output
-impl ScaleIntensity<u8> for u64 {
-    fn scale_intensity(intensity: Intensity, tpf: BigT) -> u8 {
-        0
-    }
-}
-
-/// Scales the event's intensity for a u8 source to a u16 output
-impl ScaleIntensity<u16> for u64 {
-    fn scale_intensity(intensity: Intensity, tpf: BigT) -> u16 {
-        0
-    }
-}
-
-/// Scales the event's intensity for a u8 source to a u32 output
-impl ScaleIntensity<u32> for u64 {
-    fn scale_intensity(intensity: Intensity, tpf: BigT) -> u32 {
-        0
-    }
-}
-
-/// Scales the event's intensity for a u8 source to a u32 output
-impl ScaleIntensity<u64> for u64 {
-    fn scale_intensity(intensity: Intensity, tpf: BigT) -> u64 {
-        0
-    }
 }
