@@ -22,7 +22,7 @@ pub type DeltaT = u32;
 pub type BigT = u64;
 
 /// Measure of an amount of light intensity
-pub type Intensity = f32;
+pub type Intensity = f64;
 
 /// Pixel x- or y- coordinate address in the ADΔER model
 pub type PixelAddress = u16;

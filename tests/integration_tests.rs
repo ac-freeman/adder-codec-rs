@@ -195,3 +195,24 @@ fn test_iter_2d() {
         break;
     }
 }
+
+#[test]
+fn test_ingest_event_for_framer() {
+    use adder_codec_rs::{Coord, Event};
+    use adder_codec_rs::framer::framer::FramerMode::INSTANTANEOUS;
+    use adder_codec_rs::framer::framer::{FrameSequence, Framer};
+    // Left parameter is the destination format, right parameter is the source format (before
+    // transcoding to ADDER)
+    let mut frame_sequence: FrameSequence<u16, u8> = Framer::<u16, u8>::new(10, 10, 3, 50000, 10, 15, 50000, INSTANTANEOUS);
+    let event: Event = Event {
+            coord: Coord {
+                x: 5,
+                y: 5,
+                c: Some(1)
+            },
+            d: 5,
+            delta_t: 1000
+        };
+    let f = frame_sequence as FrameSequence<u16, u8>;
+    let t = frame_sequence.ingest_event(&event);
+}

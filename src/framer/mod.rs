@@ -1,2 +1,2 @@
-mod framer;
+pub mod framer;
 pub mod array3d;
