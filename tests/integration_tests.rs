@@ -29,7 +29,7 @@ fn setup_raw_writer(rand_num: u32) -> RawStream {
 
 fn cleanup_raw_writer(rand_num: u32, stream: &mut RawStream) {
     stream.close_writer();
-    fs::remove_file("./TEST_".to_owned() + rand_num.to_string().as_str() + ".addr").unwrap();  // Don't check the error
+    fs::remove_file("./TEST_".to_owned() + rand_num.to_string().as_str() + ".addr");  // Don't check the error
 }
 
 #[test]
@@ -168,4 +168,30 @@ fn read_event() {
     }
 
     cleanup_raw_writer(n, &mut stream);
+}
+
+#[test]
+fn test_iter_2d() {
+    use adder_codec_rs::Event;
+    use adder_codec_rs::framer::array3d::{Array3D, Array3DError};
+    let mut  arr: Array3D<u16> = Array3D::new(10, 10, 3);
+    arr.set_at(100, 0,0,0);
+    arr.set_at(250, 0,0,1);
+    arr.set_at(325,0,0,2);
+    for elem in &arr.iter_2d() {
+        let first_sum = elem.sum::<u16>();  // Just summing the first element to show an example
+        assert_eq!(first_sum, 675);
+        break;
+    }
+    for mut elem in &arr.iter_2d_mut() {
+        for i in elem {
+            *i = *i + 1;
+        }
+        break;
+    }
+    for elem in &arr.iter_2d() {
+        let first_sum = elem.sum::<u16>();
+        assert_eq!(first_sum, 678);
+        break;
+    }
 }
