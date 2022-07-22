@@ -14,6 +14,9 @@ pub type D = u8;
 /// Number of ticks elapsed since a given pixel last fired an [`pixel::Event`]
 pub type DeltaT = u32;
 
+/// Large count of ticks (e.g., for tracking the running timestamp of a sequence of events)
+pub type BigT = u64;
+
 /// Measure of an amount of light intensity
 pub type Intensity = f32;
 
