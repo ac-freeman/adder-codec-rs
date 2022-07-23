@@ -4,6 +4,7 @@ use std::vec::IntoIter;
 use itertools::{IntoChunks, Itertools};
 use crate::framer::array3d::Array3DError::InvalidIndex;
 
+#[derive(Debug, Clone, Default)]
 pub struct Array3D<T> {
     array: Vec<T>,
     num_rows: usize,
@@ -37,6 +38,11 @@ impl<T: Default + std::clone::Clone> Array3D<T> {
             num_cols,
             num_channels
         }
+    }
+
+    pub fn new_like(ref_array: &Array3D<T>) -> Self {
+        let array: Array3D<T> = Array3D::new(ref_array.num_rows, ref_array.num_cols, ref_array.num_channels);
+        array
     }
 
     pub fn num_rows(&self) -> usize {

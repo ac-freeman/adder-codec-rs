@@ -196,3 +196,44 @@ fn test_iter_2d() {
         break;
     }
 }
+
+#[test]
+fn test_event_framer_ingest() {
+    use adder_codec_rs::{Coord, Event};
+    use adder_codec_rs::framer::framer::FramerMode::INSTANTANEOUS;
+    use adder_codec_rs::framer::framer::{FrameSequence, Framer, EventCoordless};
+    use adder_codec_rs::framer::framer::SourceType::U8;
+    let mut frame_sequence: FrameSequence<Option<EventCoordless>> = FrameSequence::<Option<EventCoordless>>::new(10, 10, 3, 50000, 50, 15, 50000, INSTANTANEOUS, U8);
+    let event: Event = Event {
+            coord: Coord {
+                x: 5,
+                y: 5,
+                c: Some(1)
+            },
+            d: 5,
+            delta_t: 5000
+        };
+    let elem = frame_sequence.px_at_frame(5, 5, 1,5);
+    assert!(elem.is_none());
+    frame_sequence.ingest_event(&event);
+    let elem = frame_sequence.px_at_frame(5, 5, 1,5).unwrap();
+    let stored_event = elem.unwrap();
+    assert!(elem.is_some());
+    let elem = frame_sequence.px_at_current(5, 5, 1).unwrap();
+    assert!(elem.is_some());
+
+    let event2: Event = Event {
+        coord: Coord {
+            x: 5,
+            y: 5,
+            c: Some(1)
+        },
+        d: 5,
+        delta_t: 5100
+    };
+    frame_sequence.ingest_event(&event2);
+    let elem = frame_sequence.px_at_current(5, 5, 1).unwrap();
+    assert!(elem.is_some());
+    let stored_event2 = elem.unwrap();
+    assert_eq!(stored_event2, stored_event);
+}
