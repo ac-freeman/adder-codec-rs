@@ -6,10 +6,12 @@ use crate::framer::framer::{EventCoordless, Frame, Framer, FramerMode, FrameSequ
 use crate::framer::framer::FramerMode::INSTANTANEOUS;
 
 impl Framer for FrameSequence<Option<EventCoordless>> {
+    type Output = Option<EventCoordless>;
+
     fn new(num_rows: usize, num_cols: usize, num_channels: usize, tps: DeltaT, output_fps: u32, d_max: D, delta_t_max: DeltaT, _: FramerMode, source: SourceType) -> Self {
         let array: Array3D<Option<EventCoordless>> = Array3D::new(num_rows, num_cols, num_channels);
         FrameSequence {
-            frames: VecDeque::from(vec![Frame { array, start_ts: 0 }]),
+            frames: VecDeque::from(vec![Frame { array, start_ts: 0, filled_count: 0 }]),
             frames_written: 0,
             pixel_ts_tracker: Array3D::new(num_rows, num_cols, num_channels),
             mode: INSTANTANEOUS,    // Silently ignore the mode that's passed in
@@ -53,7 +55,7 @@ impl Framer for FrameSequence<Option<EventCoordless>> {
     /// //let elem = frame_sequence.px_at_current(5, 5, 1).unwrap();
     /// //assert!(elem.is_some())
     /// ```
-    fn ingest_event(&mut self, event: &crate::Event) -> Result<(), Array3DError> {
+    fn ingest_event(&mut self, event: &crate::Event) -> Result<bool, Array3DError> {
         let channel = match event.coord.c {
             None => {0}
             Some(c) => {c}
@@ -72,7 +74,7 @@ impl Framer for FrameSequence<Option<EventCoordless>> {
         match frame_num as i64 - self.frames.len() as i64 - self.frames_written + 1{
             a if a > 0 => {
                 let array: Array3D<Option<EventCoordless>> = Array3D::new_like(&self.frames[0].array);
-                self.frames.append(&mut VecDeque::from(vec![Frame { array, start_ts: 0 }; a as usize]));
+                self.frames.append(&mut VecDeque::from(vec![Frame { array, start_ts: 0, filled_count: 0 }; a as usize]));
 
             }
             _ => {}
@@ -86,11 +88,12 @@ impl Framer for FrameSequence<Option<EventCoordless>> {
                     self.frames[i + old_frame_num as usize].array.set_at(
                                 Some(EventCoordless { d: event.d, delta_t: event.delta_t }),
                                 event.coord.y.into(), event.coord.x.into(), channel.into())?;
+                    self.frames[i + old_frame_num as usize].filled_count += 1;
                 }
             }
             _ => {}
         }
 
-        Ok(())
+        Ok(self.frames[frame_num as usize].filled_count == self.frames[0].array.num_elems())
     }
 }

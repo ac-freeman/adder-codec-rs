@@ -12,7 +12,7 @@ pub struct Array3D<T> {
     num_channels: usize
 }
 
-
+#[derive(Debug)]
 pub enum Array3DError {
     /// Index out of bounds
     InvalidIndex,

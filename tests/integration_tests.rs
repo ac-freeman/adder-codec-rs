@@ -237,3 +237,38 @@ fn test_event_framer_ingest() {
     let stored_event2 = elem.unwrap();
     assert_eq!(stored_event2, stored_event);
 }
+
+#[test]
+fn test_event_framer_ingest_get_filled() {
+    use adder_codec_rs::{Coord, Event};
+    use adder_codec_rs::framer::framer::FramerMode::INSTANTANEOUS;
+    use adder_codec_rs::framer::framer::{FrameSequence, Framer, EventCoordless};
+    use adder_codec_rs::framer::framer::SourceType::U8;
+    let mut frame_sequence: FrameSequence<Option<EventCoordless>> = FrameSequence::<Option<EventCoordless>>::new(5, 5, 1, 50000, 50, 15, 50000, INSTANTANEOUS, U8);
+
+    for i in 0..5 {
+        for j in 0..5{
+            let event: Event = Event {
+                coord: Coord {
+                    x: i,
+                    y: j,
+                    c: None
+                },
+                d: 5,
+                delta_t: 5100
+            };
+            let filled = frame_sequence.ingest_event(&event).unwrap();
+            if i < 4 || j < 4 {
+                assert_eq!(filled, false)
+            } else {
+                assert_eq!(filled, true)
+            }
+        }
+        if i < 4 {
+            assert_eq!(frame_sequence.check_if_frame_filled(0).unwrap(), false);
+        } else {
+            assert_eq!(frame_sequence.check_if_frame_filled(0).unwrap(), true);
+        }
+
+    }
+}

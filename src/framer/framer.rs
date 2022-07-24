@@ -35,6 +35,7 @@ pub enum SourceType {
 }
 
 pub trait Framer {
+    type Output;
     fn new(num_rows: usize,
            num_cols: usize,
            num_channels: usize,
@@ -53,7 +54,9 @@ pub trait Framer {
     ///
     /// If [`INTEGRATION`], this function will integrate this [`Event`] value for the corresponding
     /// output frame(s)
-    fn ingest_event(&mut self, event: &Event) -> Result<(), Array3DError>;
+    fn ingest_event(&mut self, event: &Event) -> Result<bool, Array3DError>;
+
+    // fn get_frame(&self, frame_idx: usize) -> &Array3D<Self::Output>;
 
 
     // fn event_to_scaled_intensity(&self, event: &Event) -> Intensity {
@@ -68,7 +71,14 @@ pub trait Framer {
 #[derive(Debug, Clone, Default)]
 pub(crate) struct Frame<T> {
     pub(crate) array: Array3D<T>,
-    pub(crate) start_ts: BigT,
+    pub(crate) start_ts: BigT,  // TODO: using this for anything??
+    pub(crate) filled_count: usize,
+}
+
+#[derive(Debug)]
+pub enum FrameSequenceError {
+    /// Frame index out of bounds
+    InvalidIndex,
 }
 
 pub struct FrameSequence<T> {
@@ -88,11 +98,12 @@ pub struct FrameSequence<T> {
 use duplicate::duplicate_item;
 #[duplicate_item(name; [u8]; [u16])]
 impl Framer for FrameSequence<name>
-    {
+{
+    type Output = name;
     fn new(num_rows: usize, num_cols: usize, num_channels: usize, tps: DeltaT, output_fps: u32, d_max: D, delta_t_max: DeltaT, mode: FramerMode, source: SourceType) -> Self {
         let array: Array3D<name> = Array3D::new(num_rows, num_cols, num_channels);
         FrameSequence {
-            frames: VecDeque::from(vec![Frame { array, start_ts: 0 }]),
+            frames: VecDeque::from(vec![Frame { array, start_ts: 0, filled_count: 0 }]),
             frames_written: 0,
             pixel_ts_tracker: Array3D::new(num_rows, num_cols, num_channels),
             mode,
@@ -131,7 +142,7 @@ impl Framer for FrameSequence<name>
     /// let elem = frame_sequence.px_at_current(5, 5, 1).unwrap();
     /// assert_eq!(*elem, 32);
     /// ```
-    fn ingest_event(&mut self, event: &crate::Event) -> Result<(), Array3DError> {
+    fn ingest_event(&mut self, event: &crate::Event) -> Result<bool, Array3DError> {
         let channel = match event.coord.c {
             None => {0}
             Some(c) => {c}
@@ -170,8 +181,9 @@ impl Framer for FrameSequence<name>
 
             }
         }
-        Ok(())
+        Ok(false)
     }
+
 
 }
 
@@ -183,6 +195,7 @@ impl FrameSequence<name> {
         }
         self.frames[0].array.at(row, col, channel)
     }
+
     pub fn px_at_frame(&self, row: usize, col: usize, channel: usize, frame_idx: usize) -> Option<&name> {
         match self.frames.len() {
             a if frame_idx < a => {
@@ -190,6 +203,29 @@ impl FrameSequence<name> {
             }
             _ => {
                 None
+            }
+        }
+    }
+
+    fn get_frame(&self, frame_idx: usize) -> Result<&Array3D<name>, FrameSequenceError> {
+        match self.frames.len() <= frame_idx {
+            true => {
+                Err(FrameSequenceError::InvalidIndex)
+            }
+            false => {
+                Ok(&self.frames[frame_idx].array)
+            }
+        }
+
+    }
+
+    pub fn check_if_frame_filled(&self, frame_idx: usize) -> Result<bool, FrameSequenceError> {
+        match self.frames.len() <= frame_idx {
+            true => {
+                Err(FrameSequenceError::InvalidIndex)
+            }
+            false => {
+                Ok(self.frames[frame_idx as usize].filled_count == self.frames[0].array.num_elems())
             }
         }
     }
