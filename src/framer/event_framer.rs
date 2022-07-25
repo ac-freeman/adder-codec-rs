@@ -1,9 +1,20 @@
 use std::collections::VecDeque;
+use bytes::Bytes;
 use crate::{BigT, D, DeltaT};
 use crate::framer::array3d::{Array3D, Array3DError};
 use crate::framer::array3d::Array3DError::InvalidIndex;
-use crate::framer::framer::{EventCoordless, Frame, Framer, FramerMode, FrameSequence, SourceType};
+use crate::framer::framer::{EventCoordless, Frame, Framer, FramerMode, FrameSequence, OptionEventCoordless, SourceType};
 use crate::framer::framer::FramerMode::INSTANTANEOUS;
+
+impl From<&EventCoordless> for Bytes {
+    fn from(event: &EventCoordless) -> Self {
+        Bytes::from([
+            &event.d.to_be_bytes() as &[u8],
+            &event.delta_t.to_be_bytes() as &[u8]
+        ].concat()
+        )
+    }
+}
 
 impl Framer for FrameSequence<Option<EventCoordless>> {
     type Output = Option<EventCoordless>;

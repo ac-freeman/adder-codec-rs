@@ -265,9 +265,9 @@ fn test_event_framer_ingest_get_filled() {
             }
         }
         if i < 4 {
-            assert_eq!(frame_sequence.check_if_frame_filled(0).unwrap(), false);
+            assert_eq!(frame_sequence.is_frame_filled(0).unwrap(), false);
         } else {
-            assert_eq!(frame_sequence.check_if_frame_filled(0).unwrap(), true);
+            assert_eq!(frame_sequence.is_frame_filled(0).unwrap(), true);
         }
 
     }

@@ -2,6 +2,7 @@ use std::fs::File;
 use std::io::{BufReader, BufWriter};
 use std::path::Path;
 use bytes::Bytes;
+use crate::framer::framer::EventCoordless;
 use crate::header::EventStreamHeader;
 
 mod header;
@@ -64,6 +65,8 @@ impl From<&Coord> for Bytes {
 
     }
 }
+
+
 
 impl From<&Event> for Bytes {
     fn from(event: &Event) -> Self {

@@ -1,7 +1,11 @@
+use std::io::{BufWriter, Write};
+use std::mem::size_of;
 use std::ops::{Index, IndexMut};
 use std::slice::{Iter, IterMut};
 use std::vec::IntoIter;
+use bytes::{BufMut, Bytes, BytesMut};
 use itertools::{IntoChunks, Itertools};
+use crate::{Event, EventCoordless};
 use crate::framer::array3d::Array3DError::InvalidIndex;
 
 #[derive(Debug, Clone, Default)]
@@ -18,7 +22,7 @@ pub enum Array3DError {
     InvalidIndex,
 }
 
-impl<T: Default + std::clone::Clone> Array3D<T> {
+impl<T: Default + std::clone::Clone> Array3D<T> where bytes::Bytes: From<Vec<u8>> {
 
     /// Allocates a new [`Array3D`], initializing all elements with defaults
     ///
@@ -177,9 +181,45 @@ impl<T: Default + std::clone::Clone> Array3D<T> {
     pub fn iter_2d_mut(&mut self) -> IntoChunks<IterMut<'_, T>> {
         self.array.iter_mut().chunks(self.num_channels)
     }
+
+    // pub fn serialize_to_be_bytes(&self) ->  BytesMut {
+    //     let mut buf = BytesMut::with_capacity(self.num_rows*self.num_cols*self.num_channels * size_of::<T>());
+    //     for elem in &self.iter_2d() {
+    //         for sub_elem in elem {
+    //             // sub_elem.to_be_bytes();
+    //             buf.put(Bytes::from(sub_elem.clone()));
+    //         }
+    //     }
+    //
+    //     buf
+    // }
 }
 
-impl<T: Default + std::clone::Clone> Index<(usize, usize)> for Array3D<T> {
+impl Array3D<Option<EventCoordless>> {
+    pub fn serialize_to_be_bytes(&self) ->  BytesMut {
+        let mut buf = BytesMut::with_capacity(self.num_rows*self.num_cols*self.num_channels * size_of::<EventCoordless>());
+        for elem in &self.iter_2d() {
+            for sub_elem in elem {
+                // sub_elem.to_be_bytes();
+                match sub_elem {
+                    None => {
+                        let empty = EventCoordless { d: 0, delta_t: 0 };
+                        buf.put(Bytes::from(&empty))
+                    }
+                    Some(event) => {
+                        buf.put(Bytes::from(event))
+                    }
+                }
+            }
+        }
+
+        buf
+    }
+}
+
+
+
+impl<T: Default + std::clone::Clone > Index<(usize, usize)> for Array3D<T> where bytes::Bytes: From<T> {
     type Output = T;
 
     fn index(&self, (row, col): (usize, usize)) -> &Self::Output {
@@ -187,13 +227,13 @@ impl<T: Default + std::clone::Clone> Index<(usize, usize)> for Array3D<T> {
     }
 }
 
-impl<T: Default + std::clone::Clone> IndexMut<(usize, usize)> for Array3D<T> {
+impl<T: Default + std::clone::Clone> IndexMut<(usize, usize)> for Array3D<T> where bytes::Bytes: From<T> {
     fn index_mut(&mut self, (row, col): (usize, usize)) -> &mut Self::Output {
         self.at_mut(row, col, 0).unwrap_or_else(|| panic!("Invalid index for row {}, col {}", row, col))
     }
 }
 
-impl<T: Default + std::clone::Clone> Index<(usize, usize, usize)> for Array3D<T> {
+impl<T: Default + std::clone::Clone> Index<(usize, usize, usize)> for Array3D<T> where bytes::Bytes: From<T> {
     type Output = T;
 
     fn index(&self, (row, col, channel): (usize, usize, usize)) -> &Self::Output {
@@ -201,8 +241,22 @@ impl<T: Default + std::clone::Clone> Index<(usize, usize, usize)> for Array3D<T>
     }
 }
 
-impl<T: Default + std::clone::Clone> IndexMut<(usize, usize, usize)> for Array3D<T> {
+impl<T: Default + std::clone::Clone> IndexMut<(usize, usize, usize)> for Array3D<T> where bytes::Bytes: From<T> {
     fn index_mut(&mut self, (row, col, channel): (usize, usize, usize)) -> &mut Self::Output {
         self.at_mut(row, col, channel).unwrap_or_else(|| panic!("Invalid index for row {}, col {}, channel {}", row, col, channel))
     }
 }
+
+// impl<T: Default + Clone + From<T>> From<&Array3D<T>> for Bytes{
+//     fn from(arr: &Array3D<T>) -> Self {
+//         let mut buff = Vec::with_capacity(arr.num_rows*arr.num_cols*arr.num_channels * size_of::<T>());
+//         for elem in &arr.iter_2d() {
+//             for sub_elem in elem {
+//                 buff.push(&Bytes::from(sub_elem.clone()).to_vec());
+//             }
+//         }
+//
+//         let t = Bytes::from(buff.concat());
+//         t
+//     }
+// }

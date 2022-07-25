@@ -1,4 +1,6 @@
 use std::collections::VecDeque;
+use std::fs::File;
+use std::io::{BufWriter, Error, Write};
 use crate::{BigT, D, D_SHIFT, DeltaT, Event, Intensity};
 use crate::framer::array3d::{Array3D, Array3DError};
 use crate::framer::array3d::Array3DError::InvalidIndex;
@@ -18,6 +20,11 @@ use crate::framer::scale_intensity::ScaleIntensity;
 pub struct EventCoordless {
     pub d: D,
     pub delta_t: DeltaT,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Default)]
+pub struct OptionEventCoordless {
+    pub(crate) event: Option<EventCoordless>
 }
 
 pub enum FramerMode {
@@ -55,6 +62,10 @@ pub trait Framer {
     /// If [`INTEGRATION`], this function will integrate this [`Event`] value for the corresponding
     /// output frame(s)
     fn ingest_event(&mut self, event: &Event) -> Result<bool, Array3DError>;
+
+    // fn pop_next_frame(&mut self) -> Result<Array3D<Self::Output>, Array3DError>;
+    //
+    // fn write_next_frame(&mut self) -> Result<(), Error>;
 
     // fn get_frame(&self, frame_idx: usize) -> &Array3D<Self::Output>;
 
@@ -219,14 +230,29 @@ impl FrameSequence<name> {
 
     }
 
-    pub fn check_if_frame_filled(&self, frame_idx: usize) -> Result<bool, FrameSequenceError> {
+    pub fn is_frame_filled(&self, frame_idx: usize) -> Result<bool, FrameSequenceError> {
         match self.frames.len() <= frame_idx {
             true => {
                 Err(FrameSequenceError::InvalidIndex)
             }
             false => {
-                Ok(self.frames[frame_idx as usize].filled_count == self.frames[0].array.num_elems())
+                match self.frames[frame_idx as usize].filled_count {
+                    a if a == self.frames[0].array.num_elems() => { Ok(true) },
+                    a if a > self.frames[0].array.num_elems() => {
+                        panic!("Impossible fill count. File a bug report!")
+                    },
+                    _ => { Ok(false) }
+                }
             }
+        }
+    }
+
+    pub fn pop_next_frame(&mut self) -> Option<Array3D<name>> {
+        match self.frames.pop_front() {
+            Some(a) => {
+                Some(a.array)
+            }
+            None => { None }
         }
     }
 }
