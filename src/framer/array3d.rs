@@ -217,6 +217,20 @@ impl Array3D<Option<EventCoordless>> {
     }
 }
 
+use duplicate::duplicate_item;
+#[duplicate_item(name; [u8]; [u16]; [u32]; [u64];)]
+impl Array3D<name> {
+    pub fn serialize_to_be_bytes(&self) ->  BytesMut {
+        let mut buf = BytesMut::with_capacity(self.num_rows*self.num_cols*self.num_channels * size_of::<name>());
+        for elem in &self.iter_2d() {
+            for sub_elem in elem {
+                buf.put(Bytes::from(sub_elem.to_be_bytes().to_vec()));
+            }
+        }
+        buf
+    }
+}
+
 
 
 impl<T: Default + std::clone::Clone > Index<(usize, usize)> for Array3D<T> where bytes::Bytes: From<T> {

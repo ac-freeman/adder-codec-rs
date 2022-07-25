@@ -1,6 +1,7 @@
 use std::collections::VecDeque;
 use std::fs::File;
 use std::io::{BufWriter, Error, Write};
+use bytes::BytesMut;
 use crate::{BigT, D, D_SHIFT, DeltaT, Event, Intensity};
 use crate::framer::array3d::{Array3D, Array3DError};
 use crate::framer::array3d::Array3DError::InvalidIndex;
@@ -62,6 +63,8 @@ pub trait Framer {
     /// If [`INTEGRATION`], this function will integrate this [`Event`] value for the corresponding
     /// output frame(s)
     fn ingest_event(&mut self, event: &Event) -> Result<bool, Array3DError>;
+
+    fn get_frame_bytes(&mut self) -> Option<BytesMut>;
 
     // fn pop_next_frame(&mut self) -> Result<Array3D<Self::Output>, Array3DError>;
     //
@@ -195,7 +198,16 @@ impl Framer for FrameSequence<name>
         Ok(false)
     }
 
-
+    fn get_frame_bytes(&mut self) -> Option<BytesMut> {
+        match self.pop_next_frame() {
+            Some(arr) => {
+                Some(arr.serialize_to_be_bytes())
+            }
+            None => {
+                None
+            }
+        }
+    }
 }
 
 #[duplicate_item(name; [u8]; [u16]; [u32]; [u64]; [Option<EventCoordless>])]
