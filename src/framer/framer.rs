@@ -162,6 +162,26 @@ impl Framer for FrameSequence<name>
             Some(c) => {c}
         };
 
+        // Increment the timestamp tracker
+        let tracker = self.pixel_ts_tracker.at_mut(event.coord.y.into(), event.coord.x.into(), channel.into()).ok_or(InvalidIndex)?;
+        let old_tracker_ts = *tracker;
+        let old_frame_num = old_tracker_ts as i64 / self.tpf as i64;
+        *tracker = *tracker + event.delta_t as BigT;
+
+        // Get the event's corresponding frame number
+        let frame_num = *tracker as i64 / self.tpf as i64;
+
+        // If frame_num is too big, grow the frame vec by the difference
+        match frame_num as i64 - self.frames.len() as i64 - self.frames_written + 1{
+            a if a > 0 => {
+                let array = Array3D::new_like(&self.frames[0].array);
+                self.frames.append(&mut VecDeque::from(vec![Frame { array, start_ts: 0, filled_count: 0 }; a as usize]));
+
+            }
+            _ => {}
+        }
+
+
         match &self.mode {
             FramerMode::INSTANTANEOUS => {
                 // Event's intensity representation
@@ -177,11 +197,23 @@ impl Framer for FrameSequence<name>
                     _ => {panic!("jkl")}
                 };
 
+                match frame_num - old_frame_num {
+                    a if a > 0 => {
+                        for i in 0..a as usize + 1 {
+                            self.frames[i + old_frame_num as usize].array.set_at(
+                                scaled_intensity,
+                                event.coord.y.into(), event.coord.x.into(), channel.into())?;
+                            self.frames[i + old_frame_num as usize].filled_count += 1;
+                        }
+                    }
+                    _ => {}
+                }
                 // Since we're only looking at the most recent event for each pixel, never need more than one frame
-                self.frames[0].array.set_at(scaled_intensity, event.coord.y.into(), event.coord.x.into(), channel.into())?;
+                // self.frames[0].array.set_at(scaled_intensity, event.coord.y.into(), event.coord.x.into(), channel.into())?;
 
 
             }
+            // TODO: not covered by tests
             FramerMode::INTEGRATION => {
 
                 // TODO: figure out what the index will be
@@ -195,7 +227,7 @@ impl Framer for FrameSequence<name>
 
             }
         }
-        Ok(false)
+        Ok(self.frames[frame_num as usize].filled_count == self.frames[0].array.num_elems())
     }
 
     fn get_frame_bytes(&mut self) -> Option<BytesMut> {
