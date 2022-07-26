@@ -23,11 +23,6 @@ pub struct EventCoordless {
     pub delta_t: DeltaT,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Default)]
-pub struct OptionEventCoordless {
-    pub(crate) event: Option<EventCoordless>
-}
-
 pub enum FramerMode {
     INSTANTANEOUS,
     INTEGRATION,
@@ -64,7 +59,7 @@ pub trait Framer {
     /// output frame(s)
     fn ingest_event(&mut self, event: &Event) -> Result<bool, Array3DError>;
 
-    fn get_frame_bytes(&mut self) -> Option<BytesMut>;
+    // fn get_frame_bytes(&mut self) -> Option<BytesMut>;
 
     // fn pop_next_frame(&mut self) -> Result<Array3D<Self::Output>, Array3DError>;
     //
@@ -110,7 +105,7 @@ pub struct FrameSequence<T> {
 }
 
 use duplicate::duplicate_item;
-#[duplicate_item(name; [u8]; [u16])]
+#[duplicate_item(name; [u8]; [u16]; [u32]; [u64];)]
 impl Framer for FrameSequence<name>
 {
     type Output = name;
@@ -181,6 +176,11 @@ impl Framer for FrameSequence<name>
             _ => {}
         }
 
+        // This happens when we pop a frame before all the pixels are filled
+        if frame_num < self.frames_written {
+            return Ok(self.frames[frame_num as usize].filled_count == self.frames[0].array.num_elems())
+        }
+
 
         match &self.mode {
             FramerMode::INSTANTANEOUS => {
@@ -228,17 +228,6 @@ impl Framer for FrameSequence<name>
             }
         }
         Ok(self.frames[frame_num as usize].filled_count == self.frames[0].array.num_elems())
-    }
-
-    fn get_frame_bytes(&mut self) -> Option<BytesMut> {
-        match self.pop_next_frame() {
-            Some(arr) => {
-                Some(arr.serialize_to_be_bytes())
-            }
-            None => {
-                None
-            }
-        }
     }
 }
 
@@ -294,9 +283,26 @@ impl FrameSequence<name> {
     pub fn pop_next_frame(&mut self) -> Option<Array3D<name>> {
         match self.frames.pop_front() {
             Some(a) => {
+                self.frames_written += 1;
+                // If this is the only frame left, then add a new one to prevent invalid accesses later
+                if self.frames.len() == 0 {
+                    let array = Array3D::new_like(&a.array);
+                    self.frames.append(&mut VecDeque::from(vec![Frame { array, start_ts: 0, filled_count: 0 }; 1]));
+                }
                 Some(a.array)
             }
             None => { None }
+        }
+    }
+
+    pub fn get_frame_bytes(&mut self) -> Option<BytesMut> {
+        match self.pop_next_frame() {
+            Some(arr) => {
+                Some(arr.serialize_to_be_bytes())
+            }
+            None => {
+                None
+            }
         }
     }
 }

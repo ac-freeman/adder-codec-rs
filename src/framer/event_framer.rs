@@ -3,7 +3,7 @@ use bytes::{Bytes, BytesMut};
 use crate::{BigT, D, DeltaT};
 use crate::framer::array3d::{Array3D, Array3DError};
 use crate::framer::array3d::Array3DError::InvalidIndex;
-use crate::framer::framer::{EventCoordless, Frame, Framer, FramerMode, FrameSequence, OptionEventCoordless, SourceType};
+use crate::framer::framer::{EventCoordless, Frame, Framer, FramerMode, FrameSequence, SourceType};
 use crate::framer::framer::FramerMode::INSTANTANEOUS;
 
 impl From<&EventCoordless> for Bytes {
@@ -106,16 +106,5 @@ impl Framer for FrameSequence<Option<EventCoordless>> {
         }
 
         Ok(self.frames[frame_num as usize].filled_count == self.frames[0].array.num_elems())
-    }
-
-    fn get_frame_bytes(&mut self) -> Option<BytesMut> {
-        match self.pop_next_frame() {
-            Some(arr) => {
-                Some(arr.serialize_to_be_bytes())
-            }
-            None => {
-                None
-            }
-        }
     }
 }
