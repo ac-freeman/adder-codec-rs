@@ -208,22 +208,44 @@ impl Framer for FrameSequence<name>
                     }
                     _ => {}
                 }
-                // Since we're only looking at the most recent event for each pixel, never need more than one frame
-                // self.frames[0].array.set_at(scaled_intensity, event.coord.y.into(), event.coord.x.into(), channel.into())?;
-
-
             }
             // TODO: not covered by tests
             FramerMode::INTEGRATION => {
 
-                // TODO: figure out what the index will be
-                let current_integration = self.frames[0].array.at_mut(
-                    event.coord.y.into(),
-                    event.coord.x.into(),
-                    channel.into())
-                    .ok_or(InvalidIndex)?;
+                // // TODO: figure out what the index will be
+                // let current_integration = self.frames[0].array.at_mut(
+                //     event.coord.y.into(),
+                //     event.coord.x.into(),
+                //     channel.into())
+                //     .ok_or(InvalidIndex)?;
+                //
+                // current_integration.saturating_add(event_to_intensity(event) as name);    // TODO: check this
 
-                current_integration.saturating_add(event_to_intensity(event) as name);    // TODO: check this
+                // let intensity_per_tick = (event_to_intensity(event) as name) / event.delta_t;
+                match frame_num - old_frame_num {
+                    a if a > 0 => {
+                        for i in 0..a as usize + 1 {
+                            let current_integration = self.frames[i + old_frame_num as usize].array.at_mut(
+                                event.coord.y.into(),
+                                event.coord.x.into(),
+                                channel.into())
+                                .ok_or(InvalidIndex)?;
+                            // let ticks_to_add
+
+                            // Integrate the event
+                            // Get the intensity remaining
+                            // Get reference to pixel in next frame
+                            // Repeat
+
+
+                            // self.frames[i + old_frame_num as usize].array.set_at(
+                            //     scaled_intensity,
+                            //     event.coord.y.into(), event.coord.x.into(), channel.into())?;
+                            // self.frames[i + old_frame_num as usize].filled_count += 1;
+                        }
+                    }
+                    _ => {}
+                }
 
             }
         }

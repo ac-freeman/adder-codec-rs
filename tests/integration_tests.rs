@@ -8,6 +8,7 @@ use adder_codec_rs::{Codec, Coord, Event};
 use adder_codec_rs::raw::raw_stream::RawStream;
 use rand::Rng;
 use adder_codec_rs::framer::framer::Framer;
+use adder_codec_rs::framer::framer::FramerMode::INTEGRATION;
 use adder_codec_rs::framer::framer::SourceType::U8;
 
 #[test]
@@ -321,6 +322,7 @@ fn get_frame_bytes_eventcoordless() {
             output_writer.flush().unwrap();
             std::mem::drop(output_writer);
             assert_eq!(fs::metadata(&path).unwrap().len(), 125);
+            fs::remove_file(&path);  // Don't check the error
         }
     }
 }
@@ -370,6 +372,8 @@ fn get_frame_bytes_u8() {
             output_writer.flush().unwrap();
             std::mem::drop(output_writer);
             assert_eq!(fs::metadata(&path).unwrap().len(), 25);
+            fs::remove_file(&path);  // Don't check the error
+
         }
     }
 }
@@ -418,6 +422,7 @@ fn get_frame_bytes_u16() {
             output_writer.flush().unwrap();
             std::mem::drop(output_writer);
             assert_eq!(fs::metadata(&path).unwrap().len(), 50);
+            fs::remove_file(&path);  // Don't check the error
         }
     }
 }
@@ -466,6 +471,7 @@ fn get_frame_bytes_u32() {
             output_writer.flush().unwrap();
             std::mem::drop(output_writer);
             assert_eq!(fs::metadata(&path).unwrap().len(), 100);
+            fs::remove_file(&path);  // Don't check the error
         }
     }
 }
@@ -514,6 +520,7 @@ fn get_frame_bytes_u64() {
             output_writer.flush().unwrap();
             std::mem::drop(output_writer);
             assert_eq!(fs::metadata(&path).unwrap().len(), 200);
+            fs::remove_file(&path);  // Don't check the error
         }
     }
 }
@@ -538,4 +545,53 @@ fn test_get_empty_frame() {
     };
     let filled = frame_sequence.ingest_event(&event).unwrap();
     assert_eq!(filled, false);
+}
+
+#[test]
+fn get_frame_bytes_u8_integration() {
+    use adder_codec_rs::{Coord, Event};
+    use adder_codec_rs::framer::framer::FramerMode::INSTANTANEOUS;
+    use adder_codec_rs::framer::framer::{FrameSequence, Framer, EventCoordless};
+    use adder_codec_rs::framer::framer::SourceType::U8;
+    let mut frame_sequence: FrameSequence<u8> = FrameSequence::<u8>::new(5, 5, 1, 50000, 50, 15, 50000, INTEGRATION, U8);
+
+    for i in 0..5 {
+        for j in 0..5{
+            let event: Event = Event {
+                coord: Coord {
+                    x: i,
+                    y: j,
+                    c: None
+                },
+                d: 5,
+                delta_t: 5100
+            };
+            let filled = frame_sequence.ingest_event(&event).unwrap();
+            if i < 4 || j < 4 {
+                assert_eq!(filled, false)
+            } else {
+                assert_eq!(filled, true)
+            }
+        }
+        if i < 4 {
+            assert_eq!(frame_sequence.is_frame_filled(0).unwrap(), false);
+        } else {
+            assert_eq!(frame_sequence.is_frame_filled(0).unwrap(), true);
+        }
+
+    }
+    match frame_sequence.get_frame_bytes() {
+        None => {}
+        Some(frame_bytes) => {
+            let n: u32 = rand::thread_rng().gen();
+            let path = "./TEST_".to_owned() + n.to_string().as_str() + ".addr";
+            let file = File::create(&path).unwrap();
+            let mut output_writer = BufWriter::new(file);
+            output_writer.write_all(&*frame_bytes);
+            output_writer.flush().unwrap();
+            std::mem::drop(output_writer);
+            assert_eq!(fs::metadata(&path).unwrap().len(), 25);
+            fs::remove_file(&path);  // Don't check the error
+        }
+    }
 }
