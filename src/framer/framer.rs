@@ -171,6 +171,14 @@ impl Framer for FrameSequence<name>
             match event.d {
                 0xFF => {
                     // Don't do anything -- it's an empty event
+                    // Except in special case where delta_t == tpf
+                    if event.delta_t == self.tpf {
+                        self.frames[(*last_filled_frame_ref - self.frames_written) as usize].array.set_at(
+                            Some(0),
+                            event.coord.y.into(), event.coord.x.into(), channel.into())?;
+                        self.frames[(*last_filled_frame_ref - self.frames_written) as usize].filled_count += 1;
+                        *last_filled_frame_ref = ((*running_ts_ref -1) as i64 / self.tpf as i64) + 1;
+                    }
                 }
                 _ => {
                     let intensity = event_to_intensity(event);

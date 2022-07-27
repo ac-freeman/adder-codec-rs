@@ -52,7 +52,10 @@ fn main() -> Result<(), Array3DError> {
 
 
             }
-            Err(e) => {panic!("{}", e)}
+            Err(e) => {
+                eprintln!("{}", e);
+                break
+            }
         }
     }
 
