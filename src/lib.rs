@@ -16,6 +16,15 @@ pub(crate) const D_SHIFT: [u32; 16] = [
     1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768,
 ];
 
+/// The maximum intensity representation for input data. Currently 255 for 8-bit framed input.
+pub const MAX_INTENSITY: f32 = 255.0; // TODO: make variable, dependent on input bit depth
+
+/// The default [`D`] value for every pixel at the beginning of transcode
+pub const D_START: D = 7;
+
+/// The maximum possible [`D`] value
+pub const D_MAX: D = 20;
+
 /// Number of ticks elapsed since a given pixel last fired an [`pixel::Event`]
 pub type DeltaT = u32;
 
