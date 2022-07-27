@@ -16,7 +16,7 @@ impl From<&EventCoordless> for Bytes {
     }
 }
 
-impl Framer for FrameSequence<Option<EventCoordless>> {
+impl Framer for FrameSequence<EventCoordless> {
     type Output = Option<EventCoordless>;
 
     fn new(num_rows: usize, num_cols: usize, num_channels: usize, tps: DeltaT, output_fps: u32, d_max: D, delta_t_max: DeltaT, _: FramerMode, source: SourceType) -> Self {

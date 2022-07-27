@@ -72,13 +72,13 @@ impl<T: Default + std::clone::Clone> Array3D<T> where bytes::Bytes: From<Vec<u8>
         Err(InvalidIndex)
     }
 
-    pub fn at(&self, row: usize, col: usize, channel: usize) -> Option<&T> {
+    pub fn at(&self, row: usize, col: usize, channel: usize) -> Result<&T, Array3DError> {
         match self.check_idx(row, col, channel) {
             Ok(_) => {
-                Some(&self.array[row * (self.num_cols * self.num_channels) + col * self.num_channels + channel])
+                Ok(&self.array[row * (self.num_cols * self.num_channels) + col * self.num_channels + channel])
             }
-            Err(_) => {
-                None
+            Err(e) => {
+                Err(e)
             }
         }
     }
@@ -219,12 +219,19 @@ impl Array3D<Option<EventCoordless>> {
 
 use duplicate::duplicate_item;
 #[duplicate_item(name; [u8]; [u16]; [u32]; [u64];)]
-impl Array3D<name> {
+impl Array3D<Option<name>> {
     pub fn serialize_to_be_bytes(&self) ->  BytesMut {
         let mut buf = BytesMut::with_capacity(self.num_rows*self.num_cols*self.num_channels * size_of::<name>());
         for elem in &self.iter_2d() {
             for sub_elem in elem {
-                buf.put(Bytes::from(sub_elem.to_be_bytes().to_vec()));
+                match sub_elem {
+                    Some(val) => {
+                        buf.put(Bytes::from(val.to_be_bytes().to_vec()));
+                    }
+                    None => {
+                        buf.put(Bytes::from((0 as name).to_be_bytes().to_vec()));
+                    }
+                }
             }
         }
         buf
@@ -237,7 +244,7 @@ impl<T: Default + std::clone::Clone > Index<(usize, usize)> for Array3D<T> where
     type Output = T;
 
     fn index(&self, (row, col): (usize, usize)) -> &Self::Output {
-        self.at(row, col, 0).unwrap_or_else(|| panic!("Invalid index for row {}, col {}", row, col))
+        self.at(row, col, 0).unwrap_or_else(|_| panic!("Invalid index for row {}, col {}", row, col))
     }
 }
 
@@ -251,7 +258,7 @@ impl<T: Default + std::clone::Clone> Index<(usize, usize, usize)> for Array3D<T>
     type Output = T;
 
     fn index(&self, (row, col, channel): (usize, usize, usize)) -> &Self::Output {
-        self.at(row, col, channel).unwrap_or_else(|| panic!("Invalid index for row {}, col {}, channel {}", row, col, channel))
+        self.at(row, col, channel).unwrap_or_else(|_| panic!("Invalid index for row {}, col {}, channel {}", row, col, channel))
     }
 }
 

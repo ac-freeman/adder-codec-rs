@@ -91,7 +91,7 @@ pub enum FrameSequenceError {
 }
 
 pub struct FrameSequence<T> {
-    pub(crate) frames: VecDeque<Frame<T>>,
+    pub(crate) frames: VecDeque<Frame<Option<T>>>,
     pub(crate) current_frame: i64,
     pub(crate) frames_written: i64,
     pub(crate) pixel_ts_tracker: Array3D<BigT>,
@@ -107,12 +107,12 @@ pub struct FrameSequence<T> {
 }
 
 use duplicate::duplicate_item;
-#[duplicate_item(name; [u8]; [u16]; [u32]; [u64];)]
+#[duplicate_item(name; [u8];)]
 impl Framer for FrameSequence<name>
 {
     type Output = name;
     fn new(num_rows: usize, num_cols: usize, num_channels: usize, tps: DeltaT, output_fps: u32, d_max: D, delta_t_max: DeltaT, mode: FramerMode, source: SourceType) -> Self {
-        let array: Array3D<name> = Array3D::new(num_rows, num_cols, num_channels);
+        let array: Array3D<Option<name>> = Array3D::new(num_rows, num_cols, num_channels);
         FrameSequence {
             frames: VecDeque::from(vec![Frame { array, start_ts: 0, filled_count: 0 }]),
             current_frame: 1,
@@ -170,7 +170,7 @@ impl Framer for FrameSequence<name>
         if ((*running_ts_ref - 1) as i64/ self.tpf as i64) + 1 > *last_filled_frame_ref {
             match event.d {
                 0xFF => {
-
+                    // Don't do anything -- it's an empty event
                 }
                 _ => {
                     let intensity = event_to_intensity(event);
@@ -196,9 +196,25 @@ impl Framer for FrameSequence<name>
                     }
 
                     for i in prev_last_filled_frame..*last_filled_frame_ref {
-                        self.frames[(i - self.frames_written) as usize].array.set_at(
-                                            scaled_intensity,
+                        match self.frames[(i - self.frames_written) as usize].array.at(
+                            event.coord.y.into(), event.coord.x.into(), channel.into()) {
+                            Ok(elem) => {
+                                match elem {
+                                    Some(val) => {
+
+                                    }
+                                    None => {
+                                        self.frames[(i - self.frames_written) as usize].array.set_at(
+                                            Some(scaled_intensity),
                                             event.coord.y.into(), event.coord.x.into(), channel.into())?;
+                                        self.frames[(i - self.frames_written) as usize].filled_count += 1;
+                                    }
+                                }
+                            }
+                            Err(e) => { panic!("todo")}
+                        }
+
+
                     }
 
                 }
@@ -206,9 +222,10 @@ impl Framer for FrameSequence<name>
 
         }
 
-        if !already_filled && *last_filled_frame_ref >= self.current_frame {
-            self.frames[0 as usize].filled_count += 1;
-        }
+        // if !already_filled && *last_filled_frame_ref >= self.current_frame {
+        //     self.frames[self.current_frame as usize - 1 - self.frames_written as usize].filled_count += 1;
+        // }
+        debug_assert!(*last_filled_frame_ref > 0);
         debug_assert!(self.frames[0 as usize].filled_count <= self.frames[0].array.num_elems());
         Ok(self.frames[0 as usize].filled_count == self.frames[0].array.num_elems())
 
@@ -290,27 +307,27 @@ impl Framer for FrameSequence<name>
     }
 }
 
-#[duplicate_item(name; [u8]; [u16]; [u32]; [u64]; [Option<EventCoordless>])]
+#[duplicate_item(name; [u8];)]
 impl FrameSequence<name> {
-    pub fn px_at_current(&self, row: usize, col: usize, channel: usize) -> Option<&name> {
+    pub fn px_at_current(&self, row: usize, col: usize, channel: usize) -> Result<&Option<name>, Array3DError> {
         if self.frames.len() == 0 {
             panic!("Frame not initialized");
         }
         self.frames[0].array.at(row, col, channel)
     }
 
-    pub fn px_at_frame(&self, row: usize, col: usize, channel: usize, frame_idx: usize) -> Option<&name> {
+    pub fn px_at_frame(&self, row: usize, col: usize, channel: usize, frame_idx: usize) -> Result<&Option<name>, Array3DError> {
         match self.frames.len() {
             a if frame_idx < a => {
                 self.frames[frame_idx].array.at(row, col, channel)
             }
             _ => {
-                None
+                Err(Array3DError::InvalidIndex) // TODO: not the right error
             }
         }
     }
 
-    fn get_frame(&self, frame_idx: usize) -> Result<&Array3D<name>, FrameSequenceError> {
+    fn get_frame(&self, frame_idx: usize) -> Result<&Array3D<Option<name>>, FrameSequenceError> {
         match self.frames.len() <= frame_idx {
             true => {
                 Err(FrameSequenceError::InvalidIndex)
@@ -339,10 +356,11 @@ impl FrameSequence<name> {
         }
     }
 
-    pub fn pop_next_frame(&mut self) -> Option<Array3D<name>> {
+    pub fn pop_next_frame(&mut self) -> Option<Array3D<Option<name>>> {
         match self.frames.pop_front() {
             Some(a) => {
                 self.current_frame += 1;
+                self.frames_written += 1;
                 // If this is the only frame left, then add a new one to prevent invalid accesses later
                 if self.frames.len() == 0 {
                     let array = Array3D::new_like(&a.array);
