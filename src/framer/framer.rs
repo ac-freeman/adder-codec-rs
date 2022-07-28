@@ -1,7 +1,8 @@
 use std::collections::VecDeque;
 use std::fs::File;
 use std::io::{BufWriter, Error, Write};
-use bytes::BytesMut;
+use std::mem::size_of;
+use bytes::{BufMut, BytesMut};
 use crate::{BigT, D, D_SHIFT, DeltaT, Event, Intensity};
 use crate::framer::array3d::{Array3D, Array3DError};
 use crate::framer::array3d::Array3DError::InvalidIndex;
@@ -412,6 +413,24 @@ impl FrameSequence<name> {
             None => {
                 None
             }
+        }
+    }
+
+    pub fn get_multi_frame_bytes(&mut self) -> Option<(i32, BytesMut)> {
+        let mut return_buf = BytesMut::with_capacity(self.frames[0].array.num_elems() * size_of::<name>());
+        let mut frame_count = 0;
+        while self.frames[0].filled_count == self.frames[0].array.num_elems() {
+            match self.get_frame_bytes() {
+                None => {panic!("TODO: Frame bytes error")}
+                Some(bytes) => {
+                    frame_count += 1;
+                    return_buf.put(bytes)
+                }
+            }
+        }
+        match return_buf.len() {
+            0 => {None},
+            _ => { Some((frame_count, return_buf))}
         }
     }
 }

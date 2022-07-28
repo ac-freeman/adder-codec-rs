@@ -28,18 +28,19 @@ fn main() -> Result<(), Array3DError> {
         match stream.decode_event() {
             Ok(event) => {
                 if frame_sequence.ingest_event(&event)? {
-                    match frame_sequence.get_frame_bytes() {
+                    match frame_sequence.get_multi_frame_bytes() {
                         None => { panic!("should have frame") },
-                        Some(bytes) => {
+                        Some((frames_returned, bytes)) => {
                             match output_stream.write_all(&bytes) {
                                 Ok(_) => {},
                                 Err(e) => {panic!("{}", e)}
                             }
-                            frame_count += 1;
+                            frame_count += frames_returned;
                             if frame_count % 1 == 0 {
                                 print!(
-                                    "\rOutput frame {} in  {}ms",
+                                    "\rOutput frame {}. Got {} frames in  {}ms",
                                     frame_count,
+                                    frames_returned,
                                     now.elapsed().as_millis()
                                 );
                                 io::stdout().flush().unwrap();
