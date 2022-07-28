@@ -36,7 +36,7 @@ fn main() -> Result<(), Array3DError> {
                                 Err(e) => {panic!("{}", e)}
                             }
                             frame_count += 1;
-                            if frame_count % 30 == 0 {
+                            if frame_count % 1 == 0 {
                                 print!(
                                     "\rOutput frame {} in  {}ms",
                                     frame_count,
@@ -53,7 +53,7 @@ fn main() -> Result<(), Array3DError> {
 
             }
             Err(e) => {
-                eprintln!("\n{}", e);
+                eprintln!("\n{}. Exiting", e);
                 break
             }
         }
