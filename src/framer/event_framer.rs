@@ -23,8 +23,8 @@ impl Framer for FrameSequence<EventCoordless> {
         let array: Array3D<Option<EventCoordless>> = Array3D::new(num_rows, num_cols, num_channels);
         FrameSequence {
             frames: VecDeque::from(vec![Frame { array, start_ts: 0, filled_count: 0 }]),
-            current_frame: 0,
             frames_written: 0,
+            frame_idx_offset: 0,
             pixel_ts_tracker: Array3D::new(num_rows, num_cols, num_channels),
             last_filled_tracker: Array3D::new(num_rows, num_cols, num_channels),
             mode: INSTANTANEOUS,    // Silently ignore the mode that's passed in
@@ -84,7 +84,7 @@ impl Framer for FrameSequence<EventCoordless> {
         let frame_num = *tracker as i64 / self.tpf as i64;
 
         // If frame_num is too big, grow the frame vec by the difference
-        match frame_num as i64 - self.frames.len() as i64 - self.current_frame + 1{
+        match frame_num as i64 - self.frames.len() as i64 - self.frames_written + 1{
             a if a > 0 => {
                 let array: Array3D<Option<EventCoordless>> = Array3D::new_like(&self.frames[0].array);
                 self.frames.append(&mut VecDeque::from(vec![Frame { array, start_ts: 0, filled_count: 0 }; a as usize]));

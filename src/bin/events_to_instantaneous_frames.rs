@@ -53,7 +53,7 @@ fn main() -> Result<(), Array3DError> {
 
             }
             Err(e) => {
-                eprintln!("{}", e);
+                eprintln!("\n{}", e);
                 break
             }
         }

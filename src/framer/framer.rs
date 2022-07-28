@@ -92,8 +92,8 @@ pub enum FrameSequenceError {
 
 pub struct FrameSequence<T> {
     pub(crate) frames: VecDeque<Frame<Option<T>>>,
-    pub(crate) current_frame: i64,
     pub(crate) frames_written: i64,
+    pub(crate) frame_idx_offset: i64,
     pub(crate) pixel_ts_tracker: Array3D<BigT>,
     pub(crate) last_filled_tracker: Array3D<i64>,
     pub(crate) mode: FramerMode,
@@ -115,10 +115,10 @@ impl Framer for FrameSequence<name>
         let array: Array3D<Option<name>> = Array3D::new(num_rows, num_cols, num_channels);
         FrameSequence {
             frames: VecDeque::from(vec![Frame { array, start_ts: 0, filled_count: 0 }]),
-            current_frame: 1,
             frames_written: 0,
+            frame_idx_offset: 0,
             pixel_ts_tracker: Array3D::new(num_rows, num_cols, num_channels),
-            last_filled_tracker: Array3D::new(num_rows, num_cols, num_channels),
+            last_filled_tracker: Array3D::new_init(-1, num_rows, num_cols, num_channels),
             mode,
             running_ts: 0,
             tps,
@@ -163,20 +163,20 @@ impl Framer for FrameSequence<name>
 
         let last_filled_frame_ref = self.last_filled_tracker.at_mut(event.coord.y.into(), event.coord.x.into(), channel.into()).ok_or(InvalidIndex)?;
         let prev_last_filled_frame = *last_filled_frame_ref;
-        let already_filled = *last_filled_frame_ref >= self.current_frame;
+        let already_filled = *last_filled_frame_ref >= self.frames_written;
         let running_ts_ref = self.pixel_ts_tracker.at_mut(event.coord.y.into(), event.coord.x.into(), channel.into()).ok_or(InvalidIndex)?;
         *running_ts_ref = *running_ts_ref + event.delta_t as BigT;
 
-        if ((*running_ts_ref - 1) as i64/ self.tpf as i64) + 1 > *last_filled_frame_ref {
+        if ((*running_ts_ref - 1) as i64/ self.tpf as i64) > *last_filled_frame_ref {
             match event.d {
                 0xFF => {
                     // Don't do anything -- it's an empty event
                     // Except in special case where delta_t == tpf
-                    if event.delta_t == self.tpf {
-                        self.frames[(*last_filled_frame_ref - self.frames_written) as usize].array.set_at(
+                    if *running_ts_ref == self.tpf as BigT && event.delta_t == self.tpf {
+                        self.frames[(*last_filled_frame_ref - self.frame_idx_offset) as usize].array.set_at(
                             Some(0),
                             event.coord.y.into(), event.coord.x.into(), channel.into())?;
-                        self.frames[(*last_filled_frame_ref - self.frames_written) as usize].filled_count += 1;
+                        self.frames[(*last_filled_frame_ref - self.frame_idx_offset) as usize].filled_count += 1;
                         *last_filled_frame_ref = ((*running_ts_ref -1) as i64 / self.tpf as i64) + 1;
                     }
                 }
@@ -191,20 +191,21 @@ impl Framer for FrameSequence<name>
                                 // SourceType::F64 => {<u8 as ScaleIntensity<T>>::scale_intensity(intensity, (self.tps / self.output_fps) as BigT}
                                 _ => { panic!("todo") }
                             };
-                    *last_filled_frame_ref = ((*running_ts_ref -1) as i64 / self.tpf as i64) + 1;
+                    *last_filled_frame_ref = ((*running_ts_ref -1) as i64 / self.tpf as i64);
 
 
                     // Grow the frames vec if necessary
-                    match *last_filled_frame_ref - self.frames_written {
-                        a if a as usize > self.frames.len() => {
+                    match *last_filled_frame_ref - self.frame_idx_offset {
+                        a if a > 0 => {
                             let array = Array3D::new_like(&self.frames[0].array);
                             self.frames.append(&mut VecDeque::from(vec![Frame { array, start_ts: 0, filled_count: 0 }; a as usize]));
+                            self.frame_idx_offset += a;
                         }
                         _ => {}
                     }
 
                     for i in prev_last_filled_frame..*last_filled_frame_ref {
-                        match self.frames[(i - self.frames_written) as usize].array.at(
+                        match self.frames[(i - self.frames_written + 1) as usize].array.at(
                             event.coord.y.into(), event.coord.x.into(), channel.into()) {
                             Ok(elem) => {
                                 match elem {
@@ -212,10 +213,12 @@ impl Framer for FrameSequence<name>
 
                                     }
                                     None => {
-                                        self.frames[(i - self.frames_written) as usize].array.set_at(
+                                        // println!("Making None to Some at {} and frame index {}", event.coord.x, (i - self.frames_written + 1));
+
+                                        self.frames[(i - self.frames_written + 1) as usize].array.set_at(
                                             Some(scaled_intensity),
                                             event.coord.y.into(), event.coord.x.into(), channel.into())?;
-                                        self.frames[(i - self.frames_written) as usize].filled_count += 1;
+                                        self.frames[(i - self.frames_written + 1) as usize].filled_count += 1;
                                     }
                                 }
                             }
@@ -230,11 +233,31 @@ impl Framer for FrameSequence<name>
 
         }
 
+        if event.coord.y == 0 && event.coord.x == 6 {
+            assert!(self.frames[0].array.at(
+                                            event.coord.y.into(), event.coord.x.into(), channel.into()).unwrap().is_some())
+        }
+
         // if !already_filled && *last_filled_frame_ref >= self.current_frame {
         //     self.frames[self.current_frame as usize - 1 - self.frames_written as usize].filled_count += 1;
         // }
-        debug_assert!(*last_filled_frame_ref > 0);
+        debug_assert!(*last_filled_frame_ref >= 0);
         debug_assert!(self.frames[0 as usize].filled_count <= self.frames[0].array.num_elems());
+        // println!("{}", self.frames[0 as usize].filled_count);//}
+        // if self.frames[0 as usize].filled_count >=0 {
+        //     let mut i = 0;
+        //     for chunk in &self.frames[0].array.iter_2d() {
+        //         for elem in chunk {
+        //             match *elem {
+        //                 None => {
+        //                     eprintln!("None at {}", i );
+        //                 }
+        //                 _ => {}
+        //             }
+        //             i += 1;
+        //         }
+        //     }
+        // }
         Ok(self.frames[0 as usize].filled_count == self.frames[0].array.num_elems())
 
 
@@ -365,10 +388,11 @@ impl FrameSequence<name> {
     }
 
     pub fn pop_next_frame(&mut self) -> Option<Array3D<Option<name>>> {
-        match self.frames.pop_front() {
+        self.frames.rotate_left(1);
+        match self.frames.pop_back() {
             Some(a) => {
-                self.current_frame += 1;
                 self.frames_written += 1;
+                // self.frame_idx_offset += 1;
                 // If this is the only frame left, then add a new one to prevent invalid accesses later
                 if self.frames.len() == 0 {
                     let array = Array3D::new_like(&a.array);

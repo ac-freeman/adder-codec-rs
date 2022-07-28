@@ -44,6 +44,26 @@ impl<T: Default + std::clone::Clone> Array3D<T> where bytes::Bytes: From<Vec<u8>
         }
     }
 
+    /// Allocates a new [`Array3D`], initializing all elements with the provided init value
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use adder_codec_rs::Event;
+    /// # use adder_codec_rs::framer::array3d::{Array3D};
+    /// let arr: Array3D<Event> = Array3D::new(10, 10, 3);
+    /// ```
+    pub fn new_init(value: T, num_rows: usize, num_cols: usize, num_channels: usize) -> Self {
+        let arr: Vec<T> = vec![value; num_rows * num_cols * num_channels];
+
+        Array3D {
+            array: arr,
+            num_rows,
+            num_cols,
+            num_channels
+        }
+    }
+
     pub fn new_like(ref_array: &Array3D<T>) -> Self {
         let array: Array3D<T> = Array3D::new(ref_array.num_rows, ref_array.num_cols, ref_array.num_channels);
         array
