@@ -2,9 +2,9 @@ extern crate core;
 
 use std::fs::File;
 use std::io;
-use std::io::{BufWriter, Error, Write};
+use std::io::{BufWriter, Write};
 use std::time::Instant;
-use adder_codec_rs::{Codec, D_MAX, Event};
+use adder_codec_rs::{Codec, D_MAX};
 use adder_codec_rs::framer::array3d::Array3DError;
 use adder_codec_rs::framer::framer::FramerMode::INSTANTANEOUS;
 use adder_codec_rs::framer::framer::FrameSequence;
@@ -60,6 +60,6 @@ fn main() -> Result<(), Array3DError> {
         }
     }
 
-    output_stream.flush();
+    output_stream.flush().unwrap();
     Ok(())
 }

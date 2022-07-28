@@ -1,5 +1,6 @@
 use std::fs::File;
 use std::io::{BufReader, BufWriter, Read, Write};
+use std::mem;
 use bytes::{Buf, Bytes};
 use crate::{Codec, Coord, DeltaT, Event, EventStreamHeader};
 use crate::header::MAGIC_RAW;
@@ -45,18 +46,17 @@ impl Codec for RawStream {
             None => {}
             Some(stream) => {
                 stream.flush().unwrap();
-                std::mem::drop(stream);
             }
         }
+        let mut tmp = None;
+        mem::swap(&mut tmp, &mut self.output_stream);
+        drop(tmp);
     }
 
     fn close_reader(&mut self) {
-        match &mut self.input_stream {
-            None => {}
-            Some(stream) => {
-                std::mem::drop(stream);
-            }
-        }
+        let mut tmp = None;
+        mem::swap(&mut tmp, &mut self.input_stream);
+        drop(tmp);
     }
 
     fn set_output_stream(&mut self, stream: Option<BufWriter<File>>) {
