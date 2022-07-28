@@ -1,12 +1,16 @@
 use std::collections::VecDeque;
 use std::fs::File;
 use std::io::{BufWriter, Error, Write};
-use bytes::BytesMut;
+use std::mem::size_of;
+use bytes::{BufMut, Bytes, BytesMut};
 use crate::{BigT, D, D_SHIFT, DeltaT, Event, Intensity};
 use crate::framer::array3d::{Array3D, Array3DError};
 use crate::framer::array3d::Array3DError::InvalidIndex;
 use crate::framer::framer::FramerMode::INSTANTANEOUS;
 use crate::framer::scale_intensity::ScaleIntensity;
+use ndarray::{Array3, Axis};
+use ndarray::parallel::prelude::IntoParallelIterator;
+use ndarray::parallel::prelude::ParallelIterator;
 
 // type EventFrame = Array3D<Event>;
 // type Intensity8Frame = Array3D<u8>;
@@ -92,8 +96,11 @@ pub enum FrameSequenceError {
 
 pub struct FrameSequence<T> {
     pub(crate) frames: VecDeque<Frame<Option<T>>>,
+    pub(crate) frame_pixels: Array3<FramePixel>,
     pub(crate) frames_written: i64,
     pub(crate) frame_idx_offset: i64,
+    pub(crate) current_frame: i64,
+    pub(crate) filled_counter: i64,
     pub(crate) pixel_ts_tracker: Array3D<BigT>,
     pub(crate) last_filled_tracker: Array3D<i64>,
     pub(crate) mode: FramerMode,
@@ -107,16 +114,32 @@ pub struct FrameSequence<T> {
 }
 
 use duplicate::duplicate_item;
-#[duplicate_item(name; [u8];)]
+use crate::framer::frame_pixel::FramePixel;
+
+#[duplicate_item(name; [u16];)]
 impl Framer for FrameSequence<name>
 {
     type Output = name;
     fn new(num_rows: usize, num_cols: usize, num_channels: usize, tps: DeltaT, output_fps: u32, d_max: D, delta_t_max: DeltaT, mode: FramerMode, source: SourceType) -> Self {
         let array: Array3D<Option<name>> = Array3D::new(num_rows, num_cols, num_channels);
+        let mut frame_pixels = Array3::<FramePixel>::default(
+            (num_rows, num_cols, num_channels));
+
+        for i in 0..num_rows {
+            for j in 0..num_cols {
+                for k in 0..num_channels {
+                    frame_pixels[[i,j,k]].init(tps / output_fps,  delta_t_max);
+                }
+            }
+        }
+
         FrameSequence {
             frames: VecDeque::from(vec![Frame { array, start_ts: 0, filled_count: 0 }]),
+            frame_pixels,
             frames_written: 0,
             frame_idx_offset: 0,
+            current_frame: 1,
+            filled_counter: 0,
             pixel_ts_tracker: Array3D::new(num_rows, num_cols, num_channels),
             last_filled_tracker: Array3D::new_init(-1, num_rows, num_cols, num_channels),
             mode,
@@ -156,189 +179,27 @@ impl Framer for FrameSequence<name>
     /// assert_eq!(*elem, 32);
     /// ```
     fn ingest_event(&mut self, event: &crate::Event) -> Result<bool, Array3DError> {
+        assert!(self.filled_counter < self.frames[0].array.num_elems() as i64);
         let channel = match event.coord.c {
             None => {0}
             Some(c) => {c}
         };
 
-        let last_filled_frame_ref = self.last_filled_tracker.at_mut(event.coord.y.into(), event.coord.x.into(), channel.into()).ok_or(InvalidIndex)?;
-        let prev_last_filled_frame = *last_filled_frame_ref;
-        let already_filled = *last_filled_frame_ref >= self.frames_written;
-        let running_ts_ref = self.pixel_ts_tracker.at_mut(event.coord.y.into(), event.coord.x.into(), channel.into()).ok_or(InvalidIndex)?;
-        *running_ts_ref = *running_ts_ref + event.delta_t as BigT;
+        if self.frame_pixels[[
+            event.coord.y.into(), event.coord.x.into(), channel.into()]]
+            .ingest_event_for_all(event, self.current_frame as u32) {
+            self.filled_counter += 1;
 
-        if ((*running_ts_ref - 1) as i64/ self.tpf as i64) > *last_filled_frame_ref {
-            match event.d {
-                0xFF => {
-                    // Don't do anything -- it's an empty event
-                    // Except in special case where delta_t == tpf
-                    if *running_ts_ref == self.tpf as BigT && event.delta_t == self.tpf {
-                        self.frames[(*last_filled_frame_ref - self.frame_idx_offset) as usize].array.set_at(
-                            Some(0),
-                            event.coord.y.into(), event.coord.x.into(), channel.into())?;
-                        self.frames[(*last_filled_frame_ref - self.frame_idx_offset) as usize].filled_count += 1;
-                        *last_filled_frame_ref = ((*running_ts_ref -1) as i64 / self.tpf as i64) + 1;
-                    }
-                }
-                _ => {
-                    let intensity = event_to_intensity(event);
-                    let scaled_intensity: name = match self.source {
-                                SourceType::U8 => { <u8 as ScaleIntensity<name>>::scale_intensity(intensity, (self.tps / self.output_fps) as BigT) },
-                                SourceType::U16 => { <u16 as ScaleIntensity<name>>::scale_intensity(intensity, (self.tps / self.output_fps) as BigT) },
-                                SourceType::U32 => { <u32 as ScaleIntensity<name>>::scale_intensity(intensity, (self.tps / self.output_fps) as BigT) },
-                                SourceType::U64 => { <u64 as ScaleIntensity<name>>::scale_intensity(intensity, (self.tps / self.output_fps) as BigT) },
-                                // SourceType::F32 => {<u8 as ScaleIntensity<T>>::scale_intensity(intensity, (self.tps / self.output_fps) as BigT}
-                                // SourceType::F64 => {<u8 as ScaleIntensity<T>>::scale_intensity(intensity, (self.tps / self.output_fps) as BigT}
-                                _ => { panic!("todo") }
-                            };
-                    *last_filled_frame_ref = ((*running_ts_ref -1) as i64 / self.tpf as i64);
-
-
-                    // Grow the frames vec if necessary
-                    match *last_filled_frame_ref - self.frame_idx_offset {
-                        a if a > 0 => {
-                            let array = Array3D::new_like(&self.frames[0].array);
-                            self.frames.append(&mut VecDeque::from(vec![Frame { array, start_ts: 0, filled_count: 0 }; a as usize]));
-                            self.frame_idx_offset += a;
-                        }
-                        _ => {}
-                    }
-
-                    for i in prev_last_filled_frame..*last_filled_frame_ref {
-                        match self.frames[(i - self.frames_written + 1) as usize].array.at(
-                            event.coord.y.into(), event.coord.x.into(), channel.into()) {
-                            Ok(elem) => {
-                                match elem {
-                                    Some(val) => {
-
-                                    }
-                                    None => {
-                                        // println!("Making None to Some at {} and frame index {}", event.coord.x, (i - self.frames_written + 1));
-
-                                        self.frames[(i - self.frames_written + 1) as usize].array.set_at(
-                                            Some(scaled_intensity),
-                                            event.coord.y.into(), event.coord.x.into(), channel.into())?;
-                                        self.frames[(i - self.frames_written + 1) as usize].filled_count += 1;
-                                    }
-                                }
-                            }
-                            Err(e) => { panic!("todo")}
-                        }
-
-
-                    }
-
-                }
+            if self.filled_counter == self.frames[0].array.num_elems() as i64 {
+                return Ok(true)
             }
-
         }
+        Ok(false)
 
-        if event.coord.y == 0 && event.coord.x == 6 {
-            assert!(self.frames[0].array.at(
-                                            event.coord.y.into(), event.coord.x.into(), channel.into()).unwrap().is_some())
-        }
-
-        // if !already_filled && *last_filled_frame_ref >= self.current_frame {
-        //     self.frames[self.current_frame as usize - 1 - self.frames_written as usize].filled_count += 1;
-        // }
-        debug_assert!(*last_filled_frame_ref >= 0);
-        debug_assert!(self.frames[0 as usize].filled_count <= self.frames[0].array.num_elems());
-        // println!("{}", self.frames[0 as usize].filled_count);//}
-        // if self.frames[0 as usize].filled_count >=0 {
-        //     let mut i = 0;
-        //     for chunk in &self.frames[0].array.iter_2d() {
-        //         for elem in chunk {
-        //             match *elem {
-        //                 None => {
-        //                     eprintln!("None at {}", i );
-        //                 }
-        //                 _ => {}
-        //             }
-        //             i += 1;
-        //         }
-        //     }
-        // }
-        Ok(self.frames[0 as usize].filled_count == self.frames[0].array.num_elems())
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-        // // Get the event's corresponding frame number
-        // let frame_num = (*runnings_ts as i64  -1) / self.tpf as i64 + 1;
-        // let already_filled = old_frame_num > self.current_frame;
-        //
-        // // If frame_num is too big, grow the frame vec by the difference
-        // match frame_num as i64 - self.frames.len() as i64 - self.current_frame {
-        //     a if a > 0 => {
-        //         let array = Array3D::new_like(&self.frames[0].array);
-        //         self.frames.append(&mut VecDeque::from(vec![Frame { array, start_ts: 0, filled_count: 0 }; a as usize]));
-        //
-        //     }
-        //     _ => {}
-        // }
-        //
-        // // This happens when we pop a frame before all the pixels are filled
-        // if frame_num < self.current_frame {
-        //     return Ok(self.frames[0 as usize].filled_count == self.frames[0].array.num_elems())
-        // }
-        //
-        // if event.d != 0xFF {
-        //     // Event's intensity representation
-        //     let intensity = event_to_intensity(event);
-        //     // <S as ScaleIntensity<T>>::scale_intensity(intensity, (self.tps / self.output_fps) as BigT);
-        //     let scaled_intensity: name = match self.source {
-        //         SourceType::U8 => { <u8 as ScaleIntensity<name>>::scale_intensity(intensity, (self.tps / self.output_fps) as BigT) },
-        //         SourceType::U16 => { <u16 as ScaleIntensity<name>>::scale_intensity(intensity, (self.tps / self.output_fps) as BigT) },
-        //         SourceType::U32 => { <u32 as ScaleIntensity<name>>::scale_intensity(intensity, (self.tps / self.output_fps) as BigT) },
-        //         SourceType::U64 => { <u64 as ScaleIntensity<name>>::scale_intensity(intensity, (self.tps / self.output_fps) as BigT) },
-        //         // SourceType::F32 => {<u8 as ScaleIntensity<T>>::scale_intensity(intensity, (self.tps / self.output_fps) as BigT}
-        //         // SourceType::F64 => {<u8 as ScaleIntensity<T>>::scale_intensity(intensity, (self.tps / self.output_fps) as BigT}
-        //         _ => { panic!("todo") }
-        //     };
-        //
-        //     match frame_num - self.current_frame {
-        //         a if a > 0 => {
-        //             for i in 0..a as usize + 1 {
-        //                 self.frames[i + old_frame_num as usize].array.set_at(
-        //                     scaled_intensity,
-        //                     event.coord.y.into(), event.coord.x.into(), channel.into())?;
-        //             }
-        //         }
-        //         _ => {
-        //             let current_value: name =  *self.frames[old_frame_num as usize].array.at(
-        //                 event.coord.y.into(), event.coord.x.into(), channel.into()).unwrap();
-        //             if !already_filled { // TODO: not a good way of doing this
-        //                 self.frames[old_frame_num as usize].array.set_at(
-        //                     scaled_intensity,
-        //                     event.coord.y.into(), event.coord.x.into(), channel.into())?;
-        //             }
-        //         }
-        //     }
-        //     }
-        // }
-        //
-        // if !already_filled && frame_num >= self.current_frame {
-        //     self.frames[0 as usize].filled_count += 1;
-        // }
-
-        // if self.frames[0 as usize].filled_count > 510000 {
-        // debug_assert!(self.frames[0 as usize].filled_count <= self.frames[0].array.num_elems());
-        // println!("{}", self.frames[0 as usize].filled_count);//}
-        // Ok(self.frames[0 as usize].filled_count == self.frames[0].array.num_elems())
     }
 }
 
-#[duplicate_item(name; [u8];)]
+#[duplicate_item(name; [u16];)]
 impl FrameSequence<name> {
     pub fn px_at_current(&self, row: usize, col: usize, channel: usize) -> Result<&Option<name>, Array3DError> {
         if self.frames.len() == 0 {
@@ -404,19 +265,58 @@ impl FrameSequence<name> {
         }
     }
 
-    pub fn get_frame_bytes(&mut self) -> Option<BytesMut> {
-        match self.pop_next_frame() {
-            Some(arr) => {
-                Some(arr.serialize_to_be_bytes())
-            }
-            None => {
-                None
+    pub fn get_frame_bytes(&mut self) -> Option<(i32, BytesMut)> {
+        assert_eq!(self.filled_counter, self.frames[0].array.num_elems() as i64);
+
+        let mut buf = BytesMut::with_capacity(self.frames[0].array.num_elems() * size_of::<name>());
+        let mut output_frame_count = 0;
+        while self.filled_counter == self.frames[0].array.num_elems() as i64
+        {
+            self.current_frame += 1;
+            output_frame_count += 1;
+
+            self.filled_counter = (self.frame_pixels).into_par_iter().fold(|| 0 as usize,
+                                                                           |a: usize, b: &FramePixel|
+                                                                               a + match b.check_if_filled(self.current_frame as u32) {
+                                                                                   true => { 1 },
+                                                                                   _ => { 0 }
+                                                                               })
+                .sum::<usize>() as i64;
+
+            for (i, mut px) in self.frame_pixels.iter_mut().enumerate() {
+                let event = match px.target_events_read_for_all[0] {
+                    None => { panic!("No event") }
+                    Some((frame, event)) => {
+                        assert!(frame as i32 >= (self.current_frame - 1) as i32);
+                        if frame as i32 == (self.current_frame - 1) as i32 {
+                            px.target_events_read_for_all.pop_front().unwrap();
+                        }
+                        event
+                    }
+                };
+                let intensity = eventcoordless_to_intensity(&event);
+                let scaled_intensity: name = match self.source {
+                    SourceType::U8 => { <u8 as ScaleIntensity<name>>::scale_intensity(intensity, (self.tps / self.output_fps) as BigT) },
+                    SourceType::U16 => { <u16 as ScaleIntensity<name>>::scale_intensity(intensity, (self.tps / self.output_fps) as BigT) },
+                    SourceType::U32 => { <u32 as ScaleIntensity<name>>::scale_intensity(intensity, (self.tps / self.output_fps) as BigT) },
+                    SourceType::U64 => { <u64 as ScaleIntensity<name>>::scale_intensity(intensity, (self.tps / self.output_fps) as BigT) },
+                    // SourceType::F32 => {<u8 as ScaleIntensity<T>>::scale_intensity(intensity, (self.tps / self.output_fps) as BigT}
+                    // SourceType::F64 => {<u8 as ScaleIntensity<T>>::scale_intensity(intensity, (self.tps / self.output_fps) as BigT}
+                    _ => { panic!("todo") }
+                };
+                buf.put(Bytes::from(scaled_intensity.to_be_bytes().to_vec()));
             }
         }
+        Some((output_frame_count, buf))
     }
 }
-
 
 fn event_to_intensity(event: &Event) -> Intensity {
     D_SHIFT[event.d as usize] as Intensity / event.delta_t as Intensity
 }
+
+fn eventcoordless_to_intensity(event: &EventCoordless) -> Intensity {
+    D_SHIFT[event.d as usize] as Intensity / event.delta_t as Intensity
+}
+
+

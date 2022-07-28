@@ -27,7 +27,7 @@ impl Codec for RawStream {
             ref_interval: 0,
             delta_t_max: 0,
             channels: 0,
-            event_size: 0
+            event_size: 0,
         }
     }
 
@@ -35,7 +35,10 @@ impl Codec for RawStream {
         match &mut self.output_stream {
             None => {}
             Some(stream) => {
-                stream.flush().unwrap();
+                match stream.flush() {
+                    Ok(_) => {},
+                    Err(e) => { panic!("{}", e) }
+                };
             }
         }
     }

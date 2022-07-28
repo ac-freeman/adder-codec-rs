@@ -3,8 +3,12 @@ use bytes::{Bytes, BytesMut};
 use crate::{BigT, D, DeltaT, Event};
 use crate::framer::array3d::{Array3D, Array3DError};
 use crate::framer::array3d::Array3DError::InvalidIndex;
+use crate::framer::frame_pixel::FramePixel;
 use crate::framer::framer::{EventCoordless, Frame, Framer, FramerMode, FrameSequence, SourceType};
 use crate::framer::framer::FramerMode::INSTANTANEOUS;
+use ndarray::{Array3, Axis};
+use ndarray::parallel::prelude::IntoParallelIterator;
+use ndarray::parallel::prelude::ParallelIterator;
 
 impl From<&EventCoordless> for Bytes {
     fn from(event: &EventCoordless) -> Self {
@@ -21,10 +25,24 @@ impl Framer for FrameSequence<EventCoordless> {
 
     fn new(num_rows: usize, num_cols: usize, num_channels: usize, tps: DeltaT, output_fps: u32, d_max: D, delta_t_max: DeltaT, _: FramerMode, source: SourceType) -> Self {
         let array: Array3D<Option<EventCoordless>> = Array3D::new(num_rows, num_cols, num_channels);
+        let mut frame_pixels = Array3::<FramePixel>::default(
+            (num_rows, num_cols, num_channels));
+
+        for i in 0..num_rows {
+            for j in 0..num_cols {
+                for k in 0..num_channels {
+                    frame_pixels[[i,j,k]].init(tps / output_fps,  delta_t_max);
+                }
+            }
+        }
+
         FrameSequence {
             frames: VecDeque::from(vec![Frame { array, start_ts: 0, filled_count: 0 }]),
+            frame_pixels,
             frames_written: 0,
             frame_idx_offset: 0,
+            current_frame: 1,
+            filled_counter: 0,
             pixel_ts_tracker: Array3D::new(num_rows, num_cols, num_channels),
             last_filled_tracker: Array3D::new(num_rows, num_cols, num_channels),
             mode: INSTANTANEOUS,    // Silently ignore the mode that's passed in
@@ -74,39 +92,62 @@ impl Framer for FrameSequence<EventCoordless> {
             Some(c) => {c}
         };
 
-        // Increment the timestamp tracker
-        let tracker = self.pixel_ts_tracker.at_mut(event.coord.y.into(), event.coord.x.into(), channel.into()).ok_or(InvalidIndex)?;
-        let old_tracker_ts = *tracker;
-        let old_frame_num = old_tracker_ts as i64 / self.tpf as i64;
-        *tracker = *tracker + event.delta_t as BigT;
+        if self.frame_pixels[[
+            event.coord.y.into(), event.coord.x.into(), channel.into()]]
+            .ingest_event_for_all(event, self.current_frame as u32) {
+            self.filled_counter += 1;
 
-        // Get the event's corresponding frame number
-        let frame_num = *tracker as i64 / self.tpf as i64;
+            if self.filled_counter == self.frames[0].array.num_elems() as i64 {
 
-        // If frame_num is too big, grow the frame vec by the difference
-        match frame_num as i64 - self.frames.len() as i64 - self.frames_written + 1{
-            a if a > 0 => {
-                let array: Array3D<Option<EventCoordless>> = Array3D::new_like(&self.frames[0].array);
-                self.frames.append(&mut VecDeque::from(vec![Frame { array, start_ts: 0, filled_count: 0 }; a as usize]));
+                self.current_frame += 1;
 
+
+                self.filled_counter = (self.frame_pixels).into_par_iter().fold( || 0 as usize,
+                                                                                | a: usize, b: &FramePixel|
+                                                                                    a + match b.check_if_filled(self.current_frame as u32) { true => {1}, _ => {0} })
+                    .sum::<usize>() as i64;
+
+                return Ok(true)
             }
-            _ => {}
         }
+        Ok(false)
 
-        // TODO: copy event to previous frames if bigger than tpf
 
-        match frame_num - old_frame_num {
-            a if a > 0 => {
-                for i in 0..a as usize + 1 {
-                    self.frames[i + old_frame_num as usize].array.set_at(
-                                Some(EventCoordless { d: event.d, delta_t: event.delta_t }),
-                                event.coord.y.into(), event.coord.x.into(), channel.into())?;
-                    self.frames[i + old_frame_num as usize].filled_count += 1;
-                }
-            }
-            _ => {}
-        }
 
-        Ok(self.frames[frame_num as usize].filled_count == self.frames[0].array.num_elems())
+
+        // // Increment the timestamp tracker
+        // let tracker = self.pixel_ts_tracker.at_mut(event.coord.y.into(), event.coord.x.into(), channel.into()).ok_or(InvalidIndex)?;
+        // let old_tracker_ts = *tracker;
+        // let old_frame_num = old_tracker_ts as i64 / self.tpf as i64;
+        // *tracker = *tracker + event.delta_t as BigT;
+        //
+        // // Get the event's corresponding frame number
+        // let frame_num = *tracker as i64 / self.tpf as i64;
+        //
+        // // If frame_num is too big, grow the frame vec by the difference
+        // match frame_num as i64 - self.frames.len() as i64 - self.frames_written + 1{
+        //     a if a > 0 => {
+        //         let array: Array3D<Option<EventCoordless>> = Array3D::new_like(&self.frames[0].array);
+        //         self.frames.append(&mut VecDeque::from(vec![Frame { array, start_ts: 0, filled_count: 0 }; a as usize]));
+        //
+        //     }
+        //     _ => {}
+        // }
+        //
+        // // TODO: copy event to previous frames if bigger than tpf
+        //
+        // match frame_num - old_frame_num {
+        //     a if a > 0 => {
+        //         for i in 0..a as usize + 1 {
+        //             self.frames[i + old_frame_num as usize].array.set_at(
+        //                         Some(EventCoordless { d: event.d, delta_t: event.delta_t }),
+        //                         event.coord.y.into(), event.coord.x.into(), channel.into())?;
+        //             self.frames[i + old_frame_num as usize].filled_count += 1;
+        //         }
+        //     }
+        //     _ => {}
+        // }
+        //
+        // Ok(self.frames[frame_num as usize].filled_count == self.frames[0].array.num_elems())
     }
 }

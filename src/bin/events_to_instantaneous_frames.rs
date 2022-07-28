@@ -8,7 +8,7 @@ use adder_codec_rs::{Codec, D_MAX, Event};
 use adder_codec_rs::framer::array3d::Array3DError;
 use adder_codec_rs::framer::framer::FramerMode::INSTANTANEOUS;
 use adder_codec_rs::framer::framer::FrameSequence;
-use adder_codec_rs::framer::framer::SourceType::U8;
+use adder_codec_rs::framer::framer::SourceType::{U16, U8};
 use adder_codec_rs::raw::raw_stream::RawStream;
 use adder_codec_rs::framer::framer::Framer;
 
@@ -21,25 +21,38 @@ fn main() -> Result<(), Array3DError> {
     let output_path = "/home/andrew/Downloads/temppp_out";
     let mut output_stream = BufWriter::new(File::create(output_path.to_string()).unwrap());
 
-    let mut frame_sequence: FrameSequence<u8> = FrameSequence::<u8>::new(stream.height.into(), stream.width.into(), stream.channels.into(), stream.tps, 60, D_MAX, stream.delta_t_max, INSTANTANEOUS, U8);
+    let mut frame_sequence: FrameSequence<u16> = FrameSequence::<u16>::new(
+        stream.height.into(),
+        stream.width.into(),
+        stream.channels.into(),
+        stream.tps,
+        60,
+        D_MAX,
+        stream.delta_t_max,
+        INSTANTANEOUS, U16);
     let mut now = Instant::now();
     let mut frame_count = 0;
+    let mut current_frame = 1;
+    let mut event_count = 0;
     loop {
         match stream.decode_event() {
             Ok(event) => {
+                event_count+= 1;
                 if frame_sequence.ingest_event(&event)? {
+
                     match frame_sequence.get_frame_bytes() {
                         None => { panic!("should have frame") },
-                        Some(bytes) => {
+                        Some((output_frame_count, bytes)) => {
                             match output_stream.write_all(&bytes) {
                                 Ok(_) => {},
                                 Err(e) => {panic!("{}", e)}
                             }
-                            frame_count += 1;
-                            if frame_count % 30 == 0 {
+                            frame_count += output_frame_count;
+                            if frame_count % 1 == 0 {
                                 print!(
-                                    "\rOutput frame {} in  {}ms",
+                                    "\rFrame total: {}    Output {} frames in  {}ms",
                                     frame_count,
+                                    output_frame_count,
                                     now.elapsed().as_millis()
                                 );
                                 io::stdout().flush().unwrap();
@@ -49,10 +62,9 @@ fn main() -> Result<(), Array3DError> {
                     }
                 }
 
-
-
             }
             Err(e) => {
+                println!("TOTAL EVENTS: {}", event_count);
                 eprintln!("\n{}", e);
                 break
             }
