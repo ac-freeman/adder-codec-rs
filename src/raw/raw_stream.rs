@@ -4,6 +4,8 @@ use std::mem;
 use bytes::{Buf, Bytes};
 use crate::{Codec, Coord, DeltaT, Event, EventStreamHeader};
 use crate::header::MAGIC_RAW;
+use bytes::BytesMut;
+use bytes::BufMut;
 
 pub struct RawStream {
     output_stream: Option<BufWriter<File>>,
@@ -154,9 +156,11 @@ impl Codec for RawStream {
                 panic!("Output stream not initialized");
             }
             Some(stream) => {
-                // NOTE: for speed, the following checks only run in debug builds. It's entirely
-                // possibly to encode non-sensical events if you want to.
+                let mut out_buf = BytesMut::with_capacity(events.len() * core::mem::size_of::<Event>());
+
                 for event in events {
+                    // NOTE: for speed, the following checks only run in debug builds. It's entirely
+                    // possibly to encode non-sensical events if you want to.
                     debug_assert!(event.coord.x < self.width);
                     debug_assert!(event.coord.y < self.height);
                     match event.coord.c {
@@ -172,9 +176,9 @@ impl Codec for RawStream {
                         }
                     }
                     debug_assert!(event.delta_t <= self.delta_t_max);
-                    stream.write_all(&Bytes::from(event).to_vec())
-                        .expect("Unable to write event");
+                    out_buf.put(Bytes::from(event));
                 }
+                stream.write_all(&out_buf).expect("Unable to write events");
             }
         }
     }
