@@ -4,6 +4,7 @@ use std::path::Path;
 use bytes::Bytes;
 use crate::framer::framer::EventCoordless;
 use crate::header::EventStreamHeader;
+use serde::{Serialize, Deserialize};
 
 mod header;
 pub mod raw;
@@ -37,17 +38,31 @@ pub type Intensity = f64;
 /// Pixel x- or y- coordinate address in the ADΔER model
 pub type PixelAddress = u16;
 
-#[derive(Debug, Copy, Clone, PartialEq, Default)]
+#[derive(Debug, Copy, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct Coord {
     pub x: PixelAddress,
     pub y: PixelAddress,
     pub c: Option<u8>,
 }
 
+#[derive(Debug, Copy, Clone, PartialEq, Default, Serialize, Deserialize)]
+pub struct CoordSingle {
+    pub x: PixelAddress,
+    pub y: PixelAddress,
+}
+
 /// An ADΔER event representation
-#[derive(Debug, Copy, Clone, PartialEq, Default)]
+#[derive(Debug, Copy, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct Event {
     pub coord: Coord,
+    pub d: D,
+    pub delta_t: DeltaT,
+}
+
+/// An ADΔER event representation
+#[derive(Debug, Copy, Clone, PartialEq, Default, Serialize, Deserialize)]
+pub struct EventSingle {
+    pub coord: CoordSingle,
     pub d: D,
     pub delta_t: DeltaT,
 }
@@ -71,7 +86,6 @@ impl From<&Coord> for Bytes {
                 )
             }
         }
-
     }
 }
 
@@ -85,6 +99,26 @@ impl From<&Event> for Bytes {
             &event.delta_t.to_be_bytes() as &[u8]
         ].concat()
         )
+    }
+}
+
+impl From<&Event> for EventSingle {
+    fn from(event: &Event) -> Self {
+        EventSingle {
+            coord: CoordSingle { x: event.coord.x, y: event.coord.y } ,
+            d: event.d,
+            delta_t: event.delta_t
+        }
+    }
+}
+
+impl From<EventSingle> for Event {
+    fn from(event: EventSingle) -> Self {
+        Event {
+            coord: Coord { x: event.coord.x, y: event.coord.y, c: None } ,
+            d: event.d,
+            delta_t: event.delta_t
+        }
     }
 }
 

@@ -1,11 +1,13 @@
 use std::fs::File;
 use std::io::{BufReader, BufWriter, Read, Write};
 use std::mem;
+use bincode::config::{BigEndian, FixintEncoding, WithOtherEndian, WithOtherIntEncoding};
 use bytes::{Buf, Bytes};
-use crate::{Codec, Coord, DeltaT, Event, EventStreamHeader};
+use crate::{Codec, Coord, DeltaT, Event, EventCoordless, EventSingle, EventStreamHeader};
 use crate::header::MAGIC_RAW;
 use bytes::BytesMut;
 use bytes::BufMut;
+use bincode::{DefaultOptions, Options};
 
 pub struct RawStream {
     output_stream: Option<BufWriter<File>>,
@@ -17,6 +19,7 @@ pub struct RawStream {
     pub delta_t_max: DeltaT,
     pub channels: u8,
     event_size: u8,
+    bincode: WithOtherEndian<WithOtherIntEncoding<DefaultOptions, FixintEncoding>, BigEndian>,
 }
 
 impl Codec for RawStream {
@@ -30,7 +33,10 @@ impl Codec for RawStream {
             ref_interval: 0,
             delta_t_max: 0,
             channels: 0,
-            event_size: 0
+            event_size: 0,
+            bincode: bincode::DefaultOptions::new()
+                    .with_fixint_encoding()
+                    .with_big_endian(),
         }
     }
 
@@ -156,61 +162,89 @@ impl Codec for RawStream {
                 panic!("Output stream not initialized");
             }
             Some(stream) => {
-                let mut out_buf = BytesMut::with_capacity(events.len() * core::mem::size_of::<Event>());
+                // bincode::encode_into_writer(events, stream, my_options);
 
+
+                // let mut out_buf = BytesMut::with_capacity(events.len() * core::mem::size_of::<Event>());
+                //
+                let mut output_event = EventSingle {
+                    coord: Default::default(),
+                    d: 0,
+                    delta_t: 0
+                };
                 for event in events {
-                    // NOTE: for speed, the following checks only run in debug builds. It's entirely
-                    // possibly to encode non-sensical events if you want to.
-                    debug_assert!(event.coord.x < self.width);
-                    debug_assert!(event.coord.y < self.height);
-                    match event.coord.c {
-                        None => {
-                            debug_assert_eq!(self.channels, 1);
-                        }
-                        Some(c) => {
-                            debug_assert!(c > 0);
-                            debug_assert!(c <= self.channels);
-                            if c == 1 {
-                                debug_assert!(self.channels > 1);
-                            }
-                        }
+                    if self.channels == 1 {
+                        output_event = event.into();
+                        self.bincode.serialize_into(&mut *stream, &output_event).unwrap();
+                        // bincode::serialize_into(&mut *stream, &output_event, my_options).unwrap();
+                    } else {
+                        self.bincode.serialize_into(&mut *stream, event).unwrap();
                     }
-                    debug_assert!(event.delta_t <= self.delta_t_max);
-                    out_buf.put(Bytes::from(event));
+
+                //     // NOTE: for speed, the following checks only run in debug builds. It's entirely
+                //     // possibly to encode non-sensical events if you want to.
+                //     debug_assert!(event.coord.x < self.width);
+                //     debug_assert!(event.coord.y < self.height);
+                //     match event.coord.c {
+                //         None => {
+                //             debug_assert_eq!(self.channels, 1);
+                //         }
+                //         Some(c) => {
+                //             debug_assert!(c > 0);
+                //             debug_assert!(c <= self.channels);
+                //             if c == 1 {
+                //                 debug_assert!(self.channels > 1);
+                //             }
+                //         }
+                //     }
+                //     debug_assert!(event.delta_t <= self.delta_t_max);
+                //     out_buf.put(Bytes::from(event));
                 }
-                stream.write_all(&out_buf).expect("Unable to write events");
+                // stream.write_all(&out_buf).expect("Unable to write events");
             }
         }
     }
 
     fn decode_event(&mut self) -> Result<Event, std::io::Error> {
-        let mut buf = vec![0u8; self.event_size as usize];
+        // let mut buf = vec![0u8; self.event_size as usize];
         match &mut self.input_stream {
             None => {
                 panic!("No input stream set")
             }
             Some(stream) => {
-                match stream.read_exact(&mut buf) {
-                    Ok(_) => {
-
-                        let mut byte_buffer = &buf[..];
-                        let event = Event {
-                            coord: Coord {
-                                x: byte_buffer.get_u16(),
-                                y: byte_buffer.get_u16(),
-                                c: match self.channels {
-                                    1 => { None },
-                                    _ => { Some(byte_buffer.get_u8()) }
-                                }
-                            },
-                            d: byte_buffer.get_u8(),
-                            delta_t: byte_buffer.get_u32()
-                        };
-
-                        Ok(event)
-                    }
-                    Err(e) => Err(e),
+                if self.channels == 1 {
+                    let event: EventSingle = self.bincode.deserialize_from(stream).unwrap();
+                    // bincode::serialize_into(&mut *stream, &output_event, my_options).unwrap();
+                    Ok(event.into())
+                } else {
+                    let event: Event = self.bincode.deserialize_from(stream).unwrap();
+                    // self.bincode.serialize_into(&mut *stream, event).unwrap();
+                    Ok(event)
                 }
+
+
+
+                // match stream.read_exact(&mut buf) {
+                //     Ok(_) => {
+                //
+                //         let mut byte_buffer = &buf[..];
+                //         let event = Event {
+                //             coord: Coord {
+                //                 x: byte_buffer.get_u16(),
+                //                 y: byte_buffer.get_u16(),
+                //                 c: match self.channels {
+                //                     1 => { None },
+                //                     _ => { Some(byte_buffer.get_u8()) }
+                //                 }
+                //             },
+                //             d: byte_buffer.get_u8(),
+                //             delta_t: byte_buffer.get_u32()
+                //         };
+                //
+                //         Ok(event)
+                //     }
+                //     Err(e) => Err(e),
+                // }
             }
         }
 
