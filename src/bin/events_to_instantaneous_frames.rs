@@ -21,7 +21,7 @@ fn main() -> Result<(), Array3DError> {
     let output_path = "/home/andrew/Downloads/temppp_out";
     let mut output_stream = BufWriter::new(File::create(output_path.to_string()).unwrap());
 
-    let mut frame_sequence: FrameSequence<u8> = FrameSequence::<u8>::new(stream.height.into(), stream.width.into(), stream.channels.into(), stream.tps, 60, D_MAX, stream.delta_t_max, INSTANTANEOUS, U8);
+    let mut frame_sequence: FrameSequence<u8> = FrameSequence::<u8>::new(stream.height.into(), stream.width.into(), stream.channels.into(), stream.tps, 30, D_MAX, stream.delta_t_max, INSTANTANEOUS, U8);
     let mut now = Instant::now();
     let mut frame_count = 0;
     loop {

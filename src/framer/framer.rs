@@ -170,7 +170,14 @@ impl Framer for FrameSequence<name>
 
         if ((*running_ts_ref - 1) as i64/ self.tpf as i64) > *last_filled_frame_ref {
             match event.d {
-                0xFF => {
+                d if d == 0xFF && event.delta_t < self.tpf => {
+                    // if *running_ts_ref == event.delta_t.into() {
+                    //     *last_filled_frame_ref = 0;
+                    //     self.frames[0].array.set_at(
+                    //         Some(0),
+                    //         event.coord.y.into(), event.coord.x.into(), channel.into())?;
+                    //     self.frames[0].filled_count += 1;
+                    // }
                     // Don't do anything -- it's an empty event
                     // Except in special case where delta_t == tpf
                     if *running_ts_ref == self.tpf as BigT && event.delta_t == self.tpf {
@@ -437,5 +444,13 @@ impl FrameSequence<name> {
 
 
 fn event_to_intensity(event: &Event) -> Intensity {
-    D_SHIFT[event.d as usize] as Intensity / event.delta_t as Intensity
+    match event.d as usize {
+        a if a >= D_SHIFT.len() => {
+            0 as Intensity
+        },
+        _ => {
+            D_SHIFT[event.d as usize] as Intensity / event.delta_t as Intensity
+        }
+    }
+
 }
