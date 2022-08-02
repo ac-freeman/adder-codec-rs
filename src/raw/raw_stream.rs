@@ -156,6 +156,12 @@ impl Codec for RawStream {
         }
     }
 
+    fn encode_events_events(&mut self, events: &Vec<Vec<Event>>) {
+        for v in events {
+            self.encode_events(v);
+        }
+    }
+
     fn encode_events(&mut self, events: &Vec<Event>) {
         match &mut self.output_stream {
             None => {

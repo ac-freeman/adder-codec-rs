@@ -2,6 +2,7 @@ use std::fs::File;
 use std::io::{BufReader, BufWriter};
 use std::path::Path;
 use bytes::Bytes;
+use rayon::iter::IntoParallelIterator;
 use crate::framer::framer::EventCoordless;
 use crate::header::EventStreamHeader;
 use serde::{Serialize, Deserialize};
@@ -159,6 +160,7 @@ pub trait Codec {
 
     fn encode_event(&mut self, event: &Event);
     fn encode_events(&mut self, events: &Vec<Event>);
+    fn encode_events_events(&mut self, events: &Vec<Vec<Event>>);
     fn decode_event(&mut self) -> Result<Event, std::io::Error>;
 
 

@@ -189,8 +189,12 @@ impl Framer for FrameSequence<name>
                     }
                 }
                 _ => {
+                    // if event.d == 0xFF && *last_filled_frame_ref > 420 {
+                    //     print!("t")
+                    // }
+
                     let intensity = event_to_intensity(event);
-                    let scaled_intensity: name = match self.source {
+                    let mut scaled_intensity: name = match self.source {
                                 SourceType::U8 => { <u8 as ScaleIntensity<name>>::scale_intensity(intensity, (self.tps / self.output_fps) as BigT) },
                                 SourceType::U16 => { <u16 as ScaleIntensity<name>>::scale_intensity(intensity, (self.tps / self.output_fps) as BigT) },
                                 SourceType::U32 => { <u32 as ScaleIntensity<name>>::scale_intensity(intensity, (self.tps / self.output_fps) as BigT) },
