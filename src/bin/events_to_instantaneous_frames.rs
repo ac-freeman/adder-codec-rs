@@ -58,7 +58,7 @@ fn main() -> Result<(), Array3DError> {
 
             }
             Err(e) => {
-                eprintln!("\n{}. Exiting", e);
+                eprintln!("\nExiting");
                 break
             }
         }
