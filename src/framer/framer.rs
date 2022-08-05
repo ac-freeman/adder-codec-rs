@@ -154,7 +154,7 @@ impl Framer for FrameSequence<name>
     ///     };
     /// frame_sequence.ingest_event(&event);
     /// let elem = frame_sequence.px_at_current(5, 5, 1).unwrap();
-    /// assert_eq!(*elem, 32);
+    /// assert_eq!(*elem, Some(32));
     /// ```
     fn ingest_event(&mut self, event: &crate::Event) -> Result<bool, Array3DError> {
         let channel = match event.coord.c {

@@ -165,14 +165,14 @@ impl Codec for RawStream {
             Some(stream) => {
                 // NOTE: for speed, the following checks only run in debug builds. It's entirely
                 // possibly to encode non-sensical events if you want to.
-                debug_assert!(event.coord.x < self.width);
-                debug_assert!(event.coord.y < self.height);
+                debug_assert!(event.coord.x == EOF_PX_ADDRESS || event.coord.x < self.width);
+                debug_assert!(event.coord.y == EOF_PX_ADDRESS || event.coord.y < self.height);
                 match event.coord.c {
                     None => {
                         debug_assert_eq!(self.channels, 1);
                     }
                     Some(c) => {
-                        debug_assert!(c > 0);
+                        debug_assert!(c >= 0);
                         debug_assert!(c <= self.channels);
                         if c == 1 {
                             debug_assert!(self.channels > 1);
