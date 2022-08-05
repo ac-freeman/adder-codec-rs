@@ -108,7 +108,7 @@ pub struct FrameSequence<T> {
 }
 
 use duplicate::duplicate_item;
-#[duplicate_item(name; [u8];)]
+#[duplicate_item(name; [u8]; [u16]; [u32]; [u64];)]
 impl Framer for FrameSequence<name>
 {
     type Output = name;
@@ -208,6 +208,13 @@ impl Framer for FrameSequence<name>
                             self.frames.append(&mut VecDeque::from(vec![Frame { array, start_ts: 0, filled_count: 0 }; a as usize]));
                             self.frame_idx_offset += a;
                         }
+                        a if a < 0 => {
+                            // We can get here if we've forcibly popped a frame before it's ready.
+                            // Increment pixel ts trackers as normal, but don't actually do anything
+                            // with the intensities if they correspond to frames that we've already
+                            // popped.
+                            return Ok(self.frames[0 as usize].filled_count == self.frames[0].array.num_elems())
+                        }
                         _ => {}
                     }
 
@@ -246,7 +253,7 @@ impl Framer for FrameSequence<name>
     }
 }
 
-#[duplicate_item(name; [u8];)]
+#[duplicate_item(name; [u8]; [u16]; [u32]; [u64];)]
 impl FrameSequence<name> {
     pub fn px_at_current(&self, row: usize, col: usize, channel: usize) -> Result<&Option<name>, Array3DError> {
         if self.frames.len() == 0 {
@@ -305,6 +312,7 @@ impl FrameSequence<name> {
                 if self.frames.len() == 0 {
                     let array = Array3D::new_like(&a.array);
                     self.frames.append(&mut VecDeque::from(vec![Frame { array, start_ts: 0, filled_count: 0 }; 1]));
+                    self.frame_idx_offset += 1;
                 }
                 Some(a.array)
             }
