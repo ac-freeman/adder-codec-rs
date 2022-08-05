@@ -1,13 +1,23 @@
 use std::fs::File;
-use std::io::{BufReader, BufWriter, Read, Write};
+use std::io::{BufReader, BufWriter, Error, Read, Write};
 use std::mem;
 use bincode::config::{BigEndian, FixintEncoding, WithOtherEndian, WithOtherIntEncoding};
 use bytes::{Buf, Bytes};
-use crate::{Codec, Coord, DeltaT, Event, EventCoordless, EventSingle, EventStreamHeader};
+use crate::{Codec, Coord, DeltaT, EOF_PX_ADDRESS, Event, EventCoordless, EventSingle, EventStreamHeader};
 use crate::header::MAGIC_RAW;
 use bytes::BytesMut;
 use bytes::BufMut;
 use bincode::{DefaultOptions, Options};
+use crate::raw::raw_stream::StreamError::{Deserialize, Eof};
+
+#[derive(Debug)]
+pub enum StreamError {
+    /// Reached end of file when expected
+    Eof,
+
+    /// Could not deserialize data. EOF reached at unexpected time.
+    Deserialize,
+}
 
 pub struct RawStream {
     output_stream: Option<BufWriter<File>>,
@@ -35,8 +45,8 @@ impl Codec for RawStream {
             channels: 0,
             event_size: 0,
             bincode: bincode::DefaultOptions::new()
-                    .with_fixint_encoding()
-                    .with_big_endian(),
+                .with_fixint_encoding()
+                .with_big_endian(),
         }
     }
 
@@ -48,8 +58,28 @@ impl Codec for RawStream {
             }
         }
     }
+    fn write_eof(&mut self) {
+        match &mut self.output_stream {
+            None => {
+                panic!("Output stream not initialized");
+            }
+            Some(stream) => {
+                let eof = Event {
+                    coord: Coord {
+                        x: EOF_PX_ADDRESS,
+                        y: EOF_PX_ADDRESS,
+                        c: Some(0)
+                    },
+                    d: 0,
+                    delta_t: 0
+                };
+                self.encode_event(&eof);
+            }
+        }
+    }
 
     fn close_writer(&mut self) {
+        self.write_eof();
         match &mut self.output_stream {
             None => {}
             Some(stream) => {
@@ -187,72 +217,56 @@ impl Codec for RawStream {
                         self.bincode.serialize_into(&mut *stream, event).unwrap();
                     }
 
-                //     // NOTE: for speed, the following checks only run in debug builds. It's entirely
-                //     // possibly to encode non-sensical events if you want to.
-                //     debug_assert!(event.coord.x < self.width);
-                //     debug_assert!(event.coord.y < self.height);
-                //     match event.coord.c {
-                //         None => {
-                //             debug_assert_eq!(self.channels, 1);
-                //         }
-                //         Some(c) => {
-                //             debug_assert!(c > 0);
-                //             debug_assert!(c <= self.channels);
-                //             if c == 1 {
-                //                 debug_assert!(self.channels > 1);
-                //             }
-                //         }
-                //     }
-                //     debug_assert!(event.delta_t <= self.delta_t_max);
-                //     out_buf.put(Bytes::from(event));
+                    //     // NOTE: for speed, the following checks only run in debug builds. It's entirely
+                    //     // possibly to encode non-sensical events if you want to.
+                    //     debug_assert!(event.coord.x < self.width);
+                    //     debug_assert!(event.coord.y < self.height);
+                    //     match event.coord.c {
+                    //         None => {
+                    //             debug_assert_eq!(self.channels, 1);
+                    //         }
+                    //         Some(c) => {
+                    //             debug_assert!(c > 0);
+                    //             debug_assert!(c <= self.channels);
+                    //             if c == 1 {
+                    //                 debug_assert!(self.channels > 1);
+                    //             }
+                    //         }
+                    //     }
+                    //     debug_assert!(event.delta_t <= self.delta_t_max);
+                    //     out_buf.put(Bytes::from(event));
                 }
                 // stream.write_all(&out_buf).expect("Unable to write events");
             }
         }
     }
 
-    fn decode_event(&mut self) -> Result<Event, std::io::Error> {
+    fn decode_event(&mut self) -> Result<Event, StreamError> {
         // let mut buf = vec![0u8; self.event_size as usize];
-        match &mut self.input_stream {
+        let event: Event = match &mut self.input_stream {
             None => {
                 panic!("No input stream set")
             }
             Some(stream) => {
                 if self.channels == 1 {
-                    let event: EventSingle = self.bincode.deserialize_from(stream).unwrap();
-                    // bincode::serialize_into(&mut *stream, &output_event, my_options).unwrap();
-                    Ok(event.into())
+                    match self.bincode.deserialize_from::<_, EventSingle>(stream) {
+                        Ok(ev) => { ev.into()}
+                        Err(e) => {
+                            return Err(Deserialize)
+                        }
+                    }
                 } else {
-                    let event: Event = self.bincode.deserialize_from(stream).unwrap();
-                    // self.bincode.serialize_into(&mut *stream, event).unwrap();
-                    Ok(event)
+                    match self.bincode.deserialize_from(stream) {
+                        Ok(ev) => { ev}
+                        Err(_) => { return Err(Deserialize)}
+                    }
                 }
-
-
-
-                // match stream.read_exact(&mut buf) {
-                //     Ok(_) => {
-                //
-                //         let mut byte_buffer = &buf[..];
-                //         let event = Event {
-                //             coord: Coord {
-                //                 x: byte_buffer.get_u16(),
-                //                 y: byte_buffer.get_u16(),
-                //                 c: match self.channels {
-                //                     1 => { None },
-                //                     _ => { Some(byte_buffer.get_u8()) }
-                //                 }
-                //             },
-                //             d: byte_buffer.get_u8(),
-                //             delta_t: byte_buffer.get_u32()
-                //         };
-                //
-                //         Ok(event)
-                //     }
-                //     Err(e) => Err(e),
-                // }
             }
+        };
+        if event.coord.y == EOF_PX_ADDRESS && event.coord.x == EOF_PX_ADDRESS {
+            return Err(Eof)
         }
+        Ok(event)
 
     }
 }

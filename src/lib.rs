@@ -6,6 +6,7 @@ use rayon::iter::IntoParallelIterator;
 use crate::framer::framer::EventCoordless;
 use crate::header::EventStreamHeader;
 use serde::{Serialize, Deserialize};
+use crate::raw::raw_stream::StreamError;
 
 mod header;
 pub mod raw;
@@ -38,6 +39,8 @@ pub type Intensity = f64;
 
 /// Pixel x- or y- coordinate address in the ADΔER model
 pub type PixelAddress = u16;
+
+pub const EOF_PX_ADDRESS: PixelAddress = u16::MAX;
 
 #[derive(Debug, Copy, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct Coord {
@@ -138,6 +141,7 @@ pub trait Codec {
         Ok(())
     }
 
+    fn write_eof(&mut self);
     /// Flush the stream so that program can be exited safely
     fn flush_writer(&mut self);
     fn close_writer(&mut self);
@@ -161,7 +165,7 @@ pub trait Codec {
     fn encode_event(&mut self, event: &Event);
     fn encode_events(&mut self, events: &Vec<Event>);
     fn encode_events_events(&mut self, events: &Vec<Vec<Event>>);
-    fn decode_event(&mut self) -> Result<Event, std::io::Error>;
+    fn decode_event(&mut self) -> Result<Event, StreamError>;
 
 
 }
