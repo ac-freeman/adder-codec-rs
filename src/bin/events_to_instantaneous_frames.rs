@@ -32,13 +32,9 @@ fn main() -> Result<(), Array3DError> {
         match stream.decode_event() {
             Ok(event) => {
                 if frame_sequence.ingest_event(&event)? {
-                    match frame_sequence.get_multi_frame_bytes() {
-                        None => { panic!("should have frame") },
-                        Some((frames_returned, bytes)) => {
-                            match output_stream.write_all(&bytes) {
-                                Ok(_) => {},
-                                Err(e) => {panic!("{}", e)}
-                            }
+                    match frame_sequence.write_multi_frame_bytes(&mut output_stream) {
+                        0 => {panic!("Should have frame, but didn't")}
+                        frames_returned => {
                             frame_count += frames_returned;
                             if frame_count % 1 == 0 {
                                 print!(
