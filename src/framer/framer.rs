@@ -2,6 +2,8 @@ use std::collections::VecDeque;
 use std::fs::File;
 use std::io::{BufWriter, Error, Write};
 use std::mem::size_of;
+use bincode::config::{BigEndian, FixintEncoding, WithOtherEndian, WithOtherIntEncoding};
+use bincode::{DefaultOptions, Options, serialize_into};
 use bytes::{BufMut, BytesMut};
 use crate::{BigT, D, D_SHIFT, DeltaT, Event, framer, Intensity};
 // use crate::framer::array3d::{Array3D, Array3DError};
@@ -19,7 +21,7 @@ use crate::framer::scale_intensity::{FrameValue, ScaleIntensity};
 // Want ability to get full integration frames at a fixed interval, or at api-spec'd times
 
 /// An ADΔER event representation
-#[derive(Debug, Copy, Clone, PartialEq, Default)]
+#[derive(Debug, Copy, Clone, PartialEq, Default, serde::Serialize, serde::Deserialize)]
 pub struct EventCoordless {
     pub d: D,
     pub delta_t: DeltaT,
@@ -121,6 +123,7 @@ pub struct FrameSequence<T> {
     pub(crate) d_max: D,
     pub(crate) delta_t_max: DeltaT,
     pub(crate) source: SourceType,
+    bincode: WithOtherEndian<WithOtherIntEncoding<DefaultOptions, FixintEncoding>, BigEndian>,
 }
 
 use duplicate::duplicate_item;
@@ -154,6 +157,9 @@ impl<T: std::clone::Clone + Default + FrameValue<Output = T> + Copy> Framer for 
             d_max,
             delta_t_max,
             source,
+            bincode: DefaultOptions::new()
+                .with_fixint_encoding()
+                .with_big_endian(),
         }
     }
 
@@ -311,7 +317,7 @@ impl<T: std::clone::Clone + Default + FrameValue<Output = T> + Serialize> FrameS
 
     }
 
-    fn is_frame_filled(&self, frame_idx: usize) -> Result<bool, FrameSequenceError> {
+    pub fn is_frame_filled(&self, frame_idx: usize) -> Result<bool, FrameSequenceError> {
         match self.frames.len() <= frame_idx {
             true => {
                 Err(FrameSequenceError::InvalidIndex)
@@ -349,7 +355,7 @@ impl<T: std::clone::Clone + Default + FrameValue<Output = T> + Serialize> FrameS
         match self.pop_next_frame() {
             Some(arr) => {
                 // Some(arr.)
-                bincode::serialize_into(writer, &arr);
+                self.bincode.serialize_into(writer, &arr);
             }
             None => {}
         }

@@ -1,4 +1,4 @@
-use crate::{BigT, D_SHIFT, DeltaT, Event, Intensity};
+use crate::{BigT, D_SHIFT, DeltaT, Event, EventCoordless, Intensity};
 use crate::framer::framer::SourceType;
 
 pub trait ScaleIntensity <T> {
@@ -122,6 +122,13 @@ impl ScaleIntensity<u64> for u64 {
 pub(crate) trait FrameValue {
     type Output;
     fn get_frame_value(event: &Event, source_type: SourceType, i1: DeltaT) -> Self::Output;
+}
+
+impl FrameValue for EventCoordless {
+    type Output = EventCoordless;
+    fn get_frame_value(event: &Event, _source_type: SourceType, _tpf: DeltaT) -> Self::Output {
+        EventCoordless { d: event.d, delta_t: event.delta_t }
+    }
 }
 
 impl FrameValue for u8 {
