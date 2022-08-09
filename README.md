@@ -2,6 +2,8 @@
 
 Encoder/decoder for ADΔER (Address, Decimation, Δt Event Representation) streams. Currently, only implemented for raw (uncompressed) streams.
 
+[crates.io page](https://crates.io/crates/adder-codec-rs)
+
 ### Usage
 
 
