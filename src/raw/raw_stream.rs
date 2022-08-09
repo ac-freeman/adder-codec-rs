@@ -1,12 +1,10 @@
 use std::fs::File;
-use std::io::{BufReader, BufWriter, Error, Read, Write};
+use std::io::{BufReader, BufWriter, Write};
 use std::mem;
 use bincode::config::{BigEndian, FixintEncoding, WithOtherEndian, WithOtherIntEncoding};
-use bytes::{Buf, Bytes};
-use crate::{Codec, Coord, DeltaT, EOF_PX_ADDRESS, Event, EventCoordless, EventSingle, EventStreamHeader};
+use bytes::{Bytes};
+use crate::{Codec, Coord, DeltaT, EOF_PX_ADDRESS, Event, EventSingle, EventStreamHeader};
 use crate::header::MAGIC_RAW;
-use bytes::BytesMut;
-use bytes::BufMut;
 use bincode::{DefaultOptions, Options};
 use crate::raw::raw_stream::StreamError::{Deserialize, Eof};
 
@@ -44,26 +42,18 @@ impl Codec for RawStream {
             delta_t_max: 0,
             channels: 0,
             event_size: 0,
-            bincode: bincode::DefaultOptions::new()
+            bincode: DefaultOptions::new()
                 .with_fixint_encoding()
                 .with_big_endian(),
         }
     }
 
-    fn flush_writer(&mut self) {
-        match &mut self.output_stream {
-            None => {}
-            Some(stream) => {
-                stream.flush().unwrap();
-            }
-        }
-    }
     fn write_eof(&mut self) {
         match &mut self.output_stream {
             None => {
                 panic!("Output stream not initialized");
             }
-            Some(stream) => {
+            Some(_stream) => {
                 let eof = Event {
                     coord: Coord {
                         x: EOF_PX_ADDRESS,
@@ -74,6 +64,14 @@ impl Codec for RawStream {
                     delta_t: 0
                 };
                 self.encode_event(&eof);
+            }
+        }
+    }
+    fn flush_writer(&mut self) {
+        match &mut self.output_stream {
+            None => {}
+            Some(stream) => {
+                stream.flush().unwrap();
             }
         }
     }
@@ -172,7 +170,6 @@ impl Codec for RawStream {
                         debug_assert_eq!(self.channels, 1);
                     }
                     Some(c) => {
-                        debug_assert!(c >= 0);
                         debug_assert!(c <= self.channels);
                         if c == 1 {
                             debug_assert!(self.channels > 1);
@@ -186,29 +183,18 @@ impl Codec for RawStream {
         }
     }
 
-    fn encode_events_events(&mut self, events: &Vec<Vec<Event>>) {
-        for v in events {
-            self.encode_events(v);
-        }
-    }
-
     fn encode_events(&mut self, events: &Vec<Event>) {
         match &mut self.output_stream {
             None => {
                 panic!("Output stream not initialized");
             }
             Some(stream) => {
-                // bincode::encode_into_writer(events, stream, my_options);
-
-
-                // let mut out_buf = BytesMut::with_capacity(events.len() * core::mem::size_of::<Event>());
-                //
-                let mut output_event = EventSingle {
-                    coord: Default::default(),
-                    d: 0,
-                    delta_t: 0
-                };
+                let mut output_event: EventSingle;
                 for event in events {
+                    // NOTE: for speed, the following checks only run in debug builds. It's entirely
+                    // possibly to encode non-sensical events if you want to.
+                    debug_assert!(event.coord.x < self.width);
+                    debug_assert!(event.coord.y < self.height);
                     if self.channels == 1 {
                         output_event = event.into();
                         self.bincode.serialize_into(&mut *stream, &output_event).unwrap();
@@ -216,28 +202,14 @@ impl Codec for RawStream {
                     } else {
                         self.bincode.serialize_into(&mut *stream, event).unwrap();
                     }
-
-                    //     // NOTE: for speed, the following checks only run in debug builds. It's entirely
-                    //     // possibly to encode non-sensical events if you want to.
-                    //     debug_assert!(event.coord.x < self.width);
-                    //     debug_assert!(event.coord.y < self.height);
-                    //     match event.coord.c {
-                    //         None => {
-                    //             debug_assert_eq!(self.channels, 1);
-                    //         }
-                    //         Some(c) => {
-                    //             debug_assert!(c > 0);
-                    //             debug_assert!(c <= self.channels);
-                    //             if c == 1 {
-                    //                 debug_assert!(self.channels > 1);
-                    //             }
-                    //         }
-                    //     }
-                    //     debug_assert!(event.delta_t <= self.delta_t_max);
-                    //     out_buf.put(Bytes::from(event));
                 }
-                // stream.write_all(&out_buf).expect("Unable to write events");
             }
+        }
+    }
+
+    fn encode_events_events(&mut self, events: &Vec<Vec<Event>>) {
+        for v in events {
+            self.encode_events(v);
         }
     }
 
@@ -251,7 +223,7 @@ impl Codec for RawStream {
                 if self.channels == 1 {
                     match self.bincode.deserialize_from::<_, EventSingle>(stream) {
                         Ok(ev) => { ev.into()}
-                        Err(e) => {
+                        Err(_e) => {
                             return Err(Deserialize)
                         }
                     }

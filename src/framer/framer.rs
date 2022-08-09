@@ -1,16 +1,10 @@
 use std::collections::VecDeque;
 use std::fs::File;
-use std::io::{BufWriter, Error, Write};
-use std::mem::size_of;
-use bytes::{BufMut, BytesMut};
-use crate::{BigT, D, D_SHIFT, DeltaT, Event, Intensity};
-use crate::framer::array3d::{Array3D, Array3DError};
-use crate::framer::array3d::Array3DError::InvalidIndex;
-use crate::framer::framer::FramerMode::INSTANTANEOUS;
-use crate::framer::scale_intensity::ScaleIntensity;
-
-// type EventFrame = Array3D<Event>;
-// type Intensity8Frame = Array3D<u8>;
+use std::io::{BufWriter};
+use bincode::config::{BigEndian, FixintEncoding, WithOtherEndian, WithOtherIntEncoding};
+use bincode::{DefaultOptions, Options};
+use crate::{BigT, D, DeltaT, Event,};
+use crate::framer::scale_intensity::{FrameValue};
 
 // Want one main framer with the same functions
 // Want additional functions
@@ -18,7 +12,7 @@ use crate::framer::scale_intensity::ScaleIntensity;
 // Want ability to get full integration frames at a fixed interval, or at api-spec'd times
 
 /// An ADΔER event representation
-#[derive(Debug, Copy, Clone, PartialEq, Default)]
+#[derive(Debug, Copy, Clone, PartialEq, Default, serde::Serialize, serde::Deserialize)]
 pub struct EventCoordless {
     pub d: D,
     pub delta_t: DeltaT,
@@ -29,6 +23,7 @@ pub enum FramerMode {
     INTEGRATION,
 }
 
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum SourceType {
     U8,
     U16,
@@ -36,7 +31,7 @@ pub enum SourceType {
     U64,
     F32,
     F64,
-}
+    }
 
 pub trait Framer {
     type Output;
@@ -45,8 +40,6 @@ pub trait Framer {
            num_channels: usize,
            tps: DeltaT,
            output_fps: u32,
-           d_max: D,
-           delta_t_max: DeltaT,
            mode: FramerMode,
            source: SourceType) -> Self;
 
@@ -58,30 +51,12 @@ pub trait Framer {
     ///
     /// If [`INTEGRATION`], this function will integrate this [`Event`] value for the corresponding
     /// output frame(s)
-    fn ingest_event(&mut self, event: &Event) -> Result<bool, Array3DError>;
-
-    // fn get_frame_bytes(&mut self) -> Option<BytesMut>;
-
-    // fn pop_next_frame(&mut self) -> Result<Array3D<Self::Output>, Array3DError>;
-    //
-    // fn write_next_frame(&mut self) -> Result<(), Error>;
-
-    // fn get_frame(&self, frame_idx: usize) -> &Array3D<Self::Output>;
-
-
-    // fn event_to_scaled_intensity(&self, event: &Event) -> Intensity {
-    //     let intensity = event_to_intensity(event);
-    //     (((D_SHIFT[event.d as usize] as f32) / (u8::MAX as f32))
-    //         * (self.ticks_per_frame as f32 / event.delta_t as f32)
-    //         * u16::MAX as f32) as u16}
-    // }
-    // fn get_instant_frame(&mut self) ->
+    fn ingest_event(&mut self, event: &Event) -> bool;
 }
 
 #[derive(Debug, Clone, Default)]
 pub(crate) struct Frame<T> {
-    pub(crate) array: Array3D<T>,
-    pub(crate) start_ts: BigT,  // TODO: using this for anything??
+    pub(crate) array: Array3<T>,
     pub(crate) filled_count: usize,
 }
 
@@ -95,39 +70,40 @@ pub struct FrameSequence<T> {
     pub(crate) frames: VecDeque<Frame<Option<T>>>,
     pub(crate) frames_written: i64,
     pub(crate) frame_idx_offset: i64,
-    pub(crate) pixel_ts_tracker: Array3D<BigT>,
-    pub(crate) last_filled_tracker: Array3D<i64>,
+    pub(crate) pixel_ts_tracker: Array3<BigT>,
+    pub(crate) last_filled_tracker: Array3<i64>,
     pub(crate) mode: FramerMode,
-    pub(crate) running_ts: BigT,
-    pub(crate) tps: DeltaT,
-    pub(crate) output_fps: u32,
     pub(crate) tpf: DeltaT,
-    pub(crate) d_max: D,
-    pub(crate) delta_t_max: DeltaT,
     pub(crate) source: SourceType,
+    bincode: WithOtherEndian<WithOtherIntEncoding<DefaultOptions, FixintEncoding>, BigEndian>,
 }
 
-use duplicate::duplicate_item;
-#[duplicate_item(name; [u8]; [u16]; [u32]; [u64];)]
-impl Framer for FrameSequence<name>
+use ndarray::{Array3};
+use serde::Serialize;
+
+
+impl<T: Clone + Default + FrameValue<Output = T> + Copy> Framer for FrameSequence<T>
 {
-    type Output = name;
-    fn new(num_rows: usize, num_cols: usize, num_channels: usize, tps: DeltaT, output_fps: u32, d_max: D, delta_t_max: DeltaT, mode: FramerMode, source: SourceType) -> Self {
-        let array: Array3D<Option<name>> = Array3D::new(num_rows, num_cols, num_channels);
+    type Output = T;
+    fn new(num_rows: usize, num_cols: usize, num_channels: usize, tps: DeltaT, output_fps: u32, mode: FramerMode, source: SourceType) -> Self {
+        let array: Array3<Option<T>> = Array3::<Option<T>>::default((num_rows, num_cols, num_channels));
+        let mut last_filled_tracker = Array3::zeros((num_rows, num_cols, num_channels));
+        for mut row in last_filled_tracker.rows_mut() {
+            row.fill(-1);
+        }
+            // Array3::<Option<T>>::new(num_rows, num_cols, num_channels);
         FrameSequence {
-            frames: VecDeque::from(vec![Frame { array, start_ts: 0, filled_count: 0 }]),
+            frames: VecDeque::from(vec![Frame { array, filled_count: 0 }]),
             frames_written: 0,
             frame_idx_offset: 0,
-            pixel_ts_tracker: Array3D::new(num_rows, num_cols, num_channels),
-            last_filled_tracker: Array3D::new_init(-1, num_rows, num_cols, num_channels),
+            pixel_ts_tracker: Array3::zeros((num_rows, num_cols, num_channels)),
+            last_filled_tracker,
             mode,
-            running_ts: 0,
-            tps,
-            output_fps,
             tpf: tps / output_fps,
-            d_max,
-            delta_t_max,
             source,
+            bincode: DefaultOptions::new()
+                .with_fixint_encoding()
+                .with_big_endian(),
         }
     }
 
@@ -142,7 +118,7 @@ impl Framer for FrameSequence<name>
     /// # use adder_codec_rs::framer::framer::{FrameSequence, Framer};
     /// # use adder_codec_rs::framer::framer::SourceType::U8;
     ///
-    /// let mut frame_sequence: FrameSequence<u8> = FrameSequence::<u8>::new(10, 10, 3, 50000, 50, 15, 50000, INSTANTANEOUS, U8);
+    /// let mut frame_sequence: FrameSequence<u8> = FrameSequence::<u8>::new(10, 10, 3, 50000, 50, INSTANTANEOUS, U8);
     /// let event: Event = Event {
     ///         coord: Coord {
     ///             x: 5,
@@ -153,59 +129,42 @@ impl Framer for FrameSequence<name>
     ///         delta_t: 1000
     ///     };
     /// frame_sequence.ingest_event(&event);
-    /// let elem = frame_sequence.px_at_current(5, 5, 1).unwrap();
+    /// let elem = frame_sequence.px_at_current(5, 5, 1);
     /// assert_eq!(*elem, Some(32));
     /// ```
-    fn ingest_event(&mut self, event: &crate::Event) -> Result<bool, Array3DError> {
+    fn ingest_event(&mut self, event: &Event) -> bool {
         let channel = match event.coord.c {
             None => {0}
             Some(c) => {c}
         };
 
-        let last_filled_frame_ref = self.last_filled_tracker.at_mut(event.coord.y.into(), event.coord.x.into(), channel.into()).ok_or(InvalidIndex)?;
+        let last_filled_frame_ref = &mut self.last_filled_tracker[[event.coord.y.into(), event.coord.x.into(), channel.into()]];
         let prev_last_filled_frame = *last_filled_frame_ref;
-        let already_filled = *last_filled_frame_ref >= self.frames_written;
-        let running_ts_ref = self.pixel_ts_tracker.at_mut(event.coord.y.into(), event.coord.x.into(), channel.into()).ok_or(InvalidIndex)?;
+        let _already_filled = *last_filled_frame_ref >= self.frames_written;
+        let running_ts_ref = &mut self.pixel_ts_tracker[[event.coord.y.into(), event.coord.x.into(), channel.into()]];
         *running_ts_ref = *running_ts_ref + event.delta_t as BigT;
 
         if ((*running_ts_ref - 1) as i64/ self.tpf as i64) > *last_filled_frame_ref {
             match event.d {
                 d if d == 0xFF && event.delta_t < self.tpf => {
-                    // if *running_ts_ref == event.delta_t.into() {
-                    //     *last_filled_frame_ref = 0;
-                    //     self.frames[0].array.set_at(
-                    //         Some(0),
-                    //         event.coord.y.into(), event.coord.x.into(), channel.into())?;
-                    //     self.frames[0].filled_count += 1;
-                    // }
                     // Don't do anything -- it's an empty event
                     // Except in special case where delta_t == tpf
                     if *running_ts_ref == self.tpf as BigT && event.delta_t == self.tpf {
-                        self.frames[(*last_filled_frame_ref - self.frame_idx_offset) as usize].array.set_at(
-                            Some(0),
-                            event.coord.y.into(), event.coord.x.into(), channel.into())?;
+                        self.frames[(*last_filled_frame_ref - self.frame_idx_offset) as usize].array[[
+                            event.coord.y.into(), event.coord.x.into(), channel.into()]] = Some(T::default());
                         self.frames[(*last_filled_frame_ref - self.frame_idx_offset) as usize].filled_count += 1;
                         *last_filled_frame_ref = ((*running_ts_ref -1) as i64 / self.tpf as i64) + 1;
                     }
                 }
                 _ => {
-                    let intensity = event_to_intensity(event);
-                    let mut scaled_intensity: name = match self.source {
-                                SourceType::U8 => { <u8 as ScaleIntensity<name>>::scale_intensity(intensity, (self.tps / self.output_fps) as BigT) },
-                                SourceType::U16 => { <u16 as ScaleIntensity<name>>::scale_intensity(intensity, (self.tps / self.output_fps) as BigT) },
-                                SourceType::U32 => { <u32 as ScaleIntensity<name>>::scale_intensity(intensity, (self.tps / self.output_fps) as BigT) },
-                                SourceType::U64 => { <u64 as ScaleIntensity<name>>::scale_intensity(intensity, (self.tps / self.output_fps) as BigT) },
-                                // SourceType::F32 => {<u8 as ScaleIntensity<T>>::scale_intensity(intensity, (self.tps / self.output_fps) as BigT}
-                                // SourceType::F64 => {<u8 as ScaleIntensity<T>>::scale_intensity(intensity, (self.tps / self.output_fps) as BigT}
-                                _ => { panic!("todo") }
-                            };
-                    *last_filled_frame_ref = ((*running_ts_ref -1) as i64 / self.tpf as i64);
+                    let scaled_intensity: T = T::get_frame_value(event, self.source, self.tpf);
+                    *last_filled_frame_ref = (*running_ts_ref -1) as i64 / self.tpf as i64;
 
                     // Grow the frames vec if necessary
                     match *last_filled_frame_ref - self.frame_idx_offset {
                         a if a > 0 => {
-                            let array = Array3D::new_like(&self.frames[0].array);
-                            self.frames.append(&mut VecDeque::from(vec![Frame { array, start_ts: 0, filled_count: 0 }; a as usize]));
+                            let array: Array3<Option<T>> = Array3::<Option<T>>::default(self.frames[0].array.raw_dim());
+                            self.frames.append(&mut VecDeque::from(vec![Frame { array, filled_count: 0 }; a as usize]));
                             self.frame_idx_offset += a;
                         }
                         a if a < 0 => {
@@ -213,33 +172,25 @@ impl Framer for FrameSequence<name>
                             // Increment pixel ts trackers as normal, but don't actually do anything
                             // with the intensities if they correspond to frames that we've already
                             // popped.
-                            return Ok(self.frames[0 as usize].filled_count == self.frames[0].array.num_elems())
+                            return self.frames[0 as usize].filled_count == self.frames[0].array.len()
                         }
                         _ => {}
                     }
 
+                    let mut frame: &mut Option<T>;
                     for i in prev_last_filled_frame..*last_filled_frame_ref {
-                        match self.frames[(i - self.frames_written + 1) as usize].array.at(
-                            event.coord.y.into(), event.coord.x.into(), channel.into()) {
-                            Ok(elem) => {
-                                match elem {
-                                    Some(val) => {
+                        frame = &mut self.frames[(i - self.frames_written + 1) as usize].array[[
+                            event.coord.y.into(), event.coord.x.into(), channel.into()]];
+                        match frame  {
+                            Some(_val) => {
 
-                                    }
-                                    None => {
-                                        // println!("Making None to Some at {} and frame index {}", event.coord.x, (i - self.frames_written + 1));
-
-                                        self.frames[(i - self.frames_written + 1) as usize].array.set_at(
-                                            Some(scaled_intensity),
-                                            event.coord.y.into(), event.coord.x.into(), channel.into())?;
-                                        self.frames[(i - self.frames_written + 1) as usize].filled_count += 1;
-                                    }
-                                }
                             }
-                            Err(e) => { panic!("todo")}
+                            None => {
+                                *frame =
+                                    Some(scaled_intensity);
+                                self.frames[(i - self.frames_written + 1) as usize].filled_count += 1;
+                            }
                         }
-
-
                     }
 
                 }
@@ -248,32 +199,33 @@ impl Framer for FrameSequence<name>
         }
 
         debug_assert!(*last_filled_frame_ref >= 0);
-        debug_assert!(self.frames[0 as usize].filled_count <= self.frames[0].array.num_elems());
-        Ok(self.frames[0 as usize].filled_count == self.frames[0].array.num_elems())
+        debug_assert!(self.frames[0 as usize].filled_count <= self.frames[0].array.len());
+        self.frames[0 as usize].filled_count == self.frames[0].array.len()
     }
+
+
 }
 
-#[duplicate_item(name; [u8]; [u16]; [u32]; [u64];)]
-impl FrameSequence<name> {
-    pub fn px_at_current(&self, row: usize, col: usize, channel: usize) -> Result<&Option<name>, Array3DError> {
+impl<T: Clone + Default + FrameValue<Output = T> + Serialize> FrameSequence<T> {
+    pub fn px_at_current(&self, row: usize, col: usize, channel: usize) -> &Option<T> {
         if self.frames.len() == 0 {
             panic!("Frame not initialized");
         }
-        self.frames[0].array.at(row, col, channel)
+        &self.frames[0].array[[row, col, channel]]
     }
 
-    pub fn px_at_frame(&self, row: usize, col: usize, channel: usize, frame_idx: usize) -> Result<&Option<name>, Array3DError> {
+    pub fn px_at_frame(&self, row: usize, col: usize, channel: usize, frame_idx: usize) -> Result<&Option<T>, FrameSequenceError> {
         match self.frames.len() {
             a if frame_idx < a => {
-                self.frames[frame_idx].array.at(row, col, channel)
+                Ok(&self.frames[frame_idx].array[[row, col, channel]])
             }
             _ => {
-                Err(Array3DError::InvalidIndex) // TODO: not the right error
+                Err(FrameSequenceError::InvalidIndex) // TODO: not the right error
             }
         }
     }
 
-    fn get_frame(&self, frame_idx: usize) -> Result<&Array3D<Option<name>>, FrameSequenceError> {
+    fn _get_frame(&self, frame_idx: usize) -> Result<&Array3<Option<T>>, FrameSequenceError> {
         match self.frames.len() <= frame_idx {
             true => {
                 Err(FrameSequenceError::InvalidIndex)
@@ -292,8 +244,8 @@ impl FrameSequence<name> {
             }
             false => {
                 match self.frames[frame_idx as usize].filled_count {
-                    a if a == self.frames[0].array.num_elems() => { Ok(true) },
-                    a if a > self.frames[0].array.num_elems() => {
+                    a if a == self.frames[0].array.len() => { Ok(true) },
+                    a if a > self.frames[0].array.len() => {
                         panic!("Impossible fill count. File a bug report!")
                     },
                     _ => { Ok(false) }
@@ -302,16 +254,15 @@ impl FrameSequence<name> {
         }
     }
 
-    pub fn pop_next_frame(&mut self) -> Option<Array3D<Option<name>>> {
+    fn pop_next_frame(&mut self) -> Option<Array3<Option<T>>> {
         self.frames.rotate_left(1);
         match self.frames.pop_back() {
             Some(a) => {
                 self.frames_written += 1;
-                // self.frame_idx_offset += 1;
                 // If this is the only frame left, then add a new one to prevent invalid accesses later
                 if self.frames.len() == 0 {
-                    let array = Array3D::new_like(&a.array);
-                    self.frames.append(&mut VecDeque::from(vec![Frame { array, start_ts: 0, filled_count: 0 }; 1]));
+                    let array: Array3<Option<T>> = Array3::<Option<T>>::default(a.array.raw_dim());
+                    self.frames.append(&mut VecDeque::from(vec![Frame { array, filled_count: 0 }; 1]));
                     self.frame_idx_offset += 1;
                 }
                 Some(a.array)
@@ -320,45 +271,34 @@ impl FrameSequence<name> {
         }
     }
 
-    pub fn get_frame_bytes(&mut self) -> Option<BytesMut> {
+    pub fn write_frame_bytes(&mut self, writer: &mut BufWriter<File>) {
         match self.pop_next_frame() {
             Some(arr) => {
-                Some(arr.serialize_to_be_bytes())
-            }
-            None => {
-                None
-            }
-        }
-    }
-
-    pub fn get_multi_frame_bytes(&mut self) -> Option<(i32, BytesMut)> {
-        let mut return_buf = BytesMut::with_capacity(self.frames[0].array.num_elems() * size_of::<name>());
-        let mut frame_count = 0;
-        while self.frames[0].filled_count == self.frames[0].array.num_elems() {
-            match self.get_frame_bytes() {
-                None => {panic!("TODO: Frame bytes error")}
-                Some(bytes) => {
-                    frame_count += 1;
-                    return_buf.put(bytes)
+                let none_val = T::default();
+                for px in arr.iter() {
+                    match self.bincode.serialize_into(&mut *writer, match px {
+                        Some(event) => {
+                            event
+                        }
+                        None => {
+                            &none_val
+                        }
+                    }) {
+                        Ok(_) => {}
+                        Err(e) => {panic!("{}", e)}
+                    };
                 }
             }
-        }
-        match return_buf.len() {
-            0 => {None},
-            _ => { Some((frame_count, return_buf))}
-        }
-    }
-}
-
-
-fn event_to_intensity(event: &Event) -> Intensity {
-    match event.d as usize {
-        a if a >= D_SHIFT.len() => {
-            0 as Intensity
-        },
-        _ => {
-            D_SHIFT[event.d as usize] as Intensity / event.delta_t as Intensity
+            None => {}
         }
     }
 
+    pub fn write_multi_frame_bytes(&mut self, writer: &mut BufWriter<File>) -> i32 {
+        let mut frame_count = 0;
+        while self.frames[0].filled_count == self.frames[0].array.len() {
+            self.write_frame_bytes(writer);
+            frame_count += 1;
+        }
+        frame_count
+    }
 }
