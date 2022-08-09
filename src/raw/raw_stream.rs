@@ -42,20 +42,12 @@ impl Codec for RawStream {
             delta_t_max: 0,
             channels: 0,
             event_size: 0,
-            bincode: bincode::DefaultOptions::new()
+            bincode: DefaultOptions::new()
                 .with_fixint_encoding()
                 .with_big_endian(),
         }
     }
 
-    fn flush_writer(&mut self) {
-        match &mut self.output_stream {
-            None => {}
-            Some(stream) => {
-                stream.flush().unwrap();
-            }
-        }
-    }
     fn write_eof(&mut self) {
         match &mut self.output_stream {
             None => {
@@ -72,6 +64,14 @@ impl Codec for RawStream {
                     delta_t: 0
                 };
                 self.encode_event(&eof);
+            }
+        }
+    }
+    fn flush_writer(&mut self) {
+        match &mut self.output_stream {
+            None => {}
+            Some(stream) => {
+                stream.flush().unwrap();
             }
         }
     }
@@ -183,12 +183,6 @@ impl Codec for RawStream {
         }
     }
 
-    fn encode_events_events(&mut self, events: &Vec<Vec<Event>>) {
-        for v in events {
-            self.encode_events(v);
-        }
-    }
-
     fn encode_events(&mut self, events: &Vec<Event>) {
         match &mut self.output_stream {
             None => {
@@ -210,6 +204,12 @@ impl Codec for RawStream {
                     }
                 }
             }
+        }
+    }
+
+    fn encode_events_events(&mut self, events: &Vec<Vec<Event>>) {
+        for v in events {
+            self.encode_events(v);
         }
     }
 

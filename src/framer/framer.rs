@@ -51,7 +51,7 @@ pub trait Framer {
     ///
     /// If [`INTEGRATION`], this function will integrate this [`Event`] value for the corresponding
     /// output frame(s)
-    fn ingest_event(&mut self, event: &Event) -> Result<bool, Array3DError>;
+    fn ingest_event(&mut self, event: &Event) -> bool;
 
     // fn get_frame(&self, frame_idx: usize) -> Result<&Array3D<Option<T>>, FrameSequenceError>;
     //
@@ -113,8 +113,7 @@ use ndarray::{Array3};
 use serde::Serialize;
 
 
-// #[duplicate_item(name; [u8]; [u16]; [u32]; [u64]; [EventCoordless];)]
-impl<T: std::clone::Clone + Default + FrameValue<Output = T> + Copy> Framer for FrameSequence<T>
+impl<T: Clone + Default + FrameValue<Output = T> + Copy> Framer for FrameSequence<T>
 {
     type Output = T;
     fn new(num_rows: usize, num_cols: usize, num_channels: usize, tps: DeltaT, output_fps: u32, mode: FramerMode, source: SourceType) -> Self {
@@ -164,7 +163,7 @@ impl<T: std::clone::Clone + Default + FrameValue<Output = T> + Copy> Framer for 
     /// let elem = frame_sequence.px_at_current(5, 5, 1);
     /// assert_eq!(*elem, Some(32));
     /// ```
-    fn ingest_event(&mut self, event: &crate::Event) -> Result<bool, Array3DError> {
+    fn ingest_event(&mut self, event: &Event) -> bool {
         let channel = match event.coord.c {
             None => {0}
             Some(c) => {c}
@@ -179,13 +178,6 @@ impl<T: std::clone::Clone + Default + FrameValue<Output = T> + Copy> Framer for 
         if ((*running_ts_ref - 1) as i64/ self.tpf as i64) > *last_filled_frame_ref {
             match event.d {
                 d if d == 0xFF && event.delta_t < self.tpf => {
-                    // if *running_ts_ref == event.delta_t.into() {
-                    //     *last_filled_frame_ref = 0;
-                    //     self.frames[0].array.set_at(
-                    //         Some(0),
-                    //         event.coord.y.into(), event.coord.x.into(), channel.into())?;
-                    //     self.frames[0].filled_count += 1;
-                    // }
                     // Don't do anything -- it's an empty event
                     // Except in special case where delta_t == tpf
                     if *running_ts_ref == self.tpf as BigT && event.delta_t == self.tpf {
@@ -196,17 +188,7 @@ impl<T: std::clone::Clone + Default + FrameValue<Output = T> + Copy> Framer for 
                     }
                 }
                 _ => {
-                    // let intensity = event_to_intensity(event);
                     let scaled_intensity: T = T::get_frame_value(event, self.source, self.tpf);
-                        // match self.source {
-                        //         SourceType::U8 => { <u8 as ScaleIntensity<name>>::scale_intensity(intensity, (self.tps / self.output_fps) as BigT) },
-                        //         SourceType::U16 => { <u16 as ScaleIntensity<name>>::scale_intensity(intensity, (self.tps / self.output_fps) as BigT) },
-                        //         SourceType::U32 => { <u32 as ScaleIntensity<name>>::scale_intensity(intensity, (self.tps / self.output_fps) as BigT) },
-                        //         SourceType::U64 => { <u64 as ScaleIntensity<name>>::scale_intensity(intensity, (self.tps / self.output_fps) as BigT) },
-                        //         // SourceType::F32 => {<u8 as ScaleIntensity<T>>::scale_intensity(intensity, (self.tps / self.output_fps) as BigT}
-                        //         // SourceType::F64 => {<u8 as ScaleIntensity<T>>::scale_intensity(intensity, (self.tps / self.output_fps) as BigT}
-                        //         _ => { panic!("todo") }
-                        //     };
                     *last_filled_frame_ref = (*running_ts_ref -1) as i64 / self.tpf as i64;
 
                     // Grow the frames vec if necessary
@@ -221,7 +203,7 @@ impl<T: std::clone::Clone + Default + FrameValue<Output = T> + Copy> Framer for 
                             // Increment pixel ts trackers as normal, but don't actually do anything
                             // with the intensities if they correspond to frames that we've already
                             // popped.
-                            return Ok(self.frames[0 as usize].filled_count == self.frames[0].array.len())
+                            return self.frames[0 as usize].filled_count == self.frames[0].array.len()
                         }
                         _ => {}
                     }
@@ -249,14 +231,14 @@ impl<T: std::clone::Clone + Default + FrameValue<Output = T> + Copy> Framer for 
 
         debug_assert!(*last_filled_frame_ref >= 0);
         debug_assert!(self.frames[0 as usize].filled_count <= self.frames[0].array.len());
-        Ok(self.frames[0 as usize].filled_count == self.frames[0].array.len())
+        self.frames[0 as usize].filled_count == self.frames[0].array.len()
     }
 
 
 }
 
 // #[duplicate_item(name; [u8]; [u16]; [u32]; [u64];)]
-impl<T: std::clone::Clone + Default + FrameValue<Output = T> + Serialize> FrameSequence<T> {
+impl<T: Clone + Default + FrameValue<Output = T> + Serialize> FrameSequence<T> {
     pub fn px_at_current(&self, row: usize, col: usize, channel: usize) -> &Option<T> {
         if self.frames.len() == 0 {
             panic!("Frame not initialized");
@@ -324,16 +306,6 @@ impl<T: std::clone::Clone + Default + FrameValue<Output = T> + Serialize> FrameS
     pub fn write_frame_bytes(&mut self, writer: &mut BufWriter<File>) {
         match self.pop_next_frame() {
             Some(arr) => {
-                // Some(arr.)
-
-                // let mut tmp: Array3<T> = Array3::<T>::default(arr.raw_dim());
-                // for (a, b) in arr.iter().zip(tmp.iter_mut()) {
-                //     *b = match a {
-                //         Some(elem) => { *elem},
-                //         None => { T::default() }
-                //     }
-                // }
-                // self.bincode.serialize_into(writer, &tmp.raw_view());
                 let none_val = T::default();
                 for px in arr.iter() {
                     match self.bincode.serialize_into(&mut *writer, match px {

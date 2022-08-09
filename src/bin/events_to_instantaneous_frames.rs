@@ -11,7 +11,7 @@ use adder_codec_rs::framer::framer::SourceType::U8;
 use adder_codec_rs::raw::raw_stream::RawStream;
 use adder_codec_rs::framer::framer::Framer;
 
-fn main() -> Result<(), Array3DError> {
+fn main() {
     let input_path = "/home/andrew/Downloads/temppp";
     let mut stream: RawStream = Codec::new();
     stream.open_reader(input_path.to_string()).expect("Invalid path");
@@ -30,7 +30,7 @@ fn main() -> Result<(), Array3DError> {
     loop {
         match stream.decode_event() {
             Ok(event) => {
-                if frame_sequence.ingest_event(&event)? {
+                if frame_sequence.ingest_event(&event) {
                     match frame_sequence.write_multi_frame_bytes(&mut output_stream) {
                         0 => {panic!("Should have frame, but didn't")}
                         frames_returned => {
@@ -60,5 +60,4 @@ fn main() -> Result<(), Array3DError> {
     }
 
     output_stream.flush().unwrap();
-    Ok(())
 }

@@ -41,7 +41,7 @@ impl EventStreamHeader {
         assert!(magic == MAGIC_RAW || magic == MAGIC_COMPRESSED);
 
         EventStreamHeader {
-            magic: magic,
+            magic,
             version: 0,
             endianness: 'b' as u8,
             width,

@@ -8,7 +8,7 @@ use std::path::Path;
 use std::process::Command;
 
 
-use adder_codec_rs::{Codec, Coord, D_MAX, Event};
+use adder_codec_rs::{Codec, Coord, Event};
 use adder_codec_rs::raw::raw_stream::RawStream;
 use rand::Rng;
 use adder_codec_rs::framer::framer::{Framer, FrameSequence};
@@ -20,7 +20,7 @@ use adder_codec_rs::framer::framer::SourceType::U8;
 fn test_sample_perfect_dt() {
     let input_path = "./tests/samples/sample_1_raw_events.adder";
     let mut stream: RawStream = Codec::new();
-    stream.open_reader(input_path.to_string());
+    stream.open_reader(input_path.to_string()).unwrap();
     stream.decode_header();
 
     let output_path =  Path::new("./tests/samples/temp_sample_1");
@@ -35,7 +35,7 @@ fn test_sample_perfect_dt() {
     loop {
         match stream.decode_event() {
             Ok(event) => {
-                if frame_sequence.ingest_event(&event).unwrap() {
+                if frame_sequence.ingest_event(&event) {
                     match frame_sequence.write_multi_frame_bytes(&mut output_stream) {
                         0 => { panic!("should have frame") },
                         frames_returned => {
@@ -64,18 +64,18 @@ fn test_sample_perfect_dt() {
             .output()
             .expect("failed to execute process")
     } else {
-        fs::remove_file(output_path);
+        fs::remove_file(output_path).unwrap();
         return;
     };
     assert_eq!(output.stdout.len(), 0);
-    fs::remove_file(output_path);
+    fs::remove_file(output_path).unwrap();
 }
 
 #[test]
 fn test_sample_perfect_dt_color() {
     let input_path = "./tests/samples/sample_2_raw_events.adder";
     let mut stream: RawStream = Codec::new();
-    stream.open_reader(input_path.to_string());
+    stream.open_reader(input_path.to_string()).unwrap();
     stream.decode_header();
 
     let output_path =  Path::new("./tests/samples/temp_sample_2");
@@ -90,7 +90,7 @@ fn test_sample_perfect_dt_color() {
     loop {
         match stream.decode_event() {
             Ok(event) => {
-                if frame_sequence.ingest_event(&event).unwrap() {
+                if frame_sequence.ingest_event(&event) {
                     match frame_sequence.write_multi_frame_bytes(&mut output_stream) {
                         0 => { panic!("should have frame") },
                         frames_returned => {
@@ -117,11 +117,12 @@ fn test_sample_perfect_dt_color() {
             .output()
             .expect("failed to execute process")
     } else {
-        fs::remove_file(output_path);
+        fs::remove_file(output_path).unwrap();
         return;
     };
+    assert_eq!(frame_count, 221);
     assert_eq!(output.stdout.len(), 0);
-    fs::remove_file(output_path);
+    fs::remove_file(output_path).unwrap();
 }
 
 #[test]
@@ -138,7 +139,7 @@ fn test_encode_header() {
     let mut stream = setup_raw_writer(n);
     stream.close_writer();
     assert_eq!(fs::metadata("./TEST_".to_owned() + n.to_string().as_str() + ".addr").unwrap().len(), 35);
-    fs::remove_file("./TEST_".to_owned() + n.to_string().as_str() + ".addr");  // Don't check the error
+    fs::remove_file("./TEST_".to_owned() + n.to_string().as_str() + ".addr").unwrap();  // Don't check the error
 }
 
 fn setup_raw_writer(rand_num: u32) -> RawStream {
@@ -150,7 +151,7 @@ fn setup_raw_writer(rand_num: u32) -> RawStream {
 
 fn cleanup_raw_writer(rand_num: u32, stream: &mut RawStream) {
     stream.close_writer();
-    fs::remove_file("./TEST_".to_owned() + rand_num.to_string().as_str() + ".addr");  // Don't check the error
+    fs::remove_file("./TEST_".to_owned() + rand_num.to_string().as_str() + ".addr").unwrap();  // Don't check the error
 }
 
 #[test]
@@ -341,7 +342,7 @@ fn test_event_framer_ingest_get_filled() {
                 d: 5,
                 delta_t: 5100
             };
-            let filled = frame_sequence.ingest_event(&event).unwrap();
+            let filled = frame_sequence.ingest_event(&event);
             if i < 4 || j < 4 {
                 assert_eq!(filled, false)
             } else {
@@ -376,7 +377,7 @@ fn get_frame_bytes_eventcoordless() {
                 d: 5,
                 delta_t: 5100
             };
-            let filled = frame_sequence.ingest_event(&event).unwrap();
+            let filled = frame_sequence.ingest_event(&event);
             if i < 4 || j < 4 {
                 assert_eq!(filled, false)
             } else {
@@ -404,7 +405,7 @@ fn get_frame_bytes_eventcoordless() {
             // No header. 5 bytes per eventcoordless * 6 frames = 750 bytes
             // TODO: need to serialize just the eventcoordless within, not the Option or the Array3
             assert_eq!(fs::metadata(&path).unwrap().len(), 750);
-            fs::remove_file(&path);  // Don't check the error
+            fs::remove_file(&path).unwrap();  // Don't check the error
         }
         _ => {
             panic!("fail")
@@ -432,7 +433,7 @@ fn get_frame_bytes_u8() {
                 d: 5,
                 delta_t: 5100
             };
-            let filled = frame_sequence.ingest_event(&event).unwrap();
+            let filled = frame_sequence.ingest_event(&event);
             if i < 4 || j < 4 {
                 assert_eq!(filled, false)
             } else {
@@ -459,7 +460,7 @@ fn get_frame_bytes_u8() {
             drop(output_writer);
 
             assert_eq!(fs::metadata(&path).unwrap().len(), 150);
-            fs::remove_file(&path);  // Don't check the error
+            fs::remove_file(&path).unwrap();  // Don't check the error
         }
         _ => {
             panic!("fail")
@@ -486,7 +487,7 @@ fn get_frame_bytes_u16() {
                 d: 5,
                 delta_t: 5100
             };
-            let filled = frame_sequence.ingest_event(&event).unwrap();
+            let filled = frame_sequence.ingest_event(&event);
             if i < 4 || j < 4 {
                 assert_eq!(filled, false)
             } else {
@@ -512,7 +513,7 @@ fn get_frame_bytes_u16() {
             drop(output_writer);
 
             assert_eq!(fs::metadata(&path).unwrap().len(), 300);
-            fs::remove_file(&path);  // Don't check the error
+            fs::remove_file(&path).unwrap();  // Don't check the error
         }
         _ => {
             panic!("fail")
@@ -539,7 +540,7 @@ fn get_frame_bytes_u32() {
                 d: 5,
                 delta_t: 5100
             };
-            let filled = frame_sequence.ingest_event(&event).unwrap();
+            let filled = frame_sequence.ingest_event(&event);
             if i < 4 || j < 4 {
                 assert_eq!(filled, false)
             } else {
@@ -565,7 +566,7 @@ fn get_frame_bytes_u32() {
             drop(output_writer);
 
             assert_eq!(fs::metadata(&path).unwrap().len(), 600);
-            fs::remove_file(&path);  // Don't check the error
+            fs::remove_file(&path).unwrap();  // Don't check the error
         }
         _ => {
             panic!("fail")
@@ -592,7 +593,7 @@ fn get_frame_bytes_u64() {
                 d: 5,
                 delta_t: 5100
             };
-            let filled = frame_sequence.ingest_event(&event).unwrap();
+            let filled = frame_sequence.ingest_event(&event);
             if i < 4 || j < 4 {
                 assert_eq!(filled, false)
             } else {
@@ -618,7 +619,7 @@ fn get_frame_bytes_u64() {
             drop(output_writer);
 
             assert_eq!(fs::metadata(&path).unwrap().len(), 1200);
-            fs::remove_file(&path);  // Don't check the error
+            fs::remove_file(&path).unwrap();  // Don't check the error
         }
         _ => {
             panic!("fail")
@@ -638,7 +639,7 @@ fn test_get_empty_frame() {
     let file = File::create(&path).unwrap();
     let mut output_writer = BufWriter::new(file);
     frame_sequence.write_frame_bytes(&mut output_writer);
-    output_writer.flush();
+    output_writer.flush().unwrap();
     assert_eq!(fs::metadata(&path).unwrap().len(), 25); // Even if it's all empty data, still want
     // to perform the write. Up to the user to make sure that the frame is filled.
     let event: Event = Event {
@@ -653,7 +654,7 @@ fn test_get_empty_frame() {
 
     // TODO: check that events ingested with times after they've been popped off don't actually get
     // integrated!
-    let filled = frame_sequence.ingest_event(&event).unwrap();
+    let filled = frame_sequence.ingest_event(&event);
     assert_eq!(filled, false);
 }
 
