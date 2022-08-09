@@ -40,8 +40,6 @@ pub trait Framer {
            num_channels: usize,
            tps: DeltaT,
            output_fps: u32,
-           d_max: D,
-           delta_t_max: DeltaT,
            mode: FramerMode,
            source: SourceType) -> Self;
 
@@ -90,7 +88,6 @@ pub trait Framer {
 #[derive(Debug, Clone, Default)]
 pub(crate) struct Frame<T> {
     pub(crate) array: Array3<T>,
-    pub(crate) start_ts: BigT,  // TODO: using this for anything??
     pub(crate) filled_count: usize,
 }
 
@@ -107,26 +104,20 @@ pub struct FrameSequence<T> {
     pub(crate) pixel_ts_tracker: Array3<BigT>,
     pub(crate) last_filled_tracker: Array3<i64>,
     pub(crate) mode: FramerMode,
-    pub(crate) running_ts: BigT,
-    pub(crate) tps: DeltaT,
-    pub(crate) output_fps: u32,
     pub(crate) tpf: DeltaT,
-    pub(crate) d_max: D,
-    pub(crate) delta_t_max: DeltaT,
     pub(crate) source: SourceType,
     bincode: WithOtherEndian<WithOtherIntEncoding<DefaultOptions, FixintEncoding>, BigEndian>,
 }
 
 use ndarray::{Array3};
 use serde::Serialize;
-use crate::framer::array3d::Array3DError;
-use crate::framer::array3d::Array3DError::InvalidIndex;
+
 
 // #[duplicate_item(name; [u8]; [u16]; [u32]; [u64]; [EventCoordless];)]
 impl<T: std::clone::Clone + Default + FrameValue<Output = T> + Copy> Framer for FrameSequence<T>
 {
     type Output = T;
-    fn new(num_rows: usize, num_cols: usize, num_channels: usize, tps: DeltaT, output_fps: u32, d_max: D, delta_t_max: DeltaT, mode: FramerMode, source: SourceType) -> Self {
+    fn new(num_rows: usize, num_cols: usize, num_channels: usize, tps: DeltaT, output_fps: u32, mode: FramerMode, source: SourceType) -> Self {
         let array: Array3<Option<T>> = Array3::<Option<T>>::default((num_rows, num_cols, num_channels));
         let mut last_filled_tracker = Array3::zeros((num_rows, num_cols, num_channels));
         for mut row in last_filled_tracker.rows_mut() {
@@ -134,18 +125,13 @@ impl<T: std::clone::Clone + Default + FrameValue<Output = T> + Copy> Framer for 
         }
             // Array3::<Option<T>>::new(num_rows, num_cols, num_channels);
         FrameSequence {
-            frames: VecDeque::from(vec![Frame { array, start_ts: 0, filled_count: 0 }]),
+            frames: VecDeque::from(vec![Frame { array, filled_count: 0 }]),
             frames_written: 0,
             frame_idx_offset: 0,
             pixel_ts_tracker: Array3::zeros((num_rows, num_cols, num_channels)),
             last_filled_tracker,
             mode,
-            running_ts: 0,
-            tps,
-            output_fps,
             tpf: tps / output_fps,
-            d_max,
-            delta_t_max,
             source,
             bincode: DefaultOptions::new()
                 .with_fixint_encoding()
@@ -164,7 +150,7 @@ impl<T: std::clone::Clone + Default + FrameValue<Output = T> + Copy> Framer for 
     /// # use adder_codec_rs::framer::framer::{FrameSequence, Framer};
     /// # use adder_codec_rs::framer::framer::SourceType::U8;
     ///
-    /// let mut frame_sequence: FrameSequence<u8> = FrameSequence::<u8>::new(10, 10, 3, 50000, 50, 15, 50000, INSTANTANEOUS, U8);
+    /// let mut frame_sequence: FrameSequence<u8> = FrameSequence::<u8>::new(10, 10, 3, 50000, 50, INSTANTANEOUS, U8);
     /// let event: Event = Event {
     ///         coord: Coord {
     ///             x: 5,
@@ -186,7 +172,7 @@ impl<T: std::clone::Clone + Default + FrameValue<Output = T> + Copy> Framer for 
 
         let last_filled_frame_ref = &mut self.last_filled_tracker[[event.coord.y.into(), event.coord.x.into(), channel.into()]];
         let prev_last_filled_frame = *last_filled_frame_ref;
-        let already_filled = *last_filled_frame_ref >= self.frames_written;
+        let _already_filled = *last_filled_frame_ref >= self.frames_written;
         let running_ts_ref = &mut self.pixel_ts_tracker[[event.coord.y.into(), event.coord.x.into(), channel.into()]];
         *running_ts_ref = *running_ts_ref + event.delta_t as BigT;
 
@@ -211,7 +197,7 @@ impl<T: std::clone::Clone + Default + FrameValue<Output = T> + Copy> Framer for 
                 }
                 _ => {
                     // let intensity = event_to_intensity(event);
-                    let mut scaled_intensity: T = T::get_frame_value(event, self.source, self.tpf);
+                    let scaled_intensity: T = T::get_frame_value(event, self.source, self.tpf);
                         // match self.source {
                         //         SourceType::U8 => { <u8 as ScaleIntensity<name>>::scale_intensity(intensity, (self.tps / self.output_fps) as BigT) },
                         //         SourceType::U16 => { <u16 as ScaleIntensity<name>>::scale_intensity(intensity, (self.tps / self.output_fps) as BigT) },
@@ -221,13 +207,13 @@ impl<T: std::clone::Clone + Default + FrameValue<Output = T> + Copy> Framer for 
                         //         // SourceType::F64 => {<u8 as ScaleIntensity<T>>::scale_intensity(intensity, (self.tps / self.output_fps) as BigT}
                         //         _ => { panic!("todo") }
                         //     };
-                    *last_filled_frame_ref = ((*running_ts_ref -1) as i64 / self.tpf as i64);
+                    *last_filled_frame_ref = (*running_ts_ref -1) as i64 / self.tpf as i64;
 
                     // Grow the frames vec if necessary
                     match *last_filled_frame_ref - self.frame_idx_offset {
                         a if a > 0 => {
                             let array: Array3<Option<T>> = Array3::<Option<T>>::default(self.frames[0].array.raw_dim());
-                            self.frames.append(&mut VecDeque::from(vec![Frame { array, start_ts: 0, filled_count: 0 }; a as usize]));
+                            self.frames.append(&mut VecDeque::from(vec![Frame { array, filled_count: 0 }; a as usize]));
                             self.frame_idx_offset += a;
                         }
                         a if a < 0 => {
@@ -240,16 +226,16 @@ impl<T: std::clone::Clone + Default + FrameValue<Output = T> + Copy> Framer for 
                         _ => {}
                     }
 
+                    let mut frame: &mut Option<T>;
                     for i in prev_last_filled_frame..*last_filled_frame_ref {
-                        match self.frames[(i - self.frames_written + 1) as usize].array[[
-                            event.coord.y.into(), event.coord.x.into(), channel.into()]] {
-                            Some(val) => {
+                        frame = &mut self.frames[(i - self.frames_written + 1) as usize].array[[
+                            event.coord.y.into(), event.coord.x.into(), channel.into()]];
+                        match frame  {
+                            Some(_val) => {
 
                             }
                             None => {
-                                // println!("Making None to Some at {} and frame index {}", event.coord.x, (i - self.frames_written + 1));
-
-                                self.frames[(i - self.frames_written + 1) as usize].array[[event.coord.y.into(), event.coord.x.into(), channel.into()]] =
+                                *frame =
                                     Some(scaled_intensity);
                                 self.frames[(i - self.frames_written + 1) as usize].filled_count += 1;
                             }
@@ -267,12 +253,6 @@ impl<T: std::clone::Clone + Default + FrameValue<Output = T> + Copy> Framer for 
     }
 
 
-}
-
-impl FrameSequence<u8> {
-    fn get_frame_value(&mut self, event: &Event) {
-
-    }
 }
 
 // #[duplicate_item(name; [u8]; [u16]; [u32]; [u64];)]
@@ -295,7 +275,7 @@ impl<T: std::clone::Clone + Default + FrameValue<Output = T> + Serialize> FrameS
         }
     }
 
-    fn get_frame(&self, frame_idx: usize) -> Result<&Array3<Option<T>>, FrameSequenceError> {
+    fn _get_frame(&self, frame_idx: usize) -> Result<&Array3<Option<T>>, FrameSequenceError> {
         match self.frames.len() <= frame_idx {
             true => {
                 Err(FrameSequenceError::InvalidIndex)
@@ -332,7 +312,7 @@ impl<T: std::clone::Clone + Default + FrameValue<Output = T> + Serialize> FrameS
                 // If this is the only frame left, then add a new one to prevent invalid accesses later
                 if self.frames.len() == 0 {
                     let array: Array3<Option<T>> = Array3::<Option<T>>::default(a.array.raw_dim());
-                    self.frames.append(&mut VecDeque::from(vec![Frame { array, start_ts: 0, filled_count: 0 }; 1]));
+                    self.frames.append(&mut VecDeque::from(vec![Frame { array, filled_count: 0 }; 1]));
                     self.frame_idx_offset += 1;
                 }
                 Some(a.array)
@@ -356,14 +336,17 @@ impl<T: std::clone::Clone + Default + FrameValue<Output = T> + Serialize> FrameS
                 // self.bincode.serialize_into(writer, &tmp.raw_view());
                 let none_val = T::default();
                 for px in arr.iter() {
-                    self.bincode.serialize_into(&mut *writer, match px {
+                    match self.bincode.serialize_into(&mut *writer, match px {
                         Some(event) => {
                             event
                         }
                         None => {
                             &none_val
                         }
-                    });
+                    }) {
+                        Ok(_) => {}
+                        Err(e) => {panic!("{}", e)}
+                    };
                 }
             }
             None => {}

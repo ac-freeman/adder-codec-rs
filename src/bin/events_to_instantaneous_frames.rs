@@ -4,8 +4,7 @@ use std::fs::File;
 use std::io;
 use std::io::{BufWriter, Write};
 use std::time::Instant;
-use adder_codec_rs::{Codec, D_MAX};
-use adder_codec_rs::framer::array3d::Array3DError;
+use adder_codec_rs::{Codec};
 use adder_codec_rs::framer::framer::FramerMode::INSTANTANEOUS;
 use adder_codec_rs::framer::framer::FrameSequence;
 use adder_codec_rs::framer::framer::SourceType::U8;
@@ -15,7 +14,7 @@ use adder_codec_rs::framer::framer::Framer;
 fn main() -> Result<(), Array3DError> {
     let input_path = "/home/andrew/Downloads/temppp";
     let mut stream: RawStream = Codec::new();
-    stream.open_reader(input_path.to_string());
+    stream.open_reader(input_path.to_string()).expect("Invalid path");
     stream.decode_header();
 
     let output_path = "/home/andrew/Downloads/temppp_out";
@@ -25,7 +24,7 @@ fn main() -> Result<(), Array3DError> {
     // For instantaneous reconstruction, make sure the frame rate matches the source video rate
     assert_eq!(stream.tps / stream.ref_interval, reconstructed_frame_rate);
 
-    let mut frame_sequence: FrameSequence<u8> = FrameSequence::<u8>::new(stream.height.into(), stream.width.into(), stream.channels.into(), stream.tps, reconstructed_frame_rate, D_MAX, stream.delta_t_max, INSTANTANEOUS, U8);
+    let mut frame_sequence: FrameSequence<u8> = FrameSequence::<u8>::new(stream.height.into(), stream.width.into(), stream.channels.into(), stream.tps, reconstructed_frame_rate, INSTANTANEOUS, U8);
     let mut now = Instant::now();
     let mut frame_count = 0;
     loop {
@@ -53,7 +52,7 @@ fn main() -> Result<(), Array3DError> {
 
 
             }
-            Err(e) => {
+            Err(_e) => {
                 eprintln!("\nExiting");
                 break
             }

@@ -119,7 +119,7 @@ impl ScaleIntensity<u64> for u64 {
 }
 
 
-pub(crate) trait FrameValue {
+pub trait FrameValue {
     type Output;
     fn get_frame_value(event: &Event, source_type: SourceType, i1: DeltaT) -> Self::Output;
 }

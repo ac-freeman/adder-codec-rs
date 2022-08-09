@@ -3,16 +3,16 @@ extern crate adder_codec_rs;
 use std::fs;
 use std::fs::File;
 use std::io::{BufWriter, Write};
-use std::mem::size_of;
+
 use std::path::Path;
 use std::process::Command;
-use bytes::BytesMut;
-use ndarray::Array3;
+
+
 use adder_codec_rs::{Codec, Coord, D_MAX, Event};
 use adder_codec_rs::raw::raw_stream::RawStream;
 use rand::Rng;
 use adder_codec_rs::framer::framer::{Framer, FrameSequence};
-use adder_codec_rs::framer::framer::FramerMode::{INSTANTANEOUS, INTEGRATION};
+use adder_codec_rs::framer::framer::FramerMode::{INSTANTANEOUS};
 use adder_codec_rs::framer::framer::SourceType::U8;
 
 
@@ -30,7 +30,7 @@ fn test_sample_perfect_dt() {
     // For instantaneous reconstruction, make sure the frame rate matches the source video rate
     assert_eq!(stream.tps / stream.ref_interval, reconstructed_frame_rate);
 
-    let mut frame_sequence: FrameSequence<u8> = FrameSequence::<u8>::new(stream.height.into(), stream.width.into(), stream.channels.into(), stream.tps, reconstructed_frame_rate, D_MAX, stream.delta_t_max, INSTANTANEOUS, U8);
+    let mut frame_sequence: FrameSequence<u8> = FrameSequence::<u8>::new(stream.height.into(), stream.width.into(), stream.channels.into(), stream.tps, reconstructed_frame_rate,  INSTANTANEOUS, U8);
     let mut frame_count = 0;
     loop {
         match stream.decode_event() {
@@ -47,12 +47,14 @@ fn test_sample_perfect_dt() {
 
 
             }
-            Err(e) => {
+            Err(_e) => {
                 eprintln!("\nExiting");
                 break
             }
         }
     }
+
+    assert_eq!(frame_count, 221);
 
     output_stream.flush().unwrap();
     let output = if !cfg!(target_os = "windows") {
@@ -83,7 +85,7 @@ fn test_sample_perfect_dt_color() {
     // For instantaneous reconstruction, make sure the frame rate matches the source video rate
     assert_eq!(stream.tps / stream.ref_interval, reconstructed_frame_rate);
 
-    let mut frame_sequence: FrameSequence<u8> = FrameSequence::<u8>::new(stream.height.into(), stream.width.into(), stream.channels.into(), stream.tps, reconstructed_frame_rate, D_MAX, stream.delta_t_max, INSTANTANEOUS, U8);
+    let mut frame_sequence: FrameSequence<u8> = FrameSequence::<u8>::new(stream.height.into(), stream.width.into(), stream.channels.into(), stream.tps, reconstructed_frame_rate,  INSTANTANEOUS, U8);
     let mut frame_count = 0;
     loop {
         match stream.decode_event() {
@@ -100,7 +102,7 @@ fn test_sample_perfect_dt_color() {
 
 
             }
-            Err(e) => {
+            Err(_e) => {
                 eprintln!("\nExiting");
                 break
             }
@@ -295,14 +297,8 @@ fn test_event_framer_ingest() {
     use adder_codec_rs::framer::framer::FramerMode::INSTANTANEOUS;
     use adder_codec_rs::framer::framer::{FrameSequence, Framer, EventCoordless};
     use adder_codec_rs::framer::framer::SourceType::U8;
-    use std::fs::File;
-    use std::io;
-    use std::io::{BufWriter, Write};
-    use std::time::Instant;
-    use adder_codec_rs::{Codec, D_MAX};
-    use adder_codec_rs::framer::array3d::Array3DError;
-    use adder_codec_rs::raw::raw_stream::RawStream;
-    let mut frame_sequence: FrameSequence<EventCoordless> = FrameSequence::<EventCoordless>::new(10, 10, 3, 50000, 50, 15, 50000, INSTANTANEOUS, U8);
+    
+    let mut frame_sequence: FrameSequence<EventCoordless> = FrameSequence::<EventCoordless>::new(10, 10, 3, 50000, 50, INSTANTANEOUS, U8);
     let event: Event = Event {
             coord: Coord {
                 x: 5,
@@ -332,7 +328,7 @@ fn test_event_framer_ingest_get_filled() {
     use adder_codec_rs::framer::framer::FramerMode::INSTANTANEOUS;
     use adder_codec_rs::framer::framer::{FrameSequence, Framer, EventCoordless};
     use adder_codec_rs::framer::framer::SourceType::U8;
-    let mut frame_sequence: FrameSequence<EventCoordless> = FrameSequence::<EventCoordless>::new(5, 5, 1, 50000, 50, 15, 50000, INSTANTANEOUS, U8);
+    let mut frame_sequence: FrameSequence<EventCoordless> = FrameSequence::<EventCoordless>::new(5, 5, 1, 50000, 50,  INSTANTANEOUS, U8);
 
     for i in 0..5 {
         for j in 0..5{
@@ -367,7 +363,7 @@ fn get_frame_bytes_eventcoordless() {
     use adder_codec_rs::framer::framer::FramerMode::INSTANTANEOUS;
     use adder_codec_rs::framer::framer::{FrameSequence, Framer, EventCoordless};
     use adder_codec_rs::framer::framer::SourceType::U8;
-    let mut frame_sequence: FrameSequence<EventCoordless> = FrameSequence::<EventCoordless>::new(5, 5, 1, 50000, 50, 15, 50000, INSTANTANEOUS, U8);
+    let mut frame_sequence: FrameSequence<EventCoordless> = FrameSequence::<EventCoordless>::new(5, 5, 1, 50000, 50,  INSTANTANEOUS, U8);
     eprintln!("{}", std::mem::size_of::<Option<EventCoordless>>());
     for i in 0..5 {
         for j in 0..5{
@@ -403,7 +399,7 @@ fn get_frame_bytes_eventcoordless() {
     match frame_sequence.write_multi_frame_bytes(&mut output_writer) {
         frame_count if frame_count == 6 => {
             output_writer.flush().unwrap();
-            std::mem::drop(output_writer);
+            drop(output_writer);
 
             // No header. 5 bytes per eventcoordless * 6 frames = 750 bytes
             // TODO: need to serialize just the eventcoordless within, not the Option or the Array3
@@ -421,9 +417,9 @@ fn get_frame_bytes_eventcoordless() {
 fn get_frame_bytes_u8() {
     use adder_codec_rs::{Coord, Event};
     use adder_codec_rs::framer::framer::FramerMode::INSTANTANEOUS;
-    use adder_codec_rs::framer::framer::{FrameSequence, Framer, EventCoordless};
+    use adder_codec_rs::framer::framer::{FrameSequence, Framer};
     use adder_codec_rs::framer::framer::SourceType::U8;
-    let mut frame_sequence: FrameSequence<u8> = FrameSequence::<u8>::new(5, 5, 1, 50000, 50, 15, 50000, INSTANTANEOUS, U8);
+    let mut frame_sequence: FrameSequence<u8> = FrameSequence::<u8>::new(5, 5, 1, 50000, 50,  INSTANTANEOUS, U8);
 
     for i in 0..5 {
         for j in 0..5{
@@ -460,7 +456,7 @@ fn get_frame_bytes_u8() {
     match frame_sequence.write_multi_frame_bytes(&mut output_writer) {
         frame_count if frame_count == 6 => {
             output_writer.flush().unwrap();
-            std::mem::drop(output_writer);
+            drop(output_writer);
 
             assert_eq!(fs::metadata(&path).unwrap().len(), 150);
             fs::remove_file(&path);  // Don't check the error
@@ -475,9 +471,9 @@ fn get_frame_bytes_u8() {
 fn get_frame_bytes_u16() {
     use adder_codec_rs::{Coord, Event};
     use adder_codec_rs::framer::framer::FramerMode::INSTANTANEOUS;
-    use adder_codec_rs::framer::framer::{FrameSequence, Framer, EventCoordless};
+    use adder_codec_rs::framer::framer::{FrameSequence, Framer};
     use adder_codec_rs::framer::framer::SourceType::U8;
-    let mut frame_sequence: FrameSequence<u16> = FrameSequence::<u16>::new(5, 5, 1, 50000, 50, 15, 50000, INSTANTANEOUS, U8);
+    let mut frame_sequence: FrameSequence<u16> = FrameSequence::<u16>::new(5, 5, 1, 50000, 50,  INSTANTANEOUS, U8);
 
     for i in 0..5 {
         for j in 0..5{
@@ -513,7 +509,7 @@ fn get_frame_bytes_u16() {
     match frame_sequence.write_multi_frame_bytes(&mut output_writer) {
         frame_count if frame_count == 6 => {
             output_writer.flush().unwrap();
-            std::mem::drop(output_writer);
+            drop(output_writer);
 
             assert_eq!(fs::metadata(&path).unwrap().len(), 300);
             fs::remove_file(&path);  // Don't check the error
@@ -528,9 +524,9 @@ fn get_frame_bytes_u16() {
 fn get_frame_bytes_u32() {
     use adder_codec_rs::{Coord, Event};
     use adder_codec_rs::framer::framer::FramerMode::INSTANTANEOUS;
-    use adder_codec_rs::framer::framer::{FrameSequence, Framer, EventCoordless};
+    use adder_codec_rs::framer::framer::{FrameSequence, Framer};
     use adder_codec_rs::framer::framer::SourceType::U8;
-    let mut frame_sequence: FrameSequence<u32> = FrameSequence::<u32>::new(5, 5, 1, 50000, 50, 15, 50000, INSTANTANEOUS, U8);
+    let mut frame_sequence: FrameSequence<u32> = FrameSequence::<u32>::new(5, 5, 1, 50000, 50,  INSTANTANEOUS, U8);
 
     for i in 0..5 {
         for j in 0..5{
@@ -566,7 +562,7 @@ fn get_frame_bytes_u32() {
     match frame_sequence.write_multi_frame_bytes(&mut output_writer) {
         frame_count if frame_count == 6 => {
             output_writer.flush().unwrap();
-            std::mem::drop(output_writer);
+            drop(output_writer);
 
             assert_eq!(fs::metadata(&path).unwrap().len(), 600);
             fs::remove_file(&path);  // Don't check the error
@@ -581,9 +577,9 @@ fn get_frame_bytes_u32() {
 fn get_frame_bytes_u64() {
     use adder_codec_rs::{Coord, Event};
     use adder_codec_rs::framer::framer::FramerMode::INSTANTANEOUS;
-    use adder_codec_rs::framer::framer::{FrameSequence, Framer, EventCoordless};
+    use adder_codec_rs::framer::framer::{FrameSequence, Framer};
     use adder_codec_rs::framer::framer::SourceType::U8;
-    let mut frame_sequence: FrameSequence<u64> = FrameSequence::<u64>::new(5, 5, 1, 50000, 50, 15, 50000, INSTANTANEOUS, U8);
+    let mut frame_sequence: FrameSequence<u64> = FrameSequence::<u64>::new(5, 5, 1, 50000, 50,  INSTANTANEOUS, U8);
 
     for i in 0..5 {
         for j in 0..5{
@@ -619,7 +615,7 @@ fn get_frame_bytes_u64() {
     match frame_sequence.write_multi_frame_bytes(&mut output_writer) {
         frame_count if frame_count == 6 => {
             output_writer.flush().unwrap();
-            std::mem::drop(output_writer);
+            drop(output_writer);
 
             assert_eq!(fs::metadata(&path).unwrap().len(), 1200);
             fs::remove_file(&path);  // Don't check the error
@@ -634,9 +630,9 @@ fn get_frame_bytes_u64() {
 fn test_get_empty_frame() {
     use adder_codec_rs::{Coord, Event};
     use adder_codec_rs::framer::framer::FramerMode::INSTANTANEOUS;
-    use adder_codec_rs::framer::framer::{FrameSequence, Framer, EventCoordless};
+    use adder_codec_rs::framer::framer::{FrameSequence, Framer};
     use adder_codec_rs::framer::framer::SourceType::U8;
-    let mut frame_sequence: FrameSequence<u8> = FrameSequence::<u8>::new(5, 5, 1, 50000, 50, 15, 50000, INSTANTANEOUS, U8);
+    let mut frame_sequence: FrameSequence<u8> = FrameSequence::<u8>::new(5, 5, 1, 50000, 50,  INSTANTANEOUS, U8);
     let n: u32 = rand::thread_rng().gen();
     let path = "./TEST_".to_owned() + n.to_string().as_str() + ".addr";
     let file = File::create(&path).unwrap();
