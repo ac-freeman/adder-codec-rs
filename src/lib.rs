@@ -1,21 +1,22 @@
+use crate::framer::event_framer::EventCoordless;
+use crate::header::EventStreamHeader;
+use crate::raw::raw_stream::StreamError;
+use bytes::Bytes;
+use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::io::{BufReader, BufWriter};
 use std::path::Path;
-use bytes::Bytes;
-use crate::framer::event_framer::EventCoordless;
-use crate::header::EventStreamHeader;
-use serde::{Serialize, Deserialize};
-use crate::raw::raw_stream::StreamError;
 
+pub mod framer;
 mod header;
 pub mod raw;
-pub mod framer;
 
 /// Decimation value; a pixel's sensitivity.
 pub type D = u8;
 
 pub const D_SHIFT: [u32; 21] = [
-    1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536, 131072, 262144, 524288, 1048576
+    1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536, 131072,
+    262144, 524288, 1048576,
 ];
 
 /// The maximum intensity representation for input data. Currently 255 for 8-bit framed input.
@@ -73,34 +74,34 @@ pub struct EventSingle {
 impl From<&Coord> for Bytes {
     fn from(coord: &Coord) -> Self {
         match coord.c {
-            None => {
-                Bytes::from([
+            None => Bytes::from(
+                [
                     &coord.x.to_be_bytes() as &[u8],
                     &coord.y.to_be_bytes() as &[u8],
-                ].concat()
-                )
-            }
-            Some(c) => {
-                Bytes::from([
+                ]
+                .concat(),
+            ),
+            Some(c) => Bytes::from(
+                [
                     &coord.x.to_be_bytes() as &[u8],
                     &coord.y.to_be_bytes() as &[u8],
-                    &c.to_be_bytes() as &[u8]
-                ].concat()
-                )
-            }
+                    &c.to_be_bytes() as &[u8],
+                ]
+                .concat(),
+            ),
         }
     }
 }
 
-
-
 impl From<&Event> for Bytes {
     fn from(event: &Event) -> Self {
-        Bytes::from([
-            &Bytes::from(&event.coord).to_vec() as &[u8],
-            &event.d.to_be_bytes() as &[u8],
-            &event.delta_t.to_be_bytes() as &[u8]
-        ].concat()
+        Bytes::from(
+            [
+                &Bytes::from(&event.coord).to_vec() as &[u8],
+                &event.d.to_be_bytes() as &[u8],
+                &event.delta_t.to_be_bytes() as &[u8],
+            ]
+            .concat(),
         )
     }
 }
@@ -108,9 +109,12 @@ impl From<&Event> for Bytes {
 impl From<&Event> for EventSingle {
     fn from(event: &Event) -> Self {
         EventSingle {
-            coord: CoordSingle { x: event.coord.x, y: event.coord.y } ,
+            coord: CoordSingle {
+                x: event.coord.x,
+                y: event.coord.y,
+            },
             d: event.d,
-            delta_t: event.delta_t
+            delta_t: event.delta_t,
         }
     }
 }
@@ -118,9 +122,13 @@ impl From<&Event> for EventSingle {
 impl From<EventSingle> for Event {
     fn from(event: EventSingle) -> Self {
         Event {
-            coord: Coord { x: event.coord.x, y: event.coord.y, c: None } ,
+            coord: Coord {
+                x: event.coord.x,
+                y: event.coord.y,
+                c: None,
+            },
             d: event.d,
-            delta_t: event.delta_t
+            delta_t: event.delta_t,
         }
     }
 }
@@ -128,13 +136,13 @@ impl From<EventSingle> for Event {
 pub trait Codec {
     fn new() -> Self;
 
-    fn open_writer<P: AsRef<Path>>(&mut self, path: P) -> Result<(), std::io::Error>{
+    fn open_writer<P: AsRef<Path>>(&mut self, path: P) -> Result<(), std::io::Error> {
         let file = File::create(&path)?;
         self.set_output_stream(Some(BufWriter::new(file)));
         Ok(())
     }
 
-    fn open_reader<P: AsRef<Path>>(&mut self, path: P) -> Result<(), std::io::Error>{
+    fn open_reader<P: AsRef<Path>>(&mut self, path: P) -> Result<(), std::io::Error> {
         let file = File::open(&path)?;
         self.set_input_stream(Some(BufReader::new(file)));
         Ok(())
@@ -151,13 +159,15 @@ pub trait Codec {
     fn set_output_stream(&mut self, stream: Option<BufWriter<File>>);
     fn set_input_stream(&mut self, stream: Option<BufReader<File>>);
 
-    fn encode_header(&mut self,
-                     width: u16,
-                     height: u16,
-                     tps: u32,
-                     ref_interval: u32,
-                     delta_t_max: u32,
-                     channels: u8);
+    fn encode_header(
+        &mut self,
+        width: u16,
+        height: u16,
+        tps: u32,
+        ref_interval: u32,
+        delta_t_max: u32,
+        channels: u8,
+    );
 
     fn decode_header(&mut self);
 
@@ -165,14 +175,7 @@ pub trait Codec {
     fn encode_events(&mut self, events: &[Event]);
     fn encode_events_events(&mut self, events: &[Vec<Event>]);
     fn decode_event(&mut self) -> Result<Event, StreamError>;
-
-
 }
-
-
-
-
-
 
 #[cfg(test)]
 mod tests {
@@ -180,7 +183,5 @@ mod tests {
     // use crate::header::MAGIC_RAW;
 
     #[test]
-    fn encode_raw() {
-
-    }
+    fn encode_raw() {}
 }
