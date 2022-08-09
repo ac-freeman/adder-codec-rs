@@ -155,60 +155,6 @@ fn cleanup_raw_writer(rand_num: u32, stream: &mut RawStream) {
 }
 
 #[test]
-#[should_panic]
-fn test_encode_bad_event1() {
-    let n = 0;
-    let mut stream = setup_raw_writer(n);
-    let event: Event = Event {
-        coord: Coord {
-            x: 100,
-            y: 30,
-            c: None
-        },
-        d: 5,
-        delta_t: 1000
-    };
-    stream.encode_event(&event);
-    cleanup_raw_writer(n, &mut stream)
-}
-
-#[test]
-#[should_panic]
-fn test_encode_bad_event2() {
-    let n = 0;
-    let mut stream = setup_raw_writer(n);
-    let event: Event = Event {
-        coord: Coord {
-            x: 10,
-            y: 30,
-            c: Some(1)
-        },
-        d: 5,
-        delta_t: 1000
-    };
-    stream.encode_event(&event);
-    cleanup_raw_writer(n, &mut stream)
-}
-
-#[test]
-#[should_panic]
-fn test_encode_bad_event3() {
-    let n = 0;
-    let mut stream = setup_raw_writer(n);
-    let event: Event = Event {
-        coord: Coord {
-            x: 10,
-            y: 30,
-            c: None
-        },
-        d: 5,
-        delta_t: 1000000
-    };
-    stream.encode_event(&event);
-    cleanup_raw_writer(n, &mut stream)
-}
-
-#[test]
 fn test_encode_event() {
     let n = 0;
     let mut stream = setup_raw_writer(n);
@@ -656,6 +602,7 @@ fn test_get_empty_frame() {
     // integrated!
     let filled = frame_sequence.ingest_event(&event);
     assert_eq!(filled, false);
+    fs::remove_file(&path).unwrap();
 }
 
 // #[test]

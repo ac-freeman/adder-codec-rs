@@ -52,37 +52,6 @@ pub trait Framer {
     /// If [`INTEGRATION`], this function will integrate this [`Event`] value for the corresponding
     /// output frame(s)
     fn ingest_event(&mut self, event: &Event) -> bool;
-
-    // fn get_frame(&self, frame_idx: usize) -> Result<&Array3D<Option<T>>, FrameSequenceError>;
-    //
-    // fn px_at_current(&self, row: usize, col: usize, channel: usize) -> Result<&Option<T>, Array3DError>;
-    //
-    // fn px_at_frame(&self, row: usize, col: usize, channel: usize, frame_idx: usize) -> Result<&Option<T>, Array3DError>;
-    //
-    // fn is_frame_filled(&self, frame_idx: usize) -> Result<bool, FrameSequenceError>;
-    //
-    // fn pop_next_frame(&mut self) -> Option<Array3D<Option<T>>>;
-    //
-    // fn get_frame_bytes(&mut self) -> Option<BytesMut>;
-    //
-    // fn get_multi_frame_bytes(&mut self) -> Option<(i32, BytesMut)>;
-
-    // fn get_frame_bytes(&mut self) -> Option<BytesMut>;
-
-    // fn pop_next_frame(&mut self) -> Result<Array3D<Self::Output>, Array3DError>;
-    //
-    // fn write_next_frame(&mut self) -> Result<(), Error>;
-
-    // fn get_frame(&self, frame_idx: usize) -> &Array3D<Self::Output>;
-
-
-    // fn event_to_scaled_intensity(&self, event: &Event) -> Intensity {
-    //     let intensity = event_to_intensity(event);
-    //     (((D_SHIFT[event.d as usize] as f32) / (u8::MAX as f32))
-    //         * (self.ticks_per_frame as f32 / event.delta_t as f32)
-    //         * u16::MAX as f32) as u16}
-    // }
-    // fn get_instant_frame(&mut self) ->
 }
 
 #[derive(Debug, Clone, Default)]
@@ -237,7 +206,6 @@ impl<T: Clone + Default + FrameValue<Output = T> + Copy> Framer for FrameSequenc
 
 }
 
-// #[duplicate_item(name; [u8]; [u16]; [u32]; [u64];)]
 impl<T: Clone + Default + FrameValue<Output = T> + Serialize> FrameSequence<T> {
     pub fn px_at_current(&self, row: usize, col: usize, channel: usize) -> &Option<T> {
         if self.frames.len() == 0 {
@@ -333,8 +301,4 @@ impl<T: Clone + Default + FrameValue<Output = T> + Serialize> FrameSequence<T> {
         }
         frame_count
     }
-
 }
-
-
-
