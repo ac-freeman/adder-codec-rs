@@ -185,7 +185,7 @@ impl<T: std::clone::Clone + Default + FrameValue<Output = T> + Copy> Framer for 
     ///         delta_t: 1000
     ///     };
     /// frame_sequence.ingest_event(&event);
-    /// let elem = frame_sequence.px_at_current(5, 5, 1).unwrap();
+    /// let elem = frame_sequence.px_at_current(5, 5, 1);
     /// assert_eq!(*elem, Some(32));
     /// ```
     fn ingest_event(&mut self, event: &crate::Event) -> Result<bool, Array3DError> {
@@ -287,14 +287,14 @@ impl FrameSequence<u8> {
 
 // #[duplicate_item(name; [u8]; [u16]; [u32]; [u64];)]
 impl<T: std::clone::Clone + Default + FrameValue<Output = T> + Serialize> FrameSequence<T> {
-    fn px_at_current(&self, row: usize, col: usize, channel: usize) -> &Option<T> {
+    pub fn px_at_current(&self, row: usize, col: usize, channel: usize) -> &Option<T> {
         if self.frames.len() == 0 {
             panic!("Frame not initialized");
         }
         &self.frames[0].array[[row, col, channel]]
     }
 
-    fn px_at_frame(&self, row: usize, col: usize, channel: usize, frame_idx: usize) -> Result<&Option<T>, FrameSequenceError> {
+    pub fn px_at_frame(&self, row: usize, col: usize, channel: usize, frame_idx: usize) -> Result<&Option<T>, FrameSequenceError> {
         match self.frames.len() {
             a if frame_idx < a => {
                 Ok(&self.frames[frame_idx].array[[row, col, channel]])
@@ -351,11 +351,30 @@ impl<T: std::clone::Clone + Default + FrameValue<Output = T> + Serialize> FrameS
         }
     }
 
-    fn write_frame_bytes(&mut self, writer: &mut BufWriter<File>) {
+    pub fn write_frame_bytes(&mut self, writer: &mut BufWriter<File>) {
         match self.pop_next_frame() {
             Some(arr) => {
                 // Some(arr.)
-                self.bincode.serialize_into(writer, &arr);
+
+                // let mut tmp: Array3<T> = Array3::<T>::default(arr.raw_dim());
+                // for (a, b) in arr.iter().zip(tmp.iter_mut()) {
+                //     *b = match a {
+                //         Some(elem) => { *elem},
+                //         None => { T::default() }
+                //     }
+                // }
+                // self.bincode.serialize_into(writer, &tmp.raw_view());
+                let none_val = T::default();
+                for px in arr.iter() {
+                    self.bincode.serialize_into(&mut *writer, match px {
+                        Some(event) => {
+                            event
+                        }
+                        None => {
+                            &none_val
+                        }
+                    });
+                }
             }
             None => {}
         }
