@@ -1,12 +1,12 @@
+use crate::header::MAGIC_RAW;
+use crate::raw::raw_stream::StreamError::{Deserialize, Eof};
+use crate::{Codec, Coord, DeltaT, Event, EventSingle, EventStreamHeader, EOF_PX_ADDRESS};
+use bincode::config::{BigEndian, FixintEncoding, WithOtherEndian, WithOtherIntEncoding};
+use bincode::{DefaultOptions, Options};
+use bytes::Bytes;
 use std::fs::File;
 use std::io::{BufReader, BufWriter, Write};
 use std::mem;
-use bincode::config::{BigEndian, FixintEncoding, WithOtherEndian, WithOtherIntEncoding};
-use bytes::{Bytes};
-use crate::{Codec, Coord, DeltaT, EOF_PX_ADDRESS, Event, EventSingle, EventStreamHeader};
-use crate::header::MAGIC_RAW;
-use bincode::{DefaultOptions, Options};
-use crate::raw::raw_stream::StreamError::{Deserialize, Eof};
 
 #[derive(Debug)]
 pub enum StreamError {
@@ -58,10 +58,10 @@ impl Codec for RawStream {
                     coord: Coord {
                         x: EOF_PX_ADDRESS,
                         y: EOF_PX_ADDRESS,
-                        c: Some(0)
+                        c: Some(0),
                     },
                     d: 0,
-                    delta_t: 0
+                    delta_t: 0,
                 };
                 self.encode_event(&eof);
             }
@@ -108,27 +108,38 @@ impl Codec for RawStream {
     /// want to read and write two streams at once (for example, if you are cropping the spatial
     /// pixels of a stream, reducing the number of channels, or scaling the [DeltaT] values in
     /// some way).
-    fn encode_header(&mut self,
-                     width: u16,
-                     height: u16,
-                     tps: DeltaT,
-                     ref_interval: DeltaT,
-                     delta_t_max: DeltaT,
-                     channels: u8) {
+    fn encode_header(
+        &mut self,
+        width: u16,
+        height: u16,
+        tps: DeltaT,
+        ref_interval: DeltaT,
+        delta_t_max: DeltaT,
+        channels: u8,
+    ) {
         self.width = width;
         self.height = height;
         self.tps = tps;
         self.ref_interval = ref_interval;
         self.delta_t_max = delta_t_max;
         self.channels = channels;
-        let header = EventStreamHeader::new(MAGIC_RAW, width, height, tps, ref_interval, delta_t_max, channels);
+        let header = EventStreamHeader::new(
+            MAGIC_RAW,
+            width,
+            height,
+            tps,
+            ref_interval,
+            delta_t_max,
+            channels,
+        );
         assert_eq!(header.magic, MAGIC_RAW);
         match &mut self.output_stream {
             None => {
                 panic!("Output stream not initialized");
             }
             Some(stream) => {
-                stream.write_all(&Bytes::from(&header).to_vec())
+                stream
+                    .write_all(&Bytes::from(&header).to_vec())
                     .expect("Unable to write header");
             }
         }
@@ -152,7 +163,6 @@ impl Codec for RawStream {
                 assert_eq!(header.magic, MAGIC_RAW);
             }
         }
-
     }
 
     fn encode_event(&mut self, event: &Event) {
@@ -177,7 +187,8 @@ impl Codec for RawStream {
                     }
                 }
                 debug_assert!(event.delta_t <= self.delta_t_max);
-                stream.write_all(&Bytes::from(event).to_vec())
+                stream
+                    .write_all(&Bytes::from(event).to_vec())
                     .expect("Unable to write event");
             }
         }
@@ -197,7 +208,9 @@ impl Codec for RawStream {
                     debug_assert!(event.coord.y < self.height);
                     if self.channels == 1 {
                         output_event = event.into();
-                        self.bincode.serialize_into(&mut *stream, &output_event).unwrap();
+                        self.bincode
+                            .serialize_into(&mut *stream, &output_event)
+                            .unwrap();
                         // bincode::serialize_into(&mut *stream, &output_event, my_options).unwrap();
                     } else {
                         self.bincode.serialize_into(&mut *stream, event).unwrap();
@@ -222,52 +235,53 @@ impl Codec for RawStream {
             Some(stream) => {
                 if self.channels == 1 {
                     match self.bincode.deserialize_from::<_, EventSingle>(stream) {
-                        Ok(ev) => { ev.into()}
-                        Err(_e) => {
-                            return Err(Deserialize)
-                        }
+                        Ok(ev) => ev.into(),
+                        Err(_e) => return Err(Deserialize),
                     }
                 } else {
                     match self.bincode.deserialize_from(stream) {
-                        Ok(ev) => { ev}
-                        Err(_) => { return Err(Deserialize)}
+                        Ok(ev) => ev,
+                        Err(_) => return Err(Deserialize),
                     }
                 }
             }
         };
         if event.coord.y == EOF_PX_ADDRESS && event.coord.x == EOF_PX_ADDRESS {
-            return Err(Eof)
+            return Err(Eof);
         }
         Ok(event)
-
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::fs;
-    use rand::Rng;
-    use crate::{Codec, Coord, Event};
     use crate::raw::raw_stream::RawStream;
+    use crate::{Codec, Coord, Event};
+    use rand::Rng;
+    use std::fs;
 
     #[test]
     fn ttt() {
         let n: u32 = rand::thread_rng().gen();
         let mut stream: RawStream = Codec::new();
-        stream.open_writer("./TEST_".to_owned() + n.to_string().as_str() + ".addr").expect("Couldn't open file");
+        stream
+            .open_writer("./TEST_".to_owned() + n.to_string().as_str() + ".addr")
+            .expect("Couldn't open file");
         stream.encode_header(50, 100, 53000, 4000, 50000, 1);
         let event: Event = Event {
             coord: Coord {
                 x: 10,
                 y: 30,
-                c: None
+                c: None,
             },
             d: 5,
-            delta_t: 1000
+            delta_t: 1000,
         };
         stream.encode_event(&event);
         stream.flush_writer();
-        stream.open_reader("./TEST_".to_owned() + n.to_string().as_str() + ".addr").expect("Couldn't open file");
+        stream
+            .open_reader("./TEST_".to_owned() + n.to_string().as_str() + ".addr")
+            .expect("Couldn't open file");
         stream.decode_header();
         let res = stream.decode_event();
         match res {
@@ -281,8 +295,8 @@ mod tests {
         stream.encode_header(20, 30, 473289, 477893, 4732987, 3);
         assert!(stream.input_stream.is_none());
 
-
         stream.close_writer();
-        fs::remove_file("./TEST_".to_owned() + n.to_string().as_str() + ".addr").unwrap();  // Don't check the error
+        fs::remove_file("./TEST_".to_owned() + n.to_string().as_str() + ".addr").unwrap();
+        // Don't check the error
     }
 }

@@ -3,8 +3,8 @@ use std::fs::File;
 pub(crate) type Magic = [u8; 5];
 
 // chars in Rust are 4 bytes each, so cast to u8 for ASCII
-pub(crate) const MAGIC_RAW: Magic = ['a' as u8,'d' as u8,'d' as u8,'e' as u8,'r' as u8];
-pub(crate) const MAGIC_COMPRESSED: Magic = ['a' as u8,'d' as u8,'d' as u8,'e' as u8,'c' as u8];
+pub(crate) const MAGIC_RAW: Magic = ['a' as u8, 'd' as u8, 'd' as u8, 'e' as u8, 'r' as u8];
+pub(crate) const MAGIC_COMPRESSED: Magic = ['a' as u8, 'd' as u8, 'd' as u8, 'e' as u8, 'c' as u8];
 
 /// Both the raw (uncompressed) and compressed ADDER streams have the same header structure. All
 /// that changes is [magic]. A new [version] of the raw stream format necessitates a new [version]
@@ -23,8 +23,8 @@ pub(crate) struct EventStreamHeader {
     pub(crate) channels: u8,
 }
 
-use std::io::{BufReader, Read};
 use bytes::{Buf, Bytes};
+use std::io::{BufReader, Read};
 
 impl EventStreamHeader {
     pub fn new(
@@ -54,9 +54,9 @@ impl EventStreamHeader {
 
             // Number of bytes each event occupies
             event_size: match channels {
-                1 => {9},   // If single-channel, don't need to waste a byte on the c portion
-                            // for every event
-                _ => {10}
+                1 => 9, // If single-channel, don't need to waste a byte on the c portion
+                // for every event
+                _ => 10,
             },
             channels,
         }
@@ -68,8 +68,12 @@ impl EventStreamHeader {
         let mut byte_buffer = &buf[..];
         let mut header = EventStreamHeader::default();
         header.magic = [
-            byte_buffer.get_u8(), byte_buffer.get_u8(), byte_buffer.get_u8(), byte_buffer.get_u8(), byte_buffer.get_u8()
-            ];
+            byte_buffer.get_u8(),
+            byte_buffer.get_u8(),
+            byte_buffer.get_u8(),
+            byte_buffer.get_u8(),
+            byte_buffer.get_u8(),
+        ];
         assert!(header.magic == MAGIC_RAW || header.magic == MAGIC_COMPRESSED);
         header.version = byte_buffer.get_u8();
         header.endianness = byte_buffer.get_u8();
@@ -90,18 +94,20 @@ impl EventStreamHeader {
 
 impl From<&EventStreamHeader> for Bytes {
     fn from(header: &EventStreamHeader) -> Self {
-        Bytes::from([
-            &header.magic as &[u8],
-            &header.version.to_be_bytes() as &[u8],
-            &header.endianness.to_be_bytes() as &[u8],
-            &header.width.to_be_bytes() as &[u8],
-            &header.height.to_be_bytes() as &[u8],
-            &header.tps.to_be_bytes() as &[u8],
-            &header.ref_interval.to_be_bytes() as &[u8],
-            &header.delta_t_max.to_be_bytes() as &[u8],
-            &header.event_size.to_be_bytes() as &[u8],
-            &header.channels.to_be_bytes() as &[u8],
-                    ].concat()
+        Bytes::from(
+            [
+                &header.magic as &[u8],
+                &header.version.to_be_bytes() as &[u8],
+                &header.endianness.to_be_bytes() as &[u8],
+                &header.width.to_be_bytes() as &[u8],
+                &header.height.to_be_bytes() as &[u8],
+                &header.tps.to_be_bytes() as &[u8],
+                &header.ref_interval.to_be_bytes() as &[u8],
+                &header.delta_t_max.to_be_bytes() as &[u8],
+                &header.event_size.to_be_bytes() as &[u8],
+                &header.channels.to_be_bytes() as &[u8],
+            ]
+            .concat(),
         )
     }
 }
