@@ -1,12 +1,10 @@
 use std::fs::File;
-use std::io::{BufReader, BufWriter, Error, Read, Write};
+use std::io::{BufReader, BufWriter, Write};
 use std::mem;
 use bincode::config::{BigEndian, FixintEncoding, WithOtherEndian, WithOtherIntEncoding};
-use bytes::{Buf, Bytes};
-use crate::{Codec, Coord, DeltaT, EOF_PX_ADDRESS, Event, EventCoordless, EventSingle, EventStreamHeader};
+use bytes::{Bytes};
+use crate::{Codec, Coord, DeltaT, EOF_PX_ADDRESS, Event, EventSingle, EventStreamHeader};
 use crate::header::MAGIC_RAW;
-use bytes::BytesMut;
-use bytes::BufMut;
 use bincode::{DefaultOptions, Options};
 use crate::raw::raw_stream::StreamError::{Deserialize, Eof};
 

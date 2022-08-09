@@ -18,10 +18,10 @@ fn main() -> Result<(), Array3DError> {
     stream.open_reader(input_path.to_string());
     stream.decode_header();
 
-    let output_path = "/home/andrew/Downloads/temppp_br_out";
+    let output_path = "/home/andrew/Downloads/temppp_out";
     let mut output_stream = BufWriter::new(File::create(output_path.to_string()).unwrap());
 
-    let reconstructed_frame_rate = 24;
+    let reconstructed_frame_rate = 60;
     // For instantaneous reconstruction, make sure the frame rate matches the source video rate
     assert_eq!(stream.tps / stream.ref_interval, reconstructed_frame_rate);
 

@@ -1,19 +1,10 @@
 use std::collections::VecDeque;
 use std::fs::File;
-use std::io::{BufWriter, Error, Write};
-use std::mem::size_of;
+use std::io::{BufWriter};
 use bincode::config::{BigEndian, FixintEncoding, WithOtherEndian, WithOtherIntEncoding};
-use bincode::{DefaultOptions, Options, serialize_into};
-use bytes::{BufMut, BytesMut};
-use crate::{BigT, D, D_SHIFT, DeltaT, Event, framer, Intensity};
-// use crate::framer::array3d::{Array3D, Array3DError};
-// use crate::framer::array3d::Array3DError::InvalidIndex;
-use crate::framer::framer::FramerMode::INSTANTANEOUS;
-use crate::framer::scale_intensity::{FrameValue, ScaleIntensity};
-// use crate::framer::array3d::Array;
-
-// type EventFrame = Array3D<Event>;
-// type Intensity8Frame = Array3D<u8>;
+use bincode::{DefaultOptions, Options};
+use crate::{BigT, D, DeltaT, Event,};
+use crate::framer::scale_intensity::{FrameValue};
 
 // Want one main framer with the same functions
 // Want additional functions
@@ -126,8 +117,7 @@ pub struct FrameSequence<T> {
     bincode: WithOtherEndian<WithOtherIntEncoding<DefaultOptions, FixintEncoding>, BigEndian>,
 }
 
-use duplicate::duplicate_item;
-use ndarray::{Array3, Shape};
+use ndarray::{Array3};
 use serde::Serialize;
 use crate::framer::array3d::Array3DError;
 use crate::framer::array3d::Array3DError::InvalidIndex;

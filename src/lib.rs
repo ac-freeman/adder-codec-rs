@@ -2,7 +2,6 @@ use std::fs::File;
 use std::io::{BufReader, BufWriter};
 use std::path::Path;
 use bytes::Bytes;
-use rayon::iter::IntoParallelIterator;
 use crate::framer::framer::EventCoordless;
 use crate::header::EventStreamHeader;
 use serde::{Serialize, Deserialize};
