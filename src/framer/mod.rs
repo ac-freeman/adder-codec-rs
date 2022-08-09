@@ -1,3 +1,2 @@
-pub mod framer;
+pub mod event_framer;
 mod scale_intensity;
-mod event_framer;

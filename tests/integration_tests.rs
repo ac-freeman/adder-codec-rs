@@ -11,9 +11,9 @@ use std::process::Command;
 use adder_codec_rs::{Codec, Coord, Event};
 use adder_codec_rs::raw::raw_stream::RawStream;
 use rand::Rng;
-use adder_codec_rs::framer::framer::{Framer, FrameSequence};
-use adder_codec_rs::framer::framer::FramerMode::{INSTANTANEOUS};
-use adder_codec_rs::framer::framer::SourceType::U8;
+use adder_codec_rs::framer::event_framer::{Framer, FrameSequence};
+use adder_codec_rs::framer::event_framer::FramerMode::{INSTANTANEOUS};
+use adder_codec_rs::framer::event_framer::SourceType::U8;
 
 
 #[test]
@@ -241,9 +241,9 @@ fn read_event() {
 #[test]
 fn test_event_framer_ingest() {
     use adder_codec_rs::{Coord, Event};
-    use adder_codec_rs::framer::framer::FramerMode::INSTANTANEOUS;
-    use adder_codec_rs::framer::framer::{FrameSequence, Framer, EventCoordless};
-    use adder_codec_rs::framer::framer::SourceType::U8;
+    use adder_codec_rs::framer::event_framer::FramerMode::INSTANTANEOUS;
+    use adder_codec_rs::framer::event_framer::{FrameSequence, Framer, EventCoordless};
+    use adder_codec_rs::framer::event_framer::SourceType::U8;
     
     let mut frame_sequence: FrameSequence<EventCoordless> = FrameSequence::<EventCoordless>::new(10, 10, 3, 50000, 50, INSTANTANEOUS, U8);
     let event: Event = Event {
@@ -272,9 +272,9 @@ fn test_event_framer_ingest() {
 #[test]
 fn test_event_framer_ingest_get_filled() {
     use adder_codec_rs::{Coord, Event};
-    use adder_codec_rs::framer::framer::FramerMode::INSTANTANEOUS;
-    use adder_codec_rs::framer::framer::{FrameSequence, Framer, EventCoordless};
-    use adder_codec_rs::framer::framer::SourceType::U8;
+    use adder_codec_rs::framer::event_framer::FramerMode::INSTANTANEOUS;
+    use adder_codec_rs::framer::event_framer::{FrameSequence, Framer, EventCoordless};
+    use adder_codec_rs::framer::event_framer::SourceType::U8;
     let mut frame_sequence: FrameSequence<EventCoordless> = FrameSequence::<EventCoordless>::new(5, 5, 1, 50000, 50,  INSTANTANEOUS, U8);
 
     for i in 0..5 {
@@ -307,9 +307,9 @@ fn test_event_framer_ingest_get_filled() {
 #[test]
 fn get_frame_bytes_eventcoordless() {
     use adder_codec_rs::{Coord, Event};
-    use adder_codec_rs::framer::framer::FramerMode::INSTANTANEOUS;
-    use adder_codec_rs::framer::framer::{FrameSequence, Framer, EventCoordless};
-    use adder_codec_rs::framer::framer::SourceType::U8;
+    use adder_codec_rs::framer::event_framer::FramerMode::INSTANTANEOUS;
+    use adder_codec_rs::framer::event_framer::{FrameSequence, Framer, EventCoordless};
+    use adder_codec_rs::framer::event_framer::SourceType::U8;
     let mut frame_sequence: FrameSequence<EventCoordless> = FrameSequence::<EventCoordless>::new(5, 5, 1, 50000, 50,  INSTANTANEOUS, U8);
     eprintln!("{}", std::mem::size_of::<Option<EventCoordless>>());
     for i in 0..5 {
@@ -363,9 +363,9 @@ fn get_frame_bytes_eventcoordless() {
 #[test]
 fn get_frame_bytes_u8() {
     use adder_codec_rs::{Coord, Event};
-    use adder_codec_rs::framer::framer::FramerMode::INSTANTANEOUS;
-    use adder_codec_rs::framer::framer::{FrameSequence, Framer};
-    use adder_codec_rs::framer::framer::SourceType::U8;
+    use adder_codec_rs::framer::event_framer::FramerMode::INSTANTANEOUS;
+    use adder_codec_rs::framer::event_framer::{FrameSequence, Framer};
+    use adder_codec_rs::framer::event_framer::SourceType::U8;
     let mut frame_sequence: FrameSequence<u8> = FrameSequence::<u8>::new(5, 5, 1, 50000, 50,  INSTANTANEOUS, U8);
 
     for i in 0..5 {
@@ -417,9 +417,9 @@ fn get_frame_bytes_u8() {
 #[test]
 fn get_frame_bytes_u16() {
     use adder_codec_rs::{Coord, Event};
-    use adder_codec_rs::framer::framer::FramerMode::INSTANTANEOUS;
-    use adder_codec_rs::framer::framer::{FrameSequence, Framer};
-    use adder_codec_rs::framer::framer::SourceType::U8;
+    use adder_codec_rs::framer::event_framer::FramerMode::INSTANTANEOUS;
+    use adder_codec_rs::framer::event_framer::{FrameSequence, Framer};
+    use adder_codec_rs::framer::event_framer::SourceType::U8;
     let mut frame_sequence: FrameSequence<u16> = FrameSequence::<u16>::new(5, 5, 1, 50000, 50,  INSTANTANEOUS, U8);
 
     for i in 0..5 {
@@ -470,9 +470,9 @@ fn get_frame_bytes_u16() {
 #[test]
 fn get_frame_bytes_u32() {
     use adder_codec_rs::{Coord, Event};
-    use adder_codec_rs::framer::framer::FramerMode::INSTANTANEOUS;
-    use adder_codec_rs::framer::framer::{FrameSequence, Framer};
-    use adder_codec_rs::framer::framer::SourceType::U8;
+    use adder_codec_rs::framer::event_framer::FramerMode::INSTANTANEOUS;
+    use adder_codec_rs::framer::event_framer::{FrameSequence, Framer};
+    use adder_codec_rs::framer::event_framer::SourceType::U8;
     let mut frame_sequence: FrameSequence<u32> = FrameSequence::<u32>::new(5, 5, 1, 50000, 50,  INSTANTANEOUS, U8);
 
     for i in 0..5 {
@@ -523,9 +523,9 @@ fn get_frame_bytes_u32() {
 #[test]
 fn get_frame_bytes_u64() {
     use adder_codec_rs::{Coord, Event};
-    use adder_codec_rs::framer::framer::FramerMode::INSTANTANEOUS;
-    use adder_codec_rs::framer::framer::{FrameSequence, Framer};
-    use adder_codec_rs::framer::framer::SourceType::U8;
+    use adder_codec_rs::framer::event_framer::FramerMode::INSTANTANEOUS;
+    use adder_codec_rs::framer::event_framer::{FrameSequence, Framer};
+    use adder_codec_rs::framer::event_framer::SourceType::U8;
     let mut frame_sequence: FrameSequence<u64> = FrameSequence::<u64>::new(5, 5, 1, 50000, 50,  INSTANTANEOUS, U8);
 
     for i in 0..5 {
@@ -576,9 +576,9 @@ fn get_frame_bytes_u64() {
 #[test]
 fn test_get_empty_frame() {
     use adder_codec_rs::{Coord, Event};
-    use adder_codec_rs::framer::framer::FramerMode::INSTANTANEOUS;
-    use adder_codec_rs::framer::framer::{FrameSequence, Framer};
-    use adder_codec_rs::framer::framer::SourceType::U8;
+    use adder_codec_rs::framer::event_framer::FramerMode::INSTANTANEOUS;
+    use adder_codec_rs::framer::event_framer::{FrameSequence, Framer};
+    use adder_codec_rs::framer::event_framer::SourceType::U8;
     let mut frame_sequence: FrameSequence<u8> = FrameSequence::<u8>::new(5, 5, 1, 50000, 50,  INSTANTANEOUS, U8);
     let n: u32 = rand::thread_rng().gen();
     let path = "./TEST_".to_owned() + n.to_string().as_str() + ".addr";
