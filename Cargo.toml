@@ -1,11 +1,10 @@
 [package]
 name = "adder-codec-rs"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 authors = ["Andrew C. Freeman"]
 description = "Encoder/decoder for ADΔER (Address, Decimation, Δt Event Representation) streams. Currently, only implemented for raw (uncompressed) streams."
 homepage = "https://github.com/ac-freeman/adder-codec-rs"
-documentation = "https://github.com/ac-freeman/adder-codec-rs"
 repository = "https://github.com/ac-freeman/adder-codec-rs"
 readme = "README.md"
 license-file = "LICENSE"
@@ -18,3 +17,17 @@ lto = true
 [dependencies]
 bytes = "1"
 rand = "0.8.5"
+itertools = "0.10.3"
+duplicate = "0.4.1"
+serde = {version = "1.0.140", features = ["derive"]}
+serde_bytes = "0.11.6"
+bincode = "1.3.3"
+rayon = "1.5.3"
+num = "0.4"
+ndarray = {version = "0.15.6", features = ["rayon", "serde"]}
+
+[profile.dev]
+opt-level = 2
+
+[profile.test]
+opt-level = 0

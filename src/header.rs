@@ -1,6 +1,8 @@
 use std::fs::File;
 
 pub(crate) type Magic = [u8; 5];
+
+// chars in Rust are 4 bytes each, so cast to u8 for ASCII
 pub(crate) const MAGIC_RAW: Magic = ['a' as u8,'d' as u8,'d' as u8,'e' as u8,'r' as u8];
 pub(crate) const MAGIC_COMPRESSED: Magic = ['a' as u8,'d' as u8,'d' as u8,'e' as u8,'c' as u8];
 
@@ -41,7 +43,7 @@ impl EventStreamHeader {
         assert!(magic == MAGIC_RAW || magic == MAGIC_COMPRESSED);
 
         EventStreamHeader {
-            magic: magic,
+            magic,
             version: 0,
             endianness: 'b' as u8,
             width,
