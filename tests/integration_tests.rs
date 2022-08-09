@@ -177,7 +177,7 @@ fn cleanup_raw_writer(rand_num: u32, stream: &mut RawStream) {
 
 #[test]
 fn test_encode_event() {
-    let n = 0;
+    let n = rand_u32();
     let mut stream = setup_raw_writer(n);
     let event: Event = Event {
         coord: Coord {
@@ -194,7 +194,7 @@ fn test_encode_event() {
 
 #[test]
 fn test_encode_events() {
-    let n = 0;
+    let n = rand_u32();
     let mut stream = setup_raw_writer(n);
     let event: Event = Event {
         coord: Coord {

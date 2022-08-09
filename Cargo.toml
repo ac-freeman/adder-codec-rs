@@ -10,6 +10,9 @@ readme = "README.md"
 license-file = "LICENSE"
 keywords = ["neuromorphic", "decoding", "event", "asynchronous", "video"]
 categories = ["multimedia::encoding", "science"]
+exclude = [
+    "tests/samples/*",
+]
 
 [profile.release]
 lto = true
@@ -30,4 +33,4 @@ ndarray = {version = "0.15.6", features = ["rayon", "serde"]}
 opt-level = 2
 
 [profile.test]
-opt-level = 0
+opt-level = 2
