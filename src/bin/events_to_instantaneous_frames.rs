@@ -45,7 +45,7 @@ fn main() {
                         }
                         frames_returned => {
                             frame_count += frames_returned;
-                            if frame_count % 30 == 0 {
+                            if frame_count % 1 == 0 {
                                 print!(
                                     "\rOutput frame {}. Got {} frames in  {}ms",
                                     frame_count,

@@ -168,6 +168,10 @@ impl<T: Clone + Default + FrameValue<Output = T> + Copy> Framer for FrameSequenc
                             Some(T::default());
                         self.frames[(*last_filled_frame_ref - self.frame_idx_offset) as usize]
                             .filled_count += 1;
+                        // if (*last_filled_frame_ref - self.frame_idx_offset) == 0 {
+                        //     println!("{}, {}", event.coord.x, event.coord.y);
+                        // }
+
                         *last_filled_frame_ref =
                             ((*running_ts_ref - 1) as i64 / self.tpf as i64) + 1;
                     }
@@ -195,21 +199,32 @@ impl<T: Clone + Default + FrameValue<Output = T> + Copy> Framer for FrameSequenc
                             // Increment pixel ts trackers as normal, but don't actually do anything
                             // with the intensities if they correspond to frames that we've already
                             // popped.
-                            return self.frames[0].filled_count == self.frames[0].array.len();
+                            //
+                            // ALSO can arrive here if the source events are not perfectly
+                            // temporally interleaved. This may be the case for transcoder
+                            // performance reasons. The only invariant we hold is that a sequence
+                            // of events for a given (individual) pixel is in the correct order.
+                            // There is no invariant for the relative order or interleaving
+                            // of different pixel event sequences.
                         }
                         _ => {}
                     }
 
                     let mut frame: &mut Option<T>;
                     for i in prev_last_filled_frame..*last_filled_frame_ref {
-                        frame = &mut self.frames[(i - self.frames_written + 1) as usize].array
-                            [[event.coord.y.into(), event.coord.x.into(), channel.into()]];
-                        match frame {
-                            Some(_val) => {}
-                            None => {
-                                *frame = Some(scaled_intensity);
-                                self.frames[(i - self.frames_written + 1) as usize].filled_count +=
-                                    1;
+                        if i - self.frames_written + 1 >= 0 {
+                            frame = &mut self.frames[(i - self.frames_written + 1) as usize].array
+                                [[event.coord.y.into(), event.coord.x.into(), channel.into()]];
+                            match frame {
+                                Some(_val) => {}
+                                None => {
+                                    *frame = Some(scaled_intensity);
+                                    self.frames[(i - self.frames_written + 1) as usize]
+                                        .filled_count += 1;
+                                    // if (i - self.frames_written + 1) == 0 {
+                                    //     println!("{}, {}", event.coord.x, event.coord.y);
+                                    // }
+                                }
                             }
                         }
                     }
