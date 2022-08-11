@@ -45,16 +45,14 @@ fn main() {
                         }
                         frames_returned => {
                             frame_count += frames_returned;
-                            if frame_count % 1 == 0 {
-                                print!(
-                                    "\rOutput frame {}. Got {} frames in  {}ms",
-                                    frame_count,
-                                    frames_returned,
-                                    now.elapsed().as_millis()
-                                );
-                                io::stdout().flush().unwrap();
-                                now = Instant::now();
-                            }
+                            print!(
+                                "\rOutput frame {}. Got {} frames in  {}ms",
+                                frame_count,
+                                frames_returned,
+                                now.elapsed().as_millis()
+                            );
+                            io::stdout().flush().unwrap();
+                            now = Instant::now();
                         }
                     }
                 }
