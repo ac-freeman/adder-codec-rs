@@ -144,10 +144,7 @@ impl<T: Clone + Default + FrameValue<Output = T> + Copy> Framer for FrameSequenc
     /// assert_eq!(*elem, Some(32));
     /// ```
     fn ingest_event(&mut self, event: &Event) -> bool {
-        let channel = match event.coord.c {
-            None => 0,
-            Some(c) => c,
-        };
+        let channel = event.coord.c.unwrap_or(0);
 
         let last_filled_frame_ref = &mut self.last_filled_tracker
             [[event.coord.y.into(), event.coord.x.into(), channel.into()]];
