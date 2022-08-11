@@ -628,6 +628,130 @@ fn test_get_empty_frame() {
     fs::remove_file(&path).unwrap();
 }
 
+#[test]
+fn test_sample_unordered() {
+    let input_path = "./tests/samples/sample_3_unordered.adder";
+    let mut stream: RawStream = Codec::new();
+    stream.open_reader(input_path.to_string()).unwrap();
+    stream.decode_header();
+
+    let output_path = Path::new("./tests/samples/temp_sample_3_unordered");
+    let mut output_stream = BufWriter::new(File::create(output_path).unwrap());
+
+    let reconstructed_frame_rate = 60;
+    // For instantaneous reconstruction, make sure the frame rate matches the source video rate
+    assert_eq!(stream.tps / stream.ref_interval, reconstructed_frame_rate);
+
+    let mut frame_sequence: FrameSequence<u8> = FrameSequence::<u8>::new(
+        stream.height.into(),
+        stream.width.into(),
+        stream.channels.into(),
+        stream.tps,
+        reconstructed_frame_rate,
+        INSTANTANEOUS,
+        U8,
+    );
+    let mut frame_count = 0;
+    loop {
+        match stream.decode_event() {
+            Ok(event) => {
+                if frame_sequence.ingest_event(&event) {
+                    match frame_sequence.write_multi_frame_bytes(&mut output_stream) {
+                        0 => {
+                            panic!("should have frame")
+                        }
+                        frames_returned => {
+                            frame_count += frames_returned;
+                        }
+                    }
+                }
+            }
+            Err(_e) => {
+                eprintln!("\nExiting");
+                break;
+            }
+        }
+    }
+
+    assert_eq!(frame_count, 405);
+
+    output_stream.flush().unwrap();
+    let output = if !cfg!(target_os = "windows") {
+        Command::new("sh")
+            .arg("-c")
+            .arg("cmp ./temp_sample_3_unordered ./sample_3.gray")
+            .output()
+            .expect("failed to execute process")
+    } else {
+        fs::remove_file(output_path).unwrap();
+        return;
+    };
+    assert_eq!(output.stdout.len(), 0);
+    fs::remove_file(output_path).unwrap();
+}
+
+#[test]
+fn test_sample_ordered() {
+    let input_path = "./tests/samples/sample_3_ordered.adder";
+    let mut stream: RawStream = Codec::new();
+    stream.open_reader(input_path.to_string()).unwrap();
+    stream.decode_header();
+
+    let output_path = Path::new("./tests/samples/temp_sample_3_ordered");
+    let mut output_stream = BufWriter::new(File::create(output_path).unwrap());
+
+    let reconstructed_frame_rate = 60;
+    // For instantaneous reconstruction, make sure the frame rate matches the source video rate
+    assert_eq!(stream.tps / stream.ref_interval, reconstructed_frame_rate);
+
+    let mut frame_sequence: FrameSequence<u8> = FrameSequence::<u8>::new(
+        stream.height.into(),
+        stream.width.into(),
+        stream.channels.into(),
+        stream.tps,
+        reconstructed_frame_rate,
+        INSTANTANEOUS,
+        U8,
+    );
+    let mut frame_count = 0;
+    loop {
+        match stream.decode_event() {
+            Ok(event) => {
+                if frame_sequence.ingest_event(&event) {
+                    match frame_sequence.write_multi_frame_bytes(&mut output_stream) {
+                        0 => {
+                            panic!("should have frame")
+                        }
+                        frames_returned => {
+                            frame_count += frames_returned;
+                        }
+                    }
+                }
+            }
+            Err(_e) => {
+                eprintln!("\nExiting");
+                break;
+            }
+        }
+    }
+
+    assert_eq!(frame_count, 405);
+
+    output_stream.flush().unwrap();
+    let output = if !cfg!(target_os = "windows") {
+        Command::new("sh")
+            .arg("-c")
+            .arg("cmp ./temp_sample_3_ordered ./sample_3.gray")
+            .output()
+            .expect("failed to execute process")
+    } else {
+        fs::remove_file(output_path).unwrap();
+        return;
+    };
+    assert_eq!(output.stdout.len(), 0);
+    fs::remove_file(output_path).unwrap();
+}
+
 // #[test]
 // fn get_frame_bytes_u8_integration() {
 //     use adder_codec_rs::{Coord, Event};

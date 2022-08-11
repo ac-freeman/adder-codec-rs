@@ -1,6 +1,6 @@
 [package]
 name = "adder-codec-rs"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
 authors = ["Andrew C. Freeman"]
 description = "Encoder/decoder for ADΔER (Address, Decimation, Δt Event Representation) streams. Currently, only implemented for raw (uncompressed) streams."
@@ -30,7 +30,7 @@ num = "0.4"
 ndarray = {version = "0.15.6", features = ["rayon", "serde"]}
 
 [profile.dev]
-opt-level = 2
+opt-level = 1
 
 [profile.test]
 opt-level = 2
