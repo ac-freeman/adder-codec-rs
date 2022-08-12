@@ -49,17 +49,6 @@ export
 echo "=== Target settings:"
 rustc --print=cfg
 
-cargo test -vv -p opencv-binding-generator
-
-FEATURES=rgb
-
-cargo test -vv --features "$FEATURES"
-cargo test --release -vv --features "$FEATURES"
-
-pushd ci/test-proj
-cargo run -vv
-popd
-
 export CXX=clang++
 touch build.rs
 cargo test -vv
