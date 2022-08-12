@@ -31,7 +31,7 @@ fn main() {
         stream.tps,
         reconstructed_frame_rate,
         INSTANTANEOUS,
-        U8,
+        stream.get_source_type(),
     );
     let mut now = Instant::now();
     let mut frame_count = 0;

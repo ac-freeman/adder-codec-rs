@@ -11,6 +11,8 @@ use adder_codec_rs::framer::event_framer::FramerMode::INSTANTANEOUS;
 use adder_codec_rs::framer::event_framer::SourceType::U8;
 use adder_codec_rs::framer::event_framer::{FrameSequence, Framer};
 use adder_codec_rs::raw::raw_stream::RawStream;
+use adder_codec_rs::SourceCamera;
+use adder_codec_rs::SourceCamera::FramedU8;
 use adder_codec_rs::{Codec, Coord, Event};
 use rand::Rng;
 
@@ -141,12 +143,12 @@ fn test_sample_perfect_dt_color() {
 #[should_panic]
 fn test_encode_header_non_init() {
     let mut stream: RawStream = Codec::new();
-    stream.encode_header(50, 100, 53000, 4000, 50000, 1);
+    stream.encode_header(50, 100, 53000, 4000, 50000, 1, 1, FramedU8);
     // stream = RawStream::new();
 }
 
 #[test]
-fn test_encode_header() {
+fn test_encode_header_v0() {
     let n = rand_u32();
     let mut stream = setup_raw_writer(n);
     stream.close_writer();
@@ -160,12 +162,36 @@ fn test_encode_header() {
     // Don't check the error
 }
 
+#[test]
+fn test_encode_header_v1() {
+    let n = rand_u32();
+    let mut stream = setup_raw_writer_v1(n);
+    stream.close_writer();
+    assert_eq!(
+        fs::metadata("./TEST_".to_owned() + n.to_string().as_str() + ".addr")
+            .unwrap()
+            .len(),
+        38
+    );
+    fs::remove_file("./TEST_".to_owned() + n.to_string().as_str() + ".addr").unwrap();
+    // Don't check the error
+}
+
 fn setup_raw_writer(rand_num: u32) -> RawStream {
     let mut stream: RawStream = Codec::new();
     stream
         .open_writer("./TEST_".to_owned() + rand_num.to_string().as_str() + ".addr")
         .expect("Couldn't open file");
-    stream.encode_header(50, 100, 53000, 4000, 50000, 1);
+    stream.encode_header(50, 100, 53000, 4000, 50000, 1, 0, FramedU8);
+    stream
+}
+
+fn setup_raw_writer_v1(rand_num: u32) -> RawStream {
+    let mut stream: RawStream = Codec::new();
+    stream
+        .open_writer("./TEST_".to_owned() + rand_num.to_string().as_str() + ".addr")
+        .expect("Couldn't open file");
+    stream.encode_header(50, 100, 53000, 4000, 50000, 1, 1, FramedU8);
     stream
 }
 

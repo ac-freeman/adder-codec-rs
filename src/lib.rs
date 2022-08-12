@@ -1,4 +1,4 @@
-use crate::framer::event_framer::EventCoordless;
+use crate::framer::event_framer::{EventCoordless, SourceType};
 use crate::header::EventStreamHeader;
 use crate::raw::raw_stream::StreamError;
 use serde::{Deserialize, Serialize};
@@ -17,6 +17,21 @@ pub const D_SHIFT: [u32; 21] = [
     1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536, 131072,
     262144, 524288, 1048576,
 ];
+
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub enum SourceCamera {
+    #[default]
+    FramedU8,
+    FramedU16,
+    FramedU32,
+    FramedU64,
+    FramedF32,
+    FramedF64,
+    Dvs,
+    DavisU8,
+    Atis,
+    Asint,
+}
 
 /// The maximum intensity representation for input data. Currently 255 for 8-bit framed input.
 pub const MAX_INTENSITY: f32 = 255.0; // TODO: make variable, dependent on input bit depth
@@ -100,6 +115,8 @@ impl From<EventSingle> for Event {
 pub trait Codec {
     fn new() -> Self;
 
+    fn get_source_type(&self) -> SourceType;
+
     fn open_writer<P: AsRef<Path>>(&mut self, path: P) -> Result<(), std::io::Error> {
         let file = File::create(&path)?;
         self.set_output_stream(Some(BufWriter::new(file)));
@@ -131,6 +148,8 @@ pub trait Codec {
         ref_interval: u32,
         delta_t_max: u32,
         channels: u8,
+        codec_version: u8,
+        source_camera: SourceCamera,
     );
 
     fn decode_header(&mut self) -> Result<(), StreamError>;

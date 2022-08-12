@@ -1,6 +1,10 @@
-use crate::header::MAGIC_RAW;
+use crate::header::{EventStreamHeaderExtensionV0, EventStreamHeaderExtensionV1, MAGIC_RAW};
 use crate::raw::raw_stream::StreamError::{Deserialize, Eof};
-use crate::{Codec, Coord, DeltaT, Event, EventSingle, EventStreamHeader, EOF_PX_ADDRESS};
+use crate::SourceType::{F32, F64, U16, U32, U64, U8};
+use crate::{
+    Codec, Coord, DeltaT, Event, EventSingle, EventStreamHeader, SourceCamera, SourceType,
+    EOF_PX_ADDRESS,
+};
 use bincode::config::{BigEndian, FixintEncoding, WithOtherEndian, WithOtherIntEncoding};
 use bincode::{DefaultOptions, Options};
 use std::fs::File;
@@ -26,6 +30,7 @@ pub struct RawStream {
     pub delta_t_max: DeltaT,
     pub channels: u8,
     event_size: u8,
+    source_camera: SourceCamera,
     bincode: WithOtherEndian<WithOtherIntEncoding<DefaultOptions, FixintEncoding>, BigEndian>,
 }
 
@@ -41,9 +46,25 @@ impl Codec for RawStream {
             delta_t_max: 0,
             channels: 0,
             event_size: 0,
+            source_camera: SourceCamera::default(),
             bincode: DefaultOptions::new()
                 .with_fixint_encoding()
                 .with_big_endian(),
+        }
+    }
+
+    fn get_source_type(&self) -> SourceType {
+        match self.source_camera {
+            SourceCamera::FramedU8 => U8,
+            SourceCamera::FramedU16 => U16,
+            SourceCamera::FramedU32 => U32,
+            SourceCamera::FramedU64 => U64,
+            SourceCamera::FramedF32 => F32,
+            SourceCamera::FramedF64 => F64,
+            SourceCamera::Dvs => F64,
+            SourceCamera::DavisU8 => U8,
+            SourceCamera::Atis => U8,
+            SourceCamera::Asint => F64,
         }
     }
 
@@ -115,6 +136,8 @@ impl Codec for RawStream {
         ref_interval: DeltaT,
         delta_t_max: DeltaT,
         channels: u8,
+        codec_version: u8,
+        source_camera: SourceCamera,
     ) {
         self.width = width;
         self.height = height;
@@ -130,6 +153,7 @@ impl Codec for RawStream {
             ref_interval,
             delta_t_max,
             channels,
+            codec_version,
         );
         assert_eq!(header.magic, MAGIC_RAW);
 
@@ -139,6 +163,26 @@ impl Codec for RawStream {
             }
             Some(stream) => {
                 self.bincode.serialize_into(&mut *stream, &header).unwrap();
+
+                match codec_version {
+                    0 => self
+                        .bincode
+                        .serialize_into(&mut *stream, &EventStreamHeaderExtensionV0 {})
+                        .unwrap(),
+                    1 => self
+                        .bincode
+                        .serialize_into(
+                            &mut *stream,
+                            &EventStreamHeaderExtensionV1 {
+                                source: source_camera,
+                            },
+                        )
+                        .unwrap(),
+                    _ => self
+                        .bincode
+                        .serialize_into(&mut *stream, &EventStreamHeaderExtensionV0 {})
+                        .unwrap(),
+                };
             }
         }
         self.input_stream = None;
@@ -152,7 +196,7 @@ impl Codec for RawStream {
             Some(stream) => {
                 let header = match self
                     .bincode
-                    .deserialize_from::<_, EventStreamHeader>(stream)
+                    .deserialize_from::<_, EventStreamHeader>(stream.get_mut())
                 {
                     Ok(header) => header,
                     Err(_) => return Err(Deserialize),
@@ -166,6 +210,18 @@ impl Codec for RawStream {
                 self.channels = header.channels;
                 self.event_size = header.event_size;
                 assert_eq!(header.magic, MAGIC_RAW);
+                match header.version {
+                    0 => self.source_camera = SourceCamera::default(),
+                    1 => {
+                        self.source_camera = self
+                            .bincode
+                            .deserialize_from::<_, EventStreamHeaderExtensionV1>(stream.get_mut())
+                            .unwrap()
+                            .source
+                    }
+                    _ => self.source_camera = SourceCamera::default(),
+                };
+
                 Ok(())
             }
         }
@@ -237,6 +293,7 @@ impl Codec for RawStream {
 #[cfg(test)]
 mod tests {
     use crate::raw::raw_stream::RawStream;
+    use crate::SourceCamera::FramedU8;
     use crate::{Codec, Coord, Event};
     use rand::Rng;
     use std::fs;
@@ -248,7 +305,7 @@ mod tests {
         stream
             .open_writer("./TEST_".to_owned() + n.to_string().as_str() + ".addr")
             .expect("Couldn't open file");
-        stream.encode_header(50, 100, 53000, 4000, 50000, 1);
+        stream.encode_header(50, 100, 53000, 4000, 50000, 1, 1, FramedU8);
         let event: Event = Event {
             coord: Coord {
                 x: 10,
@@ -273,7 +330,7 @@ mod tests {
                 panic!("Couldn't decode event")
             }
         }
-        stream.encode_header(20, 30, 473289, 477893, 4732987, 3);
+        stream.encode_header(20, 30, 473289, 477893, 4732987, 3, 1, FramedU8);
         assert!(stream.input_stream.is_none());
 
         stream.close_writer();

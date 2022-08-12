@@ -1,3 +1,4 @@
+use crate::SourceCamera;
 use serde::{Deserialize, Serialize};
 
 pub(crate) type Magic = [u8; 5];
@@ -21,6 +22,22 @@ pub(crate) struct EventStreamHeader {
     pub(crate) channels: u8,
 }
 
+pub(crate) trait HeaderExtension {}
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub(crate) struct EventStreamHeaderExtensionV0 {}
+impl HeaderExtension for EventStreamHeaderExtensionV0 {}
+
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub(crate) struct EventStreamHeaderExtensionV1 {
+    pub(crate) source: SourceCamera,
+}
+impl HeaderExtension for EventStreamHeaderExtensionV1 {}
+
+// pub(crate) struct EventStreamHeaderExtensionV2 {
+//     pub(crate) v1: EventStreamHeaderExtensionV1,
+//     pub(crate) other: other field to add,
+// }
+
 impl EventStreamHeader {
     pub fn new(
         magic: Magic,
@@ -30,6 +47,7 @@ impl EventStreamHeader {
         ref_interval: u32,
         delta_t_max: u32,
         channels: u8,
+        codec_version: u8,
     ) -> EventStreamHeader {
         assert!(channels > 0);
         assert!(delta_t_max > 0);
@@ -39,7 +57,7 @@ impl EventStreamHeader {
 
         EventStreamHeader {
             magic,
-            version: 0,
+            version: codec_version,
             endianness: 98, // 'b' in ASCII, for big-endian
             width,
             height,
