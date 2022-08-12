@@ -32,6 +32,7 @@ opencv = {version = "0.63.1", optional = true}
 fast-math = {version = "0.1", optional = true}
 
 [features]
+default = ["transcoder"]
 transcoder = ["dep:opencv", "dep:fast-math"]
 
 [profile.dev]

@@ -1,4 +1,5 @@
 extern crate core;
+
 use adder_codec_rs::transcoder::source::framed_source::FramedSource;
 use adder_codec_rs::transcoder::source::video::Source;
 use adder_codec_rs::SourceCamera;
@@ -7,8 +8,6 @@ use std::error::Error;
 use std::io;
 use std::io::Write;
 use std::time::Instant;
-
-#[cfg(feature = "transcoder")]
 fn main() -> Result<(), Box<dyn Error>> {
     let mut source = FramedSource::new(
         "/home/andrew/Downloads/excerpt.mp4".to_string(),
