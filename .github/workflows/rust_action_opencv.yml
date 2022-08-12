@@ -5,20 +5,189 @@ on:
     branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
-
-env:
-  CARGO_TERM_COLOR: always
-
+    
 jobs:
-  build:
-
-    runs-on: ubuntu-latest
-
+  src:
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - image: ubuntu-20.04
+            family: linux
+          - image: macos-11
+            family: osx
+        rust:
+          - stable
+          - beta
+        version:
+          - opencv: 3.4.17
+          - opencv: 4.6.0
+        exclude:
+          - os:
+              family: osx
+            version:
+              opencv: 3.4.17
+    runs-on: ${{ matrix.os.image }}
+    env:
+      OS_FAMILY: ${{ matrix.os.family }}
+      RUST_TOOLCHAIN: ${{ matrix.rust }}
+      Atlas_ROOT_DIR: /usr/include/ # for cmake to find lapacke.h
+      OPENCV_VERSION: ${{ matrix.version.opencv }}
     steps:
-    - uses: actions/checkout@v3
-    - name: Setup OpenCV
-      uses: Dovyski/setup-opencv-action@v1
-    - name: Build
-      run: cargo build --verbose --all-features
-    - name: Run tests
-      run: cargo test --verbose --all-features
+      - uses: actions/checkout@v2
+
+      - name: Cache dependencies
+        uses: actions/cache@v1
+        with:
+          path: ~/build
+          key: ${{ runner.os }}-${{ matrix.version.opencv }}-build
+
+      - name: Install dependencies
+        run: ci/install.sh
+        shell: bash
+
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: ${{ matrix.rust }}
+          default: true
+
+      - name: Test project
+        run: ci/script.sh
+        shell: bash
+
+      - name: Upload bindings if test failed
+        uses: actions/upload-artifact@v1
+        if: failure()
+        with:
+          name: generated-failed-bindings-${{ runner.os }}-${{ matrix.version.opencv }}
+          path: src/opencv
+
+  vcpkg:
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - image: ubuntu-20.04
+            family: linux
+          - image: windows-2019
+            family: windows
+        rust:
+          - stable
+          - beta
+        version:
+          - vcpkg: 4
+    runs-on: ${{ matrix.os.image }}
+    env:
+      OS_FAMILY: ${{ matrix.os.family }}
+      RUST_TOOLCHAIN: ${{ matrix.rust }}
+      VCPKG_OPENCV_VERSION: ${{ matrix.version.vcpkg }}
+      VCPKG_TREE_COMMIT: 2022.02.23
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Cache dependencies
+        uses: actions/cache@v1
+        with:
+          path: ~/build
+          key: ${{ runner.os }}-${{ matrix.version.vcpkg }}-build
+
+      - name: Install dependencies
+        run: ci/install.sh
+        shell: bash
+
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: ${{ matrix.rust }}
+          default: true
+
+      - name: Test project
+        run: ci/script.sh
+        shell: bash
+
+      - name: Upload bindings if test failed
+        uses: actions/upload-artifact@v1
+        if: failure()
+        with:
+          name: generated-failed-bindings-${{ runner.os }}-vcpkg-${{ matrix.version.vcpkg }}
+          path: src/opencv
+
+  bin:
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - image: macos-11
+            family: osx
+          - image: windows-2019
+            family: windows
+        rust:
+          - stable
+          - beta
+        version:
+          - branch: 3.4
+            opencv: 3.4.16
+            brew: "@3"
+          - branch: 4
+            opencv: 4.5.5
+            brew: "@4"
+        include:
+          - os:
+              image: ubuntu-18.04
+              family: linux
+            rust: stable
+            version:
+              opencv: 3.2.0
+              brew: excluded
+          - os:
+              image: ubuntu-20.04
+              family: linux
+            rust: stable
+            version:
+              opencv: 4.2.0
+              brew: excluded
+    runs-on: ${{ matrix.os.image }}
+    env:
+      OS_FAMILY: ${{ matrix.os.family }}
+      RUST_TOOLCHAIN: ${{ matrix.rust }}
+      OPENCV_VERSION: ${{ matrix.version.opencv }}
+      BREW_OPENCV_VERSION: ${{ matrix.version.brew }}
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Install dependencies
+        run: ci/install.sh
+        shell: bash
+
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: ${{ matrix.rust }}
+          default: true
+
+      - name: Test project
+        run: ci/script.sh
+        shell: bash
+
+      - name: Upload bindings if test failed
+        uses: actions/upload-artifact@v1
+        if: failure()
+        with:
+          name: generated-failed-bindings-${{ runner.os }}-${{ matrix.version.opencv }}
+          path: src/opencv
+
+  docs-rs:
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          default: true
+
+      - name: Run a documentation generation test
+        run: ci/docs-rs.sh
+        shell: bash    
