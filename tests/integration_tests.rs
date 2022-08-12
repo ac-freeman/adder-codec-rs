@@ -38,6 +38,9 @@ fn test_sample_perfect_dt() {
         reconstructed_frame_rate,
         INSTANTANEOUS,
         U8,
+        stream.codec_version,
+        stream.source_camera,
+        stream.ref_interval,
     );
     let mut frame_count = 0;
     loop {
@@ -100,6 +103,9 @@ fn test_sample_perfect_dt_color() {
         reconstructed_frame_rate,
         INSTANTANEOUS,
         U8,
+        stream.codec_version,
+        stream.source_camera,
+        stream.ref_interval,
     );
     let mut frame_count = 0;
     loop {
@@ -293,8 +299,18 @@ fn test_event_framer_ingest() {
     use adder_codec_rs::framer::event_framer::{EventCoordless, FrameSequence, Framer};
     use adder_codec_rs::{Coord, Event};
 
-    let mut frame_sequence: FrameSequence<EventCoordless> =
-        FrameSequence::<EventCoordless>::new(10, 10, 3, 50000, 50, INSTANTANEOUS, U8);
+    let mut frame_sequence: FrameSequence<EventCoordless> = FrameSequence::<EventCoordless>::new(
+        10,
+        10,
+        3,
+        50000,
+        50,
+        INSTANTANEOUS,
+        U8,
+        1,
+        FramedU8,
+        1000,
+    );
     let event: Event = Event {
         coord: Coord {
             x: 5,
@@ -324,8 +340,18 @@ fn test_event_framer_ingest_get_filled() {
     use adder_codec_rs::framer::event_framer::SourceType::U8;
     use adder_codec_rs::framer::event_framer::{EventCoordless, FrameSequence, Framer};
     use adder_codec_rs::{Coord, Event};
-    let mut frame_sequence: FrameSequence<EventCoordless> =
-        FrameSequence::<EventCoordless>::new(5, 5, 1, 50000, 50, INSTANTANEOUS, U8);
+    let mut frame_sequence: FrameSequence<EventCoordless> = FrameSequence::<EventCoordless>::new(
+        5,
+        5,
+        1,
+        50000,
+        50,
+        INSTANTANEOUS,
+        U8,
+        1,
+        FramedU8,
+        1000,
+    );
 
     for i in 0..5 {
         for j in 0..5 {
@@ -359,8 +385,18 @@ fn get_frame_bytes_eventcoordless() {
     use adder_codec_rs::framer::event_framer::SourceType::U8;
     use adder_codec_rs::framer::event_framer::{EventCoordless, FrameSequence, Framer};
     use adder_codec_rs::{Coord, Event};
-    let mut frame_sequence: FrameSequence<EventCoordless> =
-        FrameSequence::<EventCoordless>::new(5, 5, 1, 50000, 50, INSTANTANEOUS, U8);
+    let mut frame_sequence: FrameSequence<EventCoordless> = FrameSequence::<EventCoordless>::new(
+        5,
+        5,
+        1,
+        50000,
+        50,
+        INSTANTANEOUS,
+        U8,
+        1,
+        FramedU8,
+        1000,
+    );
     eprintln!("{}", std::mem::size_of::<Option<EventCoordless>>());
     for i in 0..5 {
         for j in 0..5 {
@@ -415,7 +451,7 @@ fn get_frame_bytes_u8() {
     use adder_codec_rs::framer::event_framer::{FrameSequence, Framer};
     use adder_codec_rs::{Coord, Event};
     let mut frame_sequence: FrameSequence<u8> =
-        FrameSequence::<u8>::new(5, 5, 1, 50000, 50, INSTANTANEOUS, U8);
+        FrameSequence::<u8>::new(5, 5, 1, 50000, 50, INSTANTANEOUS, U8, 1, FramedU8, 1000);
 
     for i in 0..5 {
         for j in 0..5 {
@@ -469,7 +505,7 @@ fn get_frame_bytes_u16() {
     use adder_codec_rs::framer::event_framer::{FrameSequence, Framer};
     use adder_codec_rs::{Coord, Event};
     let mut frame_sequence: FrameSequence<u16> =
-        FrameSequence::<u16>::new(5, 5, 1, 50000, 50, INSTANTANEOUS, U8);
+        FrameSequence::<u16>::new(5, 5, 1, 50000, 50, INSTANTANEOUS, U8, 1, FramedU8, 1000);
 
     for i in 0..5 {
         for j in 0..5 {
@@ -522,7 +558,7 @@ fn get_frame_bytes_u32() {
     use adder_codec_rs::framer::event_framer::{FrameSequence, Framer};
     use adder_codec_rs::{Coord, Event};
     let mut frame_sequence: FrameSequence<u32> =
-        FrameSequence::<u32>::new(5, 5, 1, 50000, 50, INSTANTANEOUS, U8);
+        FrameSequence::<u32>::new(5, 5, 1, 50000, 50, INSTANTANEOUS, U8, 1, FramedU8, 1000);
 
     for i in 0..5 {
         for j in 0..5 {
@@ -575,7 +611,7 @@ fn get_frame_bytes_u64() {
     use adder_codec_rs::framer::event_framer::{FrameSequence, Framer};
     use adder_codec_rs::{Coord, Event};
     let mut frame_sequence: FrameSequence<u64> =
-        FrameSequence::<u64>::new(5, 5, 1, 50000, 50, INSTANTANEOUS, U8);
+        FrameSequence::<u64>::new(5, 5, 1, 50000, 50, INSTANTANEOUS, U8, 1, FramedU8, 1000);
 
     for i in 0..5 {
         for j in 0..5 {
@@ -628,7 +664,7 @@ fn test_get_empty_frame() {
     use adder_codec_rs::framer::event_framer::{FrameSequence, Framer};
     use adder_codec_rs::{Coord, Event};
     let mut frame_sequence: FrameSequence<u8> =
-        FrameSequence::<u8>::new(5, 5, 1, 50000, 50, INSTANTANEOUS, U8);
+        FrameSequence::<u8>::new(5, 5, 1, 50000, 50, INSTANTANEOUS, U8, 1, FramedU8, 1000);
     let n: u32 = rand::thread_rng().gen();
     let path = "./TEST_".to_owned() + n.to_string().as_str() + ".addr";
     let file = File::create(&path).unwrap();
@@ -676,6 +712,9 @@ fn test_sample_unordered() {
         reconstructed_frame_rate,
         INSTANTANEOUS,
         U8,
+        stream.codec_version,
+        stream.source_camera,
+        stream.ref_interval,
     );
     let mut frame_count = 0;
     loop {
@@ -738,6 +777,9 @@ fn test_sample_ordered() {
         reconstructed_frame_rate,
         INSTANTANEOUS,
         U8,
+        stream.codec_version,
+        stream.source_camera,
+        stream.ref_interval,
     );
     let mut frame_count = 0;
     loop {

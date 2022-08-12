@@ -1,5 +1,5 @@
 use crate::framer::scale_intensity::FrameValue;
-use crate::{BigT, DeltaT, Event, D};
+use crate::{BigT, DeltaT, Event, SourceCamera, D};
 use bincode::config::{BigEndian, FixintEncoding, WithOtherEndian, WithOtherIntEncoding};
 use bincode::{DefaultOptions, Options};
 use std::collections::VecDeque;
@@ -43,6 +43,9 @@ pub trait Framer {
         output_fps: u32,
         mode: FramerMode,
         source: SourceType,
+        codec_version: u8,
+        source_camera: SourceCamera,
+        ref_interval: DeltaT,
     ) -> Self;
 
     /// Ingest an ADDER event. Will process differently depending on choice of [`FramerMode`].
@@ -77,6 +80,9 @@ pub struct FrameSequence<T> {
     pub(crate) mode: FramerMode,
     pub(crate) tpf: DeltaT,
     pub(crate) source: SourceType,
+    codec_version: u8,
+    source_camera: SourceCamera,
+    ref_interval: DeltaT,
     bincode: WithOtherEndian<WithOtherIntEncoding<DefaultOptions, FixintEncoding>, BigEndian>,
 }
 
@@ -93,6 +99,9 @@ impl<T: Clone + Default + FrameValue<Output = T> + Copy> Framer for FrameSequenc
         output_fps: u32,
         mode: FramerMode,
         source: SourceType,
+        codec_version: u8,
+        source_camera: SourceCamera,
+        ref_interval: DeltaT,
     ) -> Self {
         let array: Array3<Option<T>> =
             Array3::<Option<T>>::default((num_rows, num_cols, num_channels));
@@ -113,6 +122,9 @@ impl<T: Clone + Default + FrameValue<Output = T> + Copy> Framer for FrameSequenc
             mode,
             tpf: tps / output_fps,
             source,
+            codec_version,
+            source_camera,
+            ref_interval,
             bincode: DefaultOptions::new()
                 .with_fixint_encoding()
                 .with_big_endian(),
@@ -128,8 +140,9 @@ impl<T: Clone + Default + FrameValue<Output = T> + Copy> Framer for FrameSequenc
     /// # use adder_codec_rs::framer::event_framer::FramerMode::INSTANTANEOUS;
     /// # use adder_codec_rs::framer::event_framer::{FrameSequence, Framer};
     /// # use adder_codec_rs::framer::event_framer::SourceType::U8;
+    /// use adder_codec_rs::SourceCamera::FramedU8;
     ///
-    /// let mut frame_sequence: FrameSequence<u8> = FrameSequence::<u8>::new(10, 10, 3, 50000, 50, INSTANTANEOUS, U8);
+    /// let mut frame_sequence: FrameSequence<u8> = FrameSequence::<u8>::new(10, 10, 3, 50000, 50, INSTANTANEOUS, U8, 1, FramedU8, 1500);
     /// let event: Event = Event {
     ///         coord: Coord {
     ///             x: 5,
@@ -226,6 +239,25 @@ impl<T: Clone + Default + FrameValue<Output = T> + Copy> Framer for FrameSequenc
                         }
                     }
                 }
+            }
+        }
+
+        if self.codec_version > 0
+            && match self.source_camera {
+                SourceCamera::FramedU8 => true,
+                SourceCamera::FramedU16 => true,
+                SourceCamera::FramedU32 => true,
+                SourceCamera::FramedU64 => true,
+                SourceCamera::FramedF32 => true,
+                SourceCamera::FramedF64 => true,
+                SourceCamera::Dvs => false,
+                SourceCamera::DavisU8 => false,
+                SourceCamera::Atis => false,
+                SourceCamera::Asint => false,
+            }
+        {
+            if *running_ts_ref % self.ref_interval as BigT > 0 {
+                *running_ts_ref = (*last_filled_frame_ref as BigT + 1) * self.ref_interval as BigT;
             }
         }
 

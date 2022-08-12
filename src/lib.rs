@@ -18,7 +18,7 @@ pub const D_SHIFT: [u32; 21] = [
     262144, 524288, 1048576,
 ];
 
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
 pub enum SourceCamera {
     #[default]
     FramedU8,

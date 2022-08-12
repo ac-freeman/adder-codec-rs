@@ -29,7 +29,7 @@ num = "0.4"
 ndarray = {version = "0.15.6", features = ["rayon", "serde"]}
 
 [profile.dev]
-opt-level = 1
+opt-level = 0
 
 [profile.test]
 opt-level = 2

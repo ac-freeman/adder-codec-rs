@@ -3,7 +3,6 @@ extern crate core;
 use adder_codec_rs::framer::event_framer::FrameSequence;
 use adder_codec_rs::framer::event_framer::Framer;
 use adder_codec_rs::framer::event_framer::FramerMode::INSTANTANEOUS;
-use adder_codec_rs::framer::event_framer::SourceType::U8;
 use adder_codec_rs::raw::raw_stream::RawStream;
 use adder_codec_rs::Codec;
 use std::fs::File;
@@ -32,6 +31,9 @@ fn main() {
         reconstructed_frame_rate,
         INSTANTANEOUS,
         stream.get_source_type(),
+        stream.codec_version,
+        stream.source_camera,
+        stream.ref_interval,
     );
     let mut now = Instant::now();
     let mut frame_count = 0;

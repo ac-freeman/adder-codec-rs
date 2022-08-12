@@ -23,6 +23,7 @@ pub enum StreamError {
 pub struct RawStream {
     output_stream: Option<BufWriter<File>>,
     input_stream: Option<BufReader<File>>,
+    pub codec_version: u8,
     pub width: u16,
     pub height: u16,
     pub tps: DeltaT,
@@ -30,7 +31,7 @@ pub struct RawStream {
     pub delta_t_max: DeltaT,
     pub channels: u8,
     event_size: u8,
-    source_camera: SourceCamera,
+    pub source_camera: SourceCamera,
     bincode: WithOtherEndian<WithOtherIntEncoding<DefaultOptions, FixintEncoding>, BigEndian>,
 }
 
@@ -39,6 +40,7 @@ impl Codec for RawStream {
         RawStream {
             output_stream: None,
             input_stream: None,
+            codec_version: 1,
             width: 0,
             height: 0,
             tps: 0,
@@ -202,6 +204,7 @@ impl Codec for RawStream {
                     Err(_) => return Err(Deserialize),
                 };
 
+                self.codec_version = header.version;
                 self.width = header.width;
                 self.height = header.height;
                 self.tps = header.tps;
