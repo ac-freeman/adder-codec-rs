@@ -3,7 +3,6 @@ extern crate core;
 use adder_codec_rs::framer::event_framer::FrameSequence;
 use adder_codec_rs::framer::event_framer::Framer;
 use adder_codec_rs::framer::event_framer::FramerMode::INSTANTANEOUS;
-use adder_codec_rs::framer::event_framer::SourceType::U8;
 use adder_codec_rs::raw::raw_stream::RawStream;
 use adder_codec_rs::Codec;
 use std::fs::File;
@@ -15,7 +14,7 @@ fn main() {
     let input_path = "/home/andrew/Downloads/temppp";
     let mut stream: RawStream = Codec::new();
     stream.open_reader(input_path).expect("Invalid path");
-    stream.decode_header();
+    stream.decode_header().expect("Invalid header");
 
     let output_path = "/home/andrew/Downloads/temppp_out";
     let mut output_stream = BufWriter::new(File::create(output_path).unwrap());
@@ -31,7 +30,10 @@ fn main() {
         stream.tps,
         reconstructed_frame_rate,
         INSTANTANEOUS,
-        U8,
+        stream.get_source_type(),
+        stream.codec_version,
+        stream.source_camera,
+        stream.ref_interval,
     );
     let mut now = Instant::now();
     let mut frame_count = 0;

@@ -1,7 +1,6 @@
-use crate::framer::event_framer::EventCoordless;
+use crate::framer::event_framer::{EventCoordless, SourceType};
 use crate::header::EventStreamHeader;
 use crate::raw::raw_stream::StreamError;
-use bytes::Bytes;
 use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::io::{BufReader, BufWriter};
@@ -18,6 +17,21 @@ pub const D_SHIFT: [u32; 21] = [
     1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536, 131072,
     262144, 524288, 1048576,
 ];
+
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
+pub enum SourceCamera {
+    #[default]
+    FramedU8,
+    FramedU16,
+    FramedU32,
+    FramedU64,
+    FramedF32,
+    FramedF64,
+    Dvs,
+    DavisU8,
+    Atis,
+    Asint,
+}
 
 /// The maximum intensity representation for input data. Currently 255 for 8-bit framed input.
 pub const MAX_INTENSITY: f32 = 255.0; // TODO: make variable, dependent on input bit depth
@@ -71,41 +85,6 @@ pub struct EventSingle {
     pub delta_t: DeltaT,
 }
 
-impl From<&Coord> for Bytes {
-    fn from(coord: &Coord) -> Self {
-        match coord.c {
-            None => Bytes::from(
-                [
-                    &coord.x.to_be_bytes() as &[u8],
-                    &coord.y.to_be_bytes() as &[u8],
-                ]
-                .concat(),
-            ),
-            Some(c) => Bytes::from(
-                [
-                    &coord.x.to_be_bytes() as &[u8],
-                    &coord.y.to_be_bytes() as &[u8],
-                    &c.to_be_bytes() as &[u8],
-                ]
-                .concat(),
-            ),
-        }
-    }
-}
-
-impl From<&Event> for Bytes {
-    fn from(event: &Event) -> Self {
-        Bytes::from(
-            [
-                &Bytes::from(&event.coord).to_vec() as &[u8],
-                &event.d.to_be_bytes() as &[u8],
-                &event.delta_t.to_be_bytes() as &[u8],
-            ]
-            .concat(),
-        )
-    }
-}
-
 impl From<&Event> for EventSingle {
     fn from(event: &Event) -> Self {
         EventSingle {
@@ -135,6 +114,8 @@ impl From<EventSingle> for Event {
 
 pub trait Codec {
     fn new() -> Self;
+
+    fn get_source_type(&self) -> SourceType;
 
     fn open_writer<P: AsRef<Path>>(&mut self, path: P) -> Result<(), std::io::Error> {
         let file = File::create(&path)?;
@@ -167,9 +148,11 @@ pub trait Codec {
         ref_interval: u32,
         delta_t_max: u32,
         channels: u8,
+        codec_version: u8,
+        source_camera: SourceCamera,
     );
 
-    fn decode_header(&mut self);
+    fn decode_header(&mut self) -> Result<(), StreamError>;
 
     fn encode_event(&mut self, event: &Event);
     fn encode_events(&mut self, events: &[Event]);

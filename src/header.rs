@@ -1,15 +1,14 @@
-use std::fs::File;
+use crate::SourceCamera;
+use serde::{Deserialize, Serialize};
 
 pub(crate) type Magic = [u8; 5];
-
-// chars in Rust are 4 bytes each, so cast to u8 for ASCII
-pub(crate) const MAGIC_RAW: Magic = ['a' as u8, 'd' as u8, 'd' as u8, 'e' as u8, 'r' as u8];
-pub(crate) const MAGIC_COMPRESSED: Magic = ['a' as u8, 'd' as u8, 'd' as u8, 'e' as u8, 'c' as u8];
+pub(crate) const MAGIC_RAW: Magic = [97, 100, 100, 101, 114]; // 'adder' in ASCII
+pub(crate) const MAGIC_COMPRESSED: Magic = [97, 100, 100, 101, 99]; // 'addec' in ASCII
 
 /// Both the raw (uncompressed) and compressed ADDER streams have the same header structure. All
 /// that changes is [magic]. A new [version] of the raw stream format necessitates a new [version]
 /// of the compressed format.
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub(crate) struct EventStreamHeader {
     pub(crate) magic: Magic,
     pub(crate) version: u8,
@@ -23,8 +22,21 @@ pub(crate) struct EventStreamHeader {
     pub(crate) channels: u8,
 }
 
-use bytes::{Buf, Bytes};
-use std::io::{BufReader, Read};
+pub(crate) trait HeaderExtension {}
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub(crate) struct EventStreamHeaderExtensionV0 {}
+impl HeaderExtension for EventStreamHeaderExtensionV0 {}
+
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub(crate) struct EventStreamHeaderExtensionV1 {
+    pub(crate) source: SourceCamera,
+}
+impl HeaderExtension for EventStreamHeaderExtensionV1 {}
+
+// pub(crate) struct EventStreamHeaderExtensionV2 {
+//     pub(crate) v1: EventStreamHeaderExtensionV1,
+//     pub(crate) other: other field to add,
+// }
 
 impl EventStreamHeader {
     pub fn new(
@@ -35,6 +47,7 @@ impl EventStreamHeader {
         ref_interval: u32,
         delta_t_max: u32,
         channels: u8,
+        codec_version: u8,
     ) -> EventStreamHeader {
         assert!(channels > 0);
         assert!(delta_t_max > 0);
@@ -44,8 +57,8 @@ impl EventStreamHeader {
 
         EventStreamHeader {
             magic,
-            version: 0,
-            endianness: 'b' as u8,
+            version: codec_version,
+            endianness: 98, // 'b' in ASCII, for big-endian
             width,
             height,
             tps,
@@ -60,54 +73,5 @@ impl EventStreamHeader {
             },
             channels,
         }
-    }
-
-    pub fn read_header(reader: &mut BufReader<File>) -> EventStreamHeader {
-        let mut buf = vec![0u8; 25];
-        reader.read_exact(&mut buf).unwrap();
-        let mut byte_buffer = &buf[..];
-        let mut header = EventStreamHeader::default();
-        header.magic = [
-            byte_buffer.get_u8(),
-            byte_buffer.get_u8(),
-            byte_buffer.get_u8(),
-            byte_buffer.get_u8(),
-            byte_buffer.get_u8(),
-        ];
-        assert!(header.magic == MAGIC_RAW || header.magic == MAGIC_COMPRESSED);
-        header.version = byte_buffer.get_u8();
-        header.endianness = byte_buffer.get_u8();
-        header.width = byte_buffer.get_u16();
-        header.height = byte_buffer.get_u16();
-        header.tps = byte_buffer.get_u32();
-        header.ref_interval = byte_buffer.get_u32();
-        header.delta_t_max = byte_buffer.get_u32();
-        header.event_size = byte_buffer.get_u8();
-        header.channels = byte_buffer.get_u8();
-
-        assert!(header.channels <= 3);
-        assert!(header.delta_t_max >= header.ref_interval);
-
-        header
-    }
-}
-
-impl From<&EventStreamHeader> for Bytes {
-    fn from(header: &EventStreamHeader) -> Self {
-        Bytes::from(
-            [
-                &header.magic as &[u8],
-                &header.version.to_be_bytes() as &[u8],
-                &header.endianness.to_be_bytes() as &[u8],
-                &header.width.to_be_bytes() as &[u8],
-                &header.height.to_be_bytes() as &[u8],
-                &header.tps.to_be_bytes() as &[u8],
-                &header.ref_interval.to_be_bytes() as &[u8],
-                &header.delta_t_max.to_be_bytes() as &[u8],
-                &header.event_size.to_be_bytes() as &[u8],
-                &header.channels.to_be_bytes() as &[u8],
-            ]
-            .concat(),
-        )
     }
 }
