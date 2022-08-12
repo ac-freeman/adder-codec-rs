@@ -255,10 +255,9 @@ impl<T: Clone + Default + FrameValue<Output = T> + Copy> Framer for FrameSequenc
                 SourceCamera::Atis => false,
                 SourceCamera::Asint => false,
             }
+            && *running_ts_ref % self.ref_interval as BigT > 0
         {
-            if *running_ts_ref % self.ref_interval as BigT > 0 {
-                *running_ts_ref = (*last_filled_frame_ref as BigT + 1) * self.ref_interval as BigT;
-            }
+            *running_ts_ref = (*last_filled_frame_ref as BigT + 1) * self.ref_interval as BigT;
         }
 
         debug_assert!(*last_filled_frame_ref >= 0);
