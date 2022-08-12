@@ -36,7 +36,7 @@ default = ["transcoder"]
 transcoder = ["dep:opencv", "dep:fast-math"]
 
 [profile.dev]
-opt-level = 0
+opt-level = 1
 
 [profile.test]
 opt-level = 2
