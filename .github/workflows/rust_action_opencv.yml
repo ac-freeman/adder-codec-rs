@@ -14,8 +14,6 @@ jobs:
         os:
           - image: ubuntu-20.04
             family: linux
-          - image: macos-11
-            family: osx
         rust:
           - stable
           - beta
@@ -52,17 +50,6 @@ jobs:
           toolchain: ${{ matrix.rust }}
           default: true
 
-      - name: Test project
-        run: ci/script.sh
-        shell: bash
-
-      - name: Upload bindings if test failed
-        uses: actions/upload-artifact@v1
-        if: failure()
-        with:
-          name: generated-failed-bindings-${{ runner.os }}-${{ matrix.version.opencv }}
-          path: src/opencv
-
   vcpkg:
     strategy:
       fail-fast: false
@@ -70,8 +57,6 @@ jobs:
         os:
           - image: ubuntu-20.04
             family: linux
-          - image: windows-2019
-            family: windows
         rust:
           - stable
           - beta
@@ -102,26 +87,13 @@ jobs:
           toolchain: ${{ matrix.rust }}
           default: true
 
-      - name: Test project
-        run: ci/script.sh
-        shell: bash
-
-      - name: Upload bindings if test failed
-        uses: actions/upload-artifact@v1
-        if: failure()
-        with:
-          name: generated-failed-bindings-${{ runner.os }}-vcpkg-${{ matrix.version.vcpkg }}
-          path: src/opencv
-
   bin:
     strategy:
       fail-fast: false
       matrix:
         os:
-          - image: macos-11
-            family: osx
-          - image: windows-2019
-            family: windows
+          - image: ubuntu-20.04
+            family: linux
         rust:
           - stable
           - beta
@@ -165,17 +137,6 @@ jobs:
         with:
           toolchain: ${{ matrix.rust }}
           default: true
-
-      - name: Test project
-        run: ci/script.sh
-        shell: bash
-
-      - name: Upload bindings if test failed
-        uses: actions/upload-artifact@v1
-        if: failure()
-        with:
-          name: generated-failed-bindings-${{ runner.os }}-${{ matrix.version.opencv }}
-          path: src/opencv
 
   docs-rs:
     runs-on: ubuntu-20.04
