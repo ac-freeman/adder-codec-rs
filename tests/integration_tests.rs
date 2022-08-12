@@ -154,7 +154,7 @@ fn test_encode_header() {
         fs::metadata("./TEST_".to_owned() + n.to_string().as_str() + ".addr")
             .unwrap()
             .len(),
-        35
+        34
     );
     fs::remove_file("./TEST_".to_owned() + n.to_string().as_str() + ".addr").unwrap();
     // Don't check the error

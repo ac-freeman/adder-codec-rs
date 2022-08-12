@@ -18,7 +18,6 @@ exclude = [
 lto = true
 
 [dependencies]
-bytes = "1"
 rand = "0.8.5"
 itertools = "0.10.3"
 duplicate = "0.4.1"

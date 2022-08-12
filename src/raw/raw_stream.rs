@@ -3,7 +3,6 @@ use crate::raw::raw_stream::StreamError::{Deserialize, Eof};
 use crate::{Codec, Coord, DeltaT, Event, EventSingle, EventStreamHeader, EOF_PX_ADDRESS};
 use bincode::config::{BigEndian, FixintEncoding, WithOtherEndian, WithOtherIntEncoding};
 use bincode::{DefaultOptions, Options};
-use bytes::Bytes;
 use std::fs::File;
 use std::io::{BufReader, BufWriter, Write};
 use std::mem;
@@ -133,26 +132,32 @@ impl Codec for RawStream {
             channels,
         );
         assert_eq!(header.magic, MAGIC_RAW);
+
         match &mut self.output_stream {
             None => {
                 panic!("Output stream not initialized");
             }
             Some(stream) => {
-                stream
-                    .write_all(&Bytes::from(&header).to_vec())
-                    .expect("Unable to write header");
+                self.bincode.serialize_into(&mut *stream, &header).unwrap();
             }
         }
         self.input_stream = None;
     }
 
-    fn decode_header(&mut self) {
+    fn decode_header(&mut self) -> Result<(), StreamError> {
         match &mut self.input_stream {
             None => {
                 panic!("Output stream not initialized");
             }
             Some(stream) => {
-                let header = EventStreamHeader::read_header(stream);
+                let header = match self
+                    .bincode
+                    .deserialize_from::<_, EventStreamHeader>(stream)
+                {
+                    Ok(header) => header,
+                    Err(_) => return Err(Deserialize),
+                };
+
                 self.width = header.width;
                 self.height = header.height;
                 self.tps = header.tps;
@@ -161,6 +166,7 @@ impl Codec for RawStream {
                 self.channels = header.channels;
                 self.event_size = header.event_size;
                 assert_eq!(header.magic, MAGIC_RAW);
+                Ok(())
             }
         }
     }
@@ -173,50 +179,25 @@ impl Codec for RawStream {
             Some(stream) => {
                 // NOTE: for speed, the following checks only run in debug builds. It's entirely
                 // possibly to encode non-sensical events if you want to.
-                debug_assert!(event.coord.x == EOF_PX_ADDRESS || event.coord.x < self.width);
-                debug_assert!(event.coord.y == EOF_PX_ADDRESS || event.coord.y < self.height);
-                match event.coord.c {
-                    None => {
-                        debug_assert_eq!(self.channels, 1);
-                    }
-                    Some(c) => {
-                        debug_assert!(c <= self.channels);
-                        if c == 1 {
-                            debug_assert!(self.channels > 1);
-                        }
-                    }
+                debug_assert!(event.coord.x < self.width || event.coord.x == EOF_PX_ADDRESS);
+                debug_assert!(event.coord.y < self.height || event.coord.y == EOF_PX_ADDRESS);
+                let output_event: EventSingle;
+                if self.channels == 1 {
+                    output_event = event.into();
+                    self.bincode
+                        .serialize_into(&mut *stream, &output_event)
+                        .unwrap();
+                    // bincode::serialize_into(&mut *stream, &output_event, my_options).unwrap();
+                } else {
+                    self.bincode.serialize_into(&mut *stream, event).unwrap();
                 }
-                debug_assert!(event.delta_t <= self.delta_t_max);
-                stream
-                    .write_all(&Bytes::from(event).to_vec())
-                    .expect("Unable to write event");
             }
         }
     }
 
     fn encode_events(&mut self, events: &[Event]) {
-        match &mut self.output_stream {
-            None => {
-                panic!("Output stream not initialized");
-            }
-            Some(stream) => {
-                let mut output_event: EventSingle;
-                for event in events {
-                    // NOTE: for speed, the following checks only run in debug builds. It's entirely
-                    // possibly to encode non-sensical events if you want to.
-                    debug_assert!(event.coord.x < self.width);
-                    debug_assert!(event.coord.y < self.height);
-                    if self.channels == 1 {
-                        output_event = event.into();
-                        self.bincode
-                            .serialize_into(&mut *stream, &output_event)
-                            .unwrap();
-                        // bincode::serialize_into(&mut *stream, &output_event, my_options).unwrap();
-                    } else {
-                        self.bincode.serialize_into(&mut *stream, event).unwrap();
-                    }
-                }
-            }
+        for event in events {
+            self.encode_event(event);
         }
     }
 

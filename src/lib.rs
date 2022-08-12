@@ -1,7 +1,6 @@
 use crate::framer::event_framer::EventCoordless;
 use crate::header::EventStreamHeader;
 use crate::raw::raw_stream::StreamError;
-use bytes::Bytes;
 use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::io::{BufReader, BufWriter};
@@ -71,41 +70,6 @@ pub struct EventSingle {
     pub delta_t: DeltaT,
 }
 
-impl From<&Coord> for Bytes {
-    fn from(coord: &Coord) -> Self {
-        match coord.c {
-            None => Bytes::from(
-                [
-                    &coord.x.to_be_bytes() as &[u8],
-                    &coord.y.to_be_bytes() as &[u8],
-                ]
-                .concat(),
-            ),
-            Some(c) => Bytes::from(
-                [
-                    &coord.x.to_be_bytes() as &[u8],
-                    &coord.y.to_be_bytes() as &[u8],
-                    &c.to_be_bytes() as &[u8],
-                ]
-                .concat(),
-            ),
-        }
-    }
-}
-
-impl From<&Event> for Bytes {
-    fn from(event: &Event) -> Self {
-        Bytes::from(
-            [
-                &Bytes::from(&event.coord).to_vec() as &[u8],
-                &event.d.to_be_bytes() as &[u8],
-                &event.delta_t.to_be_bytes() as &[u8],
-            ]
-            .concat(),
-        )
-    }
-}
-
 impl From<&Event> for EventSingle {
     fn from(event: &Event) -> Self {
         EventSingle {
@@ -169,7 +133,7 @@ pub trait Codec {
         channels: u8,
     );
 
-    fn decode_header(&mut self);
+    fn decode_header(&mut self) -> Result<(), StreamError>;
 
     fn encode_event(&mut self, event: &Event);
     fn encode_events(&mut self, events: &[Event]);

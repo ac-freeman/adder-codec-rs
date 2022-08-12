@@ -15,7 +15,7 @@ fn main() {
     let input_path = "/home/andrew/Downloads/temppp";
     let mut stream: RawStream = Codec::new();
     stream.open_reader(input_path).expect("Invalid path");
-    stream.decode_header();
+    stream.decode_header().expect("Invalid header");
 
     let output_path = "/home/andrew/Downloads/temppp_out";
     let mut output_stream = BufWriter::new(File::create(output_path).unwrap());
