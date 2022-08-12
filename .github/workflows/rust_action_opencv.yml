@@ -16,6 +16,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
+    - name: Setup OpenCV
+      uses: Dovyski/setup-opencv-action@v1
     - name: Build
       run: cargo build --verbose --all-features
     - name: Run tests
