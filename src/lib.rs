@@ -9,6 +9,8 @@ use std::path::Path;
 pub mod framer;
 mod header;
 pub mod raw;
+#[cfg(feature = "transcoder")]
+pub mod transcoder; // Have to enable the 'transcoder' feature. Requires OpenCV to be installed.
 
 /// Decimation value; a pixel's sensitivity.
 pub type D = u8;
@@ -168,3 +170,4 @@ mod tests {
     #[test]
     fn encode_raw() {}
 }
+//
