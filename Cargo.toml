@@ -4,7 +4,10 @@ version = "0.1.4"
 edition = "2021"
 authors = ["Andrew C. Freeman"]
 description = """Encoder/transcoder/decoder for ADΔER (Address, Decimation, Δt Event Representation) streams.
- Currently, only implemented for raw (uncompressed) streams. Includes a transcoder for """
+ Currently, only implemented for raw (uncompressed) streams. Includes a transcoder for casting framed video
+ into an ADΔER representation in a manner which preserves the temporal synchronicity of the source, but enables
+ many-frame intensity averaging on a per-pixel basis, and high dynamic range.
+ """
 homepage = "https://github.com/ac-freeman/adder-codec-rs"
 repository = "https://github.com/ac-freeman/adder-codec-rs"
 readme = "README.md"
@@ -34,6 +37,7 @@ fast-math = {version = "0.1", optional = true}
 [features]
 default = ["transcoder"]
 transcoder = ["dep:opencv", "dep:fast-math"]
+raw-codec = []
 
 [profile.dev]
 opt-level = 1

@@ -1,10 +1,24 @@
 # ADDER-codec-rs
 
-Encoder/decoder for ADΔER (Address, Decimation, Δt Event Representation) streams. Currently, only implemented for raw (uncompressed) streams.
+Encoder/transcoder/decoder for ADΔER (Address, Decimation, Δt Event Representation) streams. Currently, only implemented for raw (uncompressed) streams. Includes a transcoder for casting framed video into an ADΔER representation in a manner which preserves the temporal synchronicity of the source, but enables many-frame intensity averaging on a per-pixel basis and extremely high dynamic range.
 
 [crates.io page](https://crates.io/crates/adder-codec-rs)
 
-### Usage
+### Setup
+
+If you just want to use the hooks for encoding/decoding ADΔER streams (i.e., not a transcoder for producing the ADΔER events for a given source), then you can include the library by adding the following to your Cargo.toml file:
+
+`adder-codec-rs = {version = "0.1.4", features = ["raw-codec"]}`
+
+If you want to use the provided transcoder(s), then you have to install OpenCV 4.0+ according to the configuration guidelines for [opencv-rust](https://github.com/twistedfall/opencv-rust). Then, include the library in your project as normal:
+
+`adder-codec-rs = "0.1.4"`
+
+### Examples
+
+Example executables are provided in `src/bin` for both transcoding framed video to  ADΔER, and for reconstructing a framed representation from ADΔER. More thorough examples are to come.
+
+### Direct Usage
 
 
 Encode a raw stream:
