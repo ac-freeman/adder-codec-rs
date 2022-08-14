@@ -38,6 +38,10 @@ fast-math = {version = "0.1", optional = true}
 default = ["transcoder"]
 transcoder = ["dep:opencv", "dep:fast-math"]
 raw-codec = []
+docs-nolink = ["opencv/docs-only", "dep:fast-math"]
+
+[package.metadata.docs.rs]
+features = ["docs-nolink"]
 
 [profile.dev]
 opt-level = 1
