@@ -12,7 +12,7 @@ pub type Intensity = f32;
 /// Pixel x- or y- coordinate address in the ADΔER model
 pub type PixelAddress = u16;
 
-pub(crate) mod pixel {
+pub mod pixel {
     use crate::transcoder::d_controller::{Aggressive, DControl, DecimationModes, Standard};
     use crate::transcoder::event_pixel::{DeltaT, Integration, Intensity, PixelAddress, D};
     use crate::{Coord, Event, D_SHIFT, MAX_INTENSITY};

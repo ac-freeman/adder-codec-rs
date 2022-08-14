@@ -20,8 +20,8 @@ use rayon::iter::{IndexedParallelIterator, ParallelIterator};
 
 /// Attributes common to ADΔER transcode process
 pub struct Video {
-    pub(crate) width: u16,
-    pub(crate) height: u16,
+    pub width: u16,
+    pub height: u16,
 
     // NB: as of 4/15, boxing this attribute hurts performance slightly
     pub(crate) event_pixels: Array3<EventPixel>,
@@ -36,7 +36,7 @@ pub struct Video {
     pub(crate) instantaneous_frame: Mat,
     pub event_sender: Sender<Vec<Event>>,
     pub(crate) write_out: bool,
-    pub(crate) channels: usize,
+    pub channels: usize,
     pub(crate) stream: RawStream,
 }
 
@@ -424,7 +424,7 @@ pub fn show_display(window_name: &str, mat: &Mat, wait: i32, video: &Video) {
 pub trait Source {
     /// Intake one input interval worth of data from the source stream into the ADΔER model as
     /// intensities
-    fn consume(&mut self, view_interval: u32) -> Result<(), &'static str>;
+    fn consume(&mut self, view_interval: u32) -> Result<Vec<Vec<Event>>, &'static str>;
 
     fn get_video(&mut self) -> &mut Video;
 }

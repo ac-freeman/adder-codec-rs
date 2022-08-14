@@ -37,7 +37,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     loop {
         match pool.install(|| source.consume(1)) {
-            Ok(_) => {}
+            Ok(_) => {} // Returns Vec<Vec<Event>>, but we're just writing the events out in this example
             Err("End of video") => break, // TODO: make it a proper rust error
             Err(_) => {}
         };

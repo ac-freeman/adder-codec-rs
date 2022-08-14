@@ -183,7 +183,7 @@ impl FramedSource {
 impl Source for FramedSource {
     /// Get pixel-wise intensities directly from source frame, and integrate them with
     /// [`ref_time`](Video::ref_time) (the number of ticks each frame is said to span)
-    fn consume(&mut self, view_interval: u32) -> Result<(), &'static str> {
+    fn consume(&mut self, view_interval: u32) -> Result<Vec<Vec<Event>>, &'static str> {
         if self.video.in_interval_count == 0 {
             self.input_frame_scaled = match self.frame_rx.recv() {
                 Err(_) => return Err("End of video"), // TODO: make it a proper rust error
@@ -331,11 +331,13 @@ impl Source for FramedSource {
                 buffer
             })
             .collect();
-        self.video.stream.encode_events_events(&big_buffer);
+        if self.video.write_out {
+            self.video.stream.encode_events_events(&big_buffer);
+        }
 
         show_display("Gray input", &self.input_frame_scaled, 1, &self.video);
         self.video.instantaneous_display_frame = (*self.input_frame_scaled).clone();
-        Ok(())
+        Ok(big_buffer)
     }
 
     fn get_video(&mut self) -> &mut Video {
