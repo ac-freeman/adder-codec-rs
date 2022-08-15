@@ -309,7 +309,7 @@ impl<T: Clone + Default + FrameValue<Output = T> + Serialize> FrameSequence<T> {
         }
     }
 
-    fn pop_next_frame(&mut self) -> Option<Array3<Option<T>>> {
+    pub fn pop_next_frame(&mut self) -> Option<Array3<Option<T>>> {
         self.frames.rotate_left(1);
         match self.frames.pop_back() {
             Some(a) => {
