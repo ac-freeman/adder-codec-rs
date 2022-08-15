@@ -340,8 +340,12 @@ impl Source for FramedSource {
         Ok(big_buffer)
     }
 
-    fn get_video(&mut self) -> &mut Video {
+    fn get_video_mut(&mut self) -> &mut Video {
         &mut self.video
+    }
+
+    fn get_video(&self) -> &Video {
+        &self.video
     }
 }
 

@@ -426,5 +426,7 @@ pub trait Source {
     /// intensities
     fn consume(&mut self, view_interval: u32) -> Result<Vec<Vec<Event>>, &'static str>;
 
-    fn get_video(&mut self) -> &mut Video;
+    fn get_video_mut(&mut self) -> &mut Video;
+
+    fn get_video(&self) -> &Video;
 }
