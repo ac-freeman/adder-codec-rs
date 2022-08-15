@@ -55,6 +55,7 @@ impl FramedSource {
         c_thresh_pos: u8,
         c_thresh_neg: u8,
         write_out: bool,
+        communicate_events: bool,
         show_display_b: bool,
         source_camera: SourceCamera,
     ) -> Result<FramedSource> {
@@ -113,6 +114,7 @@ impl FramedSource {
             delta_t_max,
             0,
             write_out,
+            communicate_events,
             show_display_b,
             source_camera,
         );
@@ -323,7 +325,13 @@ impl Source for FramedSource {
                     }
 
                     let intensity = frame_arr[px_idx] as Intensity;
-                    px.add_intensity(intensity, ref_time, &dtm, &mut buffer, write_out);
+                    px.add_intensity(
+                        intensity,
+                        ref_time,
+                        &dtm,
+                        &mut buffer,
+                        self.video.communicate_events,
+                    );
 
                     px.last_event.calc_frame_intensity(ref_time as u32);
                     px.last_event.calc_frame_delta_t(dtm);

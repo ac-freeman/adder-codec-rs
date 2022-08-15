@@ -190,7 +190,7 @@ pub mod pixel {
             mut delta_t_left: f32,
             delta_t_max: &DeltaT,
             sender: &mut Vec<Event>,
-            write_out: bool,
+            communicate_events: bool,
         ) {
             if self.coord.x == 35 && self.coord.y == 8 && intensity_left == 137.0 {
                 // println!("lookk");
@@ -210,7 +210,14 @@ pub mod pixel {
                     delta_t_left,
                 ) {
                     (_, b, _, _) if self.has_empty_event(&b) => {
-                        self.fire_event(true, delta_t_max, &b, sender, write_out, first_iter);
+                        self.fire_event(
+                            true,
+                            delta_t_max,
+                            &b,
+                            sender,
+                            communicate_events,
+                            first_iter,
+                        );
                         true
                     }
                     (a, b, _, _) if self.has_full_event(&a) => {
@@ -227,7 +234,14 @@ pub mod pixel {
                         delta_t_left -= self.delta_t_to_add;
                         intensity_left -=
                             D_SHIFT[*self.d_controller.get_d() as usize] as f32 - self.integration;
-                        self.fire_event(false, delta_t_max, &b, sender, write_out, first_iter);
+                        self.fire_event(
+                            false,
+                            delta_t_max,
+                            &b,
+                            sender,
+                            communicate_events,
+                            first_iter,
+                        );
 
                         true
                     }
@@ -308,7 +322,7 @@ pub mod pixel {
             delta_t_max: &DeltaT,
             delta_t_max_f32: &f32,
             sender: &mut Vec<Event>,
-            write_out: bool,
+            communicate_events: bool,
             first_iter: bool,
         ) {
             if empty {
@@ -317,7 +331,7 @@ pub mod pixel {
                 self.event_to_send.delta_t = *delta_t_max;
                 // self.last_event.event = self.event_to_send;  // TODO: remove this again?
 
-                if write_out {
+                if communicate_events {
                     sender.push(self.event_to_send);
                 }
 
@@ -337,7 +351,7 @@ pub mod pixel {
                     self.last_event.event = self.event_to_send;
                 }
 
-                if write_out {
+                if communicate_events {
                     sender.push(self.event_to_send);
                 }
             }

@@ -23,6 +23,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         15,
         true,
         true,
+        true,
         SourceCamera::FramedU8,
     )
     .unwrap();

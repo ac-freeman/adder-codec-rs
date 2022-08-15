@@ -36,6 +36,7 @@ pub struct Video {
     pub(crate) instantaneous_frame: Mat,
     pub event_sender: Sender<Vec<Event>>,
     pub(crate) write_out: bool,
+    pub(crate) communicate_events: bool,
     pub channels: usize,
     pub(crate) stream: RawStream,
 }
@@ -54,9 +55,14 @@ impl Video {
         delta_t_max: DeltaT,
         d_mode: u32,
         write_out: bool,
+        communicate_events: bool,
         show_display: bool,
         source_camera: SourceCamera,
     ) -> Video {
+        if write_out {
+            assert!(communicate_events);
+        }
+
         let path = Path::new(&output_filename);
 
         let (event_sender, _event_receiver): (Sender<Vec<Event>>, Receiver<Vec<Event>>) = channel();
@@ -130,6 +136,7 @@ impl Video {
             instantaneous_frame,
             event_sender,
             write_out,
+            communicate_events,
             channels,
             stream,
         }
