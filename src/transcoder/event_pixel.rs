@@ -27,8 +27,6 @@ pub mod pixel {
 
     #[derive(Copy, Clone)]
     pub struct Transition {
-        pub(crate) frame_intensity: u8,
-        pub(crate) sum_intensity_before: f32,
         pub(crate) frame_idx: u32,
     }
 
@@ -168,11 +166,7 @@ pub mod pixel {
                     d: 0,
                     delta_t: 0,
                 },
-                next_transition: Transition {
-                    frame_intensity: 0,
-                    sum_intensity_before: 0.0,
-                    frame_idx: 1,
-                },
+                next_transition: Transition { frame_idx: 1 },
                 ref_time,
             }
         }

@@ -2,13 +2,11 @@ use crate::framer::scale_intensity::FrameValue;
 use crate::{BigT, DeltaT, Event, SourceCamera, D};
 use bincode::config::{BigEndian, FixintEncoding, WithOtherEndian, WithOtherIntEncoding};
 use bincode::{DefaultOptions, Options};
-use rayon::iter::IndexedParallelIterator;
 use rayon::iter::ParallelIterator;
 use std::cmp::max;
 use std::collections::VecDeque;
 use std::fs::File;
 use std::io::BufWriter;
-use std::process::Output;
 
 // Want one main framer with the same functions
 // Want additional functions
@@ -104,8 +102,7 @@ pub struct FrameSequence<T> {
 
 use ndarray::Array3;
 use rayon::current_num_threads;
-use rayon::iter::IntoParallelRefIterator;
-use rayon::prelude::{IntoParallelIterator, IntoParallelRefMutIterator};
+use rayon::prelude::IntoParallelIterator;
 use serde::Serialize;
 
 impl<T: Clone + Default + FrameValue<Output = T> + Copy + Serialize + Send + Sync> Framer
@@ -129,7 +126,6 @@ impl<T: Clone + Default + FrameValue<Output = T> + Copy + Serialize + Send + Syn
 
         let num_chunks: usize = ((num_rows) as f64 / chunk_rows as f64).ceil() as usize;
         let last_chunk_rows = num_rows - (num_chunks - 1) * chunk_rows;
-        let px_per_chunk: usize = chunk_rows * num_cols * num_channels as usize;
 
         assert!(num_chunks > 0);
         let array: Array3<Option<T>> =
@@ -164,7 +160,7 @@ impl<T: Clone + Default + FrameValue<Output = T> + Copy + Serialize + Send + Syn
         if let Some(last) = last_filled_tracker.last_mut() {
             *last = Array3::zeros((last_chunk_rows, num_cols, num_channels))
         };
-        for mut chunk in &mut last_filled_tracker {
+        for chunk in &mut last_filled_tracker {
             for mut row in chunk.rows_mut() {
                 row.fill(-1);
             }
@@ -219,7 +215,6 @@ impl<T: Clone + Default + FrameValue<Output = T> + Copy + Serialize + Send + Syn
     fn ingest_event(&mut self, event: &mut Event) -> bool {
         let channel = event.coord.c.unwrap_or(0);
         let chunk_num = event.coord.y as usize / self.chunk_rows;
-        let tmp = event.clone();
         event.coord.y -= (chunk_num * self.chunk_rows) as u16; // Modify the coordinate here, so it gets ingested at the right place
 
         let frame_chunk = &mut self.frames[chunk_num];
@@ -272,7 +267,6 @@ impl<T: Clone + Default + FrameValue<Output = T> + Copy + Serialize + Send + Syn
                     for event in a {
                         let channel = event.coord.c.unwrap_or(0);
                         let chunk_num = event.coord.y as usize / self.chunk_rows;
-                        let tmp = event.clone();
                         event.coord.y -= (chunk_num * self.chunk_rows) as u16; // Modify the coordinate here, so it gets ingested at the right place
                         let last_filled_frame_ref = &mut chunk_last_filled_tracker
                             [[event.coord.y.into(), event.coord.x.into(), channel.into()]];
@@ -329,7 +323,7 @@ impl<T: Clone + Default + FrameValue<Output = T> + Serialize> FrameSequence<T> {
         }
     }
 
-    fn _get_frame(&self, frame_idx: usize) -> Result<&Array3<Option<T>>, FrameSequenceError> {
+    fn _get_frame(&self, _frame_idx: usize) -> Result<&Array3<Option<T>>, FrameSequenceError> {
         todo!()
         // match self.frames.len() <= frame_idx {
         //     true => Err(FrameSequenceError::InvalidIndex),
@@ -521,9 +515,6 @@ fn ingest_event_for_chunk<
                 let mut frame: &mut Option<T>;
                 for i in prev_last_filled_frame..*last_filled_frame_ref {
                     if i - frames_written + 1 >= 0 {
-                        let tmp = &mut frame_chunk[(i - frames_written + 1) as usize].array;
-                        let tmp2 =
-                            tmp[[event.coord.y.into(), event.coord.x.into(), channel.into()]];
                         frame = &mut frame_chunk[(i - frames_written + 1) as usize].array
                             [[event.coord.y.into(), event.coord.x.into(), channel.into()]];
                         match frame {

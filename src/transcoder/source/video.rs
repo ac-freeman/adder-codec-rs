@@ -370,16 +370,16 @@ impl Video {
                 && area < ((self.width as f32 * self.height as f32).sqrt() * 20.0) as f64
             {
                 todo!();
-                let rect = bounding_rect(&contour).unwrap();
-                rectangle(
-                    &mut self.instantaneous_display_frame,
-                    rect,
-                    opencv::core::Scalar::new(255.0, 255.0, 255.0, 255.0),
-                    2,
-                    1,
-                    0,
-                )
-                .unwrap();
+                // let rect = bounding_rect(&contour).unwrap();
+                // rectangle(
+                //     &mut self.instantaneous_display_frame,
+                //     rect,
+                //     opencv::core::Scalar::new(255.0, 255.0, 255.0, 255.0),
+                //     2,
+                //     1,
+                //     0,
+                // )
+                // .unwrap();
             }
         }
 

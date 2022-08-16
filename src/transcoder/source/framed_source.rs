@@ -12,7 +12,6 @@ use ndarray::Axis;
 use opencv::core::{Mat, Size};
 use opencv::videoio::{VideoCapture, CAP_PROP_FPS, CAP_PROP_FRAME_COUNT, CAP_PROP_POS_FRAMES};
 use opencv::{imgproc, prelude::*, videoio, Result};
-use rayon::current_num_threads;
 
 use crate::transcoder::event_pixel::pixel::Transition;
 use crate::SourceCamera;
@@ -260,7 +259,6 @@ impl Source for FramedSource {
 
         let dtm = self.video.delta_t_max;
         let ref_time = self.video.ref_time as f32;
-        let write_out = self.video.write_out;
 
         let chunk_rows = self.video.height as usize / rayon::current_num_threads() as usize;
         let px_per_chunk: usize =
@@ -309,13 +307,9 @@ impl Source for FramedSource {
 
                         let trans = match ideal_i {
                             0 => Transition {
-                                frame_intensity: c_val,
-                                sum_intensity_before: intensity_sum,
                                 frame_idx: self.video.in_interval_count + 1,
                             },
                             _ => Transition {
-                                frame_intensity: 0,
-                                sum_intensity_before: intensity_sum,
                                 frame_idx: self.video.in_interval_count + ideal_i as u32 + 1,
                             },
                         };
