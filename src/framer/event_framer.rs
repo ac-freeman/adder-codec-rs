@@ -296,7 +296,7 @@ impl<T: Clone + Default + FrameValue<Output = T> + Copy + Serialize + Send + Syn
                 },
             );
 
-        self.is_frame_filled(0).unwrap()
+        self.is_frame_0_filled().unwrap()
     }
 }
 
