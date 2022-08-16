@@ -262,6 +262,7 @@ impl Source for FramedSource {
         let write_out = self.video.write_out;
 
         let chunk_rows: usize = rayon::current_num_threads();
+        let chunk_rows: usize = 540; // TEMP TODO
         let px_per_chunk: usize =
             chunk_rows * self.video.width as usize * self.video.channels as usize;
         let big_buffer: Vec<_> = self

@@ -26,7 +26,7 @@ pub enum FramerMode {
     INTEGRATION,
 }
 
-const TEMP_CHUNK_SIZE: usize = 15;
+const TEMP_CHUNK_SIZE: usize = 540;
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum SourceType {
@@ -292,7 +292,7 @@ impl<T: Clone + Default + FrameValue<Output = T> + Copy + Serialize + Send + Syn
                 },
             );
 
-        false
+        self.is_frame_filled(0).unwrap()
     }
 }
 
@@ -360,6 +360,23 @@ impl<T: Clone + Default + FrameValue<Output = T> + Serialize> FrameSequence<T> {
             }
         }
         Ok(true)
+    }
+
+    pub fn pop_next_frame(&mut self) -> Option<Vec<Array3<Option<T>>>> {
+        let mut ret: Vec<Array3<Option<T>>> = Vec::with_capacity(self.frames.len());
+
+        for chunk_num in 0..self.frames.len() {
+            match self.pop_next_frame_for_chunk(chunk_num) {
+                Some(frame) => {
+                    ret.push(frame);
+                }
+                None => {
+                    println!("Couldn't pop chunk {}!", chunk_num)
+                }
+            }
+        }
+        self.frames_written += 1;
+        Some(ret)
     }
 
     pub fn pop_next_frame_for_chunk(&mut self, chunk_num: usize) -> Option<Array3<Option<T>>> {
@@ -500,6 +517,9 @@ fn ingest_event_for_chunk<
                 let mut frame: &mut Option<T>;
                 for i in prev_last_filled_frame..*last_filled_frame_ref {
                     if i - frames_written + 1 >= 0 {
+                        let tmp = &mut frame_chunk[(i - frames_written + 1) as usize].array;
+                        let tmp2 =
+                            tmp[[event.coord.y.into(), event.coord.x.into(), channel.into()]];
                         frame = &mut frame_chunk[(i - frames_written + 1) as usize].array
                             [[event.coord.y.into(), event.coord.x.into(), channel.into()]];
                         match frame {
