@@ -2,9 +2,12 @@ use crate::framer::scale_intensity::FrameValue;
 use crate::{BigT, DeltaT, Event, SourceCamera, D};
 use bincode::config::{BigEndian, FixintEncoding, WithOtherEndian, WithOtherIntEncoding};
 use bincode::{DefaultOptions, Options};
+use rayon::iter::IndexedParallelIterator;
+use rayon::iter::ParallelIterator;
 use std::collections::VecDeque;
 use std::fs::File;
 use std::io::BufWriter;
+use std::process::Output;
 
 // Want one main framer with the same functions
 // Want additional functions
@@ -60,7 +63,14 @@ pub trait Framer {
     /// output frame(s)
     fn ingest_event(&mut self, event: &mut Event) -> bool;
 
-    fn ingest_event_for_chunk(&mut self, event: &Event, chunk_num: usize) -> bool;
+    // fn ingest_event_for_chunk(
+    //     &self,
+    //     event: &Event,
+    //     frame_chunk: &mut VecDeque<Frame<Option<Self::Output>>>,
+    //     pixel_ts_tracker: &mut BigT,
+    //     frame_idx_offset: &mut i64,
+    //     last_filled_tracker: &mut i64,
+    // ) -> bool;
     fn ingest_events_events(&mut self, events: Vec<Vec<Event>>) -> bool;
 }
 
@@ -93,9 +103,13 @@ pub struct FrameSequence<T> {
 }
 
 use ndarray::Array3;
+use rayon::iter::IntoParallelRefIterator;
+use rayon::prelude::{IntoParallelIterator, IntoParallelRefMutIterator};
 use serde::Serialize;
 
-impl<T: Clone + Default + FrameValue<Output = T> + Copy + Serialize> Framer for FrameSequence<T> {
+impl<T: Clone + Default + FrameValue<Output = T> + Copy + Serialize + Send + Sync> Framer
+    for FrameSequence<T>
+{
     type Output = T;
     fn new(
         num_rows: usize,
@@ -199,10 +213,30 @@ impl<T: Clone + Default + FrameValue<Output = T> + Copy + Serialize> Framer for 
     /// assert_eq!(*elem, Some(32));
     /// ```
     fn ingest_event(&mut self, event: &mut Event) -> bool {
+        let channel = event.coord.c.unwrap_or(0);
         let chunk_num = event.coord.y as usize / TEMP_CHUNK_SIZE;
         let tmp = event.clone();
         event.coord.y -= (chunk_num * TEMP_CHUNK_SIZE) as u16; // Modify the coordinate here, so it gets ingested at the right place
-        self.chunk_filled_tracker[chunk_num] = self.ingest_event_for_chunk(event, chunk_num);
+
+        let frame_chunk = &mut self.frames[chunk_num];
+        let last_filled_frame_ref = &mut self.last_filled_tracker[chunk_num]
+            [[event.coord.y.into(), event.coord.x.into(), channel.into()]];
+        let running_ts_ref = &mut self.pixel_ts_tracker[chunk_num]
+            [[event.coord.y.into(), event.coord.x.into(), channel.into()]];
+        let frame_idx_offset = &mut self.frame_idx_offsets[chunk_num];
+        self.chunk_filled_tracker[chunk_num] = ingest_event_for_chunk(
+            event,
+            frame_chunk,
+            running_ts_ref,
+            frame_idx_offset,
+            last_filled_frame_ref,
+            self.frames_written,
+            self.tpf,
+            self.source,
+            self.codec_version,
+            self.source_camera,
+            self.ref_interval,
+        );
         for chunk in &self.chunk_filled_tracker {
             if !chunk {
                 return false;
@@ -212,131 +246,53 @@ impl<T: Clone + Default + FrameValue<Output = T> + Copy + Serialize> Framer for 
         true
     }
 
-    fn ingest_event_for_chunk(&mut self, event: &Event, chunk_num: usize) -> bool {
-        let channel = event.coord.c.unwrap_or(0);
+    fn ingest_events_events(&mut self, mut events: Vec<Vec<Event>>) -> bool {
+        (
+            &mut events,
+            &mut self.frames,
+            &mut self.chunk_filled_tracker,
+            &mut self.pixel_ts_tracker,
+            &mut self.frame_idx_offsets,
+            &mut self.last_filled_tracker,
+        )
+            .into_par_iter()
+            .for_each(
+                |(
+                    a,
+                    frame_chunk,
+                    chunk_filled,
+                    chunk_ts_tracker,
+                    frame_idx_offset,
+                    chunk_last_filled_tracker,
+                )| {
+                    for event in a {
+                        let channel = event.coord.c.unwrap_or(0);
+                        let chunk_num = event.coord.y as usize / TEMP_CHUNK_SIZE;
+                        let tmp = event.clone();
+                        event.coord.y -= (chunk_num * TEMP_CHUNK_SIZE) as u16; // Modify the coordinate here, so it gets ingested at the right place
+                        let last_filled_frame_ref = &mut chunk_last_filled_tracker
+                            [[event.coord.y.into(), event.coord.x.into(), channel.into()]];
+                        let running_ts_ref = &mut chunk_ts_tracker
+                            [[event.coord.y.into(), event.coord.x.into(), channel.into()]];
 
-        let last_filled_frame_ref = &mut self.last_filled_tracker[chunk_num]
-            [[event.coord.y.into(), event.coord.x.into(), channel.into()]];
-        let prev_last_filled_frame = *last_filled_frame_ref;
-        let _already_filled = *last_filled_frame_ref >= self.frames_written;
-        let running_ts_ref = &mut self.pixel_ts_tracker[chunk_num]
-            [[event.coord.y.into(), event.coord.x.into(), channel.into()]];
-        *running_ts_ref += event.delta_t as BigT;
-
-        if ((*running_ts_ref - 1) as i64 / self.tpf as i64) > *last_filled_frame_ref {
-            match event.d {
-                d if d == 0xFF && event.delta_t < self.tpf => {
-                    // Don't do anything -- it's an empty event
-                    // Except in special case where delta_t == tpf
-                    if *running_ts_ref == self.tpf as BigT && event.delta_t == self.tpf {
-                        self.frames[chunk_num][(*last_filled_frame_ref
-                            - self.frame_idx_offsets[chunk_num])
-                            as usize]
-                            .array[[event.coord.y.into(), event.coord.x.into(), channel.into()]] =
-                            Some(T::default());
-                        self.frames[chunk_num][(*last_filled_frame_ref
-                            - self.frame_idx_offsets[chunk_num])
-                            as usize]
-                            .filled_count += 1;
-                        // if (*last_filled_frame_ref - self.frame_idx_offset) == 0 {
-                        //     println!("{}, {}", event.coord.x, event.coord.y);
-                        // }
-
-                        *last_filled_frame_ref =
-                            ((*running_ts_ref - 1) as i64 / self.tpf as i64) + 1;
+                        *chunk_filled = ingest_event_for_chunk(
+                            event,
+                            frame_chunk,
+                            running_ts_ref,
+                            frame_idx_offset,
+                            last_filled_frame_ref,
+                            self.frames_written,
+                            self.tpf,
+                            self.source,
+                            self.codec_version,
+                            self.source_camera,
+                            self.ref_interval,
+                        );
                     }
-                }
-                _ => {
-                    let scaled_intensity: T = T::get_frame_value(event, self.source, self.tpf);
-                    *last_filled_frame_ref = (*running_ts_ref - 1) as i64 / self.tpf as i64;
+                },
+            );
 
-                    // Grow the frames vec if necessary
-                    match *last_filled_frame_ref - self.frame_idx_offsets[chunk_num] {
-                        a if a > 0 => {
-                            let array: Array3<Option<T>> = Array3::<Option<T>>::default(
-                                self.frames[chunk_num][0].array.raw_dim(),
-                            );
-                            self.frames[chunk_num].append(&mut VecDeque::from(vec![
-                                Frame {
-                                    array,
-                                    filled_count: 0
-                                };
-                                a as usize
-                            ]));
-                            self.frame_idx_offsets[chunk_num] += a;
-                        }
-                        a if a < 0 => {
-                            // We can get here if we've forcibly popped a frame before it's ready.
-                            // Increment pixel ts trackers as normal, but don't actually do anything
-                            // with the intensities if they correspond to frames that we've already
-                            // popped.
-                            //
-                            // ALSO can arrive here if the source events are not perfectly
-                            // temporally interleaved. This may be the case for transcoder
-                            // performance reasons. The only invariant we hold is that a sequence
-                            // of events for a given (individual) pixel is in the correct order.
-                            // There is no invariant for the relative order or interleaving
-                            // of different pixel event sequences.
-                        }
-                        _ => {}
-                    }
-
-                    let mut frame: &mut Option<T>;
-                    for i in prev_last_filled_frame..*last_filled_frame_ref {
-                        if i - self.frames_written + 1 >= 0 {
-                            frame = &mut self.frames[chunk_num]
-                                [(i - self.frames_written + 1) as usize]
-                                .array
-                                [[event.coord.y.into(), event.coord.x.into(), channel.into()]];
-                            match frame {
-                                Some(_val) => {}
-                                None => {
-                                    *frame = Some(scaled_intensity);
-                                    self.frames[chunk_num]
-                                        [(i - self.frames_written + 1) as usize]
-                                        .filled_count += 1;
-                                    // if (i - self.frames_written + 1) == 0 {
-                                    //     println!("{}, {}", event.coord.x, event.coord.y);
-                                    // }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // If framed video source, we can take advantage of scheme that reduces event rate by half
-        if self.codec_version > 0
-            && match self.source_camera {
-                SourceCamera::FramedU8 => true,
-                SourceCamera::FramedU16 => true,
-                SourceCamera::FramedU32 => true,
-                SourceCamera::FramedU64 => true,
-                SourceCamera::FramedF32 => true,
-                SourceCamera::FramedF64 => true,
-                SourceCamera::Dvs => false,
-                SourceCamera::DavisU8 => false,
-                SourceCamera::Atis => false,
-                SourceCamera::Asint => false,
-            }
-            && *running_ts_ref % self.ref_interval as BigT > 0
-        {
-            *running_ts_ref = (*last_filled_frame_ref as BigT + 1) * self.ref_interval as BigT;
-        }
-
-        debug_assert!(*last_filled_frame_ref >= 0);
-        debug_assert!(
-            self.frames[chunk_num][0].filled_count <= self.frames[chunk_num][0].array.len()
-        );
-        self.frames[chunk_num][0].filled_count == self.frames[chunk_num][0].array.len()
-    }
-
-    fn ingest_events_events(&mut self, events: Vec<Vec<Event>>) -> bool {
-        // let chunk_rows: usize = events.len();
-        // let px_per_chunk: usize =
-        //     chunk_rows * self.num_cols as usize * self.source.get_video().channels as usize;
-        todo!()
+        false
     }
 }
 
@@ -465,4 +421,123 @@ impl<T: Clone + Default + FrameValue<Output = T> + Serialize> FrameSequence<T> {
         }
         frame_count
     }
+}
+
+fn ingest_event_for_chunk<
+    T: Clone + Default + FrameValue<Output = T> + Copy + Serialize + Send + Sync,
+>(
+    event: &Event,
+    frame_chunk: &mut VecDeque<Frame<Option<T>>>,
+    running_ts_ref: &mut BigT,
+    frame_idx_offset: &mut i64,
+    last_filled_frame_ref: &mut i64,
+    frames_written: i64,
+    tpf: DeltaT,
+    source: SourceType,
+    codec_version: u8,
+    source_camera: SourceCamera,
+    ref_interval: DeltaT,
+) -> bool {
+    let channel = event.coord.c.unwrap_or(0);
+
+    let prev_last_filled_frame = *last_filled_frame_ref;
+    let _already_filled = *last_filled_frame_ref >= frames_written;
+
+    *running_ts_ref += event.delta_t as BigT;
+
+    if ((*running_ts_ref - 1) as i64 / tpf as i64) > *last_filled_frame_ref {
+        match event.d {
+            d if d == 0xFF && event.delta_t < tpf => {
+                // Don't do anything -- it's an empty event
+                // Except in special case where delta_t == tpf
+                if *running_ts_ref == tpf as BigT && event.delta_t == tpf {
+                    frame_chunk[(*last_filled_frame_ref - *frame_idx_offset) as usize].array
+                        [[event.coord.y.into(), event.coord.x.into(), channel.into()]] =
+                        Some(T::default());
+                    frame_chunk[(*last_filled_frame_ref - *frame_idx_offset) as usize]
+                        .filled_count += 1;
+                    // if (*last_filled_frame_ref - self.frame_idx_offset) == 0 {
+                    //     println!("{}, {}", event.coord.x, event.coord.y);
+                    // }
+
+                    *last_filled_frame_ref = ((*running_ts_ref - 1) as i64 / tpf as i64) + 1;
+                }
+            }
+            _ => {
+                let scaled_intensity: T = T::get_frame_value(event, source, tpf);
+                *last_filled_frame_ref = (*running_ts_ref - 1) as i64 / tpf as i64;
+
+                // Grow the frames vec if necessary
+                match *last_filled_frame_ref - *frame_idx_offset {
+                    a if a > 0 => {
+                        let array: Array3<Option<T>> =
+                            Array3::<Option<T>>::default(frame_chunk[0].array.raw_dim());
+                        frame_chunk.append(&mut VecDeque::from(vec![
+                            Frame {
+                                array,
+                                filled_count: 0
+                            };
+                            a as usize
+                        ]));
+                        *frame_idx_offset += a;
+                    }
+                    a if a < 0 => {
+                        // We can get here if we've forcibly popped a frame before it's ready.
+                        // Increment pixel ts trackers as normal, but don't actually do anything
+                        // with the intensities if they correspond to frames that we've already
+                        // popped.
+                        //
+                        // ALSO can arrive here if the source events are not perfectly
+                        // temporally interleaved. This may be the case for transcoder
+                        // performance reasons. The only invariant we hold is that a sequence
+                        // of events for a given (individual) pixel is in the correct order.
+                        // There is no invariant for the relative order or interleaving
+                        // of different pixel event sequences.
+                    }
+                    _ => {}
+                }
+
+                let mut frame: &mut Option<T>;
+                for i in prev_last_filled_frame..*last_filled_frame_ref {
+                    if i - frames_written + 1 >= 0 {
+                        frame = &mut frame_chunk[(i - frames_written + 1) as usize].array
+                            [[event.coord.y.into(), event.coord.x.into(), channel.into()]];
+                        match frame {
+                            Some(_val) => {}
+                            None => {
+                                *frame = Some(scaled_intensity);
+                                frame_chunk[(i - frames_written + 1) as usize].filled_count += 1;
+                                // if (i - self.frames_written + 1) == 0 {
+                                //     println!("{}, {}", event.coord.x, event.coord.y);
+                                // }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // If framed video source, we can take advantage of scheme that reduces event rate by half
+    if codec_version > 0
+        && match source_camera {
+            SourceCamera::FramedU8 => true,
+            SourceCamera::FramedU16 => true,
+            SourceCamera::FramedU32 => true,
+            SourceCamera::FramedU64 => true,
+            SourceCamera::FramedF32 => true,
+            SourceCamera::FramedF64 => true,
+            SourceCamera::Dvs => false,
+            SourceCamera::DavisU8 => false,
+            SourceCamera::Atis => false,
+            SourceCamera::Asint => false,
+        }
+        && *running_ts_ref % ref_interval as BigT > 0
+    {
+        *running_ts_ref = (*last_filled_frame_ref as BigT + 1) * ref_interval as BigT;
+    }
+
+    debug_assert!(*last_filled_frame_ref >= 0);
+    debug_assert!(frame_chunk[0].filled_count <= frame_chunk[0].array.len());
+    frame_chunk[0].filled_count == frame_chunk[0].array.len()
 }
