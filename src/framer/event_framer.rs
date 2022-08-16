@@ -4,6 +4,7 @@ use bincode::config::{BigEndian, FixintEncoding, WithOtherEndian, WithOtherIntEn
 use bincode::{DefaultOptions, Options};
 use rayon::iter::IndexedParallelIterator;
 use rayon::iter::ParallelIterator;
+use std::cmp::max;
 use std::collections::VecDeque;
 use std::fs::File;
 use std::io::BufWriter;
@@ -25,8 +26,6 @@ pub enum FramerMode {
     INSTANTANEOUS,
     INTEGRATION,
 }
-
-const TEMP_CHUNK_SIZE: usize = 540;
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum SourceType {
@@ -99,10 +98,12 @@ pub struct FrameSequence<T> {
     codec_version: u8,
     source_camera: SourceCamera,
     ref_interval: DeltaT,
+    pub chunk_rows: usize,
     bincode: WithOtherEndian<WithOtherIntEncoding<DefaultOptions, FixintEncoding>, BigEndian>,
 }
 
 use ndarray::Array3;
+use rayon::current_num_threads;
 use rayon::iter::IntoParallelRefIterator;
 use rayon::prelude::{IntoParallelIterator, IntoParallelRefMutIterator};
 use serde::Serialize;
@@ -123,7 +124,9 @@ impl<T: Clone + Default + FrameValue<Output = T> + Copy + Serialize + Send + Syn
         source_camera: SourceCamera,
         ref_interval: DeltaT,
     ) -> Self {
-        let chunk_rows: usize = TEMP_CHUNK_SIZE;
+        let chunk_rows = max(num_rows / current_num_threads(), 1);
+        assert!(chunk_rows > 0);
+
         let num_chunks: usize = ((num_rows) as f64 / chunk_rows as f64).ceil() as usize;
         let last_chunk_rows = num_rows - (num_chunks - 1) * chunk_rows;
         let px_per_chunk: usize = chunk_rows * num_cols * num_channels as usize;
@@ -181,6 +184,7 @@ impl<T: Clone + Default + FrameValue<Output = T> + Copy + Serialize + Send + Syn
             codec_version,
             source_camera,
             ref_interval,
+            chunk_rows,
             bincode: DefaultOptions::new()
                 .with_fixint_encoding()
                 .with_big_endian(),
@@ -214,9 +218,9 @@ impl<T: Clone + Default + FrameValue<Output = T> + Copy + Serialize + Send + Syn
     /// ```
     fn ingest_event(&mut self, event: &mut Event) -> bool {
         let channel = event.coord.c.unwrap_or(0);
-        let chunk_num = event.coord.y as usize / TEMP_CHUNK_SIZE;
+        let chunk_num = event.coord.y as usize / self.chunk_rows;
         let tmp = event.clone();
-        event.coord.y -= (chunk_num * TEMP_CHUNK_SIZE) as u16; // Modify the coordinate here, so it gets ingested at the right place
+        event.coord.y -= (chunk_num * self.chunk_rows) as u16; // Modify the coordinate here, so it gets ingested at the right place
 
         let frame_chunk = &mut self.frames[chunk_num];
         let last_filled_frame_ref = &mut self.last_filled_tracker[chunk_num]
@@ -267,9 +271,9 @@ impl<T: Clone + Default + FrameValue<Output = T> + Copy + Serialize + Send + Syn
                 )| {
                     for event in a {
                         let channel = event.coord.c.unwrap_or(0);
-                        let chunk_num = event.coord.y as usize / TEMP_CHUNK_SIZE;
+                        let chunk_num = event.coord.y as usize / self.chunk_rows;
                         let tmp = event.clone();
-                        event.coord.y -= (chunk_num * TEMP_CHUNK_SIZE) as u16; // Modify the coordinate here, so it gets ingested at the right place
+                        event.coord.y -= (chunk_num * self.chunk_rows) as u16; // Modify the coordinate here, so it gets ingested at the right place
                         let last_filled_frame_ref = &mut chunk_last_filled_tracker
                             [[event.coord.y.into(), event.coord.x.into(), channel.into()]];
                         let running_ts_ref = &mut chunk_ts_tracker
@@ -301,8 +305,8 @@ impl<T: Clone + Default + FrameValue<Output = T> + Serialize> FrameSequence<T> {
         if self.frames.is_empty() {
             panic!("Frame not initialized");
         }
-        let chunk_num = row / TEMP_CHUNK_SIZE;
-        let local_row = row - (chunk_num * TEMP_CHUNK_SIZE);
+        let chunk_num = row / self.chunk_rows;
+        let local_row = row - (chunk_num * self.chunk_rows);
         &self.frames[chunk_num][0].array[[local_row, col, channel]]
     }
 
@@ -313,8 +317,8 @@ impl<T: Clone + Default + FrameValue<Output = T> + Serialize> FrameSequence<T> {
         channel: usize,
         frame_idx: usize,
     ) -> Result<&Option<T>, FrameSequenceError> {
-        let chunk_num = row / TEMP_CHUNK_SIZE;
-        let local_row = row - (chunk_num * TEMP_CHUNK_SIZE);
+        let chunk_num = row / self.chunk_rows;
+        let local_row = row - (chunk_num * self.chunk_rows);
         match self.frames.len() {
             a if frame_idx < a => {
                 Ok(&self.frames[chunk_num][frame_idx].array[[local_row, col, channel]])

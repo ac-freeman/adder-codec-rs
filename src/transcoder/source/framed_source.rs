@@ -12,6 +12,7 @@ use ndarray::Axis;
 use opencv::core::{Mat, Size};
 use opencv::videoio::{VideoCapture, CAP_PROP_FPS, CAP_PROP_FRAME_COUNT, CAP_PROP_POS_FRAMES};
 use opencv::{imgproc, prelude::*, videoio, Result};
+use rayon::current_num_threads;
 
 use crate::transcoder::event_pixel::pixel::Transition;
 use crate::SourceCamera;
@@ -261,8 +262,7 @@ impl Source for FramedSource {
         let ref_time = self.video.ref_time as f32;
         let write_out = self.video.write_out;
 
-        let chunk_rows: usize = rayon::current_num_threads();
-        let chunk_rows: usize = 540; // TEMP TODO
+        let chunk_rows = self.video.height as usize / rayon::current_num_threads() as usize;
         let px_per_chunk: usize =
             chunk_rows * self.video.width as usize * self.video.channels as usize;
         let big_buffer: Vec<_> = self
