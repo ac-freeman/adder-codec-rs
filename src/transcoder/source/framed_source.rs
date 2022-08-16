@@ -55,6 +55,7 @@ impl FramedSource {
         c_thresh_pos: u8,
         c_thresh_neg: u8,
         write_out: bool,
+        communicate_events: bool,
         show_display_b: bool,
         source_camera: SourceCamera,
     ) -> Result<FramedSource> {
@@ -113,6 +114,7 @@ impl FramedSource {
             delta_t_max,
             0,
             write_out,
+            communicate_events,
             show_display_b,
             source_camera,
         );
@@ -183,7 +185,7 @@ impl FramedSource {
 impl Source for FramedSource {
     /// Get pixel-wise intensities directly from source frame, and integrate them with
     /// [`ref_time`](Video::ref_time) (the number of ticks each frame is said to span)
-    fn consume(&mut self, view_interval: u32) -> Result<(), &'static str> {
+    fn consume(&mut self, view_interval: u32) -> Result<Vec<Vec<Event>>, &'static str> {
         if self.video.in_interval_count == 0 {
             self.input_frame_scaled = match self.frame_rx.recv() {
                 Err(_) => return Err("End of video"), // TODO: make it a proper rust error
@@ -257,9 +259,8 @@ impl Source for FramedSource {
 
         let dtm = self.video.delta_t_max;
         let ref_time = self.video.ref_time as f32;
-        let write_out = self.video.write_out;
 
-        let chunk_rows: usize = rayon::current_num_threads();
+        let chunk_rows = self.video.height as usize / rayon::current_num_threads() as usize;
         let px_per_chunk: usize =
             chunk_rows * self.video.width as usize * self.video.channels as usize;
         let big_buffer: Vec<_> = self
@@ -306,13 +307,9 @@ impl Source for FramedSource {
 
                         let trans = match ideal_i {
                             0 => Transition {
-                                frame_intensity: c_val,
-                                sum_intensity_before: intensity_sum,
                                 frame_idx: self.video.in_interval_count + 1,
                             },
                             _ => Transition {
-                                frame_intensity: 0,
-                                sum_intensity_before: intensity_sum,
                                 frame_idx: self.video.in_interval_count + ideal_i as u32 + 1,
                             },
                         };
@@ -323,7 +320,13 @@ impl Source for FramedSource {
                     }
 
                     let intensity = frame_arr[px_idx] as Intensity;
-                    px.add_intensity(intensity, ref_time, &dtm, &mut buffer, write_out);
+                    px.add_intensity(
+                        intensity,
+                        ref_time,
+                        &dtm,
+                        &mut buffer,
+                        self.video.communicate_events,
+                    );
 
                     px.last_event.calc_frame_intensity(ref_time as u32);
                     px.last_event.calc_frame_delta_t(dtm);
@@ -331,15 +334,21 @@ impl Source for FramedSource {
                 buffer
             })
             .collect();
-        self.video.stream.encode_events_events(&big_buffer);
+        if self.video.write_out {
+            self.video.stream.encode_events_events(&big_buffer);
+        }
 
         show_display("Gray input", &self.input_frame_scaled, 1, &self.video);
         self.video.instantaneous_display_frame = (*self.input_frame_scaled).clone();
-        Ok(())
+        Ok(big_buffer)
     }
 
-    fn get_video(&mut self) -> &mut Video {
+    fn get_video_mut(&mut self) -> &mut Video {
         &mut self.video
+    }
+
+    fn get_video(&self) -> &Video {
+        &self.video
     }
 }
 

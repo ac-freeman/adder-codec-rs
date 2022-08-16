@@ -23,6 +23,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         15,
         true,
         true,
+        true,
         SourceCamera::FramedU8,
     )
     .unwrap();
@@ -37,7 +38,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     loop {
         match pool.install(|| source.consume(1)) {
-            Ok(_) => {}
+            Ok(_) => {} // Returns Vec<Vec<Event>>, but we're just writing the events out in this example
             Err("End of video") => break, // TODO: make it a proper rust error
             Err(_) => {}
         };
@@ -59,7 +60,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
 
     println!("Closing stream...");
-    source.get_video().end_write_stream();
+    source.get_video_mut().end_write_stream();
     println!("FINISHED");
 
     Ok(())

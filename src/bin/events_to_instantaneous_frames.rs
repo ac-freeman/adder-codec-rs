@@ -39,8 +39,8 @@ fn main() {
     let mut frame_count = 0;
     loop {
         match stream.decode_event() {
-            Ok(event) => {
-                if frame_sequence.ingest_event(&event) {
+            Ok(mut event) => {
+                if frame_sequence.ingest_event(&mut event) {
                     match frame_sequence.write_multi_frame_bytes(&mut output_stream) {
                         0 => {
                             panic!("Should have frame, but didn't")

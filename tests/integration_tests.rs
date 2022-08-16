@@ -45,8 +45,8 @@ fn test_sample_perfect_dt() {
     let mut frame_count = 0;
     loop {
         match stream.decode_event() {
-            Ok(event) => {
-                if frame_sequence.ingest_event(&event) {
+            Ok(mut event) => {
+                if frame_sequence.ingest_event(&mut event) {
                     match frame_sequence.write_multi_frame_bytes(&mut output_stream) {
                         0 => {
                             panic!("should have frame")
@@ -110,8 +110,8 @@ fn test_sample_perfect_dt_color() {
     let mut frame_count = 0;
     loop {
         match stream.decode_event() {
-            Ok(event) => {
-                if frame_sequence.ingest_event(&event) {
+            Ok(mut event) => {
+                if frame_sequence.ingest_event(&mut event) {
                     match frame_sequence.write_multi_frame_bytes(&mut output_stream) {
                         0 => {
                             panic!("should have frame")
@@ -311,7 +311,7 @@ fn test_event_framer_ingest() {
         FramedU8,
         1000,
     );
-    let event: Event = Event {
+    let mut event: Event = Event {
         coord: Coord {
             x: 5,
             y: 5,
@@ -320,9 +320,9 @@ fn test_event_framer_ingest() {
         d: 5,
         delta_t: 5000,
     };
-    frame_sequence.ingest_event(&event);
+    frame_sequence.ingest_event(&mut event);
 
-    let event2: Event = Event {
+    let mut event2: Event = Event {
         coord: Coord {
             x: 5,
             y: 5,
@@ -331,7 +331,7 @@ fn test_event_framer_ingest() {
         d: 5,
         delta_t: 5100,
     };
-    frame_sequence.ingest_event(&event2);
+    frame_sequence.ingest_event(&mut event2);
 }
 
 #[test]
@@ -355,7 +355,7 @@ fn test_event_framer_ingest_get_filled() {
 
     for i in 0..5 {
         for j in 0..5 {
-            let event: Event = Event {
+            let mut event: Event = Event {
                 coord: Coord {
                     x: i,
                     y: j,
@@ -364,7 +364,7 @@ fn test_event_framer_ingest_get_filled() {
                 d: 5,
                 delta_t: 5100,
             };
-            let filled = frame_sequence.ingest_event(&event);
+            let filled = frame_sequence.ingest_event(&mut event);
             if i < 4 || j < 4 {
                 assert_eq!(filled, false)
             } else {
@@ -400,7 +400,7 @@ fn get_frame_bytes_eventcoordless() {
     eprintln!("{}", std::mem::size_of::<Option<EventCoordless>>());
     for i in 0..5 {
         for j in 0..5 {
-            let event: Event = Event {
+            let mut event: Event = Event {
                 coord: Coord {
                     x: i,
                     y: j,
@@ -409,7 +409,7 @@ fn get_frame_bytes_eventcoordless() {
                 d: 5,
                 delta_t: 5100,
             };
-            let filled = frame_sequence.ingest_event(&event);
+            let filled = frame_sequence.ingest_event(&mut event);
             if i < 4 || j < 4 {
                 assert_eq!(filled, false)
             } else {
@@ -455,7 +455,7 @@ fn get_frame_bytes_u8() {
 
     for i in 0..5 {
         for j in 0..5 {
-            let event: Event = Event {
+            let mut event: Event = Event {
                 coord: Coord {
                     x: i,
                     y: j,
@@ -464,7 +464,7 @@ fn get_frame_bytes_u8() {
                 d: 5,
                 delta_t: 5100,
             };
-            let filled = frame_sequence.ingest_event(&event);
+            let filled = frame_sequence.ingest_event(&mut event);
             if i < 4 || j < 4 {
                 assert_eq!(filled, false)
             } else {
@@ -509,7 +509,7 @@ fn get_frame_bytes_u16() {
 
     for i in 0..5 {
         for j in 0..5 {
-            let event: Event = Event {
+            let mut event: Event = Event {
                 coord: Coord {
                     x: i,
                     y: j,
@@ -518,7 +518,7 @@ fn get_frame_bytes_u16() {
                 d: 5,
                 delta_t: 5100,
             };
-            let filled = frame_sequence.ingest_event(&event);
+            let filled = frame_sequence.ingest_event(&mut event);
             if i < 4 || j < 4 {
                 assert_eq!(filled, false)
             } else {
@@ -562,7 +562,7 @@ fn get_frame_bytes_u32() {
 
     for i in 0..5 {
         for j in 0..5 {
-            let event: Event = Event {
+            let mut event: Event = Event {
                 coord: Coord {
                     x: i,
                     y: j,
@@ -571,7 +571,7 @@ fn get_frame_bytes_u32() {
                 d: 5,
                 delta_t: 5100,
             };
-            let filled = frame_sequence.ingest_event(&event);
+            let filled = frame_sequence.ingest_event(&mut event);
             if i < 4 || j < 4 {
                 assert_eq!(filled, false)
             } else {
@@ -615,7 +615,7 @@ fn get_frame_bytes_u64() {
 
     for i in 0..5 {
         for j in 0..5 {
-            let event: Event = Event {
+            let mut event: Event = Event {
                 coord: Coord {
                     x: i,
                     y: j,
@@ -624,7 +624,7 @@ fn get_frame_bytes_u64() {
                 d: 5,
                 delta_t: 5100,
             };
-            let filled = frame_sequence.ingest_event(&event);
+            let filled = frame_sequence.ingest_event(&mut event);
             if i < 4 || j < 4 {
                 assert_eq!(filled, false)
             } else {
@@ -673,7 +673,7 @@ fn test_get_empty_frame() {
     output_writer.flush().unwrap();
     assert_eq!(fs::metadata(&path).unwrap().len(), 25); // Even if it's all empty data, still want
                                                         // to perform the write. Up to the user to make sure that the frame is filled.
-    let event: Event = Event {
+    let mut event: Event = Event {
         coord: Coord {
             x: 0,
             y: 0,
@@ -685,7 +685,7 @@ fn test_get_empty_frame() {
 
     // TODO: check that events ingested with times after they've been popped off don't actually get
     // integrated!
-    let filled = frame_sequence.ingest_event(&event);
+    let filled = frame_sequence.ingest_event(&mut event);
     assert_eq!(filled, false);
     fs::remove_file(&path).unwrap();
 }
@@ -719,8 +719,8 @@ fn test_sample_unordered() {
     let mut frame_count = 0;
     loop {
         match stream.decode_event() {
-            Ok(event) => {
-                if frame_sequence.ingest_event(&event) {
+            Ok(mut event) => {
+                if frame_sequence.ingest_event(&mut event) {
                     match frame_sequence.write_multi_frame_bytes(&mut output_stream) {
                         0 => {
                             panic!("should have frame")
@@ -784,8 +784,8 @@ fn test_sample_ordered() {
     let mut frame_count = 0;
     loop {
         match stream.decode_event() {
-            Ok(event) => {
-                if frame_sequence.ingest_event(&event) {
+            Ok(mut event) => {
+                if frame_sequence.ingest_event(&mut event) {
                     match frame_sequence.write_multi_frame_bytes(&mut output_stream) {
                         0 => {
                             panic!("should have frame")

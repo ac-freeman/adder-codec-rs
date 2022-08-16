@@ -20,8 +20,8 @@ use rayon::iter::{IndexedParallelIterator, ParallelIterator};
 
 /// Attributes common to ADΔER transcode process
 pub struct Video {
-    pub(crate) width: u16,
-    pub(crate) height: u16,
+    pub width: u16,
+    pub height: u16,
 
     // NB: as of 4/15, boxing this attribute hurts performance slightly
     pub(crate) event_pixels: Array3<EventPixel>,
@@ -36,7 +36,8 @@ pub struct Video {
     pub(crate) instantaneous_frame: Mat,
     pub event_sender: Sender<Vec<Event>>,
     pub(crate) write_out: bool,
-    pub(crate) channels: usize,
+    pub(crate) communicate_events: bool,
+    pub channels: usize,
     pub(crate) stream: RawStream,
 }
 
@@ -54,9 +55,14 @@ impl Video {
         delta_t_max: DeltaT,
         d_mode: u32,
         write_out: bool,
+        communicate_events: bool,
         show_display: bool,
         source_camera: SourceCamera,
     ) -> Video {
+        if write_out {
+            assert!(communicate_events);
+        }
+
         let path = Path::new(&output_filename);
 
         let (event_sender, _event_receiver): (Sender<Vec<Event>>, Receiver<Vec<Event>>) = channel();
@@ -130,6 +136,7 @@ impl Video {
             instantaneous_frame,
             event_sender,
             write_out,
+            communicate_events,
             channels,
             stream,
         }
@@ -363,16 +370,16 @@ impl Video {
                 && area < ((self.width as f32 * self.height as f32).sqrt() * 20.0) as f64
             {
                 todo!();
-                let rect = bounding_rect(&contour).unwrap();
-                rectangle(
-                    &mut self.instantaneous_display_frame,
-                    rect,
-                    opencv::core::Scalar::new(255.0, 255.0, 255.0, 255.0),
-                    2,
-                    1,
-                    0,
-                )
-                .unwrap();
+                // let rect = bounding_rect(&contour).unwrap();
+                // rectangle(
+                //     &mut self.instantaneous_display_frame,
+                //     rect,
+                //     opencv::core::Scalar::new(255.0, 255.0, 255.0, 255.0),
+                //     2,
+                //     1,
+                //     0,
+                // )
+                // .unwrap();
             }
         }
 
@@ -424,7 +431,9 @@ pub fn show_display(window_name: &str, mat: &Mat, wait: i32, video: &Video) {
 pub trait Source {
     /// Intake one input interval worth of data from the source stream into the ADΔER model as
     /// intensities
-    fn consume(&mut self, view_interval: u32) -> Result<(), &'static str>;
+    fn consume(&mut self, view_interval: u32) -> Result<Vec<Vec<Event>>, &'static str>;
 
-    fn get_video(&mut self) -> &mut Video;
+    fn get_video_mut(&mut self) -> &mut Video;
+
+    fn get_video(&self) -> &Video;
 }

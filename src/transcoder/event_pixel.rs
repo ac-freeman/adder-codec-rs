@@ -12,7 +12,7 @@ pub type Intensity = f32;
 /// Pixel x- or y- coordinate address in the ADΔER model
 pub type PixelAddress = u16;
 
-pub(crate) mod pixel {
+pub mod pixel {
     use crate::transcoder::d_controller::{Aggressive, DControl, DecimationModes, Standard};
     use crate::transcoder::event_pixel::{DeltaT, Integration, Intensity, PixelAddress, D};
     use crate::{Coord, Event, D_SHIFT, MAX_INTENSITY};
@@ -27,8 +27,6 @@ pub(crate) mod pixel {
 
     #[derive(Copy, Clone)]
     pub struct Transition {
-        pub(crate) frame_intensity: u8,
-        pub(crate) sum_intensity_before: f32,
         pub(crate) frame_idx: u32,
     }
 
@@ -168,11 +166,7 @@ pub(crate) mod pixel {
                     d: 0,
                     delta_t: 0,
                 },
-                next_transition: Transition {
-                    frame_intensity: 0,
-                    sum_intensity_before: 0.0,
-                    frame_idx: 1,
-                },
+                next_transition: Transition { frame_idx: 1 },
                 ref_time,
             }
         }
@@ -190,7 +184,7 @@ pub(crate) mod pixel {
             mut delta_t_left: f32,
             delta_t_max: &DeltaT,
             sender: &mut Vec<Event>,
-            write_out: bool,
+            communicate_events: bool,
         ) {
             if self.coord.x == 35 && self.coord.y == 8 && intensity_left == 137.0 {
                 // println!("lookk");
@@ -210,7 +204,14 @@ pub(crate) mod pixel {
                     delta_t_left,
                 ) {
                     (_, b, _, _) if self.has_empty_event(&b) => {
-                        self.fire_event(true, delta_t_max, &b, sender, write_out, first_iter);
+                        self.fire_event(
+                            true,
+                            delta_t_max,
+                            &b,
+                            sender,
+                            communicate_events,
+                            first_iter,
+                        );
                         true
                     }
                     (a, b, _, _) if self.has_full_event(&a) => {
@@ -227,7 +228,14 @@ pub(crate) mod pixel {
                         delta_t_left -= self.delta_t_to_add;
                         intensity_left -=
                             D_SHIFT[*self.d_controller.get_d() as usize] as f32 - self.integration;
-                        self.fire_event(false, delta_t_max, &b, sender, write_out, first_iter);
+                        self.fire_event(
+                            false,
+                            delta_t_max,
+                            &b,
+                            sender,
+                            communicate_events,
+                            first_iter,
+                        );
 
                         true
                     }
@@ -308,7 +316,7 @@ pub(crate) mod pixel {
             delta_t_max: &DeltaT,
             delta_t_max_f32: &f32,
             sender: &mut Vec<Event>,
-            write_out: bool,
+            communicate_events: bool,
             first_iter: bool,
         ) {
             if empty {
@@ -317,7 +325,7 @@ pub(crate) mod pixel {
                 self.event_to_send.delta_t = *delta_t_max;
                 // self.last_event.event = self.event_to_send;  // TODO: remove this again?
 
-                if write_out {
+                if communicate_events {
                     sender.push(self.event_to_send);
                 }
 
@@ -337,7 +345,7 @@ pub(crate) mod pixel {
                     self.last_event.event = self.event_to_send;
                 }
 
-                if write_out {
+                if communicate_events {
                     sender.push(self.event_to_send);
                 }
             }
