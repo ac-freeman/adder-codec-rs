@@ -23,6 +23,8 @@ pub enum FramerMode {
     INTEGRATION,
 }
 
+const TEMP_CHUNK_SIZE: usize = 15;
+
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum SourceType {
     U8,
@@ -56,7 +58,10 @@ pub trait Framer {
     ///
     /// If [`INTEGRATION`], this function will integrate this [`Event`] value for the corresponding
     /// output frame(s)
-    fn ingest_event(&mut self, event: &Event) -> bool;
+    fn ingest_event(&mut self, event: &mut Event) -> bool;
+
+    fn ingest_event_for_chunk(&mut self, event: &Event, chunk_num: usize) -> bool;
+    fn ingest_events_events(&mut self, events: Vec<Vec<Event>>) -> bool;
 }
 
 #[derive(Debug, Clone, Default)]
@@ -72,11 +77,12 @@ pub enum FrameSequenceError {
 }
 
 pub struct FrameSequence<T> {
-    pub(crate) frames: VecDeque<Frame<Option<T>>>,
+    pub(crate) frames: Vec<VecDeque<Frame<Option<T>>>>,
     pub(crate) frames_written: i64,
-    pub(crate) frame_idx_offset: i64,
-    pub(crate) pixel_ts_tracker: Array3<BigT>,
-    pub(crate) last_filled_tracker: Array3<i64>,
+    pub(crate) frame_idx_offsets: Vec<i64>,
+    pub(crate) pixel_ts_tracker: Vec<Array3<BigT>>,
+    pub(crate) last_filled_tracker: Vec<Array3<i64>>,
+    chunk_filled_tracker: Vec<bool>,
     pub(crate) mode: FramerMode,
     pub(crate) tpf: DeltaT,
     pub(crate) source: SourceType,
@@ -89,7 +95,7 @@ pub struct FrameSequence<T> {
 use ndarray::Array3;
 use serde::Serialize;
 
-impl<T: Clone + Default + FrameValue<Output = T> + Copy> Framer for FrameSequence<T> {
+impl<T: Clone + Default + FrameValue<Output = T> + Copy + Serialize> Framer for FrameSequence<T> {
     type Output = T;
     fn new(
         num_rows: usize,
@@ -103,22 +109,58 @@ impl<T: Clone + Default + FrameValue<Output = T> + Copy> Framer for FrameSequenc
         source_camera: SourceCamera,
         ref_interval: DeltaT,
     ) -> Self {
+        let chunk_rows: usize = TEMP_CHUNK_SIZE;
+        let num_chunks: usize = ((num_rows) as f64 / chunk_rows as f64).ceil() as usize;
+        let last_chunk_rows = num_rows - (num_chunks - 1) * chunk_rows;
+        let px_per_chunk: usize = chunk_rows * num_cols * num_channels as usize;
+
+        assert!(num_chunks > 0);
         let array: Array3<Option<T>> =
-            Array3::<Option<T>>::default((num_rows, num_cols, num_channels));
-        let mut last_filled_tracker = Array3::zeros((num_rows, num_cols, num_channels));
-        for mut row in last_filled_tracker.rows_mut() {
-            row.fill(-1);
-        }
-        // Array3::<Option<T>>::new(num_rows, num_cols, num_channels);
-        FrameSequence {
-            frames: VecDeque::from(vec![Frame {
+            Array3::<Option<T>>::default((chunk_rows, num_cols, num_channels));
+        let last_array: Array3<Option<T>> =
+            Array3::<Option<T>>::default((last_chunk_rows, num_cols, num_channels));
+
+        let mut frames = vec![
+            VecDeque::from(vec![Frame {
                 array,
                 filled_count: 0,
-            }]),
+            }]);
+            num_chunks
+        ];
+
+        // Override the last chunk, in case the chunk size doesn't perfectly divide the number of rows
+        if let Some(last) = frames.last_mut() {
+            *last = VecDeque::from(vec![Frame {
+                array: last_array,
+                filled_count: 0,
+            }])
+        };
+
+        let mut pixel_ts_tracker: Vec<Array3<BigT>> =
+            vec![Array3::zeros((chunk_rows, num_cols, num_channels)); num_chunks];
+        if let Some(last) = pixel_ts_tracker.last_mut() {
+            *last = Array3::zeros((last_chunk_rows, num_cols, num_channels))
+        };
+
+        let mut last_filled_tracker: Vec<Array3<i64>> =
+            vec![Array3::zeros((chunk_rows, num_cols, num_channels)); num_chunks];
+        if let Some(last) = last_filled_tracker.last_mut() {
+            *last = Array3::zeros((last_chunk_rows, num_cols, num_channels))
+        };
+        for mut chunk in &mut last_filled_tracker {
+            for mut row in chunk.rows_mut() {
+                row.fill(-1);
+            }
+        }
+
+        // Array3::<Option<T>>::new(num_rows, num_cols, num_channels);
+        FrameSequence {
+            frames,
             frames_written: 0,
-            frame_idx_offset: 0,
-            pixel_ts_tracker: Array3::zeros((num_rows, num_cols, num_channels)),
+            frame_idx_offsets: vec![0; num_chunks],
+            pixel_ts_tracker,
             last_filled_tracker,
+            chunk_filled_tracker: vec![false; num_chunks],
             mode,
             tpf: tps / output_fps,
             source,
@@ -143,7 +185,7 @@ impl<T: Clone + Default + FrameValue<Output = T> + Copy> Framer for FrameSequenc
     /// use adder_codec_rs::SourceCamera::FramedU8;
     ///
     /// let mut frame_sequence: FrameSequence<u8> = FrameSequence::<u8>::new(10, 10, 3, 50000, 50, INSTANTANEOUS, U8, 1, FramedU8, 1500);
-    /// let event: Event = Event {
+    /// let mut event: Event = Event {
     ///         coord: Coord {
     ///             x: 5,
     ///             y: 5,
@@ -152,18 +194,32 @@ impl<T: Clone + Default + FrameValue<Output = T> + Copy> Framer for FrameSequenc
     ///         d: 5,
     ///         delta_t: 1000
     ///     };
-    /// frame_sequence.ingest_event(&event);
+    /// frame_sequence.ingest_event(&mut event);
     /// let elem = frame_sequence.px_at_current(5, 5, 1);
     /// assert_eq!(*elem, Some(32));
     /// ```
-    fn ingest_event(&mut self, event: &Event) -> bool {
+    fn ingest_event(&mut self, event: &mut Event) -> bool {
+        let chunk_num = event.coord.y as usize / TEMP_CHUNK_SIZE;
+        let tmp = event.clone();
+        event.coord.y -= (chunk_num * TEMP_CHUNK_SIZE) as u16; // Modify the coordinate here, so it gets ingested at the right place
+        self.chunk_filled_tracker[chunk_num] = self.ingest_event_for_chunk(event, chunk_num);
+        for chunk in &self.chunk_filled_tracker {
+            if !chunk {
+                return false;
+            }
+        }
+        debug_assert!(self.is_frame_0_filled().unwrap());
+        true
+    }
+
+    fn ingest_event_for_chunk(&mut self, event: &Event, chunk_num: usize) -> bool {
         let channel = event.coord.c.unwrap_or(0);
 
-        let last_filled_frame_ref = &mut self.last_filled_tracker
+        let last_filled_frame_ref = &mut self.last_filled_tracker[chunk_num]
             [[event.coord.y.into(), event.coord.x.into(), channel.into()]];
         let prev_last_filled_frame = *last_filled_frame_ref;
         let _already_filled = *last_filled_frame_ref >= self.frames_written;
-        let running_ts_ref = &mut self.pixel_ts_tracker
+        let running_ts_ref = &mut self.pixel_ts_tracker[chunk_num]
             [[event.coord.y.into(), event.coord.x.into(), channel.into()]];
         *running_ts_ref += event.delta_t as BigT;
 
@@ -173,10 +229,14 @@ impl<T: Clone + Default + FrameValue<Output = T> + Copy> Framer for FrameSequenc
                     // Don't do anything -- it's an empty event
                     // Except in special case where delta_t == tpf
                     if *running_ts_ref == self.tpf as BigT && event.delta_t == self.tpf {
-                        self.frames[(*last_filled_frame_ref - self.frame_idx_offset) as usize]
+                        self.frames[chunk_num][(*last_filled_frame_ref
+                            - self.frame_idx_offsets[chunk_num])
+                            as usize]
                             .array[[event.coord.y.into(), event.coord.x.into(), channel.into()]] =
                             Some(T::default());
-                        self.frames[(*last_filled_frame_ref - self.frame_idx_offset) as usize]
+                        self.frames[chunk_num][(*last_filled_frame_ref
+                            - self.frame_idx_offsets[chunk_num])
+                            as usize]
                             .filled_count += 1;
                         // if (*last_filled_frame_ref - self.frame_idx_offset) == 0 {
                         //     println!("{}, {}", event.coord.x, event.coord.y);
@@ -191,18 +251,19 @@ impl<T: Clone + Default + FrameValue<Output = T> + Copy> Framer for FrameSequenc
                     *last_filled_frame_ref = (*running_ts_ref - 1) as i64 / self.tpf as i64;
 
                     // Grow the frames vec if necessary
-                    match *last_filled_frame_ref - self.frame_idx_offset {
+                    match *last_filled_frame_ref - self.frame_idx_offsets[chunk_num] {
                         a if a > 0 => {
-                            let array: Array3<Option<T>> =
-                                Array3::<Option<T>>::default(self.frames[0].array.raw_dim());
-                            self.frames.append(&mut VecDeque::from(vec![
+                            let array: Array3<Option<T>> = Array3::<Option<T>>::default(
+                                self.frames[chunk_num][0].array.raw_dim(),
+                            );
+                            self.frames[chunk_num].append(&mut VecDeque::from(vec![
                                 Frame {
                                     array,
                                     filled_count: 0
                                 };
                                 a as usize
                             ]));
-                            self.frame_idx_offset += a;
+                            self.frame_idx_offsets[chunk_num] += a;
                         }
                         a if a < 0 => {
                             // We can get here if we've forcibly popped a frame before it's ready.
@@ -223,13 +284,16 @@ impl<T: Clone + Default + FrameValue<Output = T> + Copy> Framer for FrameSequenc
                     let mut frame: &mut Option<T>;
                     for i in prev_last_filled_frame..*last_filled_frame_ref {
                         if i - self.frames_written + 1 >= 0 {
-                            frame = &mut self.frames[(i - self.frames_written + 1) as usize].array
+                            frame = &mut self.frames[chunk_num]
+                                [(i - self.frames_written + 1) as usize]
+                                .array
                                 [[event.coord.y.into(), event.coord.x.into(), channel.into()]];
                             match frame {
                                 Some(_val) => {}
                                 None => {
                                     *frame = Some(scaled_intensity);
-                                    self.frames[(i - self.frames_written + 1) as usize]
+                                    self.frames[chunk_num]
+                                        [(i - self.frames_written + 1) as usize]
                                         .filled_count += 1;
                                     // if (i - self.frames_written + 1) == 0 {
                                     //     println!("{}, {}", event.coord.x, event.coord.y);
@@ -242,6 +306,7 @@ impl<T: Clone + Default + FrameValue<Output = T> + Copy> Framer for FrameSequenc
             }
         }
 
+        // If framed video source, we can take advantage of scheme that reduces event rate by half
         if self.codec_version > 0
             && match self.source_camera {
                 SourceCamera::FramedU8 => true,
@@ -261,8 +326,17 @@ impl<T: Clone + Default + FrameValue<Output = T> + Copy> Framer for FrameSequenc
         }
 
         debug_assert!(*last_filled_frame_ref >= 0);
-        debug_assert!(self.frames[0].filled_count <= self.frames[0].array.len());
-        self.frames[0].filled_count == self.frames[0].array.len()
+        debug_assert!(
+            self.frames[chunk_num][0].filled_count <= self.frames[chunk_num][0].array.len()
+        );
+        self.frames[chunk_num][0].filled_count == self.frames[chunk_num][0].array.len()
+    }
+
+    fn ingest_events_events(&mut self, events: Vec<Vec<Event>>) -> bool {
+        // let chunk_rows: usize = events.len();
+        // let px_per_chunk: usize =
+        //     chunk_rows * self.num_cols as usize * self.source.get_video().channels as usize;
+        todo!()
     }
 }
 
@@ -271,7 +345,9 @@ impl<T: Clone + Default + FrameValue<Output = T> + Serialize> FrameSequence<T> {
         if self.frames.is_empty() {
             panic!("Frame not initialized");
         }
-        &self.frames[0].array[[row, col, channel]]
+        let chunk_num = row / TEMP_CHUNK_SIZE;
+        let local_row = row - (chunk_num * TEMP_CHUNK_SIZE);
+        &self.frames[chunk_num][0].array[[local_row, col, channel]]
     }
 
     pub fn px_at_frame(
@@ -281,8 +357,12 @@ impl<T: Clone + Default + FrameValue<Output = T> + Serialize> FrameSequence<T> {
         channel: usize,
         frame_idx: usize,
     ) -> Result<&Option<T>, FrameSequenceError> {
+        let chunk_num = row / TEMP_CHUNK_SIZE;
+        let local_row = row - (chunk_num * TEMP_CHUNK_SIZE);
         match self.frames.len() {
-            a if frame_idx < a => Ok(&self.frames[frame_idx].array[[row, col, channel]]),
+            a if frame_idx < a => {
+                Ok(&self.frames[chunk_num][frame_idx].array[[local_row, col, channel]])
+            }
             _ => {
                 Err(FrameSequenceError::InvalidIndex) // TODO: not the right error
             }
@@ -290,74 +370,96 @@ impl<T: Clone + Default + FrameValue<Output = T> + Serialize> FrameSequence<T> {
     }
 
     fn _get_frame(&self, frame_idx: usize) -> Result<&Array3<Option<T>>, FrameSequenceError> {
-        match self.frames.len() <= frame_idx {
-            true => Err(FrameSequenceError::InvalidIndex),
-            false => Ok(&self.frames[frame_idx].array),
-        }
+        todo!()
+        // match self.frames.len() <= frame_idx {
+        //     true => Err(FrameSequenceError::InvalidIndex),
+        //     false => Ok(&self.frames[frame_idx].array),
+        // }
     }
 
     pub fn is_frame_filled(&self, frame_idx: usize) -> Result<bool, FrameSequenceError> {
-        match self.frames.len() <= frame_idx {
-            true => Err(FrameSequenceError::InvalidIndex),
-            false => match self.frames[frame_idx as usize].filled_count {
-                a if a == self.frames[0].array.len() => Ok(true),
-                a if a > self.frames[0].array.len() => {
-                    panic!("Impossible fill count. File a bug report!")
+        for chunk in &self.frames {
+            match chunk.len() <= frame_idx {
+                true => {
+                    return Err(FrameSequenceError::InvalidIndex);
                 }
-                _ => Ok(false),
-            },
+                false => match chunk[frame_idx as usize].filled_count {
+                    a if a == chunk[0].array.len() => {}
+                    a if a > chunk[0].array.len() => {
+                        panic!("Impossible fill count. File a bug report!")
+                    }
+                    _ => {
+                        return Ok(false);
+                    }
+                },
+            };
         }
+        Ok(true)
     }
 
-    pub fn pop_next_frame(&mut self) -> Option<Array3<Option<T>>> {
-        self.frames.rotate_left(1);
-        match self.frames.pop_back() {
+    pub fn is_frame_0_filled(&self) -> Result<bool, FrameSequenceError> {
+        for chunk in &self.chunk_filled_tracker {
+            if !chunk {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+
+    pub fn pop_next_frame_for_chunk(&mut self, chunk_num: usize) -> Option<Array3<Option<T>>> {
+        self.frames[chunk_num].rotate_left(1);
+        match self.frames[chunk_num].pop_back() {
             Some(a) => {
-                self.frames_written += 1;
                 // If this is the only frame left, then add a new one to prevent invalid accesses later
-                if self.frames.is_empty() {
+                if self.frames[chunk_num].is_empty() {
                     let array: Array3<Option<T>> = Array3::<Option<T>>::default(a.array.raw_dim());
-                    self.frames.append(&mut VecDeque::from(vec![
+                    self.frames[chunk_num].append(&mut VecDeque::from(vec![
                         Frame {
                             array,
                             filled_count: 0
                         };
                         1
                     ]));
-                    self.frame_idx_offset += 1;
+                    self.frame_idx_offsets[chunk_num] += 1;
                 }
+                self.chunk_filled_tracker[chunk_num] = false;
                 Some(a.array)
             }
-            None => None,
+            None => panic!("No frame to pop"), // TODO: remove again
         }
     }
 
     pub fn write_frame_bytes(&mut self, writer: &mut BufWriter<File>) {
-        match self.pop_next_frame() {
-            Some(arr) => {
-                let none_val = T::default();
-                for px in arr.iter() {
-                    match self.bincode.serialize_into(
-                        &mut *writer,
-                        match px {
-                            Some(event) => event,
-                            None => &none_val,
-                        },
-                    ) {
-                        Ok(_) => {}
-                        Err(e) => {
-                            panic!("{}", e)
-                        }
-                    };
+        for chunk_num in 0..self.frames.len() {
+            match self.pop_next_frame_for_chunk(chunk_num) {
+                Some(arr) => {
+                    let none_val = T::default();
+                    for px in arr.iter() {
+                        match self.bincode.serialize_into(
+                            &mut *writer,
+                            match px {
+                                Some(event) => event,
+                                None => &none_val,
+                            },
+                        ) {
+                            Ok(_) => {}
+                            Err(e) => {
+                                panic!("{}", e)
+                            }
+                        };
+                    }
+                }
+                None => {
+                    println!("Couldn't pop chunk {}!", chunk_num)
                 }
             }
-            None => {}
         }
+        self.frames_written += 1;
     }
 
     pub fn write_multi_frame_bytes(&mut self, writer: &mut BufWriter<File>) -> i32 {
         let mut frame_count = 0;
-        while self.frames[0].filled_count == self.frames[0].array.len() {
+        while self.is_frame_filled(0).unwrap() {
             self.write_frame_bytes(writer);
             frame_count += 1;
         }
