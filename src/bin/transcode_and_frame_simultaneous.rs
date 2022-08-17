@@ -72,7 +72,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .arg(
             "ffmpeg -f rawvideo -pix_fmt gray -s:v 1920x1080 -r 24 -i ".to_owned()
                 + &output_path.to_owned()
-                + " -crf 0 -c:v libx264 -y drop_recon.mp4",
+                + " -crf 0 -c:v libx264 -y ./tests/samples/videos/drop_recon.mp4",
         )
         .spawn()
         .unwrap();
