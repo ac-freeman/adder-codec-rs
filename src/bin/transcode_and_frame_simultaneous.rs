@@ -9,6 +9,7 @@ use adder_codec_rs::transcoder::source::framed_source::FramedSource;
 use adder_codec_rs::transcoder::source::video::Source;
 use adder_codec_rs::SourceCamera::FramedU8;
 use adder_codec_rs::{DeltaT, Event, SourceCamera};
+use clap::Parser;
 use rayon::{current_num_threads, ThreadPool};
 use reqwest;
 use serde::Serialize;
@@ -18,8 +19,70 @@ use std::io;
 use std::io::{BufWriter, Cursor, Write};
 use std::path::Path;
 use std::process::Command;
-use std::sync::mpsc::{channel, Receiver, Sender};
+use std::sync::mpsc::{channel, Receiver, SendError, Sender};
 use std::time::Instant;
+
+/// Command line argument parser
+#[derive(Parser, Debug, Default)]
+#[clap(author, version, about, long_about = None)]
+pub struct MyArgs {
+    /// Use color? (For framed input, most likely) (1=yes,0=no)
+    #[clap(long, default_value_t = 1)]
+    pub(crate) color_input: u32,
+
+    /// Number of ticks per second (should equal ref_time * frame rate)
+    #[clap(short, long, default_value_t = 120000)]
+    pub(crate) tps: u32,
+
+    #[clap(long, default_value_t = 24)]
+    pub(crate) fps: u32,
+
+    /// Number of ticks per input frame // TODO: modularize for different sources
+    #[clap(short, long, default_value_t = 5000)]
+    pub(crate) ref_time: u32,
+
+    /// Max number of ticks for any event
+    #[clap(short, long, default_value_t = 240000)]
+    pub(crate) delta_t_max: u32,
+
+    /// Max number of input frames to transcode (0 = no limit)
+    #[clap(short, long, default_value_t = 500)]
+    frame_count_max: u32,
+
+    /// Index of first input frame to transcode
+    #[clap(long, default_value_t = 0)]
+    pub(crate) frame_idx_start: u32,
+
+    /// Show live view displays? (1=yes,0=no)
+    #[clap(short, long, default_value_t = 0)]
+    pub(crate) show_display: u32,
+
+    /// Path to input file
+    #[clap(short, long, default_value = "./in.mp4")]
+    pub(crate) input_filename: String,
+
+    /// Path to output events file
+    #[clap(short, long, default_value = "./out.adder")]
+    pub(crate) output_events_filename: String,
+
+    /// Path to output raw video file
+    #[clap(short, long, default_value = "./out")]
+    pub(crate) output_raw_video_filename: String,
+
+    /// Resize scale
+    #[clap(short('z'), long, default_value_t = 0.5)]
+    pub(crate) scale: f64,
+
+    /// Positive contrast threshold, in intensity units. How much an intensity must increase
+    /// to create a frame division. Only used when look_ahead = 1 and framed input
+    #[clap(long, default_value_t = 5)]
+    pub(crate) c_thresh_pos: u8,
+
+    /// Negative contrast threshold, in intensity units. How much an intensity must decrease
+    /// to create a frame division.  Only used when look_ahead = 1 and framed input
+    #[clap(long, default_value_t = 5)]
+    pub(crate) c_thresh_neg: u8,
+}
 
 async fn download_file() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     // Download the drop.mp4 video example, if you don't already have it
@@ -33,46 +96,77 @@ async fn download_file() -> Result<(), Box<dyn std::error::Error + Send + Sync>>
     Ok(())
 }
 
+// Scale down source video for comparison
+// ffmpeg -i drop.mp4 -vf scale=960:-1 -crf 0 -c:v libx264 drop_scaled.mp4
+// Trim scaled video for comparison (500 frames)
+// ffmpeg -i drop_scaled.mp4 -ss 00:00:00 -t 00:00:20.833333 -crf 0 -c:v copy -c:a copy ./drop_scaled_trimmed.mp4
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    download_file().await.unwrap();
+    let mut args: MyArgs = MyArgs::parse();
+    println!("c_pos: {}, c_neg: {}", args.c_thresh_pos, args.c_thresh_neg);
 
-    let ref_time = 5000;
-    let tps = 120000;
-    let delta_t_max = 120000;
+    //////////////////////////////////////////////////////
+    // Overriding the default args for this particular video example.
+    // Can comment out if supplying a local file.
+    // download_file().await.unwrap();
+    // args.input_filename = "./tests/samples/videos/drop.mp4".to_string();
+    // args.output_raw_video_filename = "./tests/samples/videos/drop_out".to_string();
+    //////////////////////////////////////////////////////
 
     let mut source = FramedSource::new(
-        "./tests/samples/videos/drop.mp4".to_string(),
+        args.input_filename,
+        None,
+        args.frame_idx_start,
+        args.ref_time,
+        args.tps,
+        args.delta_t_max,
+        args.scale,
         0,
-        ref_time,
-        tps,
-        delta_t_max,
-        0.5,
-        0,
+        args.color_input != 0,
+        true,
+        args.c_thresh_pos,
+        args.c_thresh_neg,
         false,
         true,
-        10,
-        5,
-        true,
-        true,
-        true,
+        args.show_display != 0,
         SourceCamera::FramedU8,
     )
     .unwrap();
 
-    let output_path = "./tests/samples/videos/drop_adder.gray8";
-    let mut simul_processor = SimulProcessor::new::<u8>(source, ref_time, tps, output_path);
+    let width = source.get_video().width;
+    let height = source.get_video().height;
+
+    let mut simul_processor = SimulProcessor::new::<u8>(
+        source,
+        args.ref_time,
+        args.tps,
+        args.output_raw_video_filename.as_str(),
+        args.frame_count_max as i32,
+    );
 
     let now = std::time::Instant::now();
-    simul_processor.run(200).unwrap();
+    simul_processor.run().unwrap();
 
     // Use ffmpeg to encode the raw frame data as an mp4
+    let color_str = match args.color_input != 0 {
+        true => "bgr24",
+        _ => "gray",
+    };
     Command::new("sh")
         .arg("-c")
         .arg(
-            "ffmpeg -f rawvideo -pix_fmt gray -s:v 1920x1080 -r 24 -i ".to_owned()
-                + &output_path.to_owned()
-                + " -crf 0 -c:v libx264 -y ./tests/samples/videos/drop_recon.mp4",
+            "ffmpeg -f rawvideo -pix_fmt ".to_owned()
+                + &color_str.to_owned()
+                + " -s:v "
+                + width.to_string().as_str()
+                + "x"
+                + height.to_string().as_str()
+                + " -r 24 -i "
+                + &args.output_raw_video_filename
+                + " -crf 0 -c:v libx264 -y "
+                + &args.output_raw_video_filename
+                + ".mp4",
         )
         .spawn()
         .unwrap();
@@ -93,6 +187,7 @@ impl SimulProcessor {
         ref_time: DeltaT,
         tps: DeltaT,
         output_path: &str,
+        frame_max: i32,
     ) -> SimulProcessor
     where
         T: Clone + std::marker::Sync + std::marker::Send + 'static,
@@ -164,6 +259,10 @@ impl SimulProcessor {
                                 }
                             }
                         }
+                        if frame_count >= frame_max && frame_max > 0 {
+                            eprintln!("Wrote max frames. Exiting channel.");
+                            break;
+                        }
                     }
                     Err(_) => {
                         eprintln!("Event receiver is closed. Exiting channel.");
@@ -180,14 +279,19 @@ impl SimulProcessor {
         }
     }
 
-    pub fn run(&mut self, frame_max: u32) -> Result<(), Box<dyn Error>> {
+    pub fn run(&mut self) -> Result<(), Box<dyn Error>> {
         let mut now = Instant::now();
 
         loop {
             match self.thread_pool.install(|| self.source.consume(1)) {
                 Ok(events) => {
                     // self.framify_new_events(events, output_1.0)
-                    self.events_tx.send(events);
+                    match self.events_tx.send(events) {
+                        Ok(_) => {}
+                        Err(_) => {
+                            break;
+                        }
+                    };
                 }
                 Err("End of video") => break, // TODO: make it a proper rust error
                 Err(_) => {}
@@ -203,9 +307,6 @@ impl SimulProcessor {
                 );
                 io::stdout().flush().unwrap();
                 now = Instant::now();
-            }
-            if frame_max != 0 && video.in_interval_count >= frame_max {
-                break;
             }
         }
 

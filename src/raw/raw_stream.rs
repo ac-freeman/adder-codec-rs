@@ -73,7 +73,7 @@ impl Codec for RawStream {
     fn write_eof(&mut self) {
         match &mut self.output_stream {
             None => {
-                panic!("Output stream not initialized");
+                // panic!("Output stream not initialized");
             }
             Some(_stream) => {
                 let eof = Event {
