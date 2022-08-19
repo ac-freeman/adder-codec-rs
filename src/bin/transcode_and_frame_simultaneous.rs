@@ -155,7 +155,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 + width.to_string().as_str()
                 + "x"
                 + height.to_string().as_str()
-                + " -r 24 -i "
+                + " -r "
+                + args.fps.to_string().as_str()
+                + " -i "
                 + &args.output_raw_video_filename
                 + " -crf 0 -c:v libx264 -y "
                 + &args.output_raw_video_filename
