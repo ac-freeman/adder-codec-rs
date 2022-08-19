@@ -39,6 +39,50 @@ pub struct FramedSource {
     pub(crate) video: Video,
 }
 
+pub struct FramedSourceBuilder {
+    input_filename: String,
+    output_events_filename: Option<String>,
+    frame_idx_start: u32,
+    ref_time: DeltaT,
+    tps: DeltaT,
+    delta_t_max: DeltaT,
+    scale: f64,
+    frame_skip_interval: u8,
+    color_input: bool,
+    c_thresh_pos: u8,
+    c_thresh_neg: u8,
+    write_out: bool,
+    communicate_events: bool,
+    show_display_b: bool,
+    source_camera: SourceCamera,
+}
+
+impl FramedSourceBuilder {
+    fn new(
+        input_filename: String,
+        frame_idx_start: u32,
+        source_camera: SourceCamera,
+    ) -> FramedSourceBuilder {
+        FramedSourceBuilder {
+            input_filename,
+            output_events_filename: None,
+            frame_idx_start,
+            ref_time: 5000,
+            tps: 150000,
+            delta_t_max: 150000,
+            scale: 1.0,
+            frame_skip_interval: 0,
+            color_input: true,
+            c_thresh_pos: 0,
+            c_thresh_neg: 0,
+            write_out: false,
+            communicate_events: false,
+            show_display_b: false,
+            source_camera,
+        }
+    }
+}
+
 impl FramedSource {
     /// Initialize the framed source and read first frame of source, in order to get `height`
     /// and `width` and initialize [`Video`]
@@ -46,18 +90,18 @@ impl FramedSource {
         input_filename: String,
         output_events_filename: Option<String>,
         frame_idx_start: u32,
-        ref_time: DeltaT,
-        tps: DeltaT,
-        delta_t_max: DeltaT,
-        scale: f64,
-        frame_skip_interval: u8,
+        // ref_time: DeltaT,
+        // tps: DeltaT,
+        // delta_t_max: DeltaT,
+        // scale: f64,
+        // frame_skip_interval: u8,
         color_input: bool,
-        lookahead: bool,
-        c_thresh_pos: u8,
-        c_thresh_neg: u8,
-        write_out: bool,
-        communicate_events: bool,
-        show_display_b: bool,
+        // lookahead: bool,
+        // c_thresh_pos: u8,
+        // c_thresh_neg: u8,
+        // write_out: bool,
+        // communicate_events: bool,
+        // show_display_b: bool,
         source_camera: SourceCamera,
     ) -> Result<FramedSource> {
         let channels = match color_input {
@@ -75,7 +119,7 @@ impl FramedSource {
 
         let mut cap_lookahead =
             videoio::VideoCapture::from_file(input_filename.as_str(), videoio::CAP_FFMPEG).unwrap();
-        init_lookahead(frame_idx_start, lookahead, &mut cap_lookahead);
+        init_lookahead(frame_idx_start, true, &mut cap_lookahead);
         assert_eq!(
             ref_time * cap.get(CAP_PROP_FPS).unwrap().round() as u32,
             tps
