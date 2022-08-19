@@ -10,7 +10,8 @@ use std::io::Write;
 use std::time::Instant;
 fn main() -> Result<(), Box<dyn Error>> {
     let mut source = FramedSource::new(
-        "/home/andrew/Downloads/excerpt.mp4".to_string(),
+        "~/Downloads/excerpt.mp4".to_string(),
+        Some("~/Downloads/events.adder".to_string()),
         1420,
         5000,
         300000,

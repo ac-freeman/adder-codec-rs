@@ -1,6 +1,7 @@
 use crate::header::{EventStreamHeaderExtensionV0, EventStreamHeaderExtensionV1, MAGIC_RAW};
 use crate::raw::raw_stream::StreamError::{Deserialize, Eof};
 use crate::SourceType::{F32, F64, U16, U32, U64, U8};
+use crate::StreamError::BadFile;
 use crate::{
     Codec, Coord, DeltaT, Event, EventSingle, EventStreamHeader, SourceCamera, SourceType,
     EOF_PX_ADDRESS,
@@ -8,7 +9,7 @@ use crate::{
 use bincode::config::{BigEndian, FixintEncoding, WithOtherEndian, WithOtherIntEncoding};
 use bincode::{DefaultOptions, Options};
 use std::fs::File;
-use std::io::{BufReader, BufWriter, Write};
+use std::io::{BufReader, BufWriter, Seek, SeekFrom, Write};
 use std::mem;
 
 #[derive(Debug)]
@@ -18,6 +19,9 @@ pub enum StreamError {
 
     /// Could not deserialize data. EOF reached at unexpected time.
     Deserialize,
+
+    /// File formatted incorrectly
+    BadFile,
 }
 
 pub struct RawStream {
@@ -30,7 +34,7 @@ pub struct RawStream {
     pub ref_interval: DeltaT,
     pub delta_t_max: DeltaT,
     pub channels: u8,
-    event_size: u8,
+    pub event_size: u8,
     pub source_camera: SourceCamera,
     bincode: WithOtherEndian<WithOtherIntEncoding<DefaultOptions, FixintEncoding>, BigEndian>,
 }
@@ -73,7 +77,7 @@ impl Codec for RawStream {
     fn write_eof(&mut self) {
         match &mut self.output_stream {
             None => {
-                panic!("Output stream not initialized");
+                // panic!("Output stream not initialized");
             }
             Some(_stream) => {
                 let eof = Event {
@@ -123,6 +127,46 @@ impl Codec for RawStream {
 
     fn set_input_stream(&mut self, stream: Option<BufReader<File>>) {
         self.input_stream = stream;
+    }
+
+    fn get_eof_position(&mut self) -> Result<usize, StreamError> {
+        match &mut self.input_stream {
+            None => {
+                panic!("Input stream not initialized");
+            }
+            Some(stream) => {
+                stream
+                    .seek(SeekFrom::End(-(self.event_size as i64)))
+                    .expect("Invalid seek position");
+            }
+        };
+
+        loop {
+            match self.decode_event() {
+                Err(Eof) => {
+                    return Ok((self
+                        .input_stream
+                        .as_mut()
+                        .unwrap()
+                        .stream_position()
+                        .unwrap()
+                        - self.event_size as u64) as usize);
+                }
+                Err(Deserialize) => break,
+                _ => {}
+            }
+            match self
+                .input_stream
+                .as_mut()
+                .unwrap()
+                .seek(SeekFrom::End(-(self.event_size as i64 + 1)))
+            {
+                Ok(_) => {}
+                Err(_) => break,
+            };
+        }
+
+        Err(BadFile)
     }
 
     /// Encode the header for this [RawStream]. If an [input_stream] is open for this struct
@@ -190,10 +234,10 @@ impl Codec for RawStream {
         self.input_stream = None;
     }
 
-    fn decode_header(&mut self) -> Result<(), StreamError> {
+    fn decode_header(&mut self) -> Result<usize, StreamError> {
         match &mut self.input_stream {
             None => {
-                panic!("Output stream not initialized");
+                panic!("Input stream not initialized");
             }
             Some(stream) => {
                 let header = match self
@@ -213,19 +257,29 @@ impl Codec for RawStream {
                 self.channels = header.channels;
                 self.event_size = header.event_size;
                 assert_eq!(header.magic, MAGIC_RAW);
-                match header.version {
-                    0 => self.source_camera = SourceCamera::default(),
-                    1 => {
-                        self.source_camera = self
-                            .bincode
-                            .deserialize_from::<_, EventStreamHeaderExtensionV1>(stream.get_mut())
-                            .unwrap()
-                            .source
-                    }
-                    _ => self.source_camera = SourceCamera::default(),
-                };
+                let header_size = std::mem::size_of::<EventStreamHeader>()
+                    + match header.version {
+                        0 => {
+                            self.source_camera = SourceCamera::default();
+                            0
+                        }
+                        1 => {
+                            self.source_camera = self
+                                .bincode
+                                .deserialize_from::<_, EventStreamHeaderExtensionV1>(
+                                    stream.get_mut(),
+                                )
+                                .unwrap()
+                                .source;
+                            std::mem::size_of::<EventStreamHeaderExtensionV1>()
+                        }
+                        _ => {
+                            self.source_camera = SourceCamera::default();
+                            0
+                        }
+                    };
 
-                Ok(())
+                Ok(header_size)
             }
         }
     }

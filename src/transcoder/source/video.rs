@@ -48,7 +48,7 @@ impl Video {
     pub fn new(
         width: u16,
         height: u16,
-        output_filename: String,
+        output_filename: Option<String>,
         channels: usize,
         tps: DeltaT,
         ref_time: DeltaT,
@@ -63,27 +63,33 @@ impl Video {
             assert!(communicate_events);
         }
 
-        let path = Path::new(&output_filename);
-
         let (event_sender, _event_receiver): (Sender<Vec<Event>>, Receiver<Vec<Event>>) = channel();
 
         let mut stream: RawStream = Codec::new();
-        match stream.open_writer(path) {
-            Ok(_) => {}
-            Err(e) => {
-                panic!("{}", e)
+        match output_filename {
+            None => {}
+            Some(name) => {
+                if write_out {
+                    let path = Path::new(&name);
+                    match stream.open_writer(path) {
+                        Ok(_) => {}
+                        Err(e) => {
+                            panic!("{}", e)
+                        }
+                    };
+                    stream.encode_header(
+                        width,
+                        height,
+                        tps,
+                        ref_time,
+                        delta_t_max,
+                        channels as u8,
+                        1,
+                        source_camera,
+                    );
+                }
             }
-        };
-        stream.encode_header(
-            width,
-            height,
-            tps,
-            ref_time,
-            delta_t_max,
-            channels as u8,
-            1,
-            source_camera,
-        );
+        }
 
         let mut data = Vec::new();
         for y in 0..height {

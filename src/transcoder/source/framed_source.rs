@@ -44,6 +44,7 @@ impl FramedSource {
     /// and `width` and initialize [`Video`]
     pub fn new(
         input_filename: String,
+        output_events_filename: Option<String>,
         frame_idx_start: u32,
         ref_time: DeltaT,
         tps: DeltaT,
@@ -107,7 +108,7 @@ impl FramedSource {
         let video = Video::new(
             init_frame.size()?.width as u16,
             init_frame.size()?.height as u16,
-            "/home/andrew/Downloads/temppp".to_string(),
+            output_events_filename,
             channels,
             tps,
             ref_time,
