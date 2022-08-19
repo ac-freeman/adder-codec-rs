@@ -58,15 +58,11 @@ pub struct FramedSourceBuilder {
 }
 
 impl FramedSourceBuilder {
-    fn new(
-        input_filename: String,
-        frame_idx_start: u32,
-        source_camera: SourceCamera,
-    ) -> FramedSourceBuilder {
+    pub fn new(input_filename: String, source_camera: SourceCamera) -> FramedSourceBuilder {
         FramedSourceBuilder {
             input_filename,
             output_events_filename: None,
-            frame_idx_start,
+            frame_idx_start: 0,
             ref_time: 5000,
             tps: 150000,
             delta_t_max: 150000,
@@ -81,48 +77,94 @@ impl FramedSourceBuilder {
             source_camera,
         }
     }
+
+    pub fn output_events_filename(mut self, output_events_filename: String) -> FramedSourceBuilder {
+        self.output_events_filename = Some(output_events_filename);
+        self.write_out = true;
+        self
+    }
+
+    pub fn frame_start(mut self, frame_idx_start: u32) -> FramedSourceBuilder {
+        self.frame_idx_start = frame_idx_start;
+        self
+    }
+
+    pub fn time_parameters(
+        mut self,
+        ref_time: DeltaT,
+        tps: DeltaT,
+        delta_t_max: DeltaT,
+    ) -> FramedSourceBuilder {
+        self.ref_time = ref_time;
+        self.tps = tps;
+        self.delta_t_max = delta_t_max;
+        self
+    }
+
+    pub fn contrast_thresholds(
+        mut self,
+        c_thresh_pos: u8,
+        c_thresh_neg: u8,
+    ) -> FramedSourceBuilder {
+        self.c_thresh_pos = c_thresh_pos;
+        self.c_thresh_neg = c_thresh_neg;
+        self
+    }
+
+    pub fn scale(mut self, scale: f64) -> FramedSourceBuilder {
+        self.scale = scale;
+        self
+    }
+
+    pub fn skip_interval(mut self, frame_skip_interval: u8) -> FramedSourceBuilder {
+        self.frame_skip_interval = frame_skip_interval;
+        self
+    }
+
+    pub fn color(mut self, color_input: bool) -> FramedSourceBuilder {
+        self.color_input = color_input;
+        self
+    }
+
+    pub fn communicate_events(mut self, communicate_events: bool) -> FramedSourceBuilder {
+        self.communicate_events = communicate_events;
+        self
+    }
+
+    pub fn show_display(mut self, show_display_b: bool) -> FramedSourceBuilder {
+        self.show_display_b = show_display_b;
+        self
+    }
+
+    pub fn finish(self) -> FramedSource {
+        FramedSource::new(self).unwrap()
+    }
 }
 
 impl FramedSource {
     /// Initialize the framed source and read first frame of source, in order to get `height`
     /// and `width` and initialize [`Video`]
-    pub fn new(
-        input_filename: String,
-        output_events_filename: Option<String>,
-        frame_idx_start: u32,
-        // ref_time: DeltaT,
-        // tps: DeltaT,
-        // delta_t_max: DeltaT,
-        // scale: f64,
-        // frame_skip_interval: u8,
-        color_input: bool,
-        // lookahead: bool,
-        // c_thresh_pos: u8,
-        // c_thresh_neg: u8,
-        // write_out: bool,
-        // communicate_events: bool,
-        // show_display_b: bool,
-        source_camera: SourceCamera,
-    ) -> Result<FramedSource> {
-        let channels = match color_input {
+    fn new(builder: FramedSourceBuilder) -> Result<FramedSource> {
+        let channels = match builder.color_input {
             true => 3,
             false => 1,
         };
 
         let mut cap =
-            videoio::VideoCapture::from_file(input_filename.as_str(), videoio::CAP_FFMPEG)?;
+            videoio::VideoCapture::from_file(builder.input_filename.as_str(), videoio::CAP_FFMPEG)?;
         let video_frame_count = cap.get(CAP_PROP_FRAME_COUNT).unwrap();
-        assert!(frame_idx_start < video_frame_count as u32);
+        assert!(builder.frame_idx_start < video_frame_count as u32);
 
-        cap.set(CAP_PROP_POS_FRAMES, frame_idx_start as f64)
+        cap.set(CAP_PROP_POS_FRAMES, builder.frame_idx_start as f64)
             .unwrap();
 
         let mut cap_lookahead =
-            videoio::VideoCapture::from_file(input_filename.as_str(), videoio::CAP_FFMPEG).unwrap();
-        init_lookahead(frame_idx_start, true, &mut cap_lookahead);
+            videoio::VideoCapture::from_file(builder.input_filename.as_str(), videoio::CAP_FFMPEG)
+                .unwrap();
+        init_lookahead(builder.frame_idx_start, true, &mut cap_lookahead);
         assert_eq!(
-            ref_time * cap.get(CAP_PROP_FPS).unwrap().round() as u32,
-            tps
+            builder.ref_time * cap.get(CAP_PROP_FPS).unwrap().round() as u32,
+            builder.tps
         );
 
         let opened = videoio::VideoCapture::is_opened(&cap)?;
@@ -139,7 +181,7 @@ impl FramedSource {
 
         let mut init_frame_scaled = Mat::default();
         println!("Original width is {}", init_frame.size()?.width);
-        resize_input(&mut init_frame, &mut init_frame_scaled, scale).unwrap();
+        resize_input(&mut init_frame, &mut init_frame_scaled, builder.scale).unwrap();
 
         init_frame = init_frame_scaled;
 
@@ -152,20 +194,25 @@ impl FramedSource {
         let video = Video::new(
             init_frame.size()?.width as u16,
             init_frame.size()?.height as u16,
-            output_events_filename,
+            builder.output_events_filename,
             channels,
-            tps,
-            ref_time,
-            delta_t_max,
+            builder.tps,
+            builder.ref_time,
+            builder.delta_t_max,
             0,
-            write_out,
-            communicate_events,
-            show_display_b,
-            source_camera,
+            builder.write_out,
+            builder.communicate_events,
+            builder.show_display_b,
+            builder.source_camera,
         );
 
-        let mut frame_buffer: FrameBuffer =
-            FrameBuffer::new(120, cap, frame_skip_interval, scale, color_input);
+        let mut frame_buffer: FrameBuffer = FrameBuffer::new(
+            (builder.delta_t_max / builder.ref_time) as usize + 1,
+            cap,
+            builder.frame_skip_interval,
+            builder.scale,
+            builder.color_input,
+        );
         let (buffer_tx, buffer_rx): (Sender<i32>, Receiver<i32>) = channel();
         let (frame_tx, frame_rx): (Sender<Box<Mat>>, Receiver<Box<Mat>>) = channel();
 
@@ -219,8 +266,8 @@ impl FramedSource {
             frame_rx,
             input_frame_scaled: Default::default(),
             last_input_frame_scaled: Default::default(),
-            c_thresh_pos,
-            c_thresh_neg,
+            c_thresh_pos: builder.c_thresh_pos,
+            c_thresh_neg: builder.c_thresh_neg,
             lookahead_frames_scaled: Default::default(),
             video,
         })
