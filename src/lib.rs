@@ -2,6 +2,7 @@ use crate::framer::event_framer::{EventCoordless, SourceType};
 use crate::header::EventStreamHeader;
 use crate::raw::raw_stream::StreamError;
 use serde::{Deserialize, Serialize};
+use std::fmt::Formatter;
 use std::fs::File;
 use std::io::{BufReader, BufWriter};
 use std::path::Path;
@@ -33,6 +34,44 @@ pub enum SourceCamera {
     DavisU8,
     Atis,
     Asint,
+}
+
+impl std::fmt::Display for SourceCamera {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let text = match self {
+            SourceCamera::FramedU8 => {
+                "FramedU8 - Framed video with 8-bit pixel depth, unsigned integer"
+            }
+            SourceCamera::FramedU16 => {
+                "FramedU16 - Framed video with 16-bit pixel depth, unsigned integer"
+            }
+            SourceCamera::FramedU32 => {
+                "FramedU32 - Framed video with 32-bit pixel depth, unsigned integer"
+            }
+            SourceCamera::FramedU64 => {
+                "FramedU64 - Framed video with 64-bit pixel depth, unsigned integer"
+            }
+            SourceCamera::FramedF32 => {
+                "FramedF32 - Framed video with 32-bit pixel depth, floating point"
+            }
+            SourceCamera::FramedF64 => {
+                "FramedU8 - Framed camera with 64-bit pixel depth, floating point"
+            }
+            SourceCamera::Dvs => {
+                "Dvs - Dynamic Vision System camera"
+            }
+            SourceCamera::DavisU8 => {
+                "DavisU8 - Dynamic and Active Vision System camera. Active frames with 8-bit pixel depth, unsigned integer "
+            }
+            SourceCamera::Atis => {
+                "Atis - Asynchronous Time-Based Image Sensor camera"
+            }
+            SourceCamera::Asint => {
+                "Asint - Asynchronous Integration camera"
+            }
+        };
+        write!(f, "{}", text)
+    }
 }
 
 /// The maximum intensity representation for input data. Currently 255 for 8-bit framed input.
@@ -142,6 +181,8 @@ pub trait Codec {
     fn set_output_stream(&mut self, stream: Option<BufWriter<File>>);
     fn set_input_stream(&mut self, stream: Option<BufReader<File>>);
 
+    fn get_eof_position(&mut self) -> Result<usize, StreamError>;
+
     fn encode_header(
         &mut self,
         width: u16,
@@ -154,7 +195,7 @@ pub trait Codec {
         source_camera: SourceCamera,
     );
 
-    fn decode_header(&mut self) -> Result<(), StreamError>;
+    fn decode_header(&mut self) -> Result<usize, StreamError>;
 
     fn encode_event(&mut self, event: &Event);
     fn encode_events(&mut self, events: &[Event]);
