@@ -22,7 +22,40 @@ If you want to use the provided transcoder(s), then you have to install OpenCV 4
 Clone this repository to run example executables provided in `src/bin`
 
 ### Transcode framed video to ADΔER
-Run the program `/src/bin/framed_video_to_adder.rs`. You will need to adjust the file path in the FramedSource constructor to correspond to a file you have saved locally.
+Run the program `/src/bin/framed_video_to_adder.rs`. You will need to adjust the parameters for the FramedSourceBuilder to suit your needs, as described below.
+
+```
+ let mut source =
+        // The file path to the video you want to transcode, and the bit depth of the video
+        FramedSourceBuilder::new("~/Downloads/excerpt.mp4".to_string(),
+                                 SourceCamera::FramedU8)    
+        
+        // Which frame of the input video to begin your transcode
+        .frame_start(1420)  
+        
+        // Input video is scaled by this amount before transcoding
+        .scale(0.5)         
+        
+        // Must be true for us to do anything with the events
+        .communicate_events(true)   
+        
+        // The file path to store the ADΔER events
+        .output_events_filename("~/Downloads/events.adder".to_string())     
+        
+        // Use color, or convert input video to grayscale first?
+        .color(false)       
+        
+        // Positive and negative contrast thresholds. Larger values = more temporal loss. 0 = nearly no distortion.
+        .contrast_thresholds(10, 10)    
+        
+        // Show a live view of the input frames as they're being transcoded?
+        .show_display(true) 
+        
+        .time_parameters(5000,  // The reference interval: How many ticks does each input frame span?
+                         300000,    // Ticks per second. Must equal (reference interval) * (source frame rate)
+                         3000000)   // Δt_max: the maximum Δt value for any generated ADΔER event
+        .finish();
+```
 
 ### Direct usage
 
