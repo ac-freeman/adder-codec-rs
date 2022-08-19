@@ -7,7 +7,17 @@
 
 Encoder/transcoder/decoder for ADΔER (Address, Decimation, Δt Event Representation) streams. Currently, only implemented for raw (uncompressed) streams. Includes a transcoder for casting framed video into an ADΔER representation in a manner which preserves the temporal synchronicity of the source, but enables many-frame intensity averaging on a per-pixel basis and extremely high dynamic range.
 
-## Setup
+# Background
+
+The ADΔER (pronounced "adder") representation is inspired by the ASINT camera design by Singh et al. It aims to help us move away from thinking about video in terms of fixed sample rates and frames, and to provide a one-size-fits-all ("narrow waist") method for representing intensity information **_asynchronously_**.
+
+Under the ASINT model, a pixel $\langle x,y\rangle$ continuously integrates light, firing an ADΔER event $\langle x,y,D,\Delta t\rangle$ when it accumulates $2^D$ intensity units (e.g., photons), where $D$ is a _decimation threshold_ and $\Delta t$ is the time elapsed since the pixel last fired an event. we measure $t$ in clock “ticks,'' where the granularity of a clock tick length is user-adjustable. In a raw ADΔER stream, the events are time-ordered and spatially interleaved. An ADΔER event directly specifies an intensity, $I$, by $I \approx \frac{2^D}{\Delta t}$. The key insight of the ASINT model is _the dynamic, pixelwise control of $D$_. Lowering $D$ for a pixel will increase its event rate, while raising $D$ will decrease its event rate. With this multi-faceted $D$ control, we can ensure that pixel sensitivities are well-tuned to scene dynamics.
+
+Practically speaking, it's most useful to think about ADΔER in reference to the source data type. In the current iteration of this package, I only provide tools for transcoding framed video to ADΔER, but in the future I will release tools for transcoding data from real-world event cameras (e.g., DVS and DAVIS).
+
+In the context of framed video, ADΔER allows us to have multi-frame intensity _averaging_ for stable (unchanging) regions of a scene. This can function both to denoise the video and enable higher dynamic range, all while preserving the temporal synchronicity of the source. See the info on [simultaneous transcoding](#Simultaneously-transcode-framed-video-_to_-ADΔER-events-and-_back_-to-framed-video) to quickly test this out!
+
+# Setup
 
 If you just want to use the hooks for encoding/decoding ADΔER streams (i.e., not a transcoder for producing the ADΔER events for a given source), then you can include the library by adding the following to your Cargo.toml file:
 
@@ -17,12 +27,12 @@ If you want to use the provided transcoder(s), then you have to install OpenCV 4
 
 `adder-codec-rs = "0.1.8"`
 
-## Examples
+# Examples
 
 Clone this repository to run example executables provided in `src/bin`
 
-### Transcode framed video to ADΔER
-Run the program `/src/bin/framed_video_to_adder.rs`. You will need to adjust the parameters for the FramedSourceBuilder to suit your needs, as described below.
+## Transcode framed video _to_ ADΔER events
+We can transcode an arbitrary framed video to the ADΔER format. Run the program `/src/bin/framed_video_to_adder.rs`. You will need to adjust the parameters for the FramedSourceBuilder to suit your needs, as described below.
 
 ```
  let mut source =
@@ -57,7 +67,58 @@ Run the program `/src/bin/framed_video_to_adder.rs`. You will need to adjust the
         .finish();
 ```
 
-### Direct usage
+## Generate framed video _from_ ADΔER events
+
+We can also transform our ADΔER file back into a framed video, so we can easily view the effects of our transcode parameters. Run the program `/src/bin/events_to_instantaneous_frames.rs`. You will need to set the `input_path` to point to an ADΔER file, and the `output_path` to where you want the resulting framed video to be. This output file is in a raw pixel format for encoding with FFmpeg: either `gray` or `bgr24` (if in color), assuming that we have constructed a `FrameSequence<u8>`. Other formats can be encoded, e.g. with `FrameSequence<u16>`, `FrameSequence<f64>`, etc.
+
+To take our raw frame data and encode it in a standard format, we can use an FFmpeg command as follows:
+```
+ffmpeg -f rawvideo -pix_fmt gray -s:v 960x540 -r 60 -i ./events.adder -crf 0 -c:v libx264 -y ./events_to_framed.mp4
+```
+
+## Simultaneously transcode framed video _to_ ADΔER events and _back_ to framed video
+
+This is the most thorough example, complete with an argument parser so you don't have to edit the code. Run the program `/src/bin/transcode_and_frame_simultaneous.rs`, like this:
+
+```
+cargo run --release --bin transcode_and_frame_simultaneous -- 
+    --scale 1.0 
+    --input-filename "/path/to/video"
+    --output-raw-video-filename "/path/to/output_video"
+    --c-thresh-pos 10
+    --c-thresh-neg 10
+```
+
+The program will re-frame the ADΔER events as they are being generated, without having to write them out to a file. This lets you quickly experiment with different values for `c_thresh_pos`, `c_thresh_neg`, `ref_time`, `delta_t_max`, and `tps`, to see what effect they have on the output.
+
+## Inspect an ADΔER file
+
+Want to quickly view the metadata for an ADΔER file? Just execute:
+
+```
+cargo run --release --bin adderinfo /path/to/file.adder
+```
+
+Example output:
+
+```
+Dimensions
+	Width: 269
+	Height: 151
+	Color channels: 3
+Source camera: FramedU8 - Framed video with 8-bit pixel depth, unsigned integer
+ADΔER transcoder parameters
+	Codec version: 0
+	Ticks per second: 120000
+	Reference ticks per source interval: 5000
+	Δt_max: 150000
+File metadata
+	File size: 49795649
+	Header size: 28
+	ADΔER event count: 4979561
+```
+
+## Direct usage
 
 
 Encode a raw stream:
