@@ -106,7 +106,7 @@ async fn download_file() -> Result<(), Box<dyn std::error::Error + Send + Sync>>
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    let args: MyArgs = MyArgs::parse();
+    let mut args: MyArgs = MyArgs::parse();
     println!("c_pos: {}, c_neg: {}", args.c_thresh_pos, args.c_thresh_neg);
 
     //////////////////////////////////////////////////////
