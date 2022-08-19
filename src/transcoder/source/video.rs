@@ -110,7 +110,7 @@ impl Video {
         }
 
         let event_pixels: Array3<EventPixel> =
-            Array3::from_shape_vec((height.into(), width.into(), channels.into()), data).unwrap();
+            Array3::from_shape_vec((height.into(), width.into(), channels), data).unwrap();
 
         let mut instantaneous_frame = Mat::default();
         match channels {

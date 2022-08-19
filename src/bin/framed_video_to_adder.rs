@@ -1,6 +1,6 @@
 extern crate core;
 
-use adder_codec_rs::transcoder::source::framed_source::FramedSource;
+use adder_codec_rs::transcoder::source::framed_source::FramedSourceBuilder;
 use adder_codec_rs::transcoder::source::video::Source;
 use adder_codec_rs::SourceCamera;
 use rayon::current_num_threads;
@@ -9,25 +9,20 @@ use std::io;
 use std::io::Write;
 use std::time::Instant;
 fn main() -> Result<(), Box<dyn Error>> {
-    let mut source = FramedSource::new(
-        "~/Downloads/excerpt.mp4".to_string(),
-        Some("~/Downloads/events.adder".to_string()),
-        1420,
-        5000,
-        300000,
-        3000000,
-        0.1,
-        0,
-        false,
-        true,
-        20,
-        15,
-        true,
-        true,
-        true,
-        SourceCamera::FramedU8,
-    )
-    .unwrap();
+    let mut source =
+        FramedSourceBuilder::new("~/Downloads/excerpt.mp4".to_string(),
+                                 SourceCamera::FramedU8)
+        .frame_start(1420)
+        .scale(0.5)
+        .communicate_events(true)
+        .output_events_filename("~/Downloads/events.adder".to_string())
+        .color(false)
+        .contrast_thresholds(10, 10)
+        .show_display(true)
+        .time_parameters(5000,
+                         300000,
+                         3000000)
+        .finish();
 
     let pool = rayon::ThreadPoolBuilder::new()
         .num_threads(current_num_threads())

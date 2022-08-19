@@ -2,16 +2,15 @@ extern crate core;
 
 use adder_codec_rs::framer::event_framer::FramerMode::INSTANTANEOUS;
 use adder_codec_rs::framer::event_framer::SourceType::U8;
-use adder_codec_rs::framer::event_framer::{FrameSequence, Framer, SourceType};
+use adder_codec_rs::framer::event_framer::{Framer, FramerBuilder};
 use adder_codec_rs::framer::scale_intensity;
 use adder_codec_rs::framer::scale_intensity::FrameValue;
-use adder_codec_rs::transcoder::source::framed_source::FramedSource;
+use adder_codec_rs::transcoder::source::framed_source::{FramedSource, FramedSourceBuilder};
 use adder_codec_rs::transcoder::source::video::Source;
 use adder_codec_rs::SourceCamera::FramedU8;
-use adder_codec_rs::{DeltaT, Event, SourceCamera};
+use adder_codec_rs::{DeltaT, Event};
 use clap::Parser;
 use rayon::{current_num_threads, ThreadPool};
-use reqwest;
 use serde::Serialize;
 use std::error::Error;
 use std::fs::File;
@@ -19,7 +18,7 @@ use std::io;
 use std::io::{BufWriter, Cursor, Write};
 use std::path::Path;
 use std::process::Command;
-use std::sync::mpsc::{channel, Receiver, SendError, Sender};
+use std::sync::mpsc::{channel, Receiver, Sender};
 use std::time::Instant;
 
 /// Command line argument parser
@@ -88,7 +87,7 @@ async fn download_file() -> Result<(), Box<dyn std::error::Error + Send + Sync>>
     // Download the drop.mp4 video example, if you don't already have it
     let path_str = "./tests/samples/videos/drop.mp4";
     if !Path::new(path_str).exists() {
-        let mut resp = reqwest::get("https://www.pexels.com/video/2603664/download/").await?;
+        let resp = reqwest::get("https://www.pexels.com/video/2603664/download/").await?;
         let mut file_out = File::create(path_str).expect("Could not create file on disk");
         let mut data_in = Cursor::new(resp.bytes().await?);
         std::io::copy(&mut data_in, &mut file_out)?;
@@ -107,7 +106,7 @@ async fn download_file() -> Result<(), Box<dyn std::error::Error + Send + Sync>>
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    let mut args: MyArgs = MyArgs::parse();
+    let args: MyArgs = MyArgs::parse();
     println!("c_pos: {}, c_neg: {}", args.c_thresh_pos, args.c_thresh_neg);
 
     //////////////////////////////////////////////////////
@@ -118,25 +117,15 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // args.output_raw_video_filename = "./tests/samples/videos/drop_out".to_string();
     //////////////////////////////////////////////////////
 
-    let mut source = FramedSource::new(
-        args.input_filename,
-        None,
-        args.frame_idx_start,
-        args.ref_time,
-        args.tps,
-        args.delta_t_max,
-        args.scale,
-        0,
-        args.color_input != 0,
-        true,
-        args.c_thresh_pos,
-        args.c_thresh_neg,
-        false,
-        true,
-        args.show_display != 0,
-        SourceCamera::FramedU8,
-    )
-    .unwrap();
+    let source = FramedSourceBuilder::new(args.input_filename, FramedU8)
+        .frame_start(args.frame_idx_start)
+        .scale(args.scale)
+        .communicate_events(true)
+        .color(args.color_input != 0)
+        .contrast_thresholds(args.c_thresh_pos, args.c_thresh_neg)
+        .show_display(args.show_display != 0)
+        .time_parameters(args.ref_time, args.tps, args.delta_t_max)
+        .finish();
 
     let width = source.get_video().width;
     let height = source.get_video().height;
@@ -161,7 +150,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .arg("-c")
         .arg(
             "ffmpeg -f rawvideo -pix_fmt ".to_owned()
-                + &color_str.to_owned()
+                + color_str
                 + " -s:v "
                 + width.to_string().as_str()
                 + "x"
@@ -188,7 +177,7 @@ pub(crate) struct SimulProcessor {
 
 impl SimulProcessor {
     pub fn new<T>(
-        mut source: FramedSource,
+        source: FramedSource,
         ref_time: DeltaT,
         tps: DeltaT,
         output_path: &str,
@@ -216,18 +205,12 @@ impl SimulProcessor {
         let channels = source.get_video().channels as usize;
 
         let mut framer = thread_pool.install(|| {
-            FrameSequence::<T>::new(
-                height,
-                width,
-                channels,
-                tps,
-                reconstructed_frame_rate,
-                INSTANTANEOUS,
-                U8,
-                1,
-                FramedU8,
-                ref_time,
-            )
+            FramerBuilder::new(height, width, channels)
+                .codec_version(1)
+                .time_parameters(tps, ref_time, reconstructed_frame_rate)
+                .mode(INSTANTANEOUS)
+                .source(U8, FramedU8)
+                .finish::<T>()
         });
 
         let mut output_stream = BufWriter::new(File::create(output_path).unwrap());
