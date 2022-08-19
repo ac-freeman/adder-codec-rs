@@ -2,7 +2,7 @@ extern crate core;
 
 use adder_codec_rs::framer::event_framer::FramerMode::INSTANTANEOUS;
 use adder_codec_rs::framer::event_framer::SourceType::U8;
-use adder_codec_rs::framer::event_framer::{FrameSequence, Framer};
+use adder_codec_rs::framer::event_framer::{Framer, FramerBuilder};
 use adder_codec_rs::framer::scale_intensity;
 use adder_codec_rs::framer::scale_intensity::FrameValue;
 use adder_codec_rs::transcoder::source::framed_source::{FramedSource, FramedSourceBuilder};
@@ -11,7 +11,6 @@ use adder_codec_rs::SourceCamera::FramedU8;
 use adder_codec_rs::{DeltaT, Event};
 use clap::Parser;
 use rayon::{current_num_threads, ThreadPool};
-use reqwest;
 use serde::Serialize;
 use std::error::Error;
 use std::fs::File;
@@ -151,7 +150,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .arg("-c")
         .arg(
             "ffmpeg -f rawvideo -pix_fmt ".to_owned()
-                + &color_str.to_owned()
+                + color_str
                 + " -s:v "
                 + width.to_string().as_str()
                 + "x"
@@ -206,18 +205,12 @@ impl SimulProcessor {
         let channels = source.get_video().channels as usize;
 
         let mut framer = thread_pool.install(|| {
-            FrameSequence::<T>::new(
-                height,
-                width,
-                channels,
-                tps,
-                reconstructed_frame_rate,
-                INSTANTANEOUS,
-                U8,
-                1,
-                FramedU8,
-                ref_time,
-            )
+            FramerBuilder::new(height, width, channels)
+                .codec_version(1)
+                .time_parameters(tps, ref_time, reconstructed_frame_rate)
+                .mode(INSTANTANEOUS)
+                .source(U8, FramedU8)
+                .finish::<T>()
         });
 
         let mut output_stream = BufWriter::new(File::create(output_path).unwrap());

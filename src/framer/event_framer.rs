@@ -35,20 +35,80 @@ pub enum SourceType {
     F64,
 }
 
+pub struct FramerBuilder {
+    num_rows: usize,
+    num_cols: usize,
+    num_channels: usize,
+    tps: DeltaT,
+    output_fps: u32,
+    mode: FramerMode,
+    source: SourceType,
+    codec_version: u8,
+    source_camera: SourceCamera,
+    ref_interval: DeltaT,
+}
+
+impl FramerBuilder {
+    pub fn new(num_rows: usize, num_cols: usize, num_channels: usize) -> FramerBuilder {
+        FramerBuilder {
+            num_rows,
+            num_cols,
+            num_channels,
+            tps: 150000,
+            output_fps: 30,
+            mode: FramerMode::INSTANTANEOUS,
+            source: SourceType::U8,
+            codec_version: 1,
+            source_camera: Default::default(),
+            ref_interval: 5000,
+        }
+    }
+    pub fn time_parameters(
+        mut self,
+        tps: DeltaT,
+        ref_interval: DeltaT,
+        output_fps: u32,
+    ) -> FramerBuilder {
+        self.tps = tps;
+        self.ref_interval = ref_interval;
+        self.output_fps = output_fps;
+        self
+    }
+
+    pub fn mode(mut self, mode: FramerMode) -> FramerBuilder {
+        self.mode = mode;
+        self
+    }
+
+    pub fn source(mut self, source: SourceType, source_camera: SourceCamera) -> FramerBuilder {
+        self.source_camera = source_camera;
+        self.source = source;
+        self
+    }
+
+    pub fn codec_version(mut self, codec_version: u8) -> FramerBuilder {
+        self.codec_version = codec_version;
+        self
+    }
+
+    pub fn finish<T>(self) -> FrameSequence<T>
+    where
+        T: FrameValue<Output = T>,
+        T: Clone,
+        T: Default,
+        T: FrameValue,
+        T: Send,
+        T: Serialize,
+        T: Sync,
+        T: std::marker::Copy,
+    {
+        FrameSequence::<T>::new(self)
+    }
+}
+
 pub trait Framer {
     type Output;
-    fn new(
-        num_rows: usize,
-        num_cols: usize,
-        num_channels: usize,
-        tps: DeltaT,
-        output_fps: u32,
-        mode: FramerMode,
-        source: SourceType,
-        codec_version: u8,
-        source_camera: SourceCamera,
-        ref_interval: DeltaT,
-    ) -> Self;
+    fn new(builder: FramerBuilder) -> Self;
 
     /// Ingest an ADDER event. Will process differently depending on choice of [`FramerMode`].
     ///
@@ -109,29 +169,18 @@ impl<T: Clone + Default + FrameValue<Output = T> + Copy + Serialize + Send + Syn
     for FrameSequence<T>
 {
     type Output = T;
-    fn new(
-        num_rows: usize,
-        num_cols: usize,
-        num_channels: usize,
-        tps: DeltaT,
-        output_fps: u32,
-        mode: FramerMode,
-        source: SourceType,
-        codec_version: u8,
-        source_camera: SourceCamera,
-        ref_interval: DeltaT,
-    ) -> Self {
-        let chunk_rows = max(num_rows / current_num_threads(), 1);
+    fn new(builder: FramerBuilder) -> Self {
+        let chunk_rows = max(builder.num_rows / current_num_threads(), 1);
         assert!(chunk_rows > 0);
 
-        let num_chunks: usize = ((num_rows) as f64 / chunk_rows as f64).ceil() as usize;
-        let last_chunk_rows = num_rows - (num_chunks - 1) * chunk_rows;
+        let num_chunks: usize = ((builder.num_rows) as f64 / chunk_rows as f64).ceil() as usize;
+        let last_chunk_rows = builder.num_rows - (num_chunks - 1) * chunk_rows;
 
         assert!(num_chunks > 0);
         let array: Array3<Option<T>> =
-            Array3::<Option<T>>::default((chunk_rows, num_cols, num_channels));
+            Array3::<Option<T>>::default((chunk_rows, builder.num_cols, builder.num_channels));
         let last_array: Array3<Option<T>> =
-            Array3::<Option<T>>::default((last_chunk_rows, num_cols, num_channels));
+            Array3::<Option<T>>::default((last_chunk_rows, builder.num_cols, builder.num_channels));
 
         let mut frames = vec![
             VecDeque::from(vec![Frame {
@@ -150,15 +199,15 @@ impl<T: Clone + Default + FrameValue<Output = T> + Copy + Serialize + Send + Syn
         };
 
         let mut pixel_ts_tracker: Vec<Array3<BigT>> =
-            vec![Array3::zeros((chunk_rows, num_cols, num_channels)); num_chunks];
+            vec![Array3::zeros((chunk_rows, builder.num_cols, builder.num_channels)); num_chunks];
         if let Some(last) = pixel_ts_tracker.last_mut() {
-            *last = Array3::zeros((last_chunk_rows, num_cols, num_channels))
+            *last = Array3::zeros((last_chunk_rows, builder.num_cols, builder.num_channels))
         };
 
         let mut last_filled_tracker: Vec<Array3<i64>> =
-            vec![Array3::zeros((chunk_rows, num_cols, num_channels)); num_chunks];
+            vec![Array3::zeros((chunk_rows, builder.num_cols, builder.num_channels)); num_chunks];
         if let Some(last) = last_filled_tracker.last_mut() {
-            *last = Array3::zeros((last_chunk_rows, num_cols, num_channels))
+            *last = Array3::zeros((last_chunk_rows, builder.num_cols, builder.num_channels))
         };
         for chunk in &mut last_filled_tracker {
             for mut row in chunk.rows_mut() {
@@ -174,12 +223,12 @@ impl<T: Clone + Default + FrameValue<Output = T> + Copy + Serialize + Send + Syn
             pixel_ts_tracker,
             last_filled_tracker,
             chunk_filled_tracker: vec![false; num_chunks],
-            mode,
-            tpf: tps / output_fps,
-            source,
-            codec_version,
-            source_camera,
-            ref_interval,
+            mode: builder.mode,
+            tpf: builder.tps / builder.output_fps,
+            source: builder.source,
+            codec_version: builder.codec_version,
+            source_camera: builder.source_camera,
+            ref_interval: builder.ref_interval,
             chunk_rows,
             bincode: DefaultOptions::new()
                 .with_fixint_encoding()
@@ -194,11 +243,18 @@ impl<T: Clone + Default + FrameValue<Output = T> + Copy + Serialize + Send + Syn
     /// ```
     /// # use adder_codec_rs::{Coord, Event};
     /// # use adder_codec_rs::framer::event_framer::FramerMode::INSTANTANEOUS;
-    /// # use adder_codec_rs::framer::event_framer::{FrameSequence, Framer};
+    /// # use adder_codec_rs::framer::event_framer::{FrameSequence, Framer, FramerBuilder};
     /// # use adder_codec_rs::framer::event_framer::SourceType::U8;
     /// use adder_codec_rs::SourceCamera::FramedU8;
     ///
-    /// let mut frame_sequence: FrameSequence<u8> = FrameSequence::<u8>::new(10, 10, 3, 50000, 50, INSTANTANEOUS, U8, 1, FramedU8, 1500);
+    /// let mut frame_sequence: FrameSequence<u8> =
+    /// FramerBuilder::new(
+    ///             10, 10, 3)
+    ///             .codec_version(1)
+    ///             .time_parameters(50000, 1500, 50)
+    ///             .mode(INSTANTANEOUS)
+    ///             .source(U8, FramedU8)
+    ///             .finish();
     /// let mut event: Event = Event {
     ///         coord: Coord {
     ///             x: 5,

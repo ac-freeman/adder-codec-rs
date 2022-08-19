@@ -1,6 +1,6 @@
 extern crate core;
 
-use adder_codec_rs::framer::event_framer::FrameSequence;
+use adder_codec_rs::framer::event_framer::{FramerBuilder, FrameSequence};
 use adder_codec_rs::framer::event_framer::Framer;
 use adder_codec_rs::framer::event_framer::FramerMode::INSTANTANEOUS;
 use adder_codec_rs::raw::raw_stream::RawStream;
@@ -23,18 +23,14 @@ fn main() {
     // For instantaneous reconstruction, make sure the frame rate matches the source video rate
     assert_eq!(stream.tps / stream.ref_interval, reconstructed_frame_rate);
 
-    let mut frame_sequence: FrameSequence<u8> = FrameSequence::<u8>::new(
-        stream.height.into(),
-        stream.width.into(),
-        stream.channels.into(),
-        stream.tps,
-        reconstructed_frame_rate,
-        INSTANTANEOUS,
-        stream.get_source_type(),
-        stream.codec_version,
-        stream.source_camera,
-        stream.ref_interval,
-    );
+    let mut frame_sequence: FrameSequence<u8> = FramerBuilder::new(
+        stream.height.into(), stream.width.into(), stream.channels.into())
+        .codec_version(stream.codec_version)
+        .time_parameters(stream.tps, stream.ref_interval, reconstructed_frame_rate)
+        .mode(INSTANTANEOUS)
+        .source(stream.get_source_type(), stream.source_camera)
+        .finish();
+
     let mut now = Instant::now();
     let mut frame_count = 0;
     loop {

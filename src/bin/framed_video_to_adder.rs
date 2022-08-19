@@ -1,6 +1,6 @@
 extern crate core;
 
-use adder_codec_rs::transcoder::source::framed_source::{FramedSource, FramedSourceBuilder};
+use adder_codec_rs::transcoder::source::framed_source::FramedSourceBuilder;
 use adder_codec_rs::transcoder::source::video::Source;
 use adder_codec_rs::SourceCamera;
 use rayon::current_num_threads;
