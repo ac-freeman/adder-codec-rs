@@ -39,7 +39,7 @@ impl HeaderExtension for EventStreamHeaderExtensionV1 {}
 // }
 
 impl EventStreamHeader {
-    pub fn new(
+    pub(crate) fn new(
         magic: Magic,
         width: u16,
         height: u16,
