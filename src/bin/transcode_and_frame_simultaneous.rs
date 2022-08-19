@@ -98,8 +98,12 @@ async fn download_file() -> Result<(), Box<dyn std::error::Error + Send + Sync>>
 
 // Scale down source video for comparison
 // ffmpeg -i drop.mp4 -vf scale=960:-1 -crf 0 -c:v libx264 drop_scaled.mp4
-// Trim scaled video for comparison (500 frames)
-// ffmpeg -i drop_scaled.mp4 -ss 00:00:00 -t 00:00:20.833333 -crf 0 -c:v copy -c:a copy ./drop_scaled_trimmed.mp4
+
+// Trim scaled video for comparison (500 frames). NOTE starting at frame 1, instead of 0.
+// I think this is because OpenCV misses the first frame when decoding.
+// Start time corresponds to frame index 1. End time corresponds to frame index 500
+// (i.e., 500 frames / 24 FPS)
+// ffmpeg -i "./drop_scaled_hd.mp4" -ss 00:00:00.041666667 -t 00:00:20.833333 -crf 0 -c:v libx264 "./drop_scaled_hd_trimmed.mp4
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -153,7 +157,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         true => "bgr24",
         _ => "gray",
     };
-    Command::new("sh")
+    let mut ffmpeg = Command::new("sh")
         .arg("-c")
         .arg(
             "ffmpeg -f rawvideo -pix_fmt ".to_owned()
@@ -170,6 +174,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         )
         .spawn()
         .unwrap();
+    ffmpeg.wait().unwrap();
     println!("{} ms elapsed", now.elapsed().as_millis());
 
     Ok(())
