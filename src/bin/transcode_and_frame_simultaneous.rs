@@ -41,7 +41,7 @@ pub struct MyArgs {
     pub(crate) ref_time: u32,
 
     /// Max number of ticks for any event
-    #[clap(short, long, default_value_t = 10000)]
+    #[clap(short, long, default_value_t = 240000)]
     pub(crate) delta_t_max: u32,
 
     /// Max number of input frames to transcode (0 = no limit)
