@@ -61,7 +61,7 @@ pub struct MyArgs {
     pub(crate) input_filename: String,
 
     /// Path to output events file
-    #[clap(short, long, default_value = "./out.adder")]
+    #[clap(short, long, default_value = "")]
     pub(crate) output_events_filename: String,
 
     /// Path to output raw video file
@@ -117,15 +117,18 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // args.output_raw_video_filename = "./tests/samples/videos/drop_out".to_string();
     //////////////////////////////////////////////////////
 
-    let source = FramedSourceBuilder::new(args.input_filename, FramedU8)
+    let mut source_builder = FramedSourceBuilder::new(args.input_filename, FramedU8)
         .frame_start(args.frame_idx_start)
         .scale(args.scale)
         .communicate_events(true)
         .color(args.color_input != 0)
         .contrast_thresholds(args.c_thresh_pos, args.c_thresh_neg)
         .show_display(args.show_display != 0)
-        .time_parameters(args.ref_time, args.tps, args.delta_t_max)
-        .finish();
+        .time_parameters(args.ref_time, args.tps, args.delta_t_max);
+    if args.output_events_filename.len() > 0 {
+        source_builder = source_builder.output_events_filename(args.output_events_filename);
+    }
+    let source = source_builder.finish();
 
     let width = source.get_video().width;
     let height = source.get_video().height;

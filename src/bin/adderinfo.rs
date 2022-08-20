@@ -72,6 +72,7 @@ fn main() -> Result<(), std::io::Error> {
     let eof_position_bytes = stream.get_eof_position().unwrap();
     let file_size = Path::new(file_path).metadata().unwrap().len();
     let num_events = (eof_position_bytes - 1 - header_bytes) / stream.event_size as usize;
+    let events_per_px = num_events / (stream.width as usize * stream.height as usize);
 
     let stdout = io::stdout();
     let mut handle = io::BufWriter::new(stdout.lock());
@@ -94,6 +95,7 @@ fn main() -> Result<(), std::io::Error> {
     writeln!(handle, "\tFile size: {}", file_size)?;
     writeln!(handle, "\tHeader size: {}", header_bytes)?;
     writeln!(handle, "\tADΔER event count: {}", num_events)?;
+    writeln!(handle, "\tEvents per pixel: {}", events_per_px)?;
 
     if args.dynamic_range {
         let theory_dr_ratio = D_SHIFT[D_SHIFT.len() - 1] as f64 / (1.0 / stream.delta_t_max as f64);
