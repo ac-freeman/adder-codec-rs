@@ -2,7 +2,7 @@ extern crate core;
 
 use adder_codec_rs::framer::event_framer::FramerMode::INSTANTANEOUS;
 use adder_codec_rs::framer::event_framer::SourceType::U8;
-use adder_codec_rs::framer::event_framer::{Framer, FramerBuilder};
+use adder_codec_rs::framer::event_framer::{Framer, FramerBuilder, ImageValue};
 use adder_codec_rs::framer::scale_intensity;
 use adder_codec_rs::framer::scale_intensity::FrameValue;
 use adder_codec_rs::transcoder::source::framed_source::{FramedSource, FramedSourceBuilder};
@@ -189,8 +189,13 @@ impl SimulProcessor {
         frame_max: i32,
     ) -> SimulProcessor
     where
-        T: Clone + std::marker::Sync + std::marker::Send + 'static,
-        T: scale_intensity::FrameValue,
+        T: Clone
+            + std::marker::Sync
+            + std::marker::Send
+            + 'static
+            + adder_codec_rs::framer::event_framer::ImageValue
+            + ImageValue<Input = T>,
+        T: FrameValue,
         T: std::default::Default,
         T: std::marker::Copy,
         T: FrameValue<Output = T>,

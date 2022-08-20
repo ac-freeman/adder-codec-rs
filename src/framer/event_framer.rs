@@ -2,6 +2,7 @@ use crate::framer::scale_intensity::FrameValue;
 use crate::{BigT, DeltaT, Event, SourceCamera, D};
 use bincode::config::{BigEndian, FixintEncoding, WithOtherEndian, WithOtherIntEncoding};
 use bincode::{DefaultOptions, Options};
+use png::Compression::Fast;
 use rayon::iter::ParallelIterator;
 use std::cmp::max;
 use std::collections::VecDeque;
@@ -101,6 +102,7 @@ impl FramerBuilder {
         T: Serialize,
         T: Sync,
         T: std::marker::Copy,
+        T: ImageValue<Input = T>,
     {
         FrameSequence::<T>::new(self)
     }
@@ -165,8 +167,16 @@ use rayon::current_num_threads;
 use rayon::prelude::IntoParallelIterator;
 use serde::Serialize;
 
-impl<T: Clone + Default + FrameValue<Output = T> + Copy + Serialize + Send + Sync> Framer
-    for FrameSequence<T>
+impl<
+        T: Clone
+            + Default
+            + FrameValue<Output = T>
+            + Copy
+            + Serialize
+            + Send
+            + Sync
+            + ImageValue<Input = T>,
+    > Framer for FrameSequence<T>
 {
     type Output = T;
     fn new(builder: FramerBuilder) -> Self {
@@ -350,7 +360,9 @@ impl<T: Clone + Default + FrameValue<Output = T> + Copy + Serialize + Send + Syn
     }
 }
 
-impl<T: Clone + Default + FrameValue<Output = T> + Serialize> FrameSequence<T> {
+impl<T: Clone + Default + FrameValue<Output = T> + Serialize + ImageValue<Input = T>>
+    FrameSequence<T>
+{
     pub fn px_at_current(&self, row: usize, col: usize, channel: usize) -> &Option<T> {
         if self.frames.is_empty() {
             panic!("Frame not initialized");
@@ -457,10 +469,28 @@ impl<T: Clone + Default + FrameValue<Output = T> + Serialize> FrameSequence<T> {
     }
 
     pub fn write_frame_bytes(&mut self, writer: &mut BufWriter<File>) {
+        let mut output_string = "/home/andrew/Downloads/out_16bit.png";
+        // let mut output_string = format!("{}{}{}{}{:08}{}", self.output_dir, "/".to_string(),(dir_1 as i32).to_string(),"/".to_string(), output_name_number, ".addm".to_string());
+        let output_file = match File::create(&output_string) {
+            Err(why) => panic!("couldn't create {}: {}", output_string, why),
+            Ok(file) => file,
+        };
+        let mut output_stream = BufWriter::new(output_file);
+
+        let mut encoder = png::Encoder::new(output_stream, 1920, 1080);
+        encoder.set_color(png::ColorType::Rgb);
+        encoder.set_compression(Fast);
+        encoder.set_depth(png::BitDepth::Sixteen);
+        let mut png_writer = encoder.write_header().unwrap();
+
+        let mut idx = 0;
+        let mut addm_pixels: Vec<u8> = Vec::new();
+
         for chunk_num in 0..self.frames.len() {
             match self.pop_next_frame_for_chunk(chunk_num) {
                 Some(arr) => {
                     let none_val = T::default();
+                    let mut tri = vec![0; 6];
                     for px in arr.iter() {
                         match self.bincode.serialize_into(
                             &mut *writer,
@@ -474,6 +504,29 @@ impl<T: Clone + Default + FrameValue<Output = T> + Serialize> FrameSequence<T> {
                                 panic!("{}", e)
                             }
                         };
+
+                        match px {
+                            Some(px) => {
+                                let tmp = T::conv_image_value(px);
+                                // let t = ().to_be_bytes();
+                                if idx % 3 == 0 {
+                                    tri[4] = tmp[0];
+                                    tri[5] = tmp[1];
+                                } else if idx % 3 == 1 {
+                                    tri[2] = tmp[0];
+                                    tri[3] = tmp[1];
+                                } else {
+                                    tri[0] = tmp[0];
+                                    tri[1] = tmp[1];
+                                }
+                            }
+                            None => {}
+                        }
+
+                        idx += 1;
+                        if idx > 0 && idx % 3 == 0 {
+                            addm_pixels.append(&mut tri);
+                        }
                     }
                 }
                 None => {
@@ -481,6 +534,8 @@ impl<T: Clone + Default + FrameValue<Output = T> + Serialize> FrameSequence<T> {
                 }
             }
         }
+        png_writer.write_image_data(&addm_pixels).unwrap(); // Save
+        panic!("done");
         self.frames_written += 1;
     }
 
@@ -491,6 +546,20 @@ impl<T: Clone + Default + FrameValue<Output = T> + Serialize> FrameSequence<T> {
             frame_count += 1;
         }
         frame_count
+    }
+}
+
+pub trait ImageValue {
+    type Input;
+    fn conv_image_value(input: &Self::Input) -> [u8; 2];
+}
+
+// If we want to export just the intensities, then do so by setting the FRAMER to frame u8 values
+// (instead of EventCoordless)
+impl ImageValue for u16 {
+    type Input = u16;
+    fn conv_image_value(input: &Self::Input) -> [u8; 2] {
+        (input).to_be_bytes()
     }
 }
 
