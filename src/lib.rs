@@ -181,6 +181,9 @@ pub trait Codec {
     fn set_output_stream(&mut self, stream: Option<BufWriter<File>>);
     fn set_input_stream(&mut self, stream: Option<BufReader<File>>);
 
+    fn set_input_stream_position(&mut self, pos: u64);
+    fn get_input_stream_position(&mut self) -> Result<u64, StreamError>;
+
     fn get_eof_position(&mut self) -> Result<usize, StreamError>;
 
     fn encode_header(

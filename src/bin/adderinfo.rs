@@ -29,6 +29,7 @@ fn main() -> Result<(), std::io::Error> {
     let mut stream: RawStream = Codec::new();
     stream.open_reader(file_path).expect("Invalid path");
     let header_bytes = stream.decode_header().expect("Invalid header");
+    let first_event_position = stream.get_input_stream_position().unwrap();
 
     let mut min_event = EventCoordless {
         d: D_MAX,
@@ -38,36 +39,9 @@ fn main() -> Result<(), std::io::Error> {
         d: 0,
         delta_t: stream.delta_t_max,
     };
-    let mut max_intensity: Intensity = 0.0;
-    let mut min_intensity: Intensity = f64::MAX;
 
     // Calculate (roughly) the dynamic range of the events. That is, what is the highest intensity
     // event, and what is the lowest intensity event?
-    if args.dynamic_range {
-        loop {
-            match stream.decode_event() {
-                Ok(event) => match event_to_intensity(&event) {
-                    a if event.d == 255 => {
-                        // ignore empty events
-                    }
-                    a if a < min_intensity => {
-                        if event.d == 254 {
-                            min_intensity = 1.0 / event.delta_t as f64;
-                        } else {
-                            min_intensity = a;
-                        }
-                    }
-                    a if a > max_intensity => {
-                        max_intensity = a;
-                    }
-                    _ => {}
-                },
-                Err(_e) => {
-                    break;
-                }
-            }
-        }
-    }
 
     let eof_position_bytes = stream.get_eof_position().unwrap();
     let file_size = Path::new(file_path).metadata().unwrap().len();
@@ -96,12 +70,51 @@ fn main() -> Result<(), std::io::Error> {
     writeln!(handle, "\tHeader size: {}", header_bytes)?;
     writeln!(handle, "\tADΔER event count: {}", num_events)?;
     writeln!(handle, "\tEvents per pixel: {}", events_per_px)?;
+    handle.flush().unwrap();
 
     if args.dynamic_range {
+        let divisor = num_events as u64 / 100;
+        stream.set_input_stream_position(first_event_position);
+        let mut max_intensity: Intensity = 0.0;
+        let mut min_intensity: Intensity = f64::MAX;
+        let mut event_count: u64 = 0;
+        loop {
+            match stream.decode_event() {
+                Ok(event) => match event_to_intensity(&event) {
+                    a if event.d == 255 => {
+                        // ignore empty events
+                    }
+                    a if a < min_intensity => {
+                        if event.d == 254 {
+                            min_intensity = 1.0 / event.delta_t as f64;
+                        } else {
+                            min_intensity = a;
+                        }
+                    }
+                    a if a > max_intensity => {
+                        max_intensity = a;
+                    }
+                    _ => {}
+                },
+                Err(_e) => {
+                    break;
+                }
+            }
+            event_count += 1;
+            if event_count % divisor == 0 {
+                write!(
+                    handle,
+                    "\rCalculating dynamic range...{}%",
+                    (event_count * 100) / num_events as u64
+                )?;
+                handle.flush().unwrap();
+            }
+        }
+
         let theory_dr_ratio = D_SHIFT[D_SHIFT.len() - 1] as f64 / (1.0 / stream.delta_t_max as f64);
         let theory_dr_db = 10.0 * theory_dr_ratio.log10();
         let theory_dr_bits = theory_dr_ratio.log2();
-        writeln!(handle, "Dynamic range")?;
+        writeln!(handle, "\rDynamic range")?;
         writeln!(handle, "\tTheoretical range:")?;
         writeln!(handle, "\t\t{} dB (power)", theory_dr_db as u32)?;
         writeln!(handle, "\t\t{} bits", theory_dr_bits as u32)?;

@@ -129,6 +129,28 @@ impl Codec for RawStream {
         self.input_stream = stream;
     }
 
+    fn set_input_stream_position(&mut self, pos: u64) {
+        match &mut self.input_stream {
+            None => {
+                panic!("Input stream not initialized");
+            }
+            Some(stream) => {
+                stream
+                    .seek(SeekFrom::Start(pos))
+                    .expect("Invalid seek position");
+            }
+        }
+    }
+
+    fn get_input_stream_position(&mut self) -> Result<u64, StreamError> {
+        match &mut self.input_stream {
+            None => {
+                panic!("Input stream not initialized");
+            }
+            Some(stream) => Ok(stream.stream_position().unwrap()),
+        }
+    }
+
     fn get_eof_position(&mut self) -> Result<usize, StreamError> {
         match &mut self.input_stream {
             None => {
