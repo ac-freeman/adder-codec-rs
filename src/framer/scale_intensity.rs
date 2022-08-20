@@ -103,7 +103,7 @@ pub fn event_to_intensity(event: &Event) -> Intensity {
     }
 }
 
-pub fn eventcoordless_to_intensity(event: &EventCoordless) -> Intensity {
+fn _eventcoordless_to_intensity(event: &EventCoordless) -> Intensity {
     match event.d as usize {
         a if a >= D_SHIFT.len() => 0 as Intensity,
         _ => D_SHIFT[event.d as usize] as Intensity / event.delta_t as Intensity,

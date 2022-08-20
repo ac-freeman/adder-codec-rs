@@ -1,13 +1,11 @@
-use adder_codec_rs::framer::event_framer::EventCoordless;
-use adder_codec_rs::framer::scale_intensity::{event_to_intensity, eventcoordless_to_intensity};
+use adder_codec_rs::framer::scale_intensity::event_to_intensity;
 use adder_codec_rs::raw::raw_stream::RawStream;
-use adder_codec_rs::{Codec, Intensity, D_MAX, D_SHIFT};
+use adder_codec_rs::{Codec, Intensity, D_SHIFT};
 use clap::ArgAction::SetTrue;
 use clap::Parser;
-use itertools::min;
+use std::io;
 use std::io::Write;
 use std::path::Path;
-use std::{env, io};
 
 /// Command line argument parser
 #[derive(Parser, Debug, Default)]
@@ -30,18 +28,6 @@ fn main() -> Result<(), std::io::Error> {
     stream.open_reader(file_path).expect("Invalid path");
     let header_bytes = stream.decode_header().expect("Invalid header");
     let first_event_position = stream.get_input_stream_position().unwrap();
-
-    let mut min_event = EventCoordless {
-        d: D_MAX,
-        delta_t: 0,
-    };
-    let mut max_event = EventCoordless {
-        d: 0,
-        delta_t: stream.delta_t_max,
-    };
-
-    // Calculate (roughly) the dynamic range of the events. That is, what is the highest intensity
-    // event, and what is the lowest intensity event?
 
     let eof_position_bytes = stream.get_eof_position().unwrap();
     let file_size = Path::new(file_path).metadata().unwrap().len();
@@ -72,6 +58,8 @@ fn main() -> Result<(), std::io::Error> {
     writeln!(handle, "\tEvents per pixel: {}", events_per_px)?;
     handle.flush().unwrap();
 
+    // Calculate the dynamic range of the events. That is, what is the highest intensity
+    // event, and what is the lowest intensity event?
     if args.dynamic_range {
         let divisor = num_events as u64 / 100;
         stream.set_input_stream_position(first_event_position);
@@ -81,7 +69,7 @@ fn main() -> Result<(), std::io::Error> {
         loop {
             match stream.decode_event() {
                 Ok(event) => match event_to_intensity(&event) {
-                    a if event.d == 255 => {
+                    _ if event.d == 255 => {
                         // ignore empty events
                     }
                     a if a < min_intensity => {
