@@ -526,6 +526,7 @@ impl<T: Clone + Default + FrameValue<Output = T> + Serialize + ImageValue<Input 
                         idx += 1;
                         if idx > 0 && idx % 3 == 0 {
                             addm_pixels.append(&mut tri);
+                            tri = vec![0; 6];
                         }
                     }
                 }
