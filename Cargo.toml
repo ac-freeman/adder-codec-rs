@@ -49,7 +49,7 @@ no-default-features = true
 features = ["docs-only"]
 
 [profile.dev]
-opt-level = 1
+opt-level = 0
 
 [profile.test]
 opt-level = 2
