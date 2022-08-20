@@ -41,7 +41,7 @@ pub struct MyArgs {
     pub(crate) ref_time: u32,
 
     /// Max number of ticks for any event
-    #[clap(short, long, default_value_t = 240000)]
+    #[clap(short, long, default_value_t = 10000)]
     pub(crate) delta_t_max: u32,
 
     /// Max number of input frames to transcode (0 = no limit)
@@ -61,7 +61,7 @@ pub struct MyArgs {
     pub(crate) input_filename: String,
 
     /// Path to output events file
-    #[clap(short, long, default_value = "")]
+    #[clap(long, default_value = "")]
     pub(crate) output_events_filename: String,
 
     /// Path to output raw video file
@@ -133,7 +133,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let width = source.get_video().width;
     let height = source.get_video().height;
 
-    let mut simul_processor = SimulProcessor::new::<u8>(
+    let mut simul_processor = SimulProcessor::new::<u16>(
         source,
         args.ref_time,
         args.tps,
@@ -146,7 +146,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     // Use ffmpeg to encode the raw frame data as an mp4
     let color_str = match args.color_input != 0 {
-        true => "bgr24",
+        true => "bgr48be",
         _ => "gray",
     };
     let mut ffmpeg = Command::new("sh")
