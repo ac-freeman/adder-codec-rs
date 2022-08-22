@@ -381,7 +381,7 @@ impl Source for FramedSource {
                         // c_val is the pixel's value on the input frame we're integrating
                         let c_val: u8 = frame_arr[px_idx];
 
-                        px.lookahead_reset();
+                        px.lookahead_reset(&mut buffer);
 
                         let mut i = 0;
                         let mut next_val: u8;

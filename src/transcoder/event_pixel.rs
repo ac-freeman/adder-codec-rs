@@ -186,10 +186,6 @@ pub mod pixel {
             sender: &mut Vec<Event>,
             communicate_events: bool,
         ) {
-            if self.coord.x == 35 && self.coord.y == 8 && intensity_left == 137.0 {
-                // println!("lookk");
-            }
-
             assert!(delta_t_left > 0.0);
 
             self.intensity_original = intensity_left;
@@ -343,6 +339,9 @@ pub mod pixel {
                 // last_event is used for calculating the instantaneous intensities
                 if first_iter {
                     self.last_event.event = self.event_to_send;
+                    if *self.d_controller.get_d() > D_SHIFT.len() as D {
+                        self.last_event.event.d = 0;
+                    }
                 }
 
                 if communicate_events {
@@ -358,12 +357,15 @@ pub mod pixel {
             self.delta_t = 0.0;
         }
 
-        pub fn lookahead_reset(&mut self) {
+        pub fn lookahead_reset(&mut self, sender: &mut Vec<Event>) {
             assert!(self.integration < 255.0);
             if self.delta_t > 0.0 {
                 self.d_controller.set_d(255);
                 if self.integration == 0.0 {
                     self.d_controller.set_d(254);
+                    if self.delta_t >= self.ref_time as f32 {
+                        self.fire_event(false, &0, &f32::MAX, sender, true, true);
+                    }
                 } else {
                     assert!(self.delta_t <= self.ref_time as f32);
                     self.delta_t = (self.ref_time

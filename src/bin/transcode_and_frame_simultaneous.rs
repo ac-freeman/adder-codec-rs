@@ -313,3 +313,92 @@ impl SimulProcessor {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    // use crate::EventStreamHeader;
+    // use crate::header::MAGIC_RAW;
+
+    use crate::{MyArgs, SimulProcessor};
+    use adder_codec_rs::transcoder::source::framed_source::FramedSourceBuilder;
+    use adder_codec_rs::transcoder::source::video::Source;
+    use adder_codec_rs::SourceCamera::FramedU8;
+    use std::fs;
+    use std::process::Command;
+
+    #[test]
+    fn dark() {
+        let mut args: MyArgs = MyArgs {
+            color_input: 0,
+            tps: 120000,
+            fps: 24,
+            ref_time: 5000,
+            delta_t_max: 120000,
+            frame_count_max: 0,
+            frame_idx_start: 0,
+            show_display: 0,
+            input_filename: "./tests/samples/lake_scaled_hd_crop.mp4".to_string(),
+            output_events_filename: "./tests/samples/TEST_lake_scaled_hd_crop.adder".to_string(),
+            output_raw_video_filename: "./tests/samples/TEST_lake_scaled_hd_crop".to_string(),
+            scale: 1.0,
+            c_thresh_pos: 0,
+            c_thresh_neg: 0,
+        };
+        let mut source_builder = FramedSourceBuilder::new(args.input_filename, FramedU8)
+            .frame_start(args.frame_idx_start)
+            .scale(args.scale)
+            .communicate_events(true)
+            .color(args.color_input != 0)
+            .contrast_thresholds(args.c_thresh_pos, args.c_thresh_neg)
+            .show_display(args.show_display != 0)
+            .time_parameters(args.ref_time, args.tps, args.delta_t_max);
+        if args.output_events_filename.len() > 0 {
+            source_builder = source_builder.output_events_filename(args.output_events_filename);
+        }
+        let source = source_builder.finish();
+
+        let width = source.get_video().width;
+        let height = source.get_video().height;
+
+        let mut simul_processor = SimulProcessor::new::<u8>(
+            source,
+            args.ref_time,
+            args.tps,
+            args.output_raw_video_filename.as_str(),
+            args.frame_count_max as i32,
+        );
+
+        let now = std::time::Instant::now();
+        simul_processor.run().unwrap();
+
+        let output_path = "./tests/samples/TEST_lake_scaled_hd_crop";
+        let output = if !cfg!(target_os = "windows") {
+            Command::new("sh")
+                .arg("-c")
+                .arg("cmp ./tests/samples/TEST_lake_scaled_hd_crop ./tests/samples/lake_scaled_out")
+                .output()
+                .expect("failed to execute process")
+        } else {
+            fs::remove_file(output_path).unwrap();
+            return;
+        };
+        assert_eq!(output.stdout.len(), 0);
+        fs::remove_file(output_path).unwrap();
+
+        let output_path = "./tests/samples/TEST_lake_scaled_hd_crop.adder";
+        let output = if !cfg!(target_os = "windows") {
+            Command::new("sh")
+                .arg("-c")
+                .arg("cmp ./tests/samples/TEST_lake_scaled_hd_crop.adder ./tests/samples/lake_scaled_hd_out.adder")
+                .output()
+                .expect("failed to execute process")
+        } else {
+            fs::remove_file(output_path).unwrap();
+            return;
+        };
+        assert_eq!(output.stdout.len(), 0);
+        fs::remove_file(output_path).unwrap();
+
+        fs::remove_file("./tests/samples/TEST_lake_scaled_hd_crop.mp4").unwrap()
+    }
+}
