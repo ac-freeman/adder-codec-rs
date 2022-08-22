@@ -457,16 +457,19 @@ impl<T: Clone + Default + FrameValue<Output = T> + Serialize> FrameSequence<T> {
     }
 
     pub fn write_frame_bytes(&mut self, writer: &mut BufWriter<File>) {
+        let none_val = T::default();
         for chunk_num in 0..self.frames.len() {
             match self.pop_next_frame_for_chunk(chunk_num) {
                 Some(arr) => {
-                    let none_val = T::default();
                     for px in arr.iter() {
                         match self.bincode.serialize_into(
                             &mut *writer,
                             match px {
                                 Some(event) => event,
-                                None => &none_val,
+                                None => {
+                                    dbg!();
+                                    &none_val
+                                }
                             },
                         ) {
                             Ok(_) => {}

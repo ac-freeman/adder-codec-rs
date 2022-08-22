@@ -41,7 +41,7 @@ pub struct MyArgs {
     pub(crate) ref_time: u32,
 
     /// Max number of ticks for any event
-    #[clap(short, long, default_value_t = 240000)]
+    #[clap(short, long, default_value_t = 120000)]
     pub(crate) delta_t_max: u32,
 
     /// Max number of input frames to transcode (0 = no limit)
@@ -133,7 +133,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let width = source.get_video().width;
     let height = source.get_video().height;
 
-    let mut simul_processor = SimulProcessor::new::<u16>(
+    let mut simul_processor = SimulProcessor::new::<u8>(
         source,
         args.ref_time,
         args.tps,
@@ -252,6 +252,9 @@ impl SimulProcessor {
                                 }
                             }
                         }
+                        output_stream
+                            .flush()
+                            .expect("Could not flush raw video writer");
                         if frame_count >= frame_max && frame_max > 0 {
                             eprintln!("Wrote max frames. Exiting channel.");
                             break;

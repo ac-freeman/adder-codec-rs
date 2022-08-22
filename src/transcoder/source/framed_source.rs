@@ -348,7 +348,14 @@ impl Source for FramedSource {
 
         let mut data_bytes: Vec<&[u8]> = Vec::new();
         for i in 0..self.lookahead_frames_scaled.len() {
-            data_bytes.push((*self.lookahead_frames_scaled[i]).data_bytes().unwrap());
+            match (*self.lookahead_frames_scaled[i]).data_bytes() {
+                Ok(bytes) => {
+                    data_bytes.push(bytes);
+                }
+                _ => {
+                    return Err("End of video");
+                }
+            }
         }
 
         let dtm = self.video.delta_t_max;
