@@ -41,7 +41,7 @@ pub struct MyArgs {
     pub(crate) ref_time: u32,
 
     /// Max number of ticks for any event
-    #[clap(short, long, default_value_t = 120000)]
+    #[clap(short, long, default_value_t = 240000)]
     pub(crate) delta_t_max: u32,
 
     /// Max number of input frames to transcode (0 = no limit)
@@ -146,7 +146,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     // Use ffmpeg to encode the raw frame data as an mp4
     let color_str = match args.color_input != 0 {
-        true => "bgr48be",
+        true => "bgr24be",
         _ => "gray",
     };
     let mut ffmpeg = Command::new("sh")
