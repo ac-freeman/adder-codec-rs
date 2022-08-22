@@ -146,7 +146,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     // Use ffmpeg to encode the raw frame data as an mp4
     let color_str = match args.color_input != 0 {
-        true => "bgr24be",
+        true => "bgr24",
         _ => "gray",
     };
     let mut ffmpeg = Command::new("sh")
