@@ -469,7 +469,7 @@ impl<T: Clone + Default + FrameValue<Output = T> + Serialize + ImageValue<Input 
     }
 
     pub fn write_frame_bytes(&mut self, writer: &mut BufWriter<File>) {
-        let mut output_string = "/home/andrew/Downloads/out_16bit.png";
+        let mut output_string = "/home/andrew/Downloads/out_16bit_2.png";
         // let mut output_string = format!("{}{}{}{}{:08}{}", self.output_dir, "/".to_string(),(dir_1 as i32).to_string(),"/".to_string(), output_name_number, ".addm".to_string());
         let output_file = match File::create(&output_string) {
             Err(why) => panic!("couldn't create {}: {}", output_string, why),
@@ -486,17 +486,20 @@ impl<T: Clone + Default + FrameValue<Output = T> + Serialize + ImageValue<Input 
         let mut idx = 0;
         let mut addm_pixels: Vec<u8> = Vec::new();
 
+        let none_val = T::default();
+        let mut tri = vec![0; 6];
         for chunk_num in 0..self.frames.len() {
             match self.pop_next_frame_for_chunk(chunk_num) {
                 Some(arr) => {
-                    let none_val = T::default();
-                    let mut tri = vec![0; 6];
                     for px in arr.iter() {
                         match self.bincode.serialize_into(
                             &mut *writer,
                             match px {
                                 Some(event) => event,
-                                None => &none_val,
+                                None => {
+                                    dbg!();
+                                    &none_val
+                                }
                             },
                         ) {
                             Ok(_) => {}

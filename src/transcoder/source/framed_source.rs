@@ -348,7 +348,14 @@ impl Source for FramedSource {
 
         let mut data_bytes: Vec<&[u8]> = Vec::new();
         for i in 0..self.lookahead_frames_scaled.len() {
-            data_bytes.push((*self.lookahead_frames_scaled[i]).data_bytes().unwrap());
+            match (*self.lookahead_frames_scaled[i]).data_bytes() {
+                Ok(bytes) => {
+                    data_bytes.push(bytes);
+                }
+                _ => {
+                    return Err("End of video");
+                }
+            }
         }
 
         let dtm = self.video.delta_t_max;
@@ -374,7 +381,7 @@ impl Source for FramedSource {
                         // c_val is the pixel's value on the input frame we're integrating
                         let c_val: u8 = frame_arr[px_idx];
 
-                        px.lookahead_reset();
+                        px.lookahead_reset(&mut buffer);
 
                         let mut i = 0;
                         let mut next_val: u8;

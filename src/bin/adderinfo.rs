@@ -32,7 +32,8 @@ fn main() -> Result<(), std::io::Error> {
     let eof_position_bytes = stream.get_eof_position().unwrap();
     let file_size = Path::new(file_path).metadata().unwrap().len();
     let num_events = (eof_position_bytes - 1 - header_bytes) / stream.event_size as usize;
-    let events_per_px = num_events / (stream.width as usize * stream.height as usize);
+    let events_per_px =
+        num_events / (stream.width as usize * stream.height as usize * stream.channels as usize);
 
     let stdout = io::stdout();
     let mut handle = io::BufWriter::new(stdout.lock());
@@ -55,7 +56,7 @@ fn main() -> Result<(), std::io::Error> {
     writeln!(handle, "\tFile size: {}", file_size)?;
     writeln!(handle, "\tHeader size: {}", header_bytes)?;
     writeln!(handle, "\tADΔER event count: {}", num_events)?;
-    writeln!(handle, "\tEvents per pixel: {}", events_per_px)?;
+    writeln!(handle, "\tEvents per pixel channel: {}", events_per_px)?;
     handle.flush().unwrap();
 
     // Calculate the dynamic range of the events. That is, what is the highest intensity
