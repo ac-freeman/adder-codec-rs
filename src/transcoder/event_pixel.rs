@@ -32,9 +32,6 @@ pub mod pixel {
 
     /// ADΔER pixel model, with attributes for driving integration
     pub struct EventPixel {
-        /// x- and y- coordinates of the pixel
-        pub(crate) coord: Coord,
-
         /// Pixel's current accumulated intensity
         integration: Integration,
 
@@ -122,14 +119,6 @@ pub mod pixel {
             };
 
             EventPixel {
-                coord: Coord {
-                    x,
-                    y,
-                    c: match channels {
-                        1 => None,
-                        _ => Some(c),
-                    },
-                },
                 integration: 0.0,
                 delta_t: 0.0,
                 delta_t_original: 0.0,

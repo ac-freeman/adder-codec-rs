@@ -103,7 +103,7 @@ fn main() -> Result<(), std::io::Error> {
         let theory_dr_ratio = D_SHIFT[D_SHIFT.len() - 1] as f64 / (1.0 / stream.delta_t_max as f64);
         let theory_dr_db = 10.0 * theory_dr_ratio.log10();
         let theory_dr_bits = theory_dr_ratio.log2();
-        writeln!(handle, "\rDynamic range")?;
+        writeln!(handle, "\rDynamic range                       ")?;
         writeln!(handle, "\tTheoretical range:")?;
         writeln!(handle, "\t\t{} dB (power)", theory_dr_db as u32)?;
         writeln!(handle, "\t\t{} bits", theory_dr_bits as u32)?;

@@ -143,6 +143,7 @@ pub enum FrameSequenceError {
     InvalidIndex,
 }
 
+#[allow(dead_code)]
 pub struct FrameSequence<T> {
     pub(crate) frames: Vec<VecDeque<Frame<Option<T>>>>,
     pub(crate) frames_written: i64,

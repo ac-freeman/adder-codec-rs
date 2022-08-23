@@ -393,8 +393,8 @@ impl Source for FramedSource {
                         while i < data_bytes.len() {
                             next_val = data_bytes[i][px_idx];
 
-                            if (next_val >= c_val.saturating_sub(self.c_thresh_neg)
-                                && next_val <= c_val.saturating_add(self.c_thresh_pos))
+                            if next_val >= c_val.saturating_sub(self.c_thresh_neg)
+                                && next_val <= c_val.saturating_add(self.c_thresh_pos)
                             {
                                 i += 1;
                                 intensity_sum += next_val as f32;

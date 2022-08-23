@@ -83,6 +83,7 @@ pub struct MyArgs {
     pub(crate) c_thresh_neg: u8,
 }
 
+#[allow(dead_code)]
 async fn download_file() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     // Download the drop.mp4 video example, if you don't already have it
     let path_str = "./tests/samples/videos/drop.mp4";
@@ -106,7 +107,7 @@ async fn download_file() -> Result<(), Box<dyn std::error::Error + Send + Sync>>
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    let mut args: MyArgs = MyArgs::parse();
+    let args: MyArgs = MyArgs::parse();
     println!("c_pos: {}, c_neg: {}", args.c_thresh_pos, args.c_thresh_neg);
 
     //////////////////////////////////////////////////////
