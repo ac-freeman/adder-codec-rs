@@ -4,6 +4,7 @@ use crate::transcoder::source::video::Source;
 use crate::transcoder::source::video::Video;
 use crate::{Codec, Coord, Event, D, D_MAX};
 use core::default::Default;
+use std::cmp::max;
 use std::collections::VecDeque;
 use std::mem::swap;
 use std::sync::mpsc::{channel, Receiver, Sender};
@@ -98,6 +99,7 @@ impl FramedSourceBuilder {
         self.ref_time = ref_time;
         self.tps = tps;
         self.delta_t_max = delta_t_max;
+        assert_eq!(self.delta_t_max % self.ref_time, 0);
         self
     }
 
@@ -346,7 +348,14 @@ impl Source for FramedSource {
 
         let mut data_bytes: Vec<&[u8]> = Vec::new();
         for i in 0..self.lookahead_frames_scaled.len() {
-            data_bytes.push((*self.lookahead_frames_scaled[i]).data_bytes().unwrap());
+            match (*self.lookahead_frames_scaled[i]).data_bytes() {
+                Ok(bytes) => {
+                    data_bytes.push(bytes);
+                }
+                _ => {
+                    return Err("End of video");
+                }
+            }
         }
 
         let dtm = self.video.delta_t_max;
@@ -365,13 +374,14 @@ impl Source for FramedSource {
                 let mut buffer: Vec<Event> = Vec::with_capacity(100);
                 for (chunk_px_idx, px) in chunk.iter_mut().enumerate() {
                     let px_idx = chunk_px_idx + px_per_chunk * chunk_idx;
+
                     px.reset_fire_count();
 
                     if self.video.in_interval_count == px.next_transition.frame_idx {
                         // c_val is the pixel's value on the input frame we're integrating
                         let c_val: u8 = frame_arr[px_idx];
 
-                        px.lookahead_reset();
+                        px.lookahead_reset(&mut buffer);
 
                         let mut i = 0;
                         let mut next_val: u8;
@@ -388,7 +398,9 @@ impl Source for FramedSource {
                             {
                                 i += 1;
                                 intensity_sum += next_val as f32;
-                                if (intensity_sum).log2().floor() as D > current_d {
+                                if (intensity_sum).log2().floor() as D > current_d
+                                    || (intensity_sum == 0.0)
+                                {
                                     current_d = (intensity_sum).log2().floor() as D;
                                     ideal_i = i;
                                 }
@@ -592,7 +604,8 @@ impl FrameBuffer {
     }
 
     pub fn prep_frame(&mut self) {
-        if self.input_frame_queue.len() < self.buffer_size - 30 {
+        if self.input_frame_queue.len() < max(self.buffer_size.saturating_sub(30), self.buffer_size)
+        {
             self.fill_buffer();
         }
     }

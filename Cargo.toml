@@ -1,6 +1,6 @@
 [package]
 name = "adder-codec-rs"
-version = "0.1.8"
+version = "0.1.9"
 edition = "2021"
 authors = ["Andrew C. Freeman"]
 description = """Encoder/transcoder/decoder for ADΔER (Address, Decimation, Δt Event Representation) streams.
@@ -49,7 +49,7 @@ no-default-features = true
 features = ["docs-only"]
 
 [profile.dev]
-opt-level = 1
+opt-level = 0
 
 [profile.test]
 opt-level = 2

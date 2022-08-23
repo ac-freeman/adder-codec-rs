@@ -98,26 +98,34 @@ The program will re-frame the ADΔER events as they are being generated, without
 Want to quickly view the metadata for an ADΔER file? Just execute:
 
 ```
-cargo run --release --bin adderinfo /path/to/file.adder
+cargo run --release --bin adderinfo -- -i /path/to/file.adder -d
 ```
 
-Example output:
+The `-d` flag enables the calculation of dynamic the ADΔER file's dynamic range. This can take a while, since each event must be decoded to find the event with the maximum intensity and the minimum intensity. Example output:
 
 ```
 Dimensions
-	Width: 269
-	Height: 151
+	Width: 960
+	Height: 540
 	Color channels: 3
 Source camera: FramedU8 - Framed video with 8-bit pixel depth, unsigned integer
 ADΔER transcoder parameters
-	Codec version: 0
+	Codec version: 1
 	Ticks per second: 120000
 	Reference ticks per source interval: 5000
-	Δt_max: 150000
+	Δt_max: 240000
 File metadata
-	File size: 49795649
-	Header size: 28
-	ADΔER event count: 4979561
+	File size: 1114272056
+	Header size: 29
+	ADΔER event count: 111427201
+	Events per pixel: 214
+Dynamic range
+	Theoretical range:
+		114 dB (power)
+		37 bits
+	Realized range:
+		27 dB (power)
+		9 bits
 ```
 
 ## Direct usage
