@@ -7,6 +7,8 @@
 
 Encoder/transcoder/decoder for ADΔER (Address, Decimation, Δt Event Representation) streams. Currently, only implemented for raw (uncompressed) streams. Includes a transcoder for casting framed video into an ADΔER representation in a manner which preserves the temporal synchronicity of the source, but enables many-frame intensity averaging on a per-pixel basis and extremely high dynamic range.
 
+[![ADΔER Showcase Video](https://yt-embed.herokuapp.com/embed?v=yfzwn5PrMpw)](http://www.youtube.com/watch?v=yfzwn5PrMpw "ADΔER Showcase")
+
 # Background
 
 The ADΔER (pronounced "adder") representation is inspired by the ASINT camera design by Singh et al. It aims to help us move away from thinking about video in terms of fixed sample rates and frames, and to provide a one-size-fits-all ("narrow waist") method for representing intensity information **_asynchronously_**.
@@ -21,11 +23,11 @@ In the context of framed video, ADΔER allows us to have multi-frame intensity _
 
 If you just want to use the hooks for encoding/decoding ADΔER streams (i.e., not a transcoder for producing the ADΔER events for a given source), then you can include the library by adding the following to your Cargo.toml file:
 
-`adder-codec-rs = {version = "0.1.8", features = ["raw-codec"]}`
+`adder-codec-rs = {version = "0.1.9", features = ["raw-codec"]}`
 
 If you want to use the provided transcoder(s), then you have to install OpenCV 4.0+ according to the configuration guidelines for [opencv-rust](https://github.com/twistedfall/opencv-rust). Then, include the library in your project as normal:
 
-`adder-codec-rs = "0.1.8"`
+`adder-codec-rs = "0.1.9"`
 
 # Examples
 
