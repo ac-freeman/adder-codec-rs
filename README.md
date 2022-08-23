@@ -7,11 +7,15 @@
 
 Encoder/transcoder/decoder for ADΔER (Address, Decimation, Δt Event Representation) streams. Currently, only implemented for raw (uncompressed) streams. Includes a transcoder for casting framed video into an ADΔER representation in a manner which preserves the temporal synchronicity of the source, but enables many-frame intensity averaging on a per-pixel basis and extremely high dynamic range.
 
-[![ADΔER Showcase Video](https://yt-embed.herokuapp.com/embed?v=yfzwn5PrMpw)](http://www.youtube.com/watch?v=yfzwn5PrMpw "ADΔER Showcase")
+Source 8-bit image frame with shadows boosted ([source video](https://www.pexels.com/video/river-between-trees-2126081/))      |  Frame reconstructed from ADΔER events, generated from 48 input frames, with shadows boosted. Note the greater dynamic range and temporal denoising in the shadows.
+:-------------------------:|:-------------------------:
+![](https://github.com/ac-freeman/adder-codec-rs/blob/main/source_frame_0.jpg)  |  ![](https://github.com/ac-freeman/adder-codec-rs/blob/main/out_16bit_2_c10.jpg)
 
 # Background
 
 The ADΔER (pronounced "adder") representation is inspired by the ASINT camera design by Singh et al. It aims to help us move away from thinking about video in terms of fixed sample rates and frames, and to provide a one-size-fits-all ("narrow waist") method for representing intensity information **_asynchronously_**.
+
+ <a href="http://www.youtube.com/watch?v=yfzwn5PrMpw"><img align="right" width="384" height="288" src="https://yt-embed.herokuapp.com/embed?v=yfzwn5PrMpw"></a>
 
 Under the ASINT model, a pixel $\langle x,y\rangle$ continuously integrates light, firing an ADΔER event $\langle x,y,D,\Delta t\rangle$ when it accumulates $2^D$ intensity units (e.g., photons), where $D$ is a _decimation threshold_ and $\Delta t$ is the time elapsed since the pixel last fired an event. we measure $t$ in clock “ticks,'' where the granularity of a clock tick length is user-adjustable. In a raw ADΔER stream, the events are time-ordered and spatially interleaved. An ADΔER event directly specifies an intensity, $I$, by $I \approx \frac{2^D}{\Delta t}$. The key insight of the ASINT model is _the dynamic, pixelwise control of_ $D$. Lowering $D$ for a pixel will increase its event rate, while raising $D$ will decrease its event rate. With this multi-faceted $D$ control, we can ensure that pixel sensitivities are well-tuned to scene dynamics.
 
