@@ -244,7 +244,7 @@ impl SimulProcessor {
                                 frames_returned => {
                                     frame_count += frames_returned;
                                     print!(
-                                        "\rOutput frame {}. Got {} frames in  {}ms",
+                                        "\rOutput frame {}. Got {} frames in  {}ms\t",
                                         frame_count,
                                         frames_returned,
                                         now.elapsed().as_millis()
