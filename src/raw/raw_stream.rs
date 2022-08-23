@@ -399,7 +399,7 @@ mod tests {
         stream
             .open_reader("./TEST_".to_owned() + n.to_string().as_str() + ".addr")
             .expect("Couldn't open file");
-        stream.decode_header();
+        stream.decode_header().unwrap();
         let res = stream.decode_event();
         match res {
             Ok(decoded_event) => {

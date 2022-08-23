@@ -324,14 +324,13 @@ mod tests {
 
     use crate::{MyArgs, SimulProcessor};
     use adder_codec_rs::transcoder::source::framed_source::FramedSourceBuilder;
-    use adder_codec_rs::transcoder::source::video::Source;
     use adder_codec_rs::SourceCamera::FramedU8;
     use std::fs;
     use std::process::Command;
 
     #[test]
     fn dark() {
-        let mut args: MyArgs = MyArgs {
+        let args: MyArgs = MyArgs {
             color_input: 0,
             tps: 120000,
             fps: 24,
@@ -360,18 +359,15 @@ mod tests {
         }
         let source = source_builder.finish();
 
-        let width = source.get_video().width;
-        let height = source.get_video().height;
-
         let mut simul_processor = SimulProcessor::new::<u8>(
             source,
             args.ref_time,
             args.tps,
+            args.fps,
             args.output_raw_video_filename.as_str(),
             args.frame_count_max as i32,
         );
 
-        let now = std::time::Instant::now();
         simul_processor.run().unwrap();
 
         let output_path = "./tests/samples/TEST_lake_scaled_hd_crop";
@@ -401,7 +397,5 @@ mod tests {
         };
         assert_eq!(output.stdout.len(), 0);
         fs::remove_file(output_path).unwrap();
-
-        fs::remove_file("./tests/samples/TEST_lake_scaled_hd_crop.mp4").unwrap()
     }
 }

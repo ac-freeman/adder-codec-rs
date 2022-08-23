@@ -8,10 +8,8 @@ use std::path::Path;
 use std::process::Command;
 
 use adder_codec_rs::framer::event_framer::FramerMode::INSTANTANEOUS;
-use adder_codec_rs::framer::event_framer::SourceType::U8;
 use adder_codec_rs::framer::event_framer::{FrameSequence, Framer, FramerBuilder};
 use adder_codec_rs::raw::raw_stream::RawStream;
-use adder_codec_rs::SourceCamera;
 use adder_codec_rs::SourceCamera::FramedU8;
 use adder_codec_rs::{Codec, Coord, Event};
 use rand::Rng;
@@ -21,7 +19,7 @@ fn test_sample_perfect_dt() {
     let input_path = "./tests/samples/sample_1_raw_events.adder";
     let mut stream: RawStream = Codec::new();
     stream.open_reader(input_path.to_string()).unwrap();
-    stream.decode_header();
+    stream.decode_header().unwrap();
 
     let output_path = Path::new("./tests/samples/temp_sample_1");
     let mut output_stream = BufWriter::new(File::create(output_path).unwrap());
@@ -85,7 +83,7 @@ fn test_sample_perfect_dt_color() {
     let input_path = "./tests/samples/sample_2_raw_events.adder";
     let mut stream: RawStream = Codec::new();
     stream.open_reader(input_path.to_string()).unwrap();
-    stream.decode_header();
+    stream.decode_header().unwrap();
 
     let output_path = Path::new("./tests/samples/temp_sample_2");
     let mut output_stream = BufWriter::new(File::create(output_path).unwrap());
@@ -244,7 +242,7 @@ fn setup_raw_reader(rand_num: u32, stream: &mut RawStream) {
     stream
         .open_reader("./TEST_".to_owned() + rand_num.to_string().as_str() + ".addr")
         .expect("Couldn't open file");
-    stream.decode_header();
+    stream.decode_header().unwrap();
 }
 
 fn rand_u32() -> u32 {
@@ -694,7 +692,7 @@ fn test_sample_unordered() {
     let input_path = "./tests/samples/sample_3_unordered.adder";
     let mut stream: RawStream = Codec::new();
     stream.open_reader(input_path.to_string()).unwrap();
-    stream.decode_header();
+    stream.decode_header().unwrap();
 
     let output_path = Path::new("./tests/samples/temp_sample_3_unordered");
     let mut output_stream = BufWriter::new(File::create(output_path).unwrap());
@@ -757,7 +755,7 @@ fn test_sample_ordered() {
     let input_path = "./tests/samples/sample_3_ordered.adder";
     let mut stream: RawStream = Codec::new();
     stream.open_reader(input_path.to_string()).unwrap();
-    stream.decode_header();
+    stream.decode_header().unwrap();
 
     let output_path = Path::new("./tests/samples/temp_sample_3_ordered");
     let mut output_stream = BufWriter::new(File::create(output_path).unwrap());
