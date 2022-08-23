@@ -1,10 +1,10 @@
 #!/usr/bin/bash
-FOLDER="bunny"
-SOURCE_FPS=24.0
+FOLDER="waves"
+SOURCE_FPS=30.0
 SOURCE_START_FRAME=$(bc -l <<< "1/${SOURCE_FPS}")
 cd ..
 
-for (( i = 0; i <= 20; i += 2 ))
+for (( i = 0; i <= 40; i += 5 ))
 do 
     cargo run --release --bin transcode_and_frame_simultaneous -- --show-display 0 --scale 1.0 --input-filename "/home/andrew/Downloads/${FOLDER}/${FOLDER}.mp4" --output-raw-video-filename "/home/andrew/Downloads/${FOLDER}/out_${i}" --c-thresh-pos $i --c-thresh-neg $i --frame-count-max 1440 --output-events-filename "/home/andrew/Downloads/${FOLDER}/out_${i}.adder" --tps 120000 --delta-t-max 480000 --fps 24
     rm -rf "/home/andrew/Downloads/${FOLDER}/out_${i}"
