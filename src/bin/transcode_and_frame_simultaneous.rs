@@ -137,6 +137,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         source,
         args.ref_time,
         args.tps,
+        args.fps,
         args.output_raw_video_filename.as_str(),
         args.frame_count_max as i32,
     );
@@ -185,6 +186,7 @@ impl SimulProcessor {
         source: FramedSource,
         ref_time: DeltaT,
         tps: DeltaT,
+        fps: u32,
         output_path: &str,
         frame_max: i32,
     ) -> SimulProcessor
@@ -201,7 +203,7 @@ impl SimulProcessor {
             .num_threads(current_num_threads() / 2)
             .build()
             .unwrap();
-        let reconstructed_frame_rate = 24;
+        let reconstructed_frame_rate = fps;
         // For instantaneous reconstruction, make sure the frame rate matches the source video rate
         assert_eq!(tps / ref_time, reconstructed_frame_rate);
 
