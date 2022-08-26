@@ -342,8 +342,6 @@ impl Source for FramedSource {
             return Err("End of video");
         }
 
-        self.video.input_frame_8u = (*self.input_frame_scaled).clone();
-
         let frame_arr: &[u8] = self.input_frame_scaled.data_bytes().unwrap();
 
         let mut data_bytes: Vec<&[u8]> = Vec::new();

@@ -31,7 +31,6 @@ pub struct Video {
     pub(crate) show_live: bool,
     pub in_interval_count: u32,
     pub(crate) instantaneous_display_frame: Mat,
-    pub(crate) input_frame_8u: Mat, // TODO: only makes sense for a framed source
     pub(crate) motion_frame_mat: Mat,
     pub(crate) instantaneous_frame: Mat,
     pub event_sender: Sender<Vec<Event>>,
@@ -137,7 +136,6 @@ impl Video {
             show_live: false,
             in_interval_count: 0,
             instantaneous_display_frame: Mat::default(),
-            input_frame_8u: Mat::default(),
             motion_frame_mat,
             instantaneous_frame,
             event_sender,
@@ -308,94 +306,6 @@ impl Video {
                     px.d_controller.update_roi_factor(*factor);
                 }
             });
-    }
-
-    pub fn segment_motion(&mut self) {
-        // let now = std::time::Instant::now();
-        // println!("Seg {}ms", now.elapsed().as_millis());
-        let mut motion_seg_overlay = Mat::default();
-        add(
-            &self.input_frame_8u,
-            &self.motion_frame_mat,
-            &mut motion_seg_overlay,
-            &no_array(),
-            0,
-        )
-        .unwrap();
-
-        let mut thresholded_u8 = self.motion_frame_mat.clone();
-        let dilation_size = 1;
-        let dilation_element = match opencv::imgproc::get_structuring_element(
-            opencv::imgproc::MORPH_ELLIPSE,
-            Size::new(dilation_size * 2 + 1, dilation_size * 2 + 1),
-            Point::new(dilation_size, dilation_size),
-        ) {
-            Err(why) => panic!("couldn't get structuring element: {}", why),
-            Ok(v) => v,
-        };
-        let mut thresholded_u8_eroded = Mat::default();
-        opencv::imgproc::dilate(
-            &thresholded_u8,
-            &mut thresholded_u8_eroded,
-            &dilation_element,
-            Point::new(-1, -1),
-            5,
-            BORDER_DEFAULT,
-            opencv::core::Scalar::new(255.0, 255.0, 255.0, 255.0),
-        )
-        .unwrap();
-        std::mem::swap(&mut thresholded_u8_eroded, &mut thresholded_u8);
-        opencv::imgproc::erode(
-            &thresholded_u8,
-            &mut thresholded_u8_eroded,
-            &dilation_element,
-            Point::new(-1, -1),
-            2,
-            BORDER_DEFAULT,
-            opencv::core::Scalar::new(255.0, 255.0, 255.0, 255.0),
-        )
-        .unwrap();
-
-        let mut contours = opencv::types::VectorOfVectorOfPoint::default();
-        let mut hierarchy = opencv::core::no_array();
-
-        opencv::imgproc::find_contours_with_hierarchy(
-            &thresholded_u8_eroded,
-            &mut contours,
-            &mut hierarchy,
-            RETR_EXTERNAL,
-            opencv::imgproc::CHAIN_APPROX_SIMPLE,
-            Point::new(0, 0),
-        )
-        .unwrap();
-
-        for i in 0..contours.len() {
-            let contour = contours.get(i).unwrap();
-            let area = contour_area(&contour, false).unwrap();
-            if area > ((self.width as f32 * self.height as f32).sqrt() * 0.1) as f64
-                && area < ((self.width as f32 * self.height as f32).sqrt() * 20.0) as f64
-            {
-                todo!();
-                // let rect = bounding_rect(&contour).unwrap();
-                // rectangle(
-                //     &mut self.instantaneous_display_frame,
-                //     rect,
-                //     opencv::core::Scalar::new(255.0, 255.0, 255.0, 255.0),
-                //     2,
-                //     1,
-                //     0,
-                // )
-                // .unwrap();
-            }
-        }
-
-        //// Disabled for speed at the moment
-        show_display("Motion seg overlay", &motion_seg_overlay, 1, self);
-        // show_display("Motion seg raw", &motion_seg_raw, 1, self);
-        show_display("Motion seg eroded", &thresholded_u8_eroded, 1, self);
-        // let mut rate_mat_norm = Mat::default();
-        // normalize(&self.rate_frame_mat, &mut rate_mat_norm, 122.0, 255.0, NORM_MINMAX, -1, &no_array()).unwrap();
-        // show_display("rate code", &rate_mat_norm, 1, self);
     }
 
     pub fn end_write_stream(&mut self) {
