@@ -10,7 +10,7 @@ use std::path::Path;
 pub mod framer;
 mod header;
 pub mod raw;
-#[cfg(feature = "transcoder")]
+#[cfg(feature = "opencv")]
 pub mod transcoder; // Have to enable the 'transcoder' feature. Requires OpenCV to be installed.
 
 /// Decimation value; a pixel's sensitivity.
