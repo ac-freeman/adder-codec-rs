@@ -1,5 +1,5 @@
 use opencv::core::{
-    add, no_array, normalize, Mat, Point, Size, BORDER_DEFAULT, CV_8U, CV_8UC3, NORM_MINMAX,
+    no_array, normalize, Mat, Point, Size, BORDER_DEFAULT, CV_8U, CV_8UC3, NORM_MINMAX,
 };
 
 use std::path::Path;

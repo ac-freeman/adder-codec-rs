@@ -319,17 +319,18 @@ impl SimulProcessor {
 
 #[cfg(test)]
 mod tests {
-    // use crate::EventStreamHeader;
-    // use crate::header::MAGIC_RAW;
-
     use crate::{MyArgs, SimulProcessor};
     use adder_codec_rs::transcoder::source::framed_source::FramedSourceBuilder;
     use adder_codec_rs::SourceCamera::FramedU8;
     use std::fs;
+    use std::path::PathBuf;
     use std::process::Command;
 
     #[test]
     fn dark() {
+        let d = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let manifest_path_str = d.as_path().to_str().unwrap().to_owned();
+
         let args: MyArgs = MyArgs {
             color_input: 0,
             tps: 120000,
@@ -339,9 +340,12 @@ mod tests {
             frame_count_max: 0,
             frame_idx_start: 0,
             show_display: 0,
-            input_filename: "./tests/samples/lake_scaled_hd_crop.mp4".to_string(),
-            output_events_filename: "./tests/samples/TEST_lake_scaled_hd_crop.adder".to_string(),
-            output_raw_video_filename: "./tests/samples/TEST_lake_scaled_hd_crop".to_string(),
+            input_filename: manifest_path_str.clone()
+                + &"/tests/samples/lake_scaled_hd_crop.mp4".to_string(),
+            output_events_filename: manifest_path_str.clone()
+                + &"/tests/samples/TEST_lake_scaled_hd_crop.adder".to_string(),
+            output_raw_video_filename: manifest_path_str.clone()
+                + &"/tests/samples/TEST_lake_scaled_hd_crop".to_string(),
             scale: 1.0,
             c_thresh_pos: 0,
             c_thresh_neg: 0,
