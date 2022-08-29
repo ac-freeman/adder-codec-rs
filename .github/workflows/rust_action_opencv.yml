@@ -48,10 +48,17 @@ jobs:
         with:
           toolchain: ${{ matrix.rust }}
           default: true
-      - name: Build
-        run: cargo build --verbose --all-features
-      - name: Run tests
-        run: cargo test --verbose --all-features
+          
+      - name: Test project
+        run: ci/script.sh
+        shell: bash
+
+      - name: Upload bindings if test failed
+        uses: actions/upload-artifact@v1
+        if: failure()
+        with:
+          name: generated-failed-bindings-${{ runner.os }}-${{ matrix.version.opencv }}
+          path: src/opencv
 
   vcpkg:
     strategy:
@@ -89,6 +96,17 @@ jobs:
         with:
           toolchain: ${{ matrix.rust }}
           default: true
+          
+      - name: Test project
+        run: ci/script.sh
+        shell: bash
+
+      - name: Upload bindings if test failed
+        uses: actions/upload-artifact@v1
+        if: failure()
+        with:
+          name: generated-failed-bindings-${{ runner.os }}-${{ matrix.version.opencv }}
+          path: src/opencv
 
   bin:
     strategy:
@@ -130,3 +148,28 @@ jobs:
         with:
           toolchain: ${{ matrix.rust }}
           default: true
+      - name: Test project
+        run: ci/script.sh
+        shell: bash
+
+      - name: Upload bindings if test failed
+        uses: actions/upload-artifact@v1
+        if: failure()
+        with:
+          name: generated-failed-bindings-${{ runner.os }}-${{ matrix.version.opencv }}
+          path: src/opencv
+          
+  docs-rs:
+      runs-on: ubuntu-20.04
+      steps:
+        - uses: actions/checkout@v2
+
+        - name: Install Rust
+          uses: actions-rs/toolchain@v1
+          with:
+            toolchain: stable
+            default: true
+
+        - name: Run a documentation generation test
+          run: ci/docs-rs.sh
+          shell: bash
