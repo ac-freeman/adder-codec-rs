@@ -50,6 +50,6 @@ echo "=== Target settings:"
 rustc --print=cfg
 
 export CXX=clang++
-touch build.rs
+# touch build.rs
 cargo test -vv
 cargo test --release -vv
