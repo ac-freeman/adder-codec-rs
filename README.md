@@ -13,7 +13,7 @@ Source 8-bit image frame with shadows boosted ([source video](https://www.pexels
 
 # Background
 
-The ADΔER (pronounced "adder") representation is inspired by the ASINT camera design by Singh et al. It aims to help us move away from thinking about video in terms of fixed sample rates and frames, and to provide a one-size-fits-all ("narrow waist") method for representing intensity information **_asynchronously_**.
+The ADΔER (pronounced "adder") representation is inspired by the ASINT camera design by [Singh et al](https://www.researchgate.net/publication/318351141_A_Frameless_Imaging_Sensor_with_Asynchronous_Pixels_An_Architectural_Evaluation). It aims to help us move away from thinking about video in terms of fixed sample rates and frames, and to provide a one-size-fits-all ("narrow waist") method for representing intensity information **_asynchronously_**.
 
  <a href="http://www.youtube.com/watch?v=yfzwn5PrMpw"><img align="right" width="384" height="288" src="https://yt-embed.herokuapp.com/embed?v=yfzwn5PrMpw"></a>
 
@@ -172,4 +172,48 @@ match self.stream.decode_event() {
 };
 stream.close_reader();
 ```
+# Cite this work
 
+If you write a paper which references this software, we ask that you reference the following papers on which it is based. Citations are given in the BibTeX format.
+
+[Motion segmentation and tracking for integrating event cameras](https://dl.acm.org/doi/abs/10.1145/3458305.3463373)
+```
+@inproceedings{10.1145/3458305.3463373,
+author = {Freeman, Andrew C. and Burgess, Chris and Mayer-Patel, Ketan},
+title = {Motion Segmentation and Tracking for Integrating Event Cameras},
+year = {2021},
+isbn = {9781450384346},
+publisher = {Association for Computing Machinery},
+address = {New York, NY, USA},
+url = {https://doi.org/10.1145/3458305.3463373},
+doi = {10.1145/3458305.3463373},
+abstract = {Integrating event cameras are asynchronous sensors wherein incident light values may be measured directly through continuous integration, with individual pixels' light sensitivity being adjustable in real time, allowing for extremely high frame rate and high dynamic range video capture. This paper builds on lessons learned with previous attempts to compress event data and presents a new scheme for event compression that has many analogues to traditional framed video compression techniques. We show how traditional video can be transcoded to an event-based representation, and describe the direct encoding of motion data in our event-based representation. Finally, we present experimental results proving how our simple scheme already approaches the state-of-the-art compression performance for slow-motion object tracking. This system introduces an application "in the loop" framework, where the application dynamically informs the camera how sensitive each pixel should be, based on the efficacy of the most recent data received.},
+booktitle = {Proceedings of the 12th ACM Multimedia Systems Conference},
+pages = {1–11},
+numpages = {11},
+keywords = {HDR, spike compression, image reconstruction, simulation, event cameras, object tracking, entropy encoding, motion segmentation, asynchronous systems},
+location = {Istanbul, Turkey},
+series = {MMSys '21}
+}
+```
+
+[Integrating Event Camera Sensor Emulator](https://dl.acm.org/doi/10.1145/3394171.3414394)
+```
+@inproceedings{10.1145/3394171.3414394,
+author = {Freeman, Andrew C. and Mayer-Patel, Ketan},
+title = {Integrating Event Camera Sensor Emulator},
+year = {2020},
+isbn = {9781450379885},
+publisher = {Association for Computing Machinery},
+address = {New York, NY, USA},
+url = {https://doi.org/10.1145/3394171.3414394},
+doi = {10.1145/3394171.3414394},
+abstract = {Event cameras are biologically-inspired sensors that upend the framed, synchronous nature of traditional cameras. Singh et al. proposed a novel sensor design wherein incident light values may be measured directly through continuous integration, with individual pixels' light sensitivity being adjustable in real time, allowing for extremely high frame rate and high dynamic range video capture. Arguing the potential usefulness of this sensor, this paper introduces a system for simulating the sensor's event outputs and pixel firing rate control from 3D-rendered input images.},
+booktitle = {Proceedings of the 28th ACM International Conference on Multimedia},
+pages = {4503–4505},
+numpages = {3},
+keywords = {asynchronous systems, image reconstruction, spike compression, event cameras, HDR, simulation},
+location = {Seattle, WA, USA},
+series = {MM '20}
+}
+```
