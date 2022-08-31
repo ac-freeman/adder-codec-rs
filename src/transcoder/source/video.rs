@@ -18,6 +18,21 @@ use ndarray::Axis;
 use rayon::iter::IntoParallelIterator;
 use rayon::iter::{IndexedParallelIterator, ParallelIterator};
 
+#[derive(Debug)]
+pub enum SourceError {
+    /// Could not open source file
+    Open,
+
+    /// Source buffer is empty
+    BufferEmpty,
+
+    /// Source buffer channel is closed
+    BufferChannelClosed,
+
+    /// No data from next spot in buffer
+    NoData,
+}
+
 /// Attributes common to ADΔER transcode process
 pub struct Video {
     pub width: u16,
@@ -347,7 +362,7 @@ pub fn show_display(window_name: &str, mat: &Mat, wait: i32, video: &Video) {
 pub trait Source {
     /// Intake one input interval worth of data from the source stream into the ADΔER model as
     /// intensities
-    fn consume(&mut self, view_interval: u32) -> Result<Vec<Vec<Event>>, &'static str>;
+    fn consume(&mut self, view_interval: u32) -> Result<Vec<Vec<Event>>, SourceError>;
 
     fn get_video_mut(&mut self) -> &mut Video;
 

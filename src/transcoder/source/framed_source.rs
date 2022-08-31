@@ -1,7 +1,7 @@
 use crate::transcoder::event_pixel::{DeltaT, Intensity};
-use crate::transcoder::source::video::show_display;
 use crate::transcoder::source::video::Source;
 use crate::transcoder::source::video::Video;
+use crate::transcoder::source::video::{show_display, SourceError};
 use crate::{Codec, Coord, Event, D, D_MAX};
 use core::default::Default;
 use std::cmp::max;
@@ -9,6 +9,7 @@ use std::collections::VecDeque;
 use std::mem::swap;
 use std::sync::mpsc::{channel, Receiver, Sender};
 
+use crate::transcoder::source::video::SourceError::*;
 use ndarray::Axis;
 use opencv::core::{Mat, Size};
 use opencv::videoio::{VideoCapture, CAP_PROP_FPS, CAP_PROP_FRAME_COUNT, CAP_PROP_POS_FRAMES};
@@ -171,7 +172,7 @@ impl FramedSource {
 
         let opened = videoio::VideoCapture::is_opened(&cap)?;
         if !opened {
-            panic!("Unable to open video");
+            panic!("Could not open source")
         }
         let mut init_frame = Mat::default();
         match cap.read(&mut init_frame) {
@@ -279,10 +280,10 @@ impl FramedSource {
 impl Source for FramedSource {
     /// Get pixel-wise intensities directly from source frame, and integrate them with
     /// [`ref_time`](Video::ref_time) (the number of ticks each frame is said to span)
-    fn consume(&mut self, view_interval: u32) -> Result<Vec<Vec<Event>>, &'static str> {
+    fn consume(&mut self, view_interval: u32) -> Result<Vec<Vec<Event>>, SourceError> {
         if self.video.in_interval_count == 0 {
             self.input_frame_scaled = match self.frame_rx.recv() {
-                Err(_) => return Err("End of video"), // TODO: make it a proper rust error
+                Err(_) => return Err(BufferChannelClosed), // TODO: make it a proper rust error
                 Ok(a) => a,
             };
             self.buffer_tx.send(1).unwrap();
@@ -318,8 +319,8 @@ impl Source for FramedSource {
         {
             self.lookahead_frames_scaled
                 .push_back(match self.frame_rx.recv() {
-                    // Haning when there's no message left
-                    Err(_) => return Err("End of video"), // TODO: make it a proper rust error
+                    // Hanging when there's no message left
+                    Err(_) => return Err(BufferChannelClosed), // TODO: make it a proper rust error
                     Ok(a) => a,
                 });
             match self.buffer_tx.send(1) {
@@ -339,7 +340,7 @@ impl Source for FramedSource {
 
         if (*self.input_frame_scaled).empty() || (self.lookahead_frames_scaled[0].empty()) {
             eprintln!("End of video");
-            return Err("End of video");
+            return Err(BufferEmpty);
         }
 
         let frame_arr: &[u8] = self.input_frame_scaled.data_bytes().unwrap();
@@ -351,7 +352,7 @@ impl Source for FramedSource {
                     data_bytes.push(bytes);
                 }
                 _ => {
-                    return Err("End of video");
+                    return Err(NoData);
                 }
             }
         }

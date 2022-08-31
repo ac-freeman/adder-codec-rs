@@ -292,8 +292,10 @@ impl SimulProcessor {
                         }
                     };
                 }
-                Err("End of video") => break, // TODO: make it a proper rust error
-                Err(_) => {}
+                Err(e) => {
+                    println!("Err: {:?}", e);
+                    break;
+                }
             };
 
             let video = self.source.get_video();
