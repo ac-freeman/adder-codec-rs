@@ -292,8 +292,10 @@ impl SimulProcessor {
                         }
                     };
                 }
-                Err("End of video") => break, // TODO: make it a proper rust error
-                Err(_) => {}
+                Err(e) => {
+                    println!("Err: {:?}", e);
+                    break;
+                }
             };
 
             let video = self.source.get_video();
@@ -358,7 +360,7 @@ mod tests {
             .contrast_thresholds(args.c_thresh_pos, args.c_thresh_neg)
             .show_display(args.show_display != 0)
             .time_parameters(args.ref_time, args.tps, args.delta_t_max);
-        if args.output_events_filename.len() > 0 {
+        if !args.output_events_filename.is_empty() {
             source_builder = source_builder.output_events_filename(args.output_events_filename);
         }
         let source = source_builder.finish();

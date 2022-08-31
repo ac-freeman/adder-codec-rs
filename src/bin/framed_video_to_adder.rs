@@ -9,20 +9,19 @@ use std::io;
 use std::io::Write;
 use std::time::Instant;
 fn main() -> Result<(), Box<dyn Error>> {
-    let mut source =
-        FramedSourceBuilder::new("~/Downloads/excerpt.mp4".to_string(),
-                                 SourceCamera::FramedU8)
-        .frame_start(1420)
-        .scale(0.5)
-        .communicate_events(true)
-        .output_events_filename("~/Downloads/events.adder".to_string())
-        .color(false)
-        .contrast_thresholds(10, 10)
-        .show_display(true)
-        .time_parameters(5000,
-                         300000,
-                         3000000)
-        .finish();
+    let mut source = FramedSourceBuilder::new(
+        "/media/andrew/ExternalM2/LAS/GH010017.mp4".to_string(),
+        SourceCamera::FramedU8,
+    )
+    .frame_start(1420)
+    .scale(0.5)
+    .communicate_events(true)
+    .output_events_filename("/home/andrew/Downloads/events.adder".to_string())
+    .color(false)
+    .contrast_thresholds(10, 10)
+    .show_display(true)
+    .time_parameters(5000, 300000, 3000000)
+    .finish();
 
     let pool = rayon::ThreadPoolBuilder::new()
         .num_threads(current_num_threads())
@@ -35,8 +34,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     loop {
         match pool.install(|| source.consume(1)) {
             Ok(_) => {} // Returns Vec<Vec<Event>>, but we're just writing the events out in this example
-            Err("End of video") => break, // TODO: make it a proper rust error
-            Err(_) => {}
+            Err(e) => {
+                println!("Err: {:?}", e);
+                break;
+            }
         };
 
         let video = source.get_video();
