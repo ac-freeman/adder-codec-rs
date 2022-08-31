@@ -27,11 +27,11 @@ In the context of framed video, ADΔER allows us to have multi-frame intensity _
 
 If you just want to use the hooks for encoding/decoding ADΔER streams (i.e., not a transcoder for producing the ADΔER events for a given source), then you can include the library by adding the following to your Cargo.toml file:
 
-`adder-codec-rs = {version = "0.1.11", features = ["raw-codec"]}`
+`adder-codec-rs = {version = "0.1.12", features = ["raw-codec"]}`
 
 If you want to use the provided transcoder(s), then you have to install OpenCV 4.0+ according to the configuration guidelines for [opencv-rust](https://github.com/twistedfall/opencv-rust). Then, include the library in your project as normal:
 
-`adder-codec-rs = "0.1.11"`
+`adder-codec-rs = "0.1.12"`
 
 # Examples
 
