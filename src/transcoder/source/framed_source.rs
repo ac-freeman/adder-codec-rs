@@ -285,7 +285,7 @@ impl Source for FramedSource {
     fn consume(&mut self, view_interval: u32) -> Result<Vec<Vec<Event>>, SourceError> {
         if self.video.in_interval_count == 0 {
             self.input_frame_scaled = match self.frame_rx.recv() {
-                Err(_) => return Err(BufferChannelClosed), // TODO: make it a proper rust error
+                Err(_) => return Err(BufferChannelClosed),
                 Ok(a) => a,
             };
             self.buffer_tx.send(1).unwrap();
@@ -322,7 +322,7 @@ impl Source for FramedSource {
             self.lookahead_frames_scaled
                 .push_back(match self.frame_rx.recv() {
                     // Hanging when there's no message left
-                    Err(_) => return Err(BufferChannelClosed), // TODO: make it a proper rust error
+                    Err(_) => return Err(BufferChannelClosed),
                     Ok(a) => a,
                 });
             match self.buffer_tx.send(1) {
