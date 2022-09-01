@@ -27,18 +27,18 @@ In the context of framed video, ADΔER allows us to have multi-frame intensity _
 
 If you just want to use the hooks for encoding/decoding ADΔER streams (i.e., not a transcoder for producing the ADΔER events for a given source), then you can include the library by adding the following to your Cargo.toml file:
 
-`adder-codec-rs = {version = "0.1.12", features = ["raw-codec"]}`
+`adder-codec-rs = {version = "0.1.13", features = ["raw-codec"]}`
 
 If you want to use the provided transcoder(s), then you have to install OpenCV 4.0+ according to the configuration guidelines for [opencv-rust](https://github.com/twistedfall/opencv-rust). Then, include the library in your project as normal:
 
-`adder-codec-rs = "0.1.12"`
+`adder-codec-rs = "0.1.13"`
 
 # Examples
 
-Clone this repository to run example executables provided in `src/bin`
+Clone this repository to run examples provided in `/examples` and `/src/bin`
 
 ## Transcode framed video _to_ ADΔER events
-We can transcode an arbitrary framed video to the ADΔER format. Run the program `/src/bin/framed_video_to_adder.rs`. You will need to adjust the parameters for the FramedSourceBuilder to suit your needs, as described below.
+We can transcode an arbitrary framed video to the ADΔER format. Run the program `/examples/framed_video_to_adder.rs`. You will need to adjust the parameters for the FramedSourceBuilder to suit your needs, as described below.
 
 ```
  let mut source =
@@ -75,7 +75,7 @@ We can transcode an arbitrary framed video to the ADΔER format. Run the program
 
 ## Generate framed video _from_ ADΔER events
 
-We can also transform our ADΔER file back into a framed video, so we can easily view the effects of our transcode parameters. Run the program `/src/bin/events_to_instantaneous_frames.rs`. You will need to set the `input_path` to point to an ADΔER file, and the `output_path` to where you want the resulting framed video to be. This output file is in a raw pixel format for encoding with FFmpeg: either `gray` or `bgr24` (if in color), assuming that we have constructed a `FrameSequence<u8>`. Other formats can be encoded, e.g. with `FrameSequence<u16>`, `FrameSequence<f64>`, etc.
+We can also transform our ADΔER file back into a framed video, so we can easily view the effects of our transcode parameters. Run the program `/examples/events_to_instantaneous_frames.rs`. You will need to set the `input_path` to point to an ADΔER file, and the `output_path` to where you want the resulting framed video to be. This output file is in a raw pixel format for encoding with FFmpeg: either `gray` or `bgr24` (if in color), assuming that we have constructed a `FrameSequence<u8>`. Other formats can be encoded, e.g. with `FrameSequence<u16>`, `FrameSequence<f64>`, etc.
 
 To take our raw frame data and encode it in a standard format, we can use an FFmpeg command as follows:
 ```
@@ -84,7 +84,7 @@ ffmpeg -f rawvideo -pix_fmt gray -s:v 960x540 -r 60 -i ./events.adder -crf 0 -c:
 
 ## Simultaneously transcode framed video _to_ ADΔER events and _back_ to framed video
 
-This is the most thorough example, complete with an argument parser so you don't have to edit the code. Run the program `/src/bin/transcode_and_frame_simultaneous.rs`, like this:
+This is the most thorough example, complete with an argument parser so you don't have to edit the code. Run the program `/src/bin/adder_simulproc.rs`, like this:
 
 ```
 cargo run --release --bin transcode_and_frame_simultaneous -- 
@@ -104,6 +104,8 @@ Want to quickly view the metadata for an ADΔER file? Just execute:
 ```
 cargo run --release --bin adderinfo -- -i /path/to/file.adder -d
 ```
+
+Alternatively, you can install this program for the current user with `cargo install adder-codec-rs --bin adderinfo`, then run with `adderinfo -- -i /path/to/file.adder -d`. This program is analagous to `ffprobe` for framed video.
 
 The `-d` flag enables the calculation of dynamic the ADΔER file's dynamic range. This can take a while, since each event must be decoded to find the event with the maximum intensity and the minimum intensity. Example output:
 

@@ -126,7 +126,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .contrast_thresholds(args.c_thresh_pos, args.c_thresh_neg)
         .show_display(args.show_display != 0)
         .time_parameters(args.ref_time, args.tps, args.delta_t_max);
-    if args.output_events_filename.len() > 0 {
+    if !args.output_events_filename.is_empty() {
         source_builder = source_builder.output_events_filename(args.output_events_filename);
     }
     let source = source_builder.finish();
@@ -343,11 +343,11 @@ mod tests {
             frame_idx_start: 0,
             show_display: 0,
             input_filename: manifest_path_str.clone()
-                + &"/tests/samples/lake_scaled_hd_crop.mp4".to_string(),
+                + "/tests/samples/lake_scaled_hd_crop.mp4",
             output_events_filename: manifest_path_str.clone()
-                + &"/tests/samples/TEST_lake_scaled_hd_crop.adder".to_string(),
-            output_raw_video_filename: manifest_path_str.clone()
-                + &"/tests/samples/TEST_lake_scaled_hd_crop".to_string(),
+                + "/tests/samples/TEST_lake_scaled_hd_crop.adder",
+            output_raw_video_filename: manifest_path_str
+                + "/tests/samples/TEST_lake_scaled_hd_crop",
             scale: 1.0,
             c_thresh_pos: 0,
             c_thresh_neg: 0,

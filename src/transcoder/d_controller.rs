@@ -3,15 +3,15 @@ use std::cmp::min;
 
 use crate::transcoder::event_pixel::{DeltaT, D};
 
-#[repr(u32)]
-pub(crate) enum DecimationModes {
+#[derive(Copy, Clone)]
+pub enum DecimationMode {
     Standard,
     AggressiveRoi,
+    Manual,
 }
 
 #[derive(Default)]
 pub(crate) struct DController {
-    pub(crate) d: D,
     pub(crate) lookahead_d: D,
     // delta_t_max: DeltaT, // Should just pass this with each call?
     delta_t_predicted: DeltaT,
@@ -19,11 +19,11 @@ pub(crate) struct DController {
 
 /// Define the shared functions of our DController
 pub trait DControl {
-    fn throttle_decimation(&mut self, delta_t_max: DeltaT);
-    fn update_decimation(&mut self, delta_t: DeltaT, delta_t_max: DeltaT);
-    fn get_d(&self) -> &D;
-    fn get_d_mut(&mut self) -> &mut D;
-    fn set_d(&mut self, d: D);
+    fn throttle_decimation(&mut self, d: &mut D, delta_t_max: DeltaT);
+    fn update_decimation(&mut self, d: &mut D, delta_t: DeltaT, delta_t_max: DeltaT);
+    // fn get_d(&self) -> &D;
+    // fn get_d_mut(&mut self) -> &mut D;
+    // fn set_d(&mut self, d: D);
     fn set_lookahead_d(&mut self, d: D);
     fn update_roi_factor(&mut self, roi_factor: u8);
 }
@@ -41,7 +41,6 @@ impl Standard {
     pub fn new() -> Standard {
         Standard {
             controller: DController {
-                d: crate::D_START,
                 lookahead_d: u8::MAX,
                 delta_t_predicted: 500,
             },
@@ -52,17 +51,16 @@ impl Standard {
 }
 
 impl DControl for Standard {
-    fn throttle_decimation(&mut self, delta_t_max: DeltaT) {
+    fn throttle_decimation(&mut self, d: &mut D, delta_t_max: DeltaT) {
         self.unstable_bits = 32; // TODO: maybe make conditional
-        throttle_decimation_general(&mut self.controller, delta_t_max);
+        throttle_decimation_general(&mut self.controller, d, delta_t_max);
     }
 
     /// Looks at Δt prediction accuracy and increases/decreases [`D`] accordingly
-    fn update_decimation(&mut self, delta_t: DeltaT, delta_t_max: DeltaT) {
+    fn update_decimation(&mut self, d: &mut D, delta_t: DeltaT, delta_t_max: DeltaT) {
         let last_unstable_bits = self.unstable_bits;
 
         let delta_t_predicted = &mut self.controller.delta_t_predicted;
-        let d = &mut self.controller.d;
 
         for i in (0..32).rev() {
             if (*delta_t_predicted >> i) & 1 != ((delta_t >> i) & 1) && self.unstable_bits == 0 {
@@ -109,20 +107,20 @@ impl DControl for Standard {
     }
 
     /// Getter method
-    fn get_d(&self) -> &D {
-        &self.controller.d
-    }
+    // fn get_d(&self) -> &D {
+    //     &self.controller.d
+    // }
 
     /// Getter method
-    fn get_d_mut(&mut self) -> &mut D {
-        &mut self.controller.d
-    }
+    // fn get_d_mut(&mut self) -> &mut D {
+    //     &mut self.controller.d
+    // }
 
-    /// Setter method. Should only be called by high-level rate control functions which
-    /// override the default behavior
-    fn set_d(&mut self, d: D) {
-        self.controller.d = d;
-    }
+    // /// Setter method. Should only be called by high-level rate control functions which
+    // /// override the default behavior
+    // fn set_d(&mut self, d: D) {
+    //     self.controller.d = d;
+    // }
 
     fn set_lookahead_d(&mut self, d: D) {
         self.controller.lookahead_d = d;
@@ -135,9 +133,8 @@ impl DControl for Standard {
 }
 
 /// Throttle down the [`D`] value, to hopefully ensure the next event won't be empty
-fn throttle_decimation_general(controller: &mut DController, delta_t_max: DeltaT) {
-    let old_d = controller.d;
-    let d = &mut controller.d;
+fn throttle_decimation_general(controller: &mut DController, d: &mut D, delta_t_max: DeltaT) {
+    let old_d = *d;
     let threshold = controller.delta_t_predicted as f32 * 1.2;
     if *d > 0 && delta_t_max > threshold as u32 {
         *d = fast_math::log2_raw(*d as f32) as D;
@@ -171,7 +168,6 @@ impl Aggressive {
     pub fn new(ref_time: DeltaT, _delta_t_max: DeltaT) -> Aggressive {
         Aggressive {
             controller: DController {
-                d: crate::D_START,
                 lookahead_d: u8::MAX,
                 delta_t_predicted: 500,
             },
@@ -182,14 +178,12 @@ impl Aggressive {
 }
 
 impl DControl for Aggressive {
-    fn throttle_decimation(&mut self, delta_t_max: DeltaT) {
-        throttle_decimation_general(&mut self.controller, delta_t_max);
+    fn throttle_decimation(&mut self, d: &mut D, delta_t_max: DeltaT) {
+        throttle_decimation_general(&mut self.controller, d, delta_t_max);
     }
 
     /// Adjust [`D`] based on current Δt and proximity to ROI
-    fn update_decimation(&mut self, delta_t: DeltaT, delta_t_max: DeltaT) {
-        let d = &mut self.controller.d;
-
+    fn update_decimation(&mut self, d: &mut D, delta_t: DeltaT, delta_t_max: DeltaT) {
         if self.roi_factor == (delta_t_max / self.ref_time as u32) as u8 {
             if *d < D_MAX && delta_t << 1 <= self.ref_time {
                 *d += 1;
@@ -208,20 +202,20 @@ impl DControl for Aggressive {
         }
     }
 
-    /// Getter method
-    fn get_d(&self) -> &D {
-        &self.controller.d
-    }
-
-    /// Getter method
-    fn get_d_mut(&mut self) -> &mut D {
-        &mut self.controller.d
-    }
-
-    /// Setter method. Should only be called by functions which override default behavior
-    fn set_d(&mut self, d: D) {
-        self.controller.d = d;
-    }
+    // /// Getter method
+    // fn get_d(&self) -> &D {
+    //     &self.controller.d
+    // }
+    //
+    // /// Getter method
+    // fn get_d_mut(&mut self) -> &mut D {
+    //     &mut self.controller.d
+    // }
+    //
+    // /// Setter method. Should only be called by functions which override default behavior
+    // fn set_d(&mut self, d: D) {
+    //     self.controller.d = d;
+    // }
 
     fn set_lookahead_d(&mut self, d: D) {
         self.controller.lookahead_d = d;
@@ -236,6 +230,34 @@ impl DControl for Aggressive {
             // Gradually lower pixel sensitivity if it was recently close to or in an ROI
             self.roi_factor -= 1;
         }
+    }
+}
+
+/// Manual decimation mode is set entirely by higher level controller. This is effectively a placeholder
+#[derive(Default)]
+pub(crate) struct Manual {}
+
+impl Manual {
+    pub fn new() -> Manual {
+        Manual {}
+    }
+}
+
+impl DControl for Manual {
+    fn throttle_decimation(&mut self, _d: &mut D, _delta_t_max: DeltaT) {
+        todo!()
+    }
+
+    fn update_decimation(&mut self, _d: &mut D, _delta_t: DeltaT, _delta_t_max: DeltaT) {
+        todo!()
+    }
+
+    fn set_lookahead_d(&mut self, _d: D) {
+        todo!()
+    }
+
+    fn update_roi_factor(&mut self, _roi_factor: u8) {
+        todo!()
     }
 }
 

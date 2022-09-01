@@ -18,7 +18,7 @@ use rand::Rng;
 fn test_sample_perfect_dt() {
     let input_path = "./tests/samples/sample_1_raw_events.adder";
     let mut stream: RawStream = Codec::new();
-    stream.open_reader(input_path.to_string()).unwrap();
+    stream.open_reader(input_path).unwrap();
     stream.decode_header().unwrap();
 
     let output_path = Path::new("./tests/samples/temp_sample_1");
@@ -82,7 +82,7 @@ fn test_sample_perfect_dt() {
 fn test_sample_perfect_dt_color() {
     let input_path = "./tests/samples/sample_2_raw_events.adder";
     let mut stream: RawStream = Codec::new();
-    stream.open_reader(input_path.to_string()).unwrap();
+    stream.open_reader(input_path).unwrap();
     stream.decode_header().unwrap();
 
     let output_path = Path::new("./tests/samples/temp_sample_2");
@@ -349,15 +349,15 @@ fn test_event_framer_ingest_get_filled() {
             };
             let filled = frame_sequence.ingest_event(&mut event);
             if i < 4 || j < 4 {
-                assert_eq!(filled, false)
+                assert!(!filled)
             } else {
-                assert_eq!(filled, true)
+                assert!(filled)
             }
         }
         if i < 4 {
-            assert_eq!(frame_sequence.is_frame_filled(0).unwrap(), false);
+            assert!(!frame_sequence.is_frame_filled(0).unwrap());
         } else {
-            assert_eq!(frame_sequence.is_frame_filled(0).unwrap(), true);
+            assert!(frame_sequence.is_frame_filled(0).unwrap());
         }
     }
 }
@@ -388,15 +388,15 @@ fn get_frame_bytes_eventcoordless() {
             };
             let filled = frame_sequence.ingest_event(&mut event);
             if i < 4 || j < 4 {
-                assert_eq!(filled, false)
+                assert!(!filled)
             } else {
-                assert_eq!(filled, true)
+                assert!(filled)
             }
         }
         if i < 4 {
-            assert_eq!(frame_sequence.is_frame_filled(0).unwrap(), false);
+            assert!(!frame_sequence.is_frame_filled(0).unwrap());
         } else {
-            assert_eq!(frame_sequence.is_frame_filled(0).unwrap(), true);
+            assert!(frame_sequence.is_frame_filled(0).unwrap());
         }
     }
     let n: u32 = rand::thread_rng().gen();
@@ -447,15 +447,15 @@ fn get_frame_bytes_u8() {
             };
             let filled = frame_sequence.ingest_event(&mut event);
             if i < 4 || j < 4 {
-                assert_eq!(filled, false)
+                assert!(!filled)
             } else {
-                assert_eq!(filled, true)
+                assert!(filled)
             }
         }
         if i < 4 {
-            assert_eq!(frame_sequence.is_frame_filled(0).unwrap(), false);
+            assert!(!frame_sequence.is_frame_filled(0).unwrap());
         } else {
-            assert_eq!(frame_sequence.is_frame_filled(0).unwrap(), true);
+            assert!(frame_sequence.is_frame_filled(0).unwrap());
         }
     }
 
@@ -505,15 +505,15 @@ fn get_frame_bytes_u16() {
             };
             let filled = frame_sequence.ingest_event(&mut event);
             if i < 4 || j < 4 {
-                assert_eq!(filled, false)
+                assert!(!filled)
             } else {
-                assert_eq!(filled, true)
+                assert!(filled)
             }
         }
         if i < 4 {
-            assert_eq!(frame_sequence.is_frame_filled(0).unwrap(), false);
+            assert!(!frame_sequence.is_frame_filled(0).unwrap());
         } else {
-            assert_eq!(frame_sequence.is_frame_filled(0).unwrap(), true);
+            assert!(frame_sequence.is_frame_filled(0).unwrap());
         }
     }
     let n: u32 = rand::thread_rng().gen();
@@ -562,15 +562,15 @@ fn get_frame_bytes_u32() {
             };
             let filled = frame_sequence.ingest_event(&mut event);
             if i < 4 || j < 4 {
-                assert_eq!(filled, false)
+                assert!(!filled)
             } else {
-                assert_eq!(filled, true)
+                assert!(filled)
             }
         }
         if i < 4 {
-            assert_eq!(frame_sequence.is_frame_filled(0).unwrap(), false);
+            assert!(!frame_sequence.is_frame_filled(0).unwrap());
         } else {
-            assert_eq!(frame_sequence.is_frame_filled(0).unwrap(), true);
+            assert!(frame_sequence.is_frame_filled(0).unwrap());
         }
     }
     let n: u32 = rand::thread_rng().gen();
@@ -619,15 +619,15 @@ fn get_frame_bytes_u64() {
             };
             let filled = frame_sequence.ingest_event(&mut event);
             if i < 4 || j < 4 {
-                assert_eq!(filled, false)
+                assert!(!filled)
             } else {
-                assert_eq!(filled, true)
+                assert!(filled)
             }
         }
         if i < 4 {
-            assert_eq!(frame_sequence.is_frame_filled(0).unwrap(), false);
+            assert!(!frame_sequence.is_frame_filled(0).unwrap());
         } else {
-            assert_eq!(frame_sequence.is_frame_filled(0).unwrap(), true);
+            assert!(frame_sequence.is_frame_filled(0).unwrap());
         }
     }
     let n: u32 = rand::thread_rng().gen();
@@ -683,7 +683,7 @@ fn test_get_empty_frame() {
     // TODO: check that events ingested with times after they've been popped off don't actually get
     // integrated!
     let filled = frame_sequence.ingest_event(&mut event);
-    assert_eq!(filled, false);
+    assert!(!filled);
     fs::remove_file(&path).unwrap();
 }
 
@@ -691,7 +691,7 @@ fn test_get_empty_frame() {
 fn test_sample_unordered() {
     let input_path = "./tests/samples/sample_3_unordered.adder";
     let mut stream: RawStream = Codec::new();
-    stream.open_reader(input_path.to_string()).unwrap();
+    stream.open_reader(input_path).unwrap();
     stream.decode_header().unwrap();
 
     let output_path = Path::new("./tests/samples/temp_sample_3_unordered");
@@ -754,7 +754,7 @@ fn test_sample_unordered() {
 fn test_sample_ordered() {
     let input_path = "./tests/samples/sample_3_ordered.adder";
     let mut stream: RawStream = Codec::new();
-    stream.open_reader(input_path.to_string()).unwrap();
+    stream.open_reader(input_path).unwrap();
     stream.decode_header().unwrap();
 
     let output_path = Path::new("./tests/samples/temp_sample_3_ordered");

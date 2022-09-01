@@ -1,4 +1,4 @@
-use crate::transcoder::event_pixel::{DeltaT, Intensity};
+use crate::transcoder::event_pixel::{DeltaT, IntegrationTracker, Intensity};
 use crate::transcoder::source::video::Source;
 use crate::transcoder::source::video::Video;
 use crate::transcoder::source::video::{show_display, SourceError};
@@ -15,6 +15,7 @@ use opencv::core::{Mat, Size};
 use opencv::videoio::{VideoCapture, CAP_PROP_FPS, CAP_PROP_FRAME_COUNT, CAP_PROP_POS_FRAMES};
 use opencv::{imgproc, prelude::*, videoio, Result};
 
+use crate::transcoder::d_controller::DecimationMode;
 use crate::transcoder::event_pixel::pixel::Transition;
 use crate::SourceCamera;
 
@@ -203,7 +204,7 @@ impl FramedSource {
             builder.tps,
             builder.ref_time,
             builder.delta_t_max,
-            0,
+            DecimationMode::Manual,
             builder.write_out,
             builder.communicate_events,
             builder.show_display_b,
@@ -299,7 +300,7 @@ impl Source for FramedSource {
                 .for_each(|(idx, px)| {
                     let intensity = frame_arr[idx];
                     let d_start = (intensity as f32).log2().floor() as D;
-                    px.d_controller.set_d(d_start);
+                    px.d = d_start;
                 });
         } else {
             swap(
@@ -373,6 +374,14 @@ impl Source for FramedSource {
             .enumerate()
             .map(|(chunk_idx, mut chunk)| {
                 let mut buffer: Vec<Event> = Vec::with_capacity(100);
+                let mut tracker = IntegrationTracker {
+                    intensity_original: 0.0,
+                    intensity_left: 0.0,
+                    delta_t_original: ref_time,
+                    delta_t_left: ref_time,
+                    delta_t_to_add: 0.0,
+                    delta_t_max: self.video.delta_t_max,
+                };
                 for (chunk_px_idx, px) in chunk.iter_mut().enumerate() {
                     let px_idx = chunk_px_idx + px_per_chunk * chunk_idx;
 
@@ -420,18 +429,14 @@ impl Source for FramedSource {
                         };
                         px.next_transition = trans;
                         let d_to_set = (intensity_sum).log2().floor() as D;
-                        px.d_controller.set_d(current_d);
+                        px.d = current_d;
                         assert!(d_to_set <= D_MAX);
                     }
 
-                    let intensity = frame_arr[px_idx] as Intensity;
-                    px.add_intensity(
-                        intensity,
-                        ref_time,
-                        &dtm,
-                        &mut buffer,
-                        self.video.communicate_events,
-                    );
+                    tracker.intensity_original = frame_arr[px_idx] as Intensity;
+                    tracker.intensity_left = tracker.intensity_original;
+                    tracker.delta_t_left = ref_time;
+                    px.add_intensity(&mut tracker, &mut buffer, self.video.communicate_events);
 
                     px.last_event.calc_frame_intensity(ref_time as u32);
                     px.last_event.calc_frame_delta_t(dtm);
