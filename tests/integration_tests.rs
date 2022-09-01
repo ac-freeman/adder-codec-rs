@@ -18,7 +18,7 @@ use rand::Rng;
 fn test_sample_perfect_dt() {
     let input_path = "./tests/samples/sample_1_raw_events.adder";
     let mut stream: RawStream = Codec::new();
-    stream.open_reader(input_path.to_string()).unwrap();
+    stream.open_reader(input_path).unwrap();
     stream.decode_header().unwrap();
 
     let output_path = Path::new("./tests/samples/temp_sample_1");
@@ -82,7 +82,7 @@ fn test_sample_perfect_dt() {
 fn test_sample_perfect_dt_color() {
     let input_path = "./tests/samples/sample_2_raw_events.adder";
     let mut stream: RawStream = Codec::new();
-    stream.open_reader(input_path.to_string()).unwrap();
+    stream.open_reader(input_path).unwrap();
     stream.decode_header().unwrap();
 
     let output_path = Path::new("./tests/samples/temp_sample_2");
@@ -691,7 +691,7 @@ fn test_get_empty_frame() {
 fn test_sample_unordered() {
     let input_path = "./tests/samples/sample_3_unordered.adder";
     let mut stream: RawStream = Codec::new();
-    stream.open_reader(input_path.to_string()).unwrap();
+    stream.open_reader(input_path).unwrap();
     stream.decode_header().unwrap();
 
     let output_path = Path::new("./tests/samples/temp_sample_3_unordered");
@@ -754,7 +754,7 @@ fn test_sample_unordered() {
 fn test_sample_ordered() {
     let input_path = "./tests/samples/sample_3_ordered.adder";
     let mut stream: RawStream = Codec::new();
-    stream.open_reader(input_path.to_string()).unwrap();
+    stream.open_reader(input_path).unwrap();
     stream.decode_header().unwrap();
 
     let output_path = Path::new("./tests/samples/temp_sample_3_ordered");
