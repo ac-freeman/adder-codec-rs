@@ -12,6 +12,7 @@ use crate::{Codec, Event};
 use opencv::imgproc::{bounding_rect, contour_area, rectangle, resize, RETR_EXTERNAL};
 use opencv::{highgui, prelude::*};
 
+use crate::transcoder::d_controller::DecimationMode;
 use crate::SourceCamera;
 use ndarray::Array3;
 use ndarray::Axis;
@@ -67,7 +68,7 @@ impl Video {
         tps: DeltaT,
         ref_time: DeltaT,
         delta_t_max: DeltaT,
-        d_mode: u32,
+        d_mode: DecimationMode,
         write_out: bool,
         communicate_events: bool,
         show_display: bool,
