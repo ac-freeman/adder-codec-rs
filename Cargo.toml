@@ -17,7 +17,7 @@ categories = ["multimedia::encoding", "science"]
 exclude = [
     "tests/samples/*",
 ]
-default-run = "events_to_instantaneous_frames"
+default-run = "adder_simulproc"
 
 [profile.release]
 lto = true
