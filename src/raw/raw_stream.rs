@@ -10,7 +10,7 @@ use bincode::config::{BigEndian, FixintEncoding, WithOtherEndian, WithOtherIntEn
 use bincode::{DefaultOptions, Options};
 use std::fs::File;
 use std::io::{BufReader, BufWriter, Seek, SeekFrom, Write};
-use std::mem;
+use std::{error, fmt, mem};
 
 #[derive(Debug)]
 pub enum StreamError {
@@ -22,12 +22,24 @@ pub enum StreamError {
 
     /// File formatted incorrectly
     BadFile,
+
+    /// Attempted to seek to a bad position in the stream
+    Seek,
 }
+
+impl fmt::Display for StreamError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Stream error")
+    }
+}
+
+impl error::Error for StreamError {}
 
 pub struct RawStream {
     output_stream: Option<BufWriter<File>>,
     input_stream: Option<BufReader<File>>,
     pub codec_version: u8,
+    header_size: usize,
     pub width: u16,
     pub height: u16,
     pub tps: DeltaT,
@@ -45,6 +57,7 @@ impl Codec for RawStream {
             output_stream: None,
             input_stream: None,
             codec_version: 1,
+            header_size: 0,
             width: 0,
             height: 0,
             tps: 0,
@@ -129,17 +142,20 @@ impl Codec for RawStream {
         self.input_stream = stream;
     }
 
-    fn set_input_stream_position(&mut self, pos: u64) {
+    fn set_input_stream_position(&mut self, pos: u64) -> Result<(), StreamError> {
+        if (pos as usize - self.header_size) % self.event_size as usize != 0 {
+            return Err(StreamError::Seek);
+        }
         match &mut self.input_stream {
             None => {
                 panic!("Input stream not initialized");
             }
-            Some(stream) => {
-                stream
-                    .seek(SeekFrom::Start(pos))
-                    .expect("Invalid seek position");
-            }
-        }
+            Some(stream) => match stream.seek(SeekFrom::Start(pos)) {
+                Ok(_) => {}
+                Err(_) => return Err(StreamError::Seek),
+            },
+        };
+        Ok(())
     }
 
     fn get_input_stream_position(&mut self) -> Result<u64, StreamError> {
@@ -300,6 +316,7 @@ impl Codec for RawStream {
                             0
                         }
                     };
+                self.header_size = header_size;
 
                 Ok(header_size)
             }

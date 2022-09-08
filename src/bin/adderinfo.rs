@@ -3,9 +3,9 @@ use adder_codec_rs::raw::raw_stream::RawStream;
 use adder_codec_rs::{Codec, Intensity, D_SHIFT};
 use clap::ArgAction::SetTrue;
 use clap::Parser;
-use std::io;
 use std::io::Write;
 use std::path::Path;
+use std::{error, io};
 
 /// Command line argument parser
 #[derive(Parser, Debug, Default)]
@@ -20,7 +20,7 @@ pub struct MyArgs {
     pub(crate) dynamic_range: bool,
 }
 
-fn main() -> Result<(), std::io::Error> {
+fn main() -> Result<(), Box<dyn error::Error>> {
     let args: MyArgs = MyArgs::parse();
     let file_path = args.input.as_str();
 
@@ -63,7 +63,7 @@ fn main() -> Result<(), std::io::Error> {
     // event, and what is the lowest intensity event?
     if args.dynamic_range {
         let divisor = num_events as u64 / 100;
-        stream.set_input_stream_position(first_event_position);
+        stream.set_input_stream_position(first_event_position)?;
         let mut max_intensity: Intensity = 0.0;
         let mut min_intensity: Intensity = f64::MAX;
         let mut event_count: u64 = 0;
