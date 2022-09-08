@@ -15,6 +15,26 @@ use adder_codec_rs::{Codec, Coord, Event};
 use rand::Rng;
 
 #[test]
+fn test_set_stream_position() {
+    let input_path = "./tests/samples/sample_1_raw_events.adder";
+    let mut stream: RawStream = Codec::new();
+    stream.open_reader(input_path).unwrap();
+    let header_size = stream.decode_header().unwrap();
+    for i in 1..stream.event_size as usize {
+        assert!(stream
+            .set_input_stream_position((header_size + i) as u64)
+            .is_err());
+    }
+
+    assert!(stream
+        .set_input_stream_position((header_size + stream.event_size as usize) as u64)
+        .is_ok());
+    assert!(stream
+        .set_input_stream_position((header_size + stream.event_size as usize * 2) as u64)
+        .is_ok());
+}
+
+#[test]
 fn test_sample_perfect_dt() {
     let input_path = "./tests/samples/sample_1_raw_events.adder";
     let mut stream: RawStream = Codec::new();
