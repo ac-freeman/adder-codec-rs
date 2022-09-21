@@ -93,13 +93,7 @@ impl FramedSourceBuilder {
         self
     }
 
-    pub fn time_parameters(
-        mut self,
-        ref_time: DeltaT,
-        tps: DeltaT,
-        delta_t_max: DeltaT,
-    ) -> FramedSourceBuilder {
-        self.ref_time = ref_time;
+    pub fn time_parameters(mut self, tps: DeltaT, delta_t_max: DeltaT) -> FramedSourceBuilder {
         self.tps = tps;
         self.delta_t_max = delta_t_max;
         assert_eq!(self.delta_t_max % self.ref_time, 0);
@@ -149,7 +143,7 @@ impl FramedSourceBuilder {
 impl FramedSource {
     /// Initialize the framed source and read first frame of source, in order to get `height`
     /// and `width` and initialize [`Video`]
-    fn new(builder: FramedSourceBuilder) -> Result<FramedSource> {
+    fn new(mut builder: FramedSourceBuilder) -> Result<FramedSource> {
         let channels = match builder.color_input {
             true => 3,
             false => 1,
@@ -160,8 +154,11 @@ impl FramedSource {
         let video_frame_count = cap.get(CAP_PROP_FRAME_COUNT).unwrap();
         assert!(builder.frame_idx_start < video_frame_count as u32);
 
+        // Calculate ref time based on TPS and source FPS
         cap.set(CAP_PROP_POS_FRAMES, builder.frame_idx_start as f64)
             .unwrap();
+        let source_fps = cap.get(CAP_PROP_FPS).unwrap().round();
+        builder.ref_time = (builder.tps as f64 / source_fps) as u32;
 
         let mut cap_lookahead =
             videoio::VideoCapture::from_file(builder.input_filename.as_str(), videoio::CAP_FFMPEG)
@@ -277,6 +274,10 @@ impl FramedSource {
             lookahead_frames_scaled: Default::default(),
             video,
         })
+    }
+
+    pub fn get_ref_time(&self) -> u32 {
+        self.video.ref_time
     }
 }
 

@@ -125,7 +125,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .color(args.color_input != 0)
         .contrast_thresholds(args.c_thresh_pos, args.c_thresh_neg)
         .show_display(args.show_display != 0)
-        .time_parameters(args.ref_time, args.tps, args.delta_t_max);
+        .time_parameters(args.tps, args.delta_t_max);
     if !args.output_events_filename.is_empty() {
         source_builder = source_builder.output_events_filename(args.output_events_filename);
     }
@@ -134,9 +134,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let width = source.get_video().width;
     let height = source.get_video().height;
 
+    let ref_time = source.get_ref_time();
     let mut simul_processor = SimulProcessor::new::<u8>(
         source,
-        args.ref_time,
+        ref_time,
         args.tps,
         args.fps,
         args.output_raw_video_filename.as_str(),
@@ -342,8 +343,7 @@ mod tests {
             frame_count_max: 0,
             frame_idx_start: 0,
             show_display: 0,
-            input_filename: manifest_path_str.clone()
-                + "/tests/samples/lake_scaled_hd_crop.mp4",
+            input_filename: manifest_path_str.clone() + "/tests/samples/lake_scaled_hd_crop.mp4",
             output_events_filename: manifest_path_str.clone()
                 + "/tests/samples/TEST_lake_scaled_hd_crop.adder",
             output_raw_video_filename: manifest_path_str
@@ -359,15 +359,16 @@ mod tests {
             .color(args.color_input != 0)
             .contrast_thresholds(args.c_thresh_pos, args.c_thresh_neg)
             .show_display(args.show_display != 0)
-            .time_parameters(args.ref_time, args.tps, args.delta_t_max);
+            .time_parameters(args.tps, args.delta_t_max);
         if !args.output_events_filename.is_empty() {
             source_builder = source_builder.output_events_filename(args.output_events_filename);
         }
         let source = source_builder.finish();
+        let ref_time = source.get_ref_time();
 
         let mut simul_processor = SimulProcessor::new::<u8>(
             source,
-            args.ref_time,
+            ref_time,
             args.tps,
             args.fps,
             args.output_raw_video_filename.as_str(),
