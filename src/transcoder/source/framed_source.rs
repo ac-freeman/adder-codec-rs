@@ -166,9 +166,9 @@ impl FramedSource {
         init_lookahead(builder.frame_idx_start, true, &mut cap_lookahead);
 
         // Handle the edge cases forcefully
-        builder.tps = (builder.ref_time * cap.get(CAP_PROP_FPS).unwrap().round()) as u32;
+        builder.tps = builder.ref_time * cap.get(CAP_PROP_FPS).unwrap().round() as u32;
         assert_eq!(
-            (builder.ref_time * cap.get(CAP_PROP_FPS).unwrap().round()) as u32,
+            builder.ref_time * cap.get(CAP_PROP_FPS).unwrap().round() as u32,
             builder.tps
         );
 
