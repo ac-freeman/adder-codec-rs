@@ -20,7 +20,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     .color(false)
     .contrast_thresholds(10, 10)
     .show_display(true)
-    .time_parameters(5000, 300000, 3000000)
+    .time_parameters(300000, 3000000)
     .finish();
 
     let pool = rayon::ThreadPoolBuilder::new()

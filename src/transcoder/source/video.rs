@@ -10,7 +10,7 @@ use crate::transcoder::event_pixel::pixel::EventPixel;
 use crate::transcoder::event_pixel::{DeltaT, PixelAddress};
 use crate::{Codec, Event};
 use opencv::imgproc::{bounding_rect, contour_area, rectangle, resize, RETR_EXTERNAL};
-use opencv::{highgui, prelude::*};
+use opencv::prelude::*;
 
 use crate::transcoder::d_controller::DecimationMode;
 use crate::SourceCamera;
@@ -162,168 +162,6 @@ impl Video {
         }
     }
 
-    /// Performs inter-pixel D-value adjustment
-    pub fn inter_d_adjustment(&mut self, instantaneous_frame_prev: &mut Mat) {
-        let mut instantaneous_frame_difference = Mat::default();
-        opencv::core::subtract(
-            &self.instantaneous_frame,
-            instantaneous_frame_prev,
-            &mut instantaneous_frame_difference,
-            &opencv::core::no_array(),
-            -1,
-        )
-        .unwrap();
-        // show_display("diff", &instantaneous_frame_difference, 1, self);
-
-        let mut thresholded = Mat::default();
-        opencv::imgproc::threshold(
-            &instantaneous_frame_difference,
-            &mut thresholded,
-            10.0 / 255.0,
-            1.0,
-            opencv::imgproc::THRESH_BINARY,
-        )
-        .unwrap();
-
-        // let _white_count = match opencv::core::sum_elems(&thresholded) {
-        //     Err(why) => panic!("couldn't sum elems: {}", why),
-        //     Ok(v) => v[0] as u32,
-        // };
-
-        let mut contours = opencv::types::VectorOfVectorOfPoint::default();
-        let mut hierarchy = opencv::core::no_array();
-        let mut thresholded_u8 = Mat::default();
-
-        // Necessary for find_contours to work
-        thresholded
-            .convert_to(&mut thresholded_u8, opencv::core::CV_8U, 255.0, 0.0)
-            .unwrap();
-        show_display("thresh", &thresholded_u8, 1, self);
-
-        let dilation_size = 1;
-        let dilation_element = match opencv::imgproc::get_structuring_element(
-            opencv::imgproc::MORPH_ELLIPSE,
-            Size::new(dilation_size * 2 + 1, dilation_size * 2 + 1),
-            Point::new(dilation_size, dilation_size),
-        ) {
-            Err(why) => panic!("couldn't get structuring element: {}", why),
-            Ok(v) => v,
-        };
-        let mut thresholded_u8_dilated = Mat::default();
-        opencv::imgproc::dilate(
-            &thresholded_u8,
-            &mut thresholded_u8_dilated,
-            &dilation_element,
-            Point::new(-1, -1),
-            2,
-            BORDER_DEFAULT,
-            opencv::core::Scalar::new(255.0, 255.0, 255.0, 255.0),
-        )
-        .unwrap();
-        // show_display("thresh and dilate", &thresholded_u8_dilated, 1, self);
-        opencv::imgproc::find_contours_with_hierarchy(
-            &thresholded_u8_dilated,
-            &mut contours,
-            &mut hierarchy,
-            RETR_EXTERNAL,
-            opencv::imgproc::CHAIN_APPROX_SIMPLE,
-            Point::new(0, 0),
-        )
-        .unwrap();
-
-        let mut roi_image = Mat::zeros(self.height as i32, self.width as i32, CV_8U)
-            .unwrap()
-            .to_mat()
-            .unwrap();
-
-        for r in 1..3 {
-            for i in 0..contours.len() {
-                let contour = contours.get(i).unwrap();
-                let area = contour_area(&contour, false).unwrap();
-
-                if area > ((self.width as f32 * self.height as f32).sqrt() * 0.2) as f64
-                    && area < ((self.width as f32 * self.height as f32).sqrt() * 10.0) as f64
-                {
-                    // if area > ((self.width as f32 * self.height as f32) * 0.00001) as f64 {
-
-                    let rect = bounding_rect(&contour).unwrap();
-
-                    rectangle(
-                        &mut roi_image,
-                        rect,
-                        opencv::core::Scalar::new(r as f64, r as f64, r as f64, r as f64),
-                        // (self.width as f32 * self.height as f32 * (1.0 / r as f32) * 0.0003) as i32,
-                        ((self.width as f32 * self.height as f32).sqrt() * (1.0 / r as f32) * 0.05)
-                            as i32,
-                        1,
-                        0,
-                    )
-                    .unwrap();
-                }
-            }
-        }
-        for i in 0..contours.len() {
-            let contour = contours.get(i).unwrap();
-            let area = contour_area(&contour, false).unwrap();
-
-            if area > ((self.width as f32 * self.height as f32).sqrt() * 0.2) as f64
-                && area < ((self.width as f32 * self.height as f32).sqrt() * 10.0) as f64
-            {
-                // if area > ((self.width as f32 * self.height as f32) * 0.00001) as f64 {
-                let rect = bounding_rect(&contour).unwrap();
-
-                rectangle(
-                    &mut self.instantaneous_display_frame,
-                    rect,
-                    opencv::core::Scalar::new(255.0, 255.0, 255.0, 255.0),
-                    2,
-                    1,
-                    0,
-                )
-                .unwrap();
-                rectangle(
-                    &mut roi_image,
-                    rect,
-                    opencv::core::Scalar::new(6.0, 6.0, 6.0, 6.0),
-                    -1,
-                    1,
-                    0,
-                )
-                .unwrap();
-            }
-        }
-
-        let mut roi_normed = Mat::default();
-
-        let scale_factor = self.delta_t_max as f64 / self.ref_time as f64;
-        normalize(
-            &roi_image,
-            &mut roi_normed,
-            1.0,
-            scale_factor,
-            NORM_MINMAX,
-            -1,
-            &no_array(),
-        )
-        .unwrap();
-        show_display("roi normed", &roi_normed, 1, self);
-
-        let roi_arr = roi_normed.data_bytes().unwrap();
-        let chunk_rows: usize = 10;
-        let px_per_chunk: usize = chunk_rows * self.width as usize * self.channels as usize;
-        self.event_pixels
-            .axis_chunks_iter_mut(Axis(0), chunk_rows)
-            .into_par_iter()
-            .enumerate()
-            .for_each(|(chunk_idx, mut chunk)| {
-                for (chunk_px_idx, px) in chunk.iter_mut().enumerate() {
-                    let px_idx = chunk_px_idx + px_per_chunk * chunk_idx;
-                    let factor = &roi_arr[px_idx];
-                    px.d_controller.update_roi_factor(*factor);
-                }
-            });
-    }
-
     pub fn end_write_stream(&mut self) {
         self.stream.close_writer();
     }
@@ -348,14 +186,14 @@ pub fn show_display(window_name: &str, mat: &Mat, wait: i32, video: &Video) {
                 0,
             )
             .unwrap();
-            highgui::imshow(window_name, &tmp).unwrap();
+            // highgui::imshow(window_name, &tmp).unwrap();
         } else {
-            highgui::imshow(window_name, mat).unwrap();
+            // highgui::imshow(window_name, mat).unwrap();
         }
 
         // highgui::imshow(window_name, &tmp).unwrap();
 
-        highgui::wait_key(wait).unwrap();
+        // highgui::wait_key(wait).unwrap();
         // resize_window(window_name, mat.cols() / 540, 540);
     }
 }
