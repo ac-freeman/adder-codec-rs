@@ -18,20 +18,22 @@ struct PixelNode {
 }
 
 impl PixelNode {
-    pub fn new(start_intensity: Intensity, start_time: f32) -> PixelNode {
-        let start_d = fast_math::log2_raw(start_intensity) as D;
+    pub fn new(start_intensity: Intensity) -> PixelNode {
+        let start_d = fast_math::log2(start_intensity) as D;
         PixelNode {
             alt: None,
             state: PixelState {
-                d: start_d + 1,
-                integration: start_intensity,
-                delta_t: start_time,
+                d: start_d,
+                integration: 0.0,
+                delta_t: 0.0,
             },
             best_event: None,
         }
     }
 
     pub fn integrate(&mut self, intensity: Intensity, time: f32) {
+        debug_assert_ne!(intensity, 0.0);
+        debug_assert_ne!(time, 0.0);
         self.integrate_main(intensity, time);
 
         if self.alt.is_some() {
@@ -51,11 +53,17 @@ impl PixelNode {
             });
             self.state.d += 1;
 
-            // If there was previously an alt node, it's automatically dropped when it leaves scope
-            self.alt = Some(Box::from(PixelNode::new(
-                intensity - (intensity * prop),
-                time - (time * prop),
-            )));
+            if intensity - (intensity * prop) > 0.0 {
+                // If there was previously an alt node, it's automatically dropped when it leaves scope
+                self.alt = Some(Box::from(PixelNode::new(
+                    intensity - (intensity * prop),
+                    // time - (time * prop),
+                )));
+                // self.alt
+                //     .as_mut()
+                //     .unwrap()
+                //     .integrate(intensity - (intensity * prop), time - (time * prop))
+            }
         }
         self.state.integration += intensity;
         self.state.delta_t += time;
@@ -86,5 +94,20 @@ impl PixelNode {
                 (ret, res.1)
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    // Note this useful idiom: importing names from outer (for mod tests) scope.
+    use super::*;
+
+    #[test]
+    fn test_make_tree() {
+        let mut tree = PixelNode::new(100.0);
+        assert_eq!(tree.state.d, 6);
+        tree.integrate(100.0, 20.0);
+        assert!(tree.best_event.is_some());
+        assert!(tree.alt.is_some())
     }
 }
