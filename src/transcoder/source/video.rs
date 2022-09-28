@@ -75,7 +75,7 @@ impl Video {
         show_display: bool,
         source_camera: SourceCamera,
     ) -> Video {
-        assert_eq!(D_SHIFT.len(), D_MAX as usize);
+        assert_eq!(D_SHIFT.len(), D_MAX as usize + 1);
         if write_out {
             assert!(communicate_events);
         }
