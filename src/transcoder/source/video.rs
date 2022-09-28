@@ -14,6 +14,7 @@ use opencv::imgproc::{bounding_rect, contour_area, rectangle, resize, RETR_EXTER
 use opencv::prelude::*;
 
 use crate::transcoder::d_controller::DecimationMode;
+use crate::transcoder::event_pixel_tree::PixelNode;
 use crate::SourceCamera;
 use ndarray::Array3;
 use ndarray::Axis;
@@ -42,6 +43,7 @@ pub struct Video {
 
     // NB: as of 4/15, boxing this attribute hurts performance slightly
     pub(crate) event_pixels: Array3<EventPixel>,
+    pub(crate) event_pixel_trees: Array3<PixelNode>,
     pub(crate) ref_time: u32,
     pub(crate) delta_t_max: u32,
     pub(crate) show_display: bool,
@@ -129,6 +131,19 @@ impl Video {
         let event_pixels: Array3<EventPixel> =
             Array3::from_shape_vec((height.into(), width.into(), channels), data).unwrap();
 
+        let mut data = Vec::new();
+        for y in 0..height {
+            for x in 0..width {
+                for c in 0..channels {
+                    let px = PixelNode::new(1.0);
+                    data.push(px);
+                }
+            }
+        }
+
+        let event_pixel_trees: Array3<PixelNode> =
+            Array3::from_shape_vec((height.into(), width.into(), channels), data).unwrap();
+
         let mut instantaneous_frame = Mat::default();
         match channels {
             1 => unsafe {
@@ -148,6 +163,7 @@ impl Video {
             width,
             height,
             event_pixels,
+            event_pixel_trees,
             ref_time,
             delta_t_max,
             show_display,

@@ -9,7 +9,7 @@ struct PixelState {
     delta_t: f32,
 }
 
-struct PixelNode {
+pub struct PixelNode {
     /// Will have the smaller D value
     alt: Option<Box<PixelNode>>,
 
@@ -20,6 +20,7 @@ struct PixelNode {
 impl PixelNode {
     pub fn new(start_intensity: Intensity) -> PixelNode {
         let start_d = fast_math::log2_raw(start_intensity) as D;
+        assert!(start_d <= D_MAX);
         PixelNode {
             alt: None,
             state: PixelState {
@@ -29,6 +30,10 @@ impl PixelNode {
             },
             best_event: None,
         }
+    }
+
+    pub fn set_d(&mut self, d: D) {
+        self.state.d = d;
     }
 
     // Integrates the intensity. Returns bool indicating whether or not the events MUST be popped

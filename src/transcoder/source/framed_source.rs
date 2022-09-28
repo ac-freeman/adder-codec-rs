@@ -2,7 +2,7 @@ use crate::transcoder::event_pixel::{DeltaT, IntegrationTracker, Intensity};
 use crate::transcoder::source::video::Source;
 use crate::transcoder::source::video::Video;
 use crate::transcoder::source::video::{show_display, SourceError};
-use crate::{Codec, Coord, Event, D, D_MAX};
+use crate::{Codec, Coord, Event, PixelAddress, D, D_MAX};
 use core::default::Default;
 use std::cmp::max;
 use std::collections::VecDeque;
@@ -298,13 +298,14 @@ impl Source for FramedSource {
             let frame_arr = self.input_frame_scaled.data_bytes().unwrap();
 
             self.video
-                .event_pixels
+                // .event_pixels
+                .event_pixel_trees
                 .iter_mut()
                 .enumerate()
                 .for_each(|(idx, px)| {
                     let intensity = frame_arr[idx];
                     let d_start = (intensity as f32).log2().floor() as D;
-                    px.d = d_start;
+                    px.set_d(d_start);
                 });
         } else {
             swap(
@@ -372,82 +373,113 @@ impl Source for FramedSource {
             chunk_rows * self.video.width as usize * self.video.channels as usize;
         let big_buffer: Vec<_> = self
             .video
-            .event_pixels
+            // .event_pixels
+            .event_pixel_trees
             .axis_chunks_iter_mut(Axis(0), chunk_rows)
             // .into_par_iter()
             .enumerate()
             .map(|(chunk_idx, mut chunk)| {
                 let mut buffer: Vec<Event> = Vec::with_capacity(100);
-                let mut tracker = IntegrationTracker {
-                    intensity_original: 0.0,
-                    intensity_left: 0.0,
-                    delta_t_original: ref_time,
-                    delta_t_left: ref_time,
-                    delta_t_to_add: 0.0,
-                    delta_t_max: self.video.delta_t_max,
-                };
+                //         let mut tracker = IntegrationTracker {
+                //             intensity_original: 0.0,
+                //             intensity_left: 0.0,
+                //             delta_t_original: ref_time,
+                //             delta_t_left: ref_time,
+                //             delta_t_to_add: 0.0,
+                //             delta_t_max: self.video.delta_t_max,
+                //         };
+                //         for (chunk_px_idx, px) in chunk.iter_mut().enumerate() {
+                //             let px_idx = chunk_px_idx + px_per_chunk * chunk_idx;
+                //
+                //             px.reset_fire_count();
+                //
+                //             if self.video.in_interval_count == px.next_transition.frame_idx {
+                //                 // c_val is the pixel's value on the input frame we're integrating
+                //                 let c_val: u8 = frame_arr[px_idx];
+                //
+                //                 px.lookahead_reset(&mut buffer);
+                //
+                //                 let mut i = 0;
+                //                 let mut next_val: u8;
+                //                 let mut intensity_sum = c_val as f32;
+                //                 let mut current_d = (intensity_sum).log2().floor() as D;
+                //                 let mut ideal_i = 0;
+                //
+                //                 // data_bytes stores the lookahead pixel values
+                //                 while i < data_bytes.len() {
+                //                     next_val = data_bytes[i][px_idx];
+                //
+                //                     if next_val >= c_val.saturating_sub(self.c_thresh_neg)
+                //                         && next_val <= c_val.saturating_add(self.c_thresh_pos)
+                //                     {
+                //                         i += 1;
+                //                         intensity_sum += next_val as f32;
+                //                         if (intensity_sum).log2().floor() as D > current_d
+                //                             || (intensity_sum == 0.0)
+                //                         {
+                //                             current_d = (intensity_sum).log2().floor() as D;
+                //                             ideal_i = i;
+                //                         }
+                //                     } else {
+                //                         break;
+                //                     }
+                //                 }
+                //
+                //                 let trans = match ideal_i {
+                //                     0 => Transition {
+                //                         frame_idx: self.video.in_interval_count + 1,
+                //                     },
+                //                     _ => Transition {
+                //                         frame_idx: self.video.in_interval_count + ideal_i as u32 + 1,
+                //                     },
+                //                 };
+                //                 px.next_transition = trans;
+                //                 let d_to_set = (intensity_sum).log2().floor() as D;
+                //                 px.d = current_d;
+                //                 assert!(d_to_set <= D_MAX);
+                //             }
+                //
+                //             tracker.intensity_original = frame_arr[px_idx] as Intensity;
+                //             tracker.intensity_left = tracker.intensity_original;
+                //             tracker.delta_t_left = ref_time;
+                //             px.add_intensity(&mut tracker, &mut buffer, self.video.communicate_events);
+                //
+                //             px.last_event.calc_frame_intensity(ref_time as u32);
+                //             px.last_event.calc_frame_delta_t(dtm);
+                //         }
+
+                let mut events_coordless = vec![];
                 for (chunk_px_idx, px) in chunk.iter_mut().enumerate() {
                     let px_idx = chunk_px_idx + px_per_chunk * chunk_idx;
-
-                    px.reset_fire_count();
-
-                    if self.video.in_interval_count == px.next_transition.frame_idx {
-                        // c_val is the pixel's value on the input frame we're integrating
-                        let c_val: u8 = frame_arr[px_idx];
-
-                        px.lookahead_reset(&mut buffer);
-
-                        let mut i = 0;
-                        let mut next_val: u8;
-                        let mut intensity_sum = c_val as f32;
-                        let mut current_d = (intensity_sum).log2().floor() as D;
-                        let mut ideal_i = 0;
-
-                        // data_bytes stores the lookahead pixel values
-                        while i < data_bytes.len() {
-                            next_val = data_bytes[i][px_idx];
-
-                            if next_val >= c_val.saturating_sub(self.c_thresh_neg)
-                                && next_val <= c_val.saturating_add(self.c_thresh_pos)
-                            {
-                                i += 1;
-                                intensity_sum += next_val as f32;
-                                if (intensity_sum).log2().floor() as D > current_d
-                                    || (intensity_sum == 0.0)
-                                {
-                                    current_d = (intensity_sum).log2().floor() as D;
-                                    ideal_i = i;
-                                }
-                            } else {
-                                break;
+                    let coord = Coord {
+                        x: (px_idx / self.video.channels % self.video.width as usize)
+                            as PixelAddress,
+                        y: (px_idx / self.video.channels / self.video.width as usize)
+                            as PixelAddress,
+                        c: match self.video.channels {
+                            1 => None,
+                            chan => Some((px_idx % chan) as u8),
+                        },
+                    };
+                    let frame_val: u8 = frame_arr[px_idx];
+                    match px.integrate(frame_val as Intensity, ref_time) {
+                        true => {
+                            events_coordless = px.pop_best_events();
+                            for coordless in events_coordless {
+                                buffer.push(Event {
+                                    coord,
+                                    d: coordless.d,
+                                    delta_t: coordless.delta_t,
+                                })
                             }
                         }
-
-                        let trans = match ideal_i {
-                            0 => Transition {
-                                frame_idx: self.video.in_interval_count + 1,
-                            },
-                            _ => Transition {
-                                frame_idx: self.video.in_interval_count + ideal_i as u32 + 1,
-                            },
-                        };
-                        px.next_transition = trans;
-                        let d_to_set = (intensity_sum).log2().floor() as D;
-                        px.d = current_d;
-                        assert!(d_to_set <= D_MAX);
+                        false => {}
                     }
-
-                    tracker.intensity_original = frame_arr[px_idx] as Intensity;
-                    tracker.intensity_left = tracker.intensity_original;
-                    tracker.delta_t_left = ref_time;
-                    px.add_intensity(&mut tracker, &mut buffer, self.video.communicate_events);
-
-                    px.last_event.calc_frame_intensity(ref_time as u32);
-                    px.last_event.calc_frame_delta_t(dtm);
                 }
                 buffer
             })
             .collect();
+
         if self.video.write_out {
             self.video.stream.encode_events_events(&big_buffer);
         }
