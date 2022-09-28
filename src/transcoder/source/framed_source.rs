@@ -294,6 +294,7 @@ impl Source for FramedSource {
                 Ok(a) => a,
             };
             self.buffer_tx.send(1).unwrap();
+            self.last_input_frame_scaled = self.input_frame_scaled.clone();
 
             let frame_arr = self.input_frame_scaled.data_bytes().unwrap();
 
@@ -308,10 +309,10 @@ impl Source for FramedSource {
                     px.set_d(d_start);
                 });
         } else {
-            swap(
-                &mut self.last_input_frame_scaled,
-                &mut self.input_frame_scaled,
-            );
+            // swap(
+            //     &mut self.last_input_frame_scaled,
+            //     &mut self.input_frame_scaled,
+            // );
             self.input_frame_scaled = self.lookahead_frames_scaled.pop_front().unwrap();
         }
 
@@ -352,6 +353,7 @@ impl Source for FramedSource {
         }
 
         let frame_arr: &[u8] = self.input_frame_scaled.data_bytes().unwrap();
+        let base_arr: &[u8] = self.last_input_frame_scaled.data_bytes().unwrap();
 
         let mut data_bytes: Vec<&[u8]> = Vec::new();
         for i in 0..self.lookahead_frames_scaled.len() {
@@ -462,6 +464,22 @@ impl Source for FramedSource {
                         },
                     };
                     let frame_val: u8 = frame_arr[px_idx];
+                    let base_val = base_arr[px_idx];
+                    if frame_val < base_val.saturating_sub(self.c_thresh_neg)
+                        || frame_val > base_val.saturating_add(self.c_thresh_pos)
+                        || self.video.in_interval_count % 30 == 0
+                    // TODO: temporary
+                    {
+                        events_coordless = px.pop_best_events();
+                        for coordless in events_coordless {
+                            buffer.push(Event {
+                                coord,
+                                d: coordless.d,
+                                delta_t: coordless.delta_t,
+                            })
+                        }
+                    }
+
                     match px.integrate(frame_val as Intensity, ref_time) {
                         true => {
                             events_coordless = px.pop_best_events();
@@ -479,6 +497,16 @@ impl Source for FramedSource {
                 buffer
             })
             .collect();
+
+        let mut base_mut = self.last_input_frame_scaled.data_bytes_mut().unwrap();
+        // TODO: inefficient
+        for (idx, frame_val) in frame_arr.iter().enumerate() {
+            if *frame_val < base_mut[idx].saturating_sub(self.c_thresh_neg)
+                || *frame_val > base_mut[idx].saturating_add(self.c_thresh_pos)
+            {
+                base_mut[idx] = *frame_val;
+            }
+        }
 
         if self.video.write_out {
             self.video.stream.encode_events_events(&big_buffer);

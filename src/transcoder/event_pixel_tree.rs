@@ -40,6 +40,7 @@ impl PixelNode {
     // or else risk losing accuracy. Should only return true when d=D_MAX, which should be
     // extremely rare
     pub fn integrate(&mut self, intensity: Intensity, time: f32) -> bool {
+        debug_assert!(intensity <= 255.0);
         // debug_assert_ne!(intensity, 0.0);
         // debug_assert_ne!(time, 0.0);
         // assert_ne!(self.state.d, D_MAX);
@@ -55,12 +56,13 @@ impl PixelNode {
                 self.alt.as_mut().unwrap().integrate(intensity, time);
             }
         }
-        return self.state.d == D_MAX
-            && self
-                .best_event
-                .unwrap_or(EventCoordless { d: 0, delta_t: 0 })
-                .d
-                == D_MAX;
+        debug_assert!(D_SHIFT[self.state.d as usize] as Intensity > self.state.integration);
+        return self.state.d == D_MAX;
+        // && self
+        //     .best_event
+        //     .unwrap_or(EventCoordless { d: 0, delta_t: 0 })
+        //     .d
+        //     == D_MAX;
     }
 
     pub fn integrate_main(
@@ -71,6 +73,7 @@ impl PixelNode {
         if self.state.integration + intensity >= D_SHIFT[self.state.d as usize] as f32 {
             let prop =
                 (D_SHIFT[self.state.d as usize] as f32 - self.state.integration) as f32 / intensity;
+            assert!(prop > 0.0);
             // self.state.integration += intensity * prop;
             // self.state.delta_t += time as f32 * prop;
             self.best_event = Some(EventCoordless {
@@ -78,9 +81,20 @@ impl PixelNode {
                 delta_t: (self.state.delta_t + time * prop) as DeltaT,
             });
             if self.state.d < D_MAX {
-                self.state.d += 1;
                 self.state.integration += intensity;
                 self.state.delta_t += time;
+                loop {
+                    self.state.d += 1;
+                    if D_SHIFT[self.state.d as usize] > self.state.integration as u32 {
+                        break;
+                    }
+                }
+                // assert!(self)
+                // if self.state.d == D_MAX && self.state.integration > 255.0 {
+                //     dbg!(self.state.integration);
+                // }
+            } else {
+                dbg!(self.state.integration);
             }
 
             if intensity - (intensity * prop) >= 0.0 {
@@ -93,6 +107,7 @@ impl PixelNode {
                 //     .as_mut()
                 //     .unwrap()
                 //     .integrate(intensity - (intensity * prop), time - (time * prop))
+                debug_assert!(intensity - (intensity * prop) <= 255.0);
                 return Some((
                     Box::from(PixelNode::new(intensity)),
                     intensity - (intensity * prop),
