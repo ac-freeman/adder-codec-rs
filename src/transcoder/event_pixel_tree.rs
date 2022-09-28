@@ -32,8 +32,8 @@ impl PixelNode {
     }
 
     pub fn integrate(&mut self, intensity: Intensity, time: f32) {
-        debug_assert_ne!(intensity, 0.0);
-        debug_assert_ne!(time, 0.0);
+        // debug_assert_ne!(intensity, 0.0);
+        // debug_assert_ne!(time, 0.0);
         match self.integrate_main(intensity, time) {
             None => {
                 // Only should do when the main has not just fired and created the alt
@@ -66,7 +66,7 @@ impl PixelNode {
             self.state.integration += intensity;
             self.state.delta_t += time;
 
-            if intensity - (intensity * prop) > 0.0 {
+            if intensity - (intensity * prop) >= 0.0 {
                 // If there was previously an alt node, it's automatically dropped when it leaves scope
                 // self.alt = Some(Box::from(PixelNode::new(
                 //     intensity,
@@ -196,9 +196,29 @@ mod tests {
 
         //  ------------------------------------------------------------8, 230, 74
         //                  \
-        //              (7,25)-----------------------------------7, 102, 48.4
+        //              (7,25)------------------------------------------7, 102, 48.4
         //                                         \
-        //                                    (6,12)----------6, 38, 35.6
+        //                                    (6,12)--------------------6, 38, 35.6
+
+        tree.integrate(26.0, 34.0);
+        // Main node just filled
+        assert_eq!(tree.state.d, 9);
+        assert!(f32_slack(tree.state.integration, 256.0));
+        assert!(f32_slack(tree.state.delta_t, 108.0));
+
+        assert_eq!(tree.best_event.unwrap().d, 8);
+        assert_eq!(tree.best_event.unwrap().delta_t, 108);
+
+        let alt = tree.alt.as_ref().unwrap();
+        assert_eq!(alt.state.d, 4);
+        assert!(f32_slack(alt.state.integration, 0.0));
+        assert!(f32_slack(alt.state.delta_t, 0.0));
+        assert!(alt.best_event.is_none());
+        assert!(alt.alt.is_none())
+
+        //  ---------------------------9, 256, 108
+        //                  \
+        //              (8,108)--------4, 0, 0
     }
 
     #[test]

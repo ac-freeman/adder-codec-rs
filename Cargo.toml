@@ -50,7 +50,7 @@ fast-math = {version = "0.1", optional = true}
 reqwest = "0.11.11"
 tokio = {version = "1.20.1", features = ["full"]}
 clap = { version = "3.0.10", features = ["derive"] }
-davis-edi-rs = { path = "../davis-EDI-rs" }
+#davis-edi-rs = { path = "../davis-EDI-rs" }
 
 [package.metadata.docs.rs]
 no-default-features = true
