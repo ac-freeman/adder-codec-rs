@@ -8,7 +8,7 @@ use std::sync::mpsc::{channel, Receiver, Sender};
 use crate::raw::raw_stream::RawStream;
 use crate::transcoder::event_pixel::pixel::EventPixel;
 use crate::transcoder::event_pixel::{DeltaT, PixelAddress};
-use crate::{Codec, Event};
+use crate::{Codec, Event, D_MAX, D_SHIFT};
 use opencv::highgui;
 use opencv::imgproc::{bounding_rect, contour_area, rectangle, resize, RETR_EXTERNAL};
 use opencv::prelude::*;
@@ -75,6 +75,7 @@ impl Video {
         show_display: bool,
         source_camera: SourceCamera,
     ) -> Video {
+        assert_eq!(D_SHIFT.len(), D_MAX as usize);
         if write_out {
             assert!(communicate_events);
         }

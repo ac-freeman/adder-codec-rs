@@ -1,5 +1,5 @@
 use crate::transcoder::event_pixel::{Intensity, D};
-use crate::{DeltaT, Event, EventCoordless, D_SHIFT};
+use crate::{DeltaT, Event, EventCoordless, D_MAX, D_SHIFT};
 use std::mem;
 
 #[derive(Copy, Clone)]
@@ -31,9 +31,13 @@ impl PixelNode {
         }
     }
 
-    pub fn integrate(&mut self, intensity: Intensity, time: f32) {
+    // Integrates the intensity. Returns bool indicating whether or not the events MUST be popped
+    // or else risk losing accuracy. Should only return true when d=D_MAX, which should be
+    // extremely rare
+    pub fn integrate(&mut self, intensity: Intensity, time: f32) -> bool {
         // debug_assert_ne!(intensity, 0.0);
         // debug_assert_ne!(time, 0.0);
+        // assert_ne!(self.state.d, D_MAX);
         match self.integrate_main(intensity, time) {
             None => {
                 // Only should do when the main has not just fired and created the alt
@@ -46,6 +50,12 @@ impl PixelNode {
                 self.alt.as_mut().unwrap().integrate(intensity, time);
             }
         }
+        return self.state.d == D_MAX
+            && self
+                .best_event
+                .unwrap_or(EventCoordless { d: 0, delta_t: 0 })
+                .d
+                == D_MAX;
     }
 
     pub fn integrate_main(
@@ -62,9 +72,11 @@ impl PixelNode {
                 d: self.state.d,
                 delta_t: (self.state.delta_t + time * prop) as DeltaT,
             });
-            self.state.d += 1;
-            self.state.integration += intensity;
-            self.state.delta_t += time;
+            if self.state.d < D_MAX {
+                self.state.d += 1;
+                self.state.integration += intensity;
+                self.state.delta_t += time;
+            }
 
             if intensity - (intensity * prop) >= 0.0 {
                 // If there was previously an alt node, it's automatically dropped when it leaves scope
@@ -258,9 +270,24 @@ mod tests {
         assert!(f32_slack(tree.state.delta_t, 0.0));
     }
 
+    #[test]
+    fn test_d_max() {
+        let mut tree = PixelNode::new(1048500.0);
+        let need_to_pop = tree.integrate(1048500.0, 1000.0);
+        assert!(!need_to_pop);
+        let need_to_pop = tree.integrate(1048500.0, 1000.0);
+        assert!(need_to_pop);
+        let events = tree.pop_best_events();
+        assert_eq!(events.len(), 2);
+        assert_eq!(events[0].d, 20);
+        assert_eq!(events[1].d, 19);
+        assert_eq!(tree.state.d, 19);
+        assert!(f32_slack(tree.state.integration, 524136.0));
+    }
+
     fn f32_slack(num0: f32, num1: f32) -> bool {
         let slack = 0.1e-3;
-        if num1 - slack < num0 && num1 + slack > num0 {
+        if num1 - slack <= num0 && num1 + slack >= num0 {
             return true;
         }
         return false;
