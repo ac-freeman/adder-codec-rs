@@ -38,7 +38,7 @@ impl PixelNode {
             None => {
                 // Only should do when the main has not just fired and created the alt
                 if self.alt.is_some() {
-                    self.alt.as_mut().unwrap().integrate_main(intensity, time);
+                    self.alt.as_mut().unwrap().integrate(intensity, time);
                 }
             }
             Some((alt, intensity, time)) => {
@@ -175,9 +175,40 @@ mod tests {
         tree
     }
 
+    fn make_tree2() {
+        let mut tree = make_tree();
+        tree.integrate(30.0, 34.0);
+
+        // Main node still not filled
+        assert_eq!(tree.state.d, 8);
+        assert!(f32_slack(tree.state.integration, 230.0));
+        assert!(f32_slack(tree.state.delta_t, 74.0));
+
+        let alt = tree.alt.as_ref().unwrap();
+        assert_eq!(alt.state.d, 7);
+        assert!(f32_slack(alt.state.integration, 102.0));
+        assert!(f32_slack(alt.state.delta_t, 48.4));
+
+        let alt = alt.alt.as_ref().unwrap();
+        assert_eq!(alt.state.d, 6);
+        assert!(f32_slack(alt.state.integration, 38.0));
+        assert!(f32_slack(alt.state.delta_t, 35.6));
+
+        //  ------------------------------------------------------------8, 230, 74
+        //                  \
+        //              (7,25)-----------------------------------7, 102, 48.4
+        //                                         \
+        //                                    (6,12)----------6, 38, 35.6
+    }
+
     #[test]
     fn test_make_tree() {
         make_tree();
+    }
+
+    #[test]
+    fn test_make_tree2() {
+        make_tree2();
     }
 
     #[test]
