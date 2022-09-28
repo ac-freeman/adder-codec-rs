@@ -1,6 +1,6 @@
 <component name="ProjectRunConfigurationManager">
   <configuration default="false" name="Run simul" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
-    <option name="command" value="run --bin transcode_and_frame_simultaneous -- --scale 1.0 --input-filename &quot;$USER_HOME$/Downloads/lake_scaled_hd_crop.mp4&quot; --output-raw-video-filename &quot;$USER_HOME$/Downloads/lake_scaled_out&quot; --output-events-filename &quot;$USER_HOME$/Downloads/lake_scaled_hd_out.adder&quot; --c-thresh-pos 0 --c-thresh-neg 0 --frame-idx-start 0 --color-input 0 --show-display 1" />
+    <option name="command" value="run --bin adder_simulproc -- --scale 0.25 --input-filename &quot;$USER_HOME$/Downloads/lake_scaled_hd.mp4&quot; --output-raw-video-filename &quot;$USER_HOME$/Downloads/lake_out&quot; --tps 150000 --fps 24 --output-events-filename &quot;$USER_HOME$/Downloads/waves_out.adder&quot; --c-thresh-pos 10 --c-thresh-neg 10 --frame-idx-start 0 --color-input 1 --show-display 1" />
     <option name="workingDirectory" value="file://$PROJECT_DIR$" />
     <option name="channel" value="DEFAULT" />
     <option name="requiredFeatures" value="true" />

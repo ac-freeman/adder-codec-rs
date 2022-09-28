@@ -9,6 +9,7 @@ use crate::raw::raw_stream::RawStream;
 use crate::transcoder::event_pixel::pixel::EventPixel;
 use crate::transcoder::event_pixel::{DeltaT, PixelAddress};
 use crate::{Codec, Event};
+use opencv::highgui;
 use opencv::imgproc::{bounding_rect, contour_area, rectangle, resize, RETR_EXTERNAL};
 use opencv::prelude::*;
 
@@ -186,14 +187,14 @@ pub fn show_display(window_name: &str, mat: &Mat, wait: i32, video: &Video) {
                 0,
             )
             .unwrap();
-            // highgui::imshow(window_name, &tmp).unwrap();
+            highgui::imshow(window_name, &tmp).unwrap();
         } else {
-            // highgui::imshow(window_name, mat).unwrap();
+            highgui::imshow(window_name, mat).unwrap();
         }
 
         // highgui::imshow(window_name, &tmp).unwrap();
 
-        // highgui::wait_key(wait).unwrap();
+        highgui::wait_key(wait).unwrap();
         // resize_window(window_name, mat.cols() / 540, 540);
     }
 }
