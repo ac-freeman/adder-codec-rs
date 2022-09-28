@@ -175,7 +175,7 @@ mod tests {
         tree
     }
 
-    fn make_tree2() {
+    fn make_tree2() -> PixelNode {
         let mut tree = make_tree();
         tree.integrate(30.0, 34.0);
 
@@ -214,11 +214,12 @@ mod tests {
         assert!(f32_slack(alt.state.integration, 0.0));
         assert!(f32_slack(alt.state.delta_t, 0.0));
         assert!(alt.best_event.is_none());
-        assert!(alt.alt.is_none())
+        assert!(alt.alt.is_none());
 
         //  ---------------------------9, 256, 108
         //                  \
         //              (8,108)--------4, 0, 0
+        tree
     }
 
     #[test]
@@ -243,6 +244,18 @@ mod tests {
         assert_eq!(tree.state.d, 6);
         assert!(f32_slack(tree.state.integration, 8.0));
         assert!(f32_slack(tree.state.delta_t, 1.6));
+    }
+
+    #[test]
+    fn test_pop_best_states2() {
+        let mut tree = make_tree2();
+        let events = tree.pop_best_events();
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].d, 8);
+        assert_eq!(events[0].delta_t, 108);
+        assert_eq!(tree.state.d, 4);
+        assert!(f32_slack(tree.state.integration, 0.0));
+        assert!(f32_slack(tree.state.delta_t, 0.0));
     }
 
     fn f32_slack(num0: f32, num1: f32) -> bool {
