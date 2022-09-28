@@ -102,7 +102,8 @@ impl PixelNode {
     fn pop_and_reset_state(&mut self) -> (Vec<EventCoordless>, PixelState) {
         match self.best_event {
             None => {
-                panic!("No best event! TODO: handle it")
+                // panic!("No best event! TODO: handle it")
+                (vec![], self.state.clone())
             }
             Some(event) => {
                 let mut ret = vec![event];
@@ -123,8 +124,7 @@ mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
 
-    #[test]
-    fn test_make_tree() {
+    fn make_tree() -> PixelNode {
         let mut tree = PixelNode::new(100.0);
         assert_eq!(tree.state.d, 6);
         tree.integrate(100.0, 20.0);
@@ -172,6 +172,26 @@ mod tests {
         //                                    (7,25)-----------------------------------7, 72, 14.4
         //                                                                  \
         //                                                             (6,12)----------6, 8, 1.6
+        tree
+    }
+
+    #[test]
+    fn test_make_tree() {
+        make_tree();
+    }
+
+    #[test]
+    fn test_pop_best_states() {
+        let mut tree = make_tree();
+        let events = tree.pop_best_events();
+        assert_eq!(events.len(), 2);
+        assert_eq!(events[0].d, 7);
+        assert_eq!(events[0].delta_t, 25);
+        assert_eq!(events[1].d, 6);
+        assert_eq!(events[1].delta_t, 12);
+        assert_eq!(tree.state.d, 6);
+        assert!(f32_slack(tree.state.integration, 8.0));
+        assert!(f32_slack(tree.state.delta_t, 1.6));
     }
 
     fn f32_slack(num0: f32, num1: f32) -> bool {
