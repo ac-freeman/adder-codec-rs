@@ -110,8 +110,10 @@ impl PixelNode {
                 // debug_assert!(intensity - (intensity * prop) <= 255.0);
                 return Some((
                     Box::from(PixelNode::new(intensity)),
-                    intensity - (intensity * prop),
-                    time - (time * prop),
+                    // intensity - (intensity * prop),
+                    // time - (time * prop),
+                    0.0,
+                    0.0,
                 ));
             }
             return None;
