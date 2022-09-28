@@ -17,6 +17,7 @@ use opencv::{imgproc, prelude::*, videoio, Result};
 
 use crate::transcoder::d_controller::DecimationMode;
 use crate::transcoder::event_pixel::pixel::Transition;
+use crate::transcoder::event_pixel_tree::Mode::FramePerfect;
 use crate::SourceCamera;
 
 #[derive(Debug, Copy, Clone)]
@@ -467,8 +468,6 @@ impl Source for FramedSource {
                     let base_val = base_arr[px_idx];
                     if frame_val < base_val.saturating_sub(self.c_thresh_neg)
                         || frame_val > base_val.saturating_add(self.c_thresh_pos)
-                        || self.video.in_interval_count % 30 == 0
-                    // TODO: temporary
                     {
                         events_coordless = px.pop_best_events();
                         for coordless in events_coordless {
@@ -480,7 +479,12 @@ impl Source for FramedSource {
                         }
                     }
 
-                    match px.integrate(frame_val as Intensity, ref_time) {
+                    match px.integrate(
+                        frame_val as Intensity,
+                        ref_time,
+                        &FramePerfect,
+                        &self.video.delta_t_max,
+                    ) {
                         true => {
                             events_coordless = px.pop_best_events();
                             for coordless in events_coordless {

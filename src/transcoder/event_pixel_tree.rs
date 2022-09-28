@@ -1,6 +1,12 @@
 use crate::transcoder::event_pixel::{Intensity, D};
-use crate::{DeltaT, Event, EventCoordless, D_MAX, D_SHIFT};
+use crate::transcoder::event_pixel_tree::Mode::{Continuous, FramePerfect};
+use crate::{DeltaT, Event, EventCoordless, SourceCamera, D_MAX, D_SHIFT};
 use std::mem;
+
+pub(crate) enum Mode {
+    FramePerfect,
+    Continuous,
+}
 
 #[derive(Copy, Clone)]
 struct PixelState {
@@ -39,25 +45,37 @@ impl PixelNode {
     // Integrates the intensity. Returns bool indicating whether or not the events MUST be popped
     // or else risk losing accuracy. Should only return true when d=D_MAX, which should be
     // extremely rare
-    pub fn integrate(&mut self, intensity: Intensity, time: f32) -> bool {
+    pub fn integrate(
+        &mut self,
+        intensity: Intensity,
+        time: f32,
+        mode: &Mode,
+        dtm: &DeltaT,
+    ) -> bool {
         // debug_assert!(intensity <= 255.0);
         // debug_assert_ne!(intensity, 0.0);
         // debug_assert_ne!(time, 0.0);
         // assert_ne!(self.state.d, D_MAX);
-        match self.integrate_main(intensity, time) {
+        match self.integrate_main(intensity, time, mode) {
             None => {
                 // Only should do when the main has not just fired and created the alt
                 if self.alt.is_some() {
-                    self.alt.as_mut().unwrap().integrate(intensity, time);
+                    self.alt
+                        .as_mut()
+                        .unwrap()
+                        .integrate(intensity, time, mode, dtm);
                 }
             }
             Some((alt, intensity, time)) => {
                 self.alt = Some(alt);
-                self.alt.as_mut().unwrap().integrate(intensity, time);
+                self.alt
+                    .as_mut()
+                    .unwrap()
+                    .integrate(intensity, time, mode, dtm);
             }
         }
         debug_assert!(D_SHIFT[self.state.d as usize] as Intensity > self.state.integration);
-        return self.state.d == D_MAX;
+        return self.state.d == D_MAX || self.state.delta_t as DeltaT >= *dtm;
         // && self
         //     .best_event
         //     .unwrap_or(EventCoordless { d: 0, delta_t: 0 })
@@ -69,13 +87,12 @@ impl PixelNode {
         &mut self,
         intensity: Intensity,
         time: f32,
+        mode: &Mode,
     ) -> Option<(Box<PixelNode>, Intensity, f32)> {
-        if self.state.integration + intensity >= D_SHIFT[self.state.d as usize] as f32 {
+        return if self.state.integration + intensity >= D_SHIFT[self.state.d as usize] as f32 {
             let prop =
                 (D_SHIFT[self.state.d as usize] as f32 - self.state.integration) as f32 / intensity;
             assert!(prop > 0.0);
-            // self.state.integration += intensity * prop;
-            // self.state.delta_t += time as f32 * prop;
             self.best_event = Some(EventCoordless {
                 d: self.state.d,
                 delta_t: (self.state.delta_t + time * prop) as DeltaT,
@@ -89,39 +106,29 @@ impl PixelNode {
                         break;
                     }
                 }
-                // assert!(self)
-                // if self.state.d == D_MAX && self.state.integration > 255.0 {
-                //     dbg!(self.state.integration);
-                // }
             } else {
                 dbg!(self.state.integration);
             }
 
             if intensity - (intensity * prop) >= 0.0 {
-                // If there was previously an alt node, it's automatically dropped when it leaves scope
-                // self.alt = Some(Box::from(PixelNode::new(
-                //     intensity,
-                //     // time - (time * prop),
-                // )));
-                // self.alt
-                //     .as_mut()
-                //     .unwrap()
-                //     .integrate(intensity - (intensity * prop), time - (time * prop))
-                // debug_assert!(intensity - (intensity * prop) <= 255.0);
-                return Some((
-                    Box::from(PixelNode::new(intensity)),
-                    // intensity - (intensity * prop),
-                    // time - (time * prop),
-                    0.0,
-                    0.0,
-                ));
+                // For a framed source, we need to return 0,0 for intensity,time.
+                // This lets us preserve the spatially-coherent intensities, especially for color
+                // transcode.
+                return Some(match mode {
+                    FramePerfect => (Box::from(PixelNode::new(intensity)), 0.0, 0.0),
+                    Continuous => (
+                        Box::from(PixelNode::new(intensity)),
+                        intensity - (intensity * prop),
+                        time - (time * prop),
+                    ),
+                });
             }
-            return None;
+            None
         } else {
             self.state.integration += intensity;
             self.state.delta_t += time;
-            return None;
-        }
+            None
+        };
     }
 
     /// Recursively pop all the alt events
@@ -159,9 +166,10 @@ mod tests {
     use super::*;
 
     fn make_tree() -> PixelNode {
+        let dtm = 10000;
         let mut tree = PixelNode::new(100.0);
         assert_eq!(tree.state.d, 6);
-        tree.integrate(100.0, 20.0);
+        tree.integrate(100.0, 20.0, &Continuous, &dtm);
         assert!(tree.best_event.is_some());
         assert_eq!(tree.best_event.unwrap().d, 6);
         assert_eq!(tree.best_event.unwrap().delta_t, 12);
@@ -174,7 +182,7 @@ mod tests {
         assert_eq!(tree.alt.as_ref().unwrap().state.integration, 36.0);
         assert!(f32_slack(tree.alt.as_ref().unwrap().state.delta_t, 7.2));
 
-        tree.integrate(100.0, 20.0);
+        tree.integrate(100.0, 20.0, &Continuous, &dtm);
         assert_eq!(tree.best_event.unwrap().d, 7);
         // Since we're casting, the delta t gets rounded down
         assert_eq!(tree.best_event.unwrap().delta_t, 25);
@@ -210,8 +218,9 @@ mod tests {
     }
 
     fn make_tree2() -> PixelNode {
+        let dtm = 10000;
         let mut tree = make_tree();
-        tree.integrate(30.0, 34.0);
+        tree.integrate(30.0, 34.0, &Continuous, &dtm);
 
         // Main node still not filled
         assert_eq!(tree.state.d, 8);
@@ -234,7 +243,7 @@ mod tests {
         //                                         \
         //                                    (6,12)--------------------6, 38, 35.6
 
-        tree.integrate(26.0, 34.0);
+        tree.integrate(26.0, 34.0, &Continuous, &dtm);
         // Main node just filled
         assert_eq!(tree.state.d, 9);
         assert!(f32_slack(tree.state.integration, 256.0));
@@ -295,8 +304,9 @@ mod tests {
     #[test]
     fn test_d_max() {
         // 1048576
+        let dtm = 10000;
         let mut tree = PixelNode::new(1048500.0);
-        let need_to_pop = tree.integrate(1048500.0, 1000.0);
+        let need_to_pop = tree.integrate(1048500.0, 1000.0, &Continuous, &dtm);
         assert!(need_to_pop);
         let events = tree.pop_best_events();
         assert_eq!(events.len(), 1);
