@@ -307,7 +307,7 @@ impl Source for FramedSource {
                 .for_each(|(idx, px)| {
                     let intensity = frame_arr[idx];
                     let d_start = (intensity as f32).log2().floor() as D;
-                    px.set_d(d_start);
+                    px.arena[px.root_idx].set_d(d_start);
                 });
         } else {
             // swap(
@@ -480,6 +480,7 @@ impl Source for FramedSource {
                     }
 
                     match px.integrate(
+                        px.root_idx,
                         frame_val as Intensity,
                         ref_time,
                         &FramePerfect,

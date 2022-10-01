@@ -50,6 +50,7 @@ fast-math = {version = "0.1", optional = true}
 reqwest = "0.11.11"
 tokio = {version = "1.20.1", features = ["full"]}
 clap = { version = "3.0.10", features = ["derive"] }
+generational-arena = "0.2"
 #davis-edi-rs = { path = "../davis-EDI-rs" }
 
 [package.metadata.docs.rs]
@@ -61,4 +62,4 @@ features = ["docs-only"]
 opt-level = 0
 
 [profile.test]
-opt-level = 0
+opt-level = 2
