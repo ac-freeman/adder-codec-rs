@@ -62,4 +62,4 @@ features = ["docs-only"]
 opt-level = 0
 
 [profile.test]
-opt-level = 2
+opt-level = 0
