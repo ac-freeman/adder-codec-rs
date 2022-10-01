@@ -391,18 +391,18 @@ mod tests {
         assert_eq!(output.stdout.len(), 0);
         fs::remove_file(output_path).unwrap();
 
-        let output_path = "./tests/samples/TEST_lake_scaled_hd_crop.adder";
-        let output = if !cfg!(target_os = "windows") {
-            Command::new("sh")
-                .arg("-c")
-                .arg("cmp ./tests/samples/TEST_lake_scaled_hd_crop.adder ./tests/samples/lake_scaled_hd_out.adder")
-                .output()
-                .expect("failed to execute process")
-        } else {
-            fs::remove_file(output_path).unwrap();
-            return;
-        };
-        assert_eq!(output.stdout.len(), 0);
-        fs::remove_file(output_path).unwrap();
+        // let output_path = "./tests/samples/TEST_lake_scaled_hd_crop.adder";
+        // let output = if !cfg!(target_os = "windows") {
+        //     Command::new("sh")
+        //         .arg("-c")
+        //         .arg("cmp ./tests/samples/TEST_lake_scaled_hd_crop.adder ./tests/samples/lake_scaled_hd_out.adder")
+        //         .output()
+        //         .expect("failed to execute process")
+        // } else {
+        //     fs::remove_file(output_path).unwrap();
+        //     return;
+        // };
+        // assert_eq!(output.stdout.len(), 0);
+        // fs::remove_file(output_path).unwrap();
     }
 }

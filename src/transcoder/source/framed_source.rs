@@ -469,7 +469,7 @@ impl Source for FramedSource {
                     if frame_val < base_val.saturating_sub(self.c_thresh_neg)
                         || frame_val > base_val.saturating_add(self.c_thresh_pos)
                     {
-                        events_coordless = px.pop_best_events();
+                        events_coordless = px.pop_best_events(Some(frame_val as Intensity));
                         for coordless in events_coordless {
                             buffer.push(Event {
                                 coord,
@@ -486,14 +486,12 @@ impl Source for FramedSource {
                         &self.video.delta_t_max,
                     ) {
                         true => {
-                            events_coordless = px.pop_best_events();
-                            for coordless in events_coordless {
-                                buffer.push(Event {
-                                    coord,
-                                    d: coordless.d,
-                                    delta_t: coordless.delta_t,
-                                })
-                            }
+                            let coordless = px.pop_top_event(Some(frame_val as Intensity));
+                            buffer.push(Event {
+                                coord,
+                                d: coordless.d,
+                                delta_t: coordless.delta_t,
+                            });
                         }
                         false => {}
                     }

@@ -8,13 +8,14 @@ pub(crate) enum Mode {
     Continuous,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 struct PixelState {
     d: D,
     integration: Intensity,
     delta_t: f32,
 }
 
+#[derive(Clone)]
 pub struct PixelNode {
     /// Will have the smaller D value
     alt: Option<Box<PixelNode>>,
@@ -23,9 +24,16 @@ pub struct PixelNode {
     best_event: Option<EventCoordless>,
 }
 
+fn get_d_from_intensity(intensity: Intensity) -> D {
+    match intensity > 0.0 {
+        true => fast_math::log2_raw(intensity) as D,
+        false => 0,
+    }
+}
+
 impl PixelNode {
     pub fn new(start_intensity: Intensity) -> PixelNode {
-        let start_d = fast_math::log2_raw(start_intensity) as D;
+        let start_d = get_d_from_intensity(start_intensity);
         assert!(start_d <= D_MAX);
         PixelNode {
             alt: None,
@@ -42,9 +50,9 @@ impl PixelNode {
         self.state.d = d;
     }
 
-    // Integrates the intensity. Returns bool indicating whether or not the events MUST be popped
+    // Integrates the intensity. Returns bool indicating whether or not the topmost event MUST be popped
     // or else risk losing accuracy. Should only return true when d=D_MAX, which should be
-    // extremely rare
+    // extremely rare, or when delta_t_max is hit
     pub fn integrate(
         &mut self,
         intensity: Intensity,
@@ -97,6 +105,8 @@ impl PixelNode {
                 d: self.state.d,
                 delta_t: (self.state.delta_t + time * prop) as DeltaT,
             });
+
+            // Increase d to prepare for the next integration of this pixel
             if self.state.d < D_MAX {
                 self.state.integration += intensity;
                 self.state.delta_t += time;
@@ -107,7 +117,7 @@ impl PixelNode {
                     }
                 }
             } else {
-                dbg!(self.state.integration);
+                // dbg!(self.state.integration);
             }
 
             if intensity - (intensity * prop) >= 0.0 {
@@ -131,10 +141,65 @@ impl PixelNode {
         };
     }
 
+    /// Pop just the topmost event. Should be called only when dtm is reached for main node
+    pub fn pop_top_event(&mut self, next_intensity: Option<Intensity>) -> EventCoordless {
+        match self.best_event {
+            None => {
+                if self.state.integration == 0.0 && self.state.delta_t > 0.0 {
+                    // If the integration is 0, we need to forcefully fire an event where d=254
+                    let ret_event = EventCoordless {
+                        d: 254,
+                        delta_t: self.state.delta_t as DeltaT,
+                    };
+                    self.state.delta_t = 0.0;
+                    match next_intensity {
+                        None => {}
+                        Some(intensity) => self.state.d = get_d_from_intensity(intensity),
+                    }
+                    ret_event
+                } else {
+                    panic!("No best event! TODO: handle it")
+                }
+            }
+            Some(event) => {
+                let alt = self.alt.as_deref_mut().unwrap();
+                *self = alt.clone();
+                event
+            }
+        }
+    }
+
     /// Recursively pop all the alt events
-    pub fn pop_best_events(&mut self) -> Vec<EventCoordless> {
-        let res = self.pop_and_reset_state();
+    pub fn pop_best_events(&mut self, next_intensity: Option<Intensity>) -> Vec<EventCoordless> {
+        let mut res = self.pop_and_reset_state();
         self.state = res.1;
+        if self.state.delta_t > 0.0 {
+            // dbg!(self.state);
+
+            if self.state.integration == 0.0 {
+                // If the integration is 0, we need to forcefully fire an event where d=254
+                res.0.push(EventCoordless {
+                    d: 254,
+                    delta_t: self.state.delta_t as DeltaT,
+                });
+            } else {
+                // TODO: sanity check assertions
+            }
+
+            // If framed source and we want to ignore the rest of the integration for the last
+            // frame, just clear the state.
+        }
+
+        match next_intensity {
+            None => {}
+            // TODO: match on mode instead. This is disjoint.
+            Some(intensity) => {
+                self.state.d = get_d_from_intensity(intensity);
+                self.state.integration = 0.0;
+                self.state.delta_t = 0.0;
+            }
+        }
+
         self.alt = None; // Free the memory for the alternate branch
         self.best_event = None;
         res.0
@@ -144,6 +209,9 @@ impl PixelNode {
         match self.best_event {
             None => {
                 // panic!("No best event! TODO: handle it")
+                // if self.state.integration > 0.0 {
+                //     dbg!(self.state);
+                // }
                 (vec![], self.state.clone())
             }
             Some(event) => {
@@ -278,7 +346,7 @@ mod tests {
     #[test]
     fn test_pop_best_states() {
         let mut tree = make_tree();
-        let events = tree.pop_best_events();
+        let events = tree.pop_best_events(None);
         assert_eq!(events.len(), 2);
         assert_eq!(events[0].d, 7);
         assert_eq!(events[0].delta_t, 25);
@@ -292,7 +360,7 @@ mod tests {
     #[test]
     fn test_pop_best_states2() {
         let mut tree = make_tree2();
-        let events = tree.pop_best_events();
+        let events = tree.pop_best_events(None);
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].d, 8);
         assert_eq!(events[0].delta_t, 108);
@@ -308,7 +376,7 @@ mod tests {
         let mut tree = PixelNode::new(1048500.0);
         let need_to_pop = tree.integrate(1048500.0, 1000.0, &Continuous, &dtm);
         assert!(need_to_pop);
-        let events = tree.pop_best_events();
+        let events = tree.pop_best_events(None);
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].d, 19);
         assert_eq!(events[0].delta_t, 500);
@@ -321,6 +389,20 @@ mod tests {
         // assert_eq!(events[1].d, 19);
         // assert_eq!(tree.state.d, 19);
         // assert!(f32_slack(tree.state.integration, 524136.0));
+    }
+
+    #[test]
+    fn test_dtm() {
+        let dtm = 240000;
+        let mut tree = PixelNode::new(245.0);
+        for i in 0..47 {
+            tree.integrate(245.0, 5000.0, &FramePerfect, &dtm);
+        }
+        let need_to_pop = tree.integrate(245.0, 5000.0, &FramePerfect, &dtm);
+        assert!(need_to_pop);
+        let ret = tree.pop_top_event(Some(245.0));
+        assert_eq!(tree.state.delta_t, 70000.0)
+        // assert_eq!(ret.len(), 5);
     }
 
     fn f32_slack(num0: f32, num1: f32) -> bool {
