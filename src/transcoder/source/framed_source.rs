@@ -356,7 +356,7 @@ impl Source for FramedSource {
 
         let dtm = self.video.delta_t_max;
         let ref_time = self.video.ref_time as f32;
-
+        let tmp = rayon::current_num_threads();
         let chunk_rows = self.video.height as usize / rayon::current_num_threads() as usize;
         let px_per_chunk: usize =
             chunk_rows * self.video.width as usize * self.video.channels as usize;

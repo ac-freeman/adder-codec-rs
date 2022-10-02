@@ -152,26 +152,26 @@ async fn main() -> Result<(), Box<dyn Error>> {
         true => "bgr24",
         _ => "gray",
     };
-    let mut ffmpeg = Command::new("sh")
-        .arg("-c")
-        .arg(
-            "ffmpeg -f rawvideo -pix_fmt ".to_owned()
-                + color_str
-                + " -s:v "
-                + width.to_string().as_str()
-                + "x"
-                + height.to_string().as_str()
-                + " -r "
-                + args.fps.to_string().as_str()
-                + " -i "
-                + &args.output_raw_video_filename
-                + " -crf 0 -c:v libx264 -y "
-                + &args.output_raw_video_filename
-                + ".mp4",
-        )
-        .spawn()
-        .unwrap();
-    ffmpeg.wait().unwrap();
+    // let mut ffmpeg = Command::new("sh")
+    //     .arg("-c")
+    //     .arg(
+    //         "ffmpeg -f rawvideo -pix_fmt ".to_owned()
+    //             + color_str
+    //             + " -s:v "
+    //             + width.to_string().as_str()
+    //             + "x"
+    //             + height.to_string().as_str()
+    //             + " -r "
+    //             + args.fps.to_string().as_str()
+    //             + " -i "
+    //             + &args.output_raw_video_filename
+    //             + " -crf 0 -c:v libx264 -y "
+    //             + &args.output_raw_video_filename
+    //             + ".mp4",
+    //     )
+    //     .spawn()
+    //     .unwrap();
+    // ffmpeg.wait().unwrap();
     println!("{} ms elapsed", now.elapsed().as_millis());
 
     Ok(())
@@ -202,7 +202,7 @@ impl SimulProcessor {
     {
         let thread_pool = rayon::ThreadPoolBuilder::new()
             // .num_threads(1)
-            .num_threads(current_num_threads() / 2)
+            .num_threads(current_num_threads())
             .build()
             .unwrap();
         let reconstructed_frame_rate = fps;
