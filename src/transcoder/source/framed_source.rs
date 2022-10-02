@@ -4,6 +4,7 @@ use crate::transcoder::source::video::Video;
 use crate::transcoder::source::video::{show_display, SourceError};
 use crate::{Codec, Coord, Event, PixelAddress, D, D_MAX};
 use core::default::Default;
+use rayon::iter::{IndexedParallelIterator, IntoParallelIterator, IntoParallelRefMutIterator};
 use std::cmp::max;
 use std::collections::VecDeque;
 use std::mem::swap;
@@ -14,6 +15,7 @@ use ndarray::Axis;
 use opencv::core::{Mat, Size};
 use opencv::videoio::{VideoCapture, CAP_PROP_FPS, CAP_PROP_FRAME_COUNT, CAP_PROP_POS_FRAMES};
 use opencv::{imgproc, prelude::*, videoio, Result};
+use rayon::iter::IntoParallelRefIterator;
 
 use crate::transcoder::d_controller::DecimationMode;
 use crate::transcoder::event_pixel::pixel::Transition;
@@ -308,6 +310,7 @@ impl Source for FramedSource {
                     let intensity = frame_arr[idx];
                     let d_start = (intensity as f32).log2().floor() as D;
                     px.arena[0].set_d(d_start);
+                    px.base_val = intensity;
                 });
         } else {
             // swap(
@@ -354,7 +357,6 @@ impl Source for FramedSource {
         }
 
         let frame_arr: &[u8] = self.input_frame_scaled.data_bytes().unwrap();
-        let base_arr: &[u8] = self.last_input_frame_scaled.data_bytes().unwrap();
 
         let mut data_bytes: Vec<&[u8]> = Vec::new();
         for i in 0..self.lookahead_frames_scaled.len() {
@@ -451,32 +453,17 @@ impl Source for FramedSource {
                 //             px.last_event.calc_frame_delta_t(dtm);
                 //         }
 
-                let mut events_coordless = vec![];
+                let mut events = vec![];
                 for (chunk_px_idx, px) in chunk.iter_mut().enumerate() {
                     let px_idx = chunk_px_idx + px_per_chunk * chunk_idx;
-                    let coord = Coord {
-                        x: (px_idx / self.video.channels % self.video.width as usize)
-                            as PixelAddress,
-                        y: (px_idx / self.video.channels / self.video.width as usize)
-                            as PixelAddress,
-                        c: match self.video.channels {
-                            1 => None,
-                            chan => Some((px_idx % chan) as u8),
-                        },
-                    };
                     let frame_val: u8 = frame_arr[px_idx];
-                    let base_val = base_arr[px_idx];
+                    let mut base_val = &mut px.base_val;
                     if frame_val < base_val.saturating_sub(self.c_thresh_neg)
                         || frame_val > base_val.saturating_add(self.c_thresh_pos)
                     {
-                        events_coordless = px.pop_best_events(Some(frame_val as Intensity));
-                        for coordless in events_coordless {
-                            buffer.push(Event {
-                                coord,
-                                d: coordless.d,
-                                delta_t: coordless.delta_t,
-                            })
-                        }
+                        events = px.pop_best_events(Some(frame_val as Intensity));
+                        buffer.append(&mut events);
+                        px.base_val = frame_val;
                     }
 
                     match px.integrate(
@@ -487,12 +474,8 @@ impl Source for FramedSource {
                         &self.video.delta_t_max,
                     ) {
                         true => {
-                            let coordless = px.pop_top_event(Some(frame_val as Intensity));
-                            buffer.push(Event {
-                                coord,
-                                d: coordless.d,
-                                delta_t: coordless.delta_t,
-                            });
+                            let event = px.pop_top_event(Some(frame_val as Intensity));
+                            buffer.push(event);
                         }
                         false => {}
                     }
@@ -500,16 +483,6 @@ impl Source for FramedSource {
                 buffer
             })
             .collect();
-
-        let mut base_mut = self.last_input_frame_scaled.data_bytes_mut().unwrap();
-        // TODO: inefficient
-        for (idx, frame_val) in frame_arr.iter().enumerate() {
-            if *frame_val < base_mut[idx].saturating_sub(self.c_thresh_neg)
-                || *frame_val > base_mut[idx].saturating_add(self.c_thresh_pos)
-            {
-                base_mut[idx] = *frame_val;
-            }
-        }
 
         if self.video.write_out {
             self.video.stream.encode_events_events(&big_buffer);

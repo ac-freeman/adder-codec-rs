@@ -1,6 +1,6 @@
 use crate::transcoder::event_pixel::{Intensity, D};
 use crate::transcoder::event_pixel_tree::Mode::{Continuous, FramePerfect};
-use crate::{DeltaT, Event, EventCoordless, SourceCamera, D_MAX, D_SHIFT};
+use crate::{Coord, DeltaT, Event, EventCoordless, SourceCamera, D_MAX, D_SHIFT};
 use generational_arena::{Arena, Index};
 use std::collections::VecDeque;
 use std::mem;
@@ -23,28 +23,35 @@ pub struct PixelNode {
     alt: Option<()>,
 
     state: PixelState,
-    best_event: Option<EventCoordless>,
+    best_event: Option<Event>,
 }
 
 pub struct PixelArena {
     pub arena: VecDeque<PixelNode>,
+    coord: Coord,
+    pub base_val: u8,
 }
 
 impl PixelArena {
-    pub(crate) fn new(start_intensity: Intensity) -> PixelArena {
+    pub(crate) fn new(start_intensity: Intensity, coord: Coord) -> PixelArena {
         let mut arena = VecDeque::with_capacity(15);
         arena.push_back(PixelNode::new(start_intensity));
-        PixelArena { arena }
+        PixelArena {
+            arena,
+            coord,
+            base_val: 0,
+        }
     }
 
     /// Pop just the topmost event. Should be called only when dtm is reached for main node
-    pub fn pop_top_event(&mut self, next_intensity: Option<Intensity>) -> EventCoordless {
+    pub fn pop_top_event(&mut self, next_intensity: Option<Intensity>) -> Event {
         let mut root = &mut self.arena[0];
         match root.best_event {
             None => {
                 if root.state.integration == 0.0 && root.state.delta_t > 0.0 {
                     // If the integration is 0, we need to forcefully fire an event where d=254
-                    let ret_event = EventCoordless {
+                    let ret_event = Event {
+                        coord: self.coord,
                         d: 254,
                         delta_t: root.state.delta_t as DeltaT,
                     };
@@ -68,7 +75,7 @@ impl PixelArena {
     }
 
     /// Recursively pop all the alt events
-    pub fn pop_best_events(&mut self, next_intensity: Option<Intensity>) -> Vec<EventCoordless> {
+    pub fn pop_best_events(&mut self, next_intensity: Option<Intensity>) -> Vec<Event> {
         let mut events = Vec::new();
         for node in &self.arena {
             match node.best_event {
@@ -209,7 +216,8 @@ impl PixelArena {
             let prop =
                 (D_SHIFT[node.state.d as usize] as f32 - node.state.integration) as f32 / intensity;
             assert!(prop > 0.0);
-            node.best_event = Some(EventCoordless {
+            node.best_event = Some(Event {
+                coord: self.coord,
                 d: node.state.d,
                 delta_t: (node.state.delta_t + time * prop) as DeltaT,
             });
