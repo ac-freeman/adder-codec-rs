@@ -28,7 +28,8 @@ pub struct PixelNode {
 
 pub struct PixelArena {
     pub arena: VecDeque<PixelNode>,
-    coord: Coord,
+    length: usize,
+    pub coord: Coord,
     pub base_val: u8,
 }
 
@@ -38,6 +39,7 @@ impl PixelArena {
         arena.push_back(PixelNode::new(start_intensity));
         PixelArena {
             arena,
+            length: 1,
             coord,
             base_val: 0,
         }
@@ -66,7 +68,10 @@ impl PixelArena {
                 }
             }
             Some(event) => {
+                assert!(self.length > 1);
                 self.arena.pop_front();
+                self.length -= 1;
+
                 // let alt = self.alt.as_deref_mut().unwrap();
                 // *self = alt.clone();
                 event
@@ -77,13 +82,16 @@ impl PixelArena {
     /// Recursively pop all the alt events
     pub fn pop_best_events(&mut self, next_intensity: Option<Intensity>) -> Vec<Event> {
         let mut events = Vec::new();
-        for node in &self.arena {
-            match node.best_event {
+        for node_idx in 0..self.length {
+            match self.arena[node_idx].best_event {
                 None => {}
                 Some(event) => events.push(event),
             }
         }
-        self.arena.drain(..self.arena.len() - 1);
+        self.arena.swap(0, self.length - 1);
+        debug_assert!(self.arena.front().unwrap().alt.is_none());
+        self.length = 1;
+        // self.arena.drain(..self.arena.len() - 1);
         // let mut res = self.pop_and_reset_state(0);
         // let mut root = &mut self.arena[0];
         // root.state = res.1;
@@ -167,18 +175,26 @@ impl PixelArena {
             match self.integrate_main(idx, intensity, time, mode) {
                 None => {}
                 Some((next_intensity, next_time)) => {
-                    self.arena.drain(idx + 1..);
-                    self.arena.push_back(PixelNode::new(intensity));
+                    // self.arena.drain(idx + 1..);
+                    match self.arena.len() > idx + 1 {
+                        true => self.arena[idx + 1] = PixelNode::new(intensity),
+                        false => {
+                            self.arena.push_back(PixelNode::new(intensity));
+                        }
+                    }
+                    self.length = idx + 2;
                     self.arena[idx].alt = Some(());
                     intensity = next_intensity;
                     time = next_time;
                 }
             }
             idx += 1;
-            if idx >= self.arena.len() {
+            if idx >= self.length {
                 break;
             }
         }
+        debug_assert!(self.length <= self.arena.len());
+        assert!(self.length > 0);
 
         // match self.integrate_main(index, intensity, time, mode) {
         //     None => {
@@ -296,7 +312,14 @@ mod tests {
 
     fn make_tree() -> PixelArena {
         let dtm = 10000;
-        let mut tree = PixelArena::new(100.0);
+        let mut tree = PixelArena::new(
+            100.0,
+            Coord {
+                x: 0,
+                y: 0,
+                c: None,
+            },
+        );
         assert_eq!(tree.arena[0].state.d, 6);
         tree.integrate(0, 100.0, 20.0, &Continuous, &dtm);
         assert!(tree.arena[0].best_event.is_some());
@@ -434,7 +457,14 @@ mod tests {
     fn test_d_max() {
         // 1048576
         let dtm = 10000;
-        let mut tree = PixelArena::new(1048500.0);
+        let mut tree = PixelArena::new(
+            1048500.0,
+            Coord {
+                x: 0,
+                y: 0,
+                c: None,
+            },
+        );
         let need_to_pop = tree.integrate(0, 1048500.0, 1000.0, &Continuous, &dtm);
         assert!(need_to_pop);
         let events = tree.pop_best_events(None);
@@ -455,7 +485,14 @@ mod tests {
     #[test]
     fn test_dtm() {
         let dtm = 240000;
-        let mut tree = PixelArena::new(245.0);
+        let mut tree = PixelArena::new(
+            245.0,
+            Coord {
+                x: 0,
+                y: 0,
+                c: None,
+            },
+        );
         for i in 0..47 {
             tree.integrate(0, 245.0, 5000.0, &FramePerfect, &dtm);
         }
