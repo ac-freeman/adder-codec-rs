@@ -51,6 +51,7 @@ reqwest = "0.11.11"
 tokio = {version = "1.20.1", features = ["full"]}
 clap = { version = "3.0.10", features = ["derive"] }
 generational-arena = "0.2"
+smallvec = "1.9.0"
 #davis-edi-rs = { path = "../davis-EDI-rs" }
 
 [package.metadata.docs.rs]

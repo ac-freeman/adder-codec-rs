@@ -2,6 +2,7 @@ use crate::transcoder::event_pixel::{Intensity, D};
 use crate::transcoder::event_pixel_tree::Mode::{Continuous, FramePerfect};
 use crate::{Coord, DeltaT, Event, EventCoordless, SourceCamera, D_MAX, D_SHIFT};
 use generational_arena::{Arena, Index};
+use smallvec::{smallvec, SmallVec};
 use std::collections::VecDeque;
 use std::mem;
 
@@ -27,7 +28,7 @@ pub struct PixelNode {
 }
 
 pub struct PixelArena {
-    pub arena: VecDeque<PixelNode>,
+    pub arena: SmallVec<[PixelNode; 5]>,
     length: usize,
     pub coord: Coord,
     pub base_val: u8,
@@ -35,8 +36,9 @@ pub struct PixelArena {
 
 impl PixelArena {
     pub(crate) fn new(start_intensity: Intensity, coord: Coord) -> PixelArena {
-        let mut arena = VecDeque::with_capacity(15);
-        arena.push_back(PixelNode::new(start_intensity));
+        // let mut arena = VecDeque::with_capacity(5);
+        let mut arena = smallvec![];
+        arena.push(PixelNode::new(start_intensity));
         PixelArena {
             arena,
             length: 1,
@@ -69,7 +71,8 @@ impl PixelArena {
             }
             Some(event) => {
                 assert!(self.length > 1);
-                self.arena.pop_front();
+                self.arena.remove(0);
+                // self.arena.pop_front();
                 self.length -= 1;
 
                 // let alt = self.alt.as_deref_mut().unwrap();
@@ -89,7 +92,7 @@ impl PixelArena {
             }
         }
         self.arena.swap(0, self.length - 1);
-        debug_assert!(self.arena.front().unwrap().alt.is_none());
+        debug_assert!(self.arena[0].alt.is_none());
         self.length = 1;
         // self.arena.drain(..self.arena.len() - 1);
         // let mut res = self.pop_and_reset_state(0);
@@ -179,7 +182,7 @@ impl PixelArena {
                     match self.arena.len() > idx + 1 {
                         true => self.arena[idx + 1] = PixelNode::new(intensity),
                         false => {
-                            self.arena.push_back(PixelNode::new(intensity));
+                            self.arena.push(PixelNode::new(intensity));
                         }
                     }
                     self.length = idx + 2;
