@@ -347,30 +347,6 @@ impl Source for FramedSource {
             self.video.show_live = false;
         }
 
-        // while self.lookahead_frames_scaled.len()
-        //     < (self.video.delta_t_max / self.video.ref_time) as usize - 1
-        // {
-        //     self.lookahead_frames_scaled
-        //         .push_back(match self.frame_rx.recv() {
-        //             // Hanging when there's no message left
-        //             Err(_) => return Err(BufferChannelClosed),
-        //             Ok(a) => a,
-        //         });
-        //     match self.buffer_tx.send(1) {
-        //         Ok(_) => {}
-        //         Err(_e) => {
-        //             // eprintln!("{}", e)
-        //         }
-        //     };
-        // }
-
-        // match self.buffer_tx.send(1) {
-        //     Ok(_) => {}
-        //     Err(_e) => {
-        //         // eprintln!("{}", e)
-        //     }
-        // };
-
         if self.input_frame_scaled.empty() {
             eprintln!("End of video");
             return Err(BufferEmpty);
@@ -392,7 +368,7 @@ impl Source for FramedSource {
             // .into_par_iter()
             .enumerate()
             .map(|(chunk_idx, mut chunk)| {
-                let mut buffer: Vec<Event> = Vec::with_capacity(50000);
+                let mut buffer: Vec<Event> = Vec::with_capacity(px_per_chunk);
                 let mut events = vec![];
                 for (chunk_px_idx, px) in chunk.iter_mut().enumerate() {
                     let px_idx = chunk_px_idx + px_per_chunk * chunk_idx;
