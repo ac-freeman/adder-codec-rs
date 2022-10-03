@@ -152,26 +152,26 @@ async fn main() -> Result<(), Box<dyn Error>> {
         true => "bgr24",
         _ => "gray",
     };
-    // let mut ffmpeg = Command::new("sh")
-    //     .arg("-c")
-    //     .arg(
-    //         "ffmpeg -f rawvideo -pix_fmt ".to_owned()
-    //             + color_str
-    //             + " -s:v "
-    //             + width.to_string().as_str()
-    //             + "x"
-    //             + height.to_string().as_str()
-    //             + " -r "
-    //             + args.fps.to_string().as_str()
-    //             + " -i "
-    //             + &args.output_raw_video_filename
-    //             + " -crf 0 -c:v libx264 -y "
-    //             + &args.output_raw_video_filename
-    //             + ".mp4",
-    //     )
-    //     .spawn()
-    //     .unwrap();
-    // ffmpeg.wait().unwrap();
+    let mut ffmpeg = Command::new("sh")
+        .arg("-c")
+        .arg(
+            "ffmpeg -f rawvideo -pix_fmt ".to_owned()
+                + color_str
+                + " -s:v "
+                + width.to_string().as_str()
+                + "x"
+                + height.to_string().as_str()
+                + " -r "
+                + args.fps.to_string().as_str()
+                + " -i "
+                + &args.output_raw_video_filename
+                + " -crf 0 -c:v libx264 -y "
+                + &args.output_raw_video_filename
+                + ".mp4",
+        )
+        .spawn()
+        .unwrap();
+    ffmpeg.wait().unwrap();
     println!("{} ms elapsed", now.elapsed().as_millis());
 
     Ok(())
@@ -329,6 +329,7 @@ impl SimulProcessor {
 mod tests {
     use crate::{MyArgs, SimulProcessor};
     use adder_codec_rs::transcoder::source::framed_source::FramedSourceBuilder;
+    use adder_codec_rs::transcoder::source::video::Source;
     use adder_codec_rs::SourceCamera::FramedU8;
     use std::fs;
     use std::path::PathBuf;
@@ -383,6 +384,19 @@ mod tests {
         simul_processor.run().unwrap();
 
         let output_path = "./tests/samples/TEST_lake_scaled_hd_crop";
+        assert_eq!(
+            fs::metadata(output_path).unwrap().len()
+                % (simul_processor.source.get_video().width as u64
+                    * simul_processor.source.get_video().height as u64),
+            0
+        );
+        // assert_eq!(
+        //     fs::metadata(output_path).unwrap().len()
+        //         / (simul_processor.source.get_video().width as u64
+        //             * simul_processor.source.get_video().height as u64),
+        //     313
+        // );
+
         let output = if !cfg!(target_os = "windows") {
             Command::new("sh")
                 .arg("-c")
@@ -393,6 +407,8 @@ mod tests {
             fs::remove_file(output_path).unwrap();
             return;
         };
+        // let tmp = String::from_utf8(output.stdout.clone()).unwrap();
+        // println!("{}", String::from_utf8(output.stdout.clone()).unwrap());
         assert_eq!(output.stdout.len(), 0);
         fs::remove_file(output_path).unwrap();
 

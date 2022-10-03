@@ -141,7 +141,7 @@ impl Video {
                             x,
                             y,
                             c: match channels {
-                                0 => None,
+                                1 => None,
                                 _ => Some(c as u8),
                             },
                         },

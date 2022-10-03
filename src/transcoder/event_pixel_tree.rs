@@ -18,7 +18,7 @@ struct PixelState {
     delta_t: f32,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct PixelNode {
     /// Will have the smaller D value
     alt: Option<()>,
@@ -64,6 +64,7 @@ impl PixelArena {
                         None => {}
                         Some(intensity) => root.state.d = get_d_from_intensity(intensity),
                     }
+                    debug_assert!(root.alt.is_none());
                     ret_event
                 } else {
                     panic!("No best event! TODO: handle it")
@@ -72,6 +73,7 @@ impl PixelArena {
             Some(event) => {
                 assert!(self.length > 1);
                 self.arena.remove(0);
+                self.arena.grow(5);
                 // self.arena.pop_front();
                 self.length -= 1;
 
@@ -85,9 +87,15 @@ impl PixelArena {
     /// Recursively pop all the alt events
     pub fn pop_best_events(&mut self, next_intensity: Option<Intensity>, buffer: &mut Vec<Event>) {
         // let mut events = Vec::new();
+
         for node_idx in 0..self.length {
             match self.arena[node_idx].best_event {
-                None => {}
+                None => {
+                    if node_idx == 0 && self.arena[0].state.delta_t > 0.0 {
+                        buffer.push(self.pop_top_event(next_intensity));
+                        return;
+                    }
+                }
                 Some(event) => buffer.push(event),
             }
         }
@@ -433,7 +441,8 @@ mod tests {
     #[test]
     fn test_pop_best_states() {
         let mut tree = make_tree();
-        let events = tree.pop_best_events(None);
+        let mut events = Vec::new();
+        tree.pop_best_events(None, &mut events);
         assert_eq!(events.len(), 2);
         assert_eq!(events[0].d, 7);
         assert_eq!(events[0].delta_t, 25);
@@ -447,7 +456,8 @@ mod tests {
     #[test]
     fn test_pop_best_states2() {
         let mut tree = make_tree2();
-        let events = tree.pop_best_events(None);
+        let mut events = Vec::new();
+        tree.pop_best_events(None, &mut events);
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].d, 8);
         assert_eq!(events[0].delta_t, 108);
@@ -470,7 +480,8 @@ mod tests {
         );
         let need_to_pop = tree.integrate(0, 1048500.0, 1000.0, &Continuous, &dtm);
         assert!(need_to_pop);
-        let events = tree.pop_best_events(None);
+        let mut events = Vec::new();
+        tree.pop_best_events(None, &mut events);
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].d, 19);
         assert_eq!(events[0].delta_t, 500);
