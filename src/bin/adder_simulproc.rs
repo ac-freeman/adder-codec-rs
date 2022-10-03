@@ -332,8 +332,12 @@ mod tests {
     use adder_codec_rs::transcoder::source::video::Source;
     use adder_codec_rs::SourceCamera::FramedU8;
     use std::fs;
+    use std::fs::File;
+    use std::io::{Seek, SeekFrom};
     use std::path::PathBuf;
     use std::process::Command;
+    use std::thread::sleep;
+    use std::time::Duration;
 
     #[test]
     fn dark() {
@@ -382,6 +386,7 @@ mod tests {
         );
 
         simul_processor.run().unwrap();
+        sleep(Duration::from_secs(5));
 
         let output_path = "./tests/samples/TEST_lake_scaled_hd_crop";
         assert_eq!(
@@ -390,12 +395,11 @@ mod tests {
                     * simul_processor.source.get_video().height as u64),
             0
         );
-        // assert_eq!(
-        //     fs::metadata(output_path).unwrap().len()
-        //         / (simul_processor.source.get_video().width as u64
-        //             * simul_processor.source.get_video().height as u64),
-        //     313
-        // );
+        let tmp = fs::metadata(output_path).unwrap().len();
+        let mut file = File::open(output_path).unwrap();
+        let trunc_filesize = 313
+            * (simul_processor.source.get_video().width as u64
+                * simul_processor.source.get_video().height as u64);
 
         let output = if !cfg!(target_os = "windows") {
             Command::new("sh")
@@ -407,23 +411,16 @@ mod tests {
             fs::remove_file(output_path).unwrap();
             return;
         };
-        // let tmp = String::from_utf8(output.stdout.clone()).unwrap();
+        let tmp = String::from_utf8(output.stdout.clone()).unwrap();
         // println!("{}", String::from_utf8(output.stdout.clone()).unwrap());
+
+        // Note the file might be larger than that given in ./tests/samples, if the method for
+        // framing generates more frames at the end than the original method used. This assertion
+        // should still pass if all the frames before that are identical.
         assert_eq!(output.stdout.len(), 0);
         fs::remove_file(output_path).unwrap();
 
-        // let output_path = "./tests/samples/TEST_lake_scaled_hd_crop.adder";
-        // let output = if !cfg!(target_os = "windows") {
-        //     Command::new("sh")
-        //         .arg("-c")
-        //         .arg("cmp ./tests/samples/TEST_lake_scaled_hd_crop.adder ./tests/samples/lake_scaled_hd_out.adder")
-        //         .output()
-        //         .expect("failed to execute process")
-        // } else {
-        //     fs::remove_file(output_path).unwrap();
-        //     return;
-        // };
-        // assert_eq!(output.stdout.len(), 0);
-        // fs::remove_file(output_path).unwrap();
+        let output_path = "./tests/samples/TEST_lake_scaled_hd_crop.adder";
+        fs::remove_file(output_path).unwrap();
     }
 }
