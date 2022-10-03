@@ -28,7 +28,7 @@ pub struct PixelNode {
 }
 
 pub struct PixelArena {
-    pub arena: SmallVec<[PixelNode; 5]>,
+    pub arena: Vec<PixelNode>,
     length: usize,
     pub coord: Coord,
     pub base_val: u8,
@@ -36,8 +36,8 @@ pub struct PixelArena {
 
 impl PixelArena {
     pub(crate) fn new(start_intensity: Intensity, coord: Coord) -> PixelArena {
-        // let mut arena = VecDeque::with_capacity(5);
-        let mut arena = smallvec![];
+        let mut arena = Vec::with_capacity(5);
+        // let mut arena = smallvec![];
         arena.push(PixelNode::new(start_intensity));
         PixelArena {
             arena,
@@ -67,14 +67,30 @@ impl PixelArena {
                     debug_assert!(root.alt.is_none());
                     ret_event
                 } else {
-                    panic!("No best event! TODO: handle it")
+                    // We can reach here under frame-perfect integration when approaching dtm. The new
+                    // node might not have the right D set.
+                    // TODO: cover with a unit test
+                    root.best_event = Some(Event {
+                        coord: self.coord,
+                        d: fast_math::log2_raw(root.state.integration) as D,
+                        delta_t: root.state.delta_t as DeltaT,
+                    });
+                    match self.arena.len() > 1 {
+                        true => self.arena[1] = PixelNode::new(next_intensity.unwrap()),
+                        false => {
+                            self.arena.push(PixelNode::new(next_intensity.unwrap()));
+                        }
+                    }
+                    self.length += 1;
+                    return self.pop_top_event(next_intensity);
+                    // panic!("No best event! TODO: handle it")
                 }
             }
             Some(event) => {
                 assert!(self.length > 1);
-                self.arena.remove(0);
-                self.arena.grow(5);
-                // self.arena.pop_front();
+                for i in 0..self.length - 1 {
+                    self.arena[i] = self.arena[i + 1].clone();
+                }
                 self.length -= 1;
 
                 // let alt = self.alt.as_deref_mut().unwrap();
@@ -102,26 +118,6 @@ impl PixelArena {
         self.arena.swap(0, self.length - 1);
         debug_assert!(self.arena[0].alt.is_none());
         self.length = 1;
-        // self.arena.drain(..self.arena.len() - 1);
-        // let mut res = self.pop_and_reset_state(0);
-        // let mut root = &mut self.arena[0];
-        // root.state = res.1;
-        // if root.state.delta_t > 0.0 {
-        //     // dbg!(self.state);
-        //
-        //     if root.state.integration == 0.0 {
-        //         // If the integration is 0, we need to forcefully fire an event where d=254
-        //         res.0.push(EventCoordless {
-        //             d: 254,
-        //             delta_t: root.state.delta_t as DeltaT,
-        //         });
-        //     } else {
-        //         // TODO: sanity check assertions
-        //     }
-        //
-        //     // If framed source and we want to ignore the rest of the integration for the last
-        //     // frame, just clear the state.
-        // }
 
         match next_intensity {
             None => {}
@@ -132,43 +128,11 @@ impl PixelArena {
                 self.arena[0].state.delta_t = 0.0;
             }
         };
-        // events
-
-        // root.alt = None; // Free the memory for the alternate branch
-        // root.best_event = None;
-        // res.0
     }
 
-    // fn pop_and_reset_state(&mut self, index: usize) -> (Vec<EventCoordless>, PixelState) {
-    //     let node = &self.arena[index];
-    //     match node.best_event {
-    //         None => {
-    //             // panic!("No best event! TODO: handle it")
-    //             // if self.state.integration > 0.0 {
-    //             //     dbg!(self.state);
-    //             // }
-    //             (vec![], node.state.clone())
-    //         }
-    //         Some(event) => {
-    //             let mut ret = vec![event];
-    //
-    //             let res = match node.alt.is_some() {
-    //                 false => (vec![], node.state.clone()),
-    //                 true => {
-    //                     let rec = self.pop_and_reset_state(index + 1);
-    //                     self.arena.pop_back();
-    //                     rec
-    //                 }
-    //             };
-    //             ret.extend(res.0);
-    //             (ret, res.1)
-    //         }
-    //     }
-    // }
-
-    // Integrates the intensity. Returns bool indicating whether or not the topmost event MUST be popped
-    // or else risk losing accuracy. Should only return true when d=D_MAX, which should be
-    // extremely rare, or when delta_t_max is hit
+    /// Integrates the intensity. Returns bool indicating whether or not the topmost event MUST be popped
+    /// or else risk losing accuracy. Should only return true when d=D_MAX, which should be
+    /// extremely rare, or when delta_t_max is hit
     pub fn integrate(
         &mut self,
         index: usize,
@@ -197,6 +161,10 @@ impl PixelArena {
                     self.arena[idx].alt = Some(());
                     intensity = next_intensity;
                     time = next_time;
+                    match mode {
+                        FramePerfect => break,
+                        Continuous => {}
+                    }
                 }
             }
             idx += 1;
@@ -207,28 +175,7 @@ impl PixelArena {
         debug_assert!(self.length <= self.arena.len());
         assert!(self.length > 0);
 
-        // match self.integrate_main(index, intensity, time, mode) {
-        //     None => {
-        //         // Only should do when the main has not just fired and created the alt
-        //         if self.arena[index].alt.is_some() {
-        //             self.integrate(index + 1, intensity, time, mode, dtm);
-        //         }
-        //     }
-        //     Some((intensity, time)) => {
-        //         self.arena[index].alt = Some(());
-        //         self.integrate(index + 1, intensity, time, mode, dtm);
-        //     }
-        // }
-        // debug_assert!(
-        //     D_SHIFT[self.arena[index].state.d as usize] as Intensity
-        //         > self.arena[index].state.integration
-        // );
         return self.arena[0].state.d == D_MAX || self.arena[0].state.delta_t as DeltaT >= *dtm;
-        // && self
-        //     .best_event
-        //     .unwrap_or(EventCoordless { d: 0, delta_t: 0 })
-        //     .d
-        //     == D_MAX;
     }
 
     pub fn integrate_main(
@@ -267,13 +214,6 @@ impl PixelArena {
                 // For a framed source, we need to return 0,0 for intensity,time.
                 // This lets us preserve the spatially-coherent intensities, especially for color
                 // transcode.
-                // match self.arena[index].alt {
-                //     // self.arena.remove(self.arena[index].alt.unwrap());
-                //     None => {
-                //         self.arena.push_back(PixelNode::new(intensity));
-                //     }
-                //     Some(_) => self.arena[index + 1] = PixelNode::new(intensity),
-                // }
 
                 return Some(match mode {
                     FramePerfect => (0.0, 0.0),

@@ -294,7 +294,6 @@ impl Source for FramedSource {
     /// Get pixel-wise intensities directly from source frame, and integrate them with
     /// [`ref_time`](Video::ref_time) (the number of ticks each frame is said to span)
     fn consume(&mut self, view_interval: u32) -> Result<Vec<Vec<Event>>, SourceError> {
-        let mut time = Instant::now();
         if self.video.in_interval_count == 0 {
             match self.cap.read(&mut self.input_frame) {
                 Ok(_) => resize_frame(
@@ -343,12 +342,6 @@ impl Source for FramedSource {
             };
         }
 
-        println!(
-            "get frame in {} ms",
-            Instant::now().duration_since(time).as_millis()
-        );
-        time = Instant::now();
-
         self.video.in_interval_count += 1;
         if self.video.in_interval_count % view_interval == 0 {
             self.video.show_live = true;
@@ -383,6 +376,14 @@ impl Source for FramedSource {
                     let px_idx = chunk_px_idx + px_per_chunk * chunk_idx;
                     let frame_val: u8 = frame_arr[px_idx];
                     let mut base_val = &mut px.base_val;
+                    if px.coord.x == 602
+                        && px.coord.y == 113
+                        && px.coord.c.unwrap() == 2
+                        && self.video.in_interval_count > 330
+                    {
+                        dbg!(self.video.in_interval_count);
+                        dbg!(frame_val);
+                    }
                     if frame_val < base_val.saturating_sub(self.c_thresh_neg)
                         || frame_val > base_val.saturating_add(self.c_thresh_pos)
                     {
@@ -409,20 +410,10 @@ impl Source for FramedSource {
                 buffer
             })
             .collect();
-        println!(
-            "integrate frame in {} ms",
-            Instant::now().duration_since(time).as_millis()
-        );
-        time = Instant::now();
 
         if self.video.write_out {
             self.video.stream.encode_events_events(&big_buffer);
         }
-        println!(
-            "encode events in {} ms",
-            Instant::now().duration_since(time).as_millis()
-        );
-        time = Instant::now();
 
         show_display("Gray input", &self.input_frame_scaled, 1, &self.video);
         self.video.instantaneous_display_frame = (self.input_frame_scaled).clone();
