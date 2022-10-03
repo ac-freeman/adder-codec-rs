@@ -83,12 +83,12 @@ impl PixelArena {
     }
 
     /// Recursively pop all the alt events
-    pub fn pop_best_events(&mut self, next_intensity: Option<Intensity>) -> Vec<Event> {
-        let mut events = Vec::new();
+    pub fn pop_best_events(&mut self, next_intensity: Option<Intensity>, buffer: &mut Vec<Event>) {
+        // let mut events = Vec::new();
         for node_idx in 0..self.length {
             match self.arena[node_idx].best_event {
                 None => {}
-                Some(event) => events.push(event),
+                Some(event) => buffer.push(event),
             }
         }
         self.arena.swap(0, self.length - 1);
@@ -124,7 +124,7 @@ impl PixelArena {
                 self.arena[0].state.delta_t = 0.0;
             }
         };
-        events
+        // events
 
         // root.alt = None; // Free the memory for the alternate branch
         // root.best_event = None;

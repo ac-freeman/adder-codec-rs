@@ -4,11 +4,13 @@ use crate::transcoder::source::video::Video;
 use crate::transcoder::source::video::{show_display, SourceError};
 use crate::{Codec, Coord, Event, PixelAddress, D, D_MAX};
 use core::default::Default;
+use rayon::iter::ParallelIterator;
 use rayon::iter::{IndexedParallelIterator, IntoParallelIterator, IntoParallelRefMutIterator};
 use std::cmp::max;
 use std::collections::VecDeque;
 use std::mem::swap;
 use std::sync::mpsc::{channel, Receiver, Sender};
+use std::time::Instant;
 
 use crate::transcoder::source::video::SourceError::*;
 use ndarray::Axis;
@@ -292,6 +294,7 @@ impl Source for FramedSource {
     /// Get pixel-wise intensities directly from source frame, and integrate them with
     /// [`ref_time`](Video::ref_time) (the number of ticks each frame is said to span)
     fn consume(&mut self, view_interval: u32) -> Result<Vec<Vec<Event>>, SourceError> {
+        let mut time = Instant::now();
         if self.video.in_interval_count == 0 {
             match self.cap.read(&mut self.input_frame) {
                 Ok(_) => resize_frame(
@@ -340,6 +343,12 @@ impl Source for FramedSource {
             };
         }
 
+        println!(
+            "get frame in {} ms",
+            Instant::now().duration_since(time).as_millis()
+        );
+        time = Instant::now();
+
         self.video.in_interval_count += 1;
         if self.video.in_interval_count % view_interval == 0 {
             self.video.show_live = true;
@@ -365,11 +374,11 @@ impl Source for FramedSource {
             // .event_pixels
             .event_pixel_trees
             .axis_chunks_iter_mut(Axis(0), chunk_rows)
-            // .into_par_iter()
+            .into_par_iter()
             .enumerate()
             .map(|(chunk_idx, mut chunk)| {
                 let mut buffer: Vec<Event> = Vec::with_capacity(px_per_chunk);
-                let mut events = vec![];
+                // let mut events = vec![];
                 for (chunk_px_idx, px) in chunk.iter_mut().enumerate() {
                     let px_idx = chunk_px_idx + px_per_chunk * chunk_idx;
                     let frame_val: u8 = frame_arr[px_idx];
@@ -377,8 +386,8 @@ impl Source for FramedSource {
                     if frame_val < base_val.saturating_sub(self.c_thresh_neg)
                         || frame_val > base_val.saturating_add(self.c_thresh_pos)
                     {
-                        events = px.pop_best_events(Some(frame_val as Intensity));
-                        buffer.append(&mut events);
+                        px.pop_best_events(Some(frame_val as Intensity), &mut buffer);
+                        // buffer.append(&mut events);
                         px.base_val = frame_val;
                     }
 
@@ -400,10 +409,20 @@ impl Source for FramedSource {
                 buffer
             })
             .collect();
+        println!(
+            "integrate frame in {} ms",
+            Instant::now().duration_since(time).as_millis()
+        );
+        time = Instant::now();
 
         if self.video.write_out {
             self.video.stream.encode_events_events(&big_buffer);
         }
+        println!(
+            "encode events in {} ms",
+            Instant::now().duration_since(time).as_millis()
+        );
+        time = Instant::now();
 
         show_display("Gray input", &self.input_frame_scaled, 1, &self.video);
         self.video.instantaneous_display_frame = (self.input_frame_scaled).clone();

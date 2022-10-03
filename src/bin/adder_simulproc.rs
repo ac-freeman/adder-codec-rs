@@ -200,9 +200,14 @@ impl SimulProcessor {
         T: FrameValue<Output = T>,
         T: Serialize,
     {
-        let thread_pool = rayon::ThreadPoolBuilder::new()
+        let thread_pool_framer = rayon::ThreadPoolBuilder::new()
             // .num_threads(1)
-            .num_threads(current_num_threads())
+            .num_threads(current_num_threads() / 2)
+            .build()
+            .unwrap();
+        let thread_pool_transcoder = rayon::ThreadPoolBuilder::new()
+            // .num_threads(1)
+            .num_threads(current_num_threads() / 2)
             .build()
             .unwrap();
         let reconstructed_frame_rate = fps;
@@ -213,7 +218,7 @@ impl SimulProcessor {
         let width = source.get_video().width as usize;
         let channels = source.get_video().channels as usize;
 
-        let mut framer = thread_pool.install(|| {
+        let mut framer = thread_pool_framer.install(|| {
             FramerBuilder::new(height, width, channels)
                 .codec_version(1)
                 .time_parameters(tps, ref_time, reconstructed_frame_rate)
@@ -246,10 +251,10 @@ impl SimulProcessor {
                                 frames_returned => {
                                     frame_count += frames_returned;
                                     print!(
-                                        "\rOutput frame {}. Got {} frames in  {}ms\t",
+                                        "\rOutput frame {}. Got {} frames in  {} ms/frame\t",
                                         frame_count,
                                         frames_returned,
-                                        now.elapsed().as_millis()
+                                        now.elapsed().as_millis() / frames_returned as u128
                                     );
                                     io::stdout().flush().unwrap();
                                     now = Instant::now();
@@ -274,7 +279,7 @@ impl SimulProcessor {
 
         SimulProcessor {
             source,
-            thread_pool,
+            thread_pool: thread_pool_transcoder,
             events_tx,
         }
     }
