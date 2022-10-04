@@ -310,29 +310,50 @@ impl Source for FramedSource {
                 for (chunk_px_idx, px) in chunk.iter_mut().enumerate() {
                     let px_idx = chunk_px_idx + px_per_chunk * chunk_idx;
                     let frame_val: u8 = frame_arr[px_idx];
-                    let base_val = &mut px.base_val;
-                    if px.coord.x == 2 && px.coord.y == 5 && self.video.in_interval_count > 74 {
+                    if px.coord.x == 0 && px.coord.y == 0 {
                         dbg!(&px.arena[0]);
                     }
+                    if px.need_to_pop_top {
+                        let event = px.pop_top_event(Some(frame_val as Intensity));
+                        if event.d == 8 && event.delta_t == 10508 {
+                            dbg!(event);
+                        }
+                        buffer.push(event);
+                    }
+
+                    let base_val = &mut px.base_val;
+
                     if frame_val < base_val.saturating_sub(self.c_thresh_neg)
                         || frame_val > base_val.saturating_add(self.c_thresh_pos)
                     {
                         px.pop_best_events(Some(frame_val as Intensity), &mut buffer);
+                        if buffer.contains(&Event {
+                            coord: Coord {
+                                x: 0,
+                                y: 0,
+                                c: None,
+                            },
+                            d: 6,
+                            delta_t: 2990,
+                        }) {
+                            dbg!("look");
+                        }
                         px.base_val = frame_val;
                     }
 
-                    match px.integrate(
+                    px.integrate(
                         frame_val as Intensity,
                         ref_time,
                         &FramePerfect,
                         &self.video.delta_t_max,
-                    ) {
-                        true => {
-                            let event = px.pop_top_event(Some(frame_val as Intensity));
-                            buffer.push(event);
-                        }
-                        false => {}
-                    }
+                    );
+                    // {
+                    //     true => {
+                    //         let event = px.pop_top_event(Some(frame_val as Intensity));
+                    //         buffer.push(event);
+                    //     }
+                    //     false => {}
+                    // }
                 }
                 buffer
             })

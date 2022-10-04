@@ -9,9 +9,12 @@ use std::process::Command;
 
 use adder_codec_rs::framer::event_framer::FramerMode::INSTANTANEOUS;
 use adder_codec_rs::framer::event_framer::{FrameSequence, Framer, FramerBuilder};
-use adder_codec_rs::raw::raw_stream::RawStream;
+use adder_codec_rs::framer::scale_intensity::event_to_intensity;
+use adder_codec_rs::raw::raw_stream::{RawStream, StreamError};
+use adder_codec_rs::transcoder::source::framed_source::FramedSourceBuilder;
+use adder_codec_rs::transcoder::source::video::Source;
 use adder_codec_rs::SourceCamera::FramedU8;
-use adder_codec_rs::{Codec, Coord, Event};
+use adder_codec_rs::{Codec, Coord, Event, SourceCamera};
 use rand::Rng;
 
 #[test]
@@ -831,6 +834,85 @@ fn test_sample_ordered() {
     };
     assert_eq!(output.stdout.len(), 0);
     fs::remove_file(output_path).unwrap();
+}
+
+#[test]
+fn test_framed_to_adder_bunny2() {
+    let mut source = FramedSourceBuilder::new(
+        "./tests/samples/bunny_crop2.mp4".to_string(),
+        SourceCamera::FramedU8,
+    )
+    .frame_start(400)
+    .scale(1.0)
+    .communicate_events(true)
+    // .output_events_filename("./tests/samples/TEST_bunny2.adder".to_string())
+    .color(false)
+    .contrast_thresholds(5, 5)
+    .show_display(false)
+    .time_parameters(120000, 240000)
+    .finish();
+
+    let frame_max = 250;
+
+    // Open GT file
+    let mut stream: RawStream = Codec::new();
+    stream
+        .open_reader("./tests/samples/bunny2.adder")
+        .expect("Invalid path");
+    let _ = stream.decode_header().expect("Invalid header");
+    let mut gt_events = Vec::new();
+    loop {
+        match stream.decode_event() {
+            Ok(event_gt) => {
+                if event_gt.coord.x == 0 && event_gt.coord.y == 0 {
+                    gt_events.push(event_gt)
+                }
+            }
+            Err(_) => break,
+        };
+    }
+
+    let mut event_count: usize = 0;
+    let mut test_events = Vec::new();
+    loop {
+        if event_count == 64 {
+            dbg!("");
+        }
+        match source.consume(1) {
+            Ok(events_events) => {
+                for events in events_events {
+                    for event in events {
+                        if event.coord.x == 0 && event.coord.y == 0 {
+                            let gt_event = gt_events[event_count];
+                            assert_eq!(event, gt_event);
+                            test_events.push(event);
+                            event_count += 1;
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                println!("Err: {:?}", e);
+                break;
+            }
+        }
+
+        let video = source.get_video();
+        if frame_max != 0 && video.in_interval_count >= frame_max {
+            break;
+        }
+    }
+
+    source.get_video_mut().end_write_stream();
+
+    assert_eq!(test_events[64].d, 8);
+    assert_eq!(test_events[64].delta_t, 10508);
+    for i in 0..gt_events.len() {
+        let gt_event = gt_events[i];
+        let test_event = test_events[i];
+        assert_eq!(gt_events[i], test_events[i]);
+    }
+    assert_eq!(gt_events.len(), test_events.len());
 }
 
 // #[test]

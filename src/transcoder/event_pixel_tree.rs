@@ -41,6 +41,7 @@ pub struct PixelArena {
     length: usize,
     pub coord: Coord,
     pub base_val: u8,
+    pub need_to_pop_top: bool,
 }
 
 impl PixelArena {
@@ -53,6 +54,7 @@ impl PixelArena {
             length: 1,
             coord,
             base_val: 0,
+            need_to_pop_top: false,
         }
     }
 
@@ -105,6 +107,10 @@ impl PixelArena {
 
                 // let alt = self.alt.as_deref_mut().unwrap();
                 // *self = alt.clone();
+                if event.d == 8 && event.delta_t == 10508 {
+                    dbg!(event);
+                    println!("HERE");
+                }
                 event
             }
         }
@@ -154,11 +160,23 @@ impl PixelArena {
         mut time: f32,
         mode: &Mode,
         dtm: &DeltaT,
-    ) -> bool {
+    ) {
         // debug_assert!(intensity <= 255.0);
         // debug_assert_ne!(intensity, 0.0);
         // debug_assert_ne!(time, 0.0);
         // assert_ne!(self.state.d, D_MAX);
+        if self.coord.x == 0 && self.coord.y == 0 && intensity == 115.0 {
+            dbg!(&self.arena[0]);
+        }
+        if self.coord.x == 0 && self.coord.y == 0 {
+            dbg!(&self.arena[0]);
+        }
+
+        let tail = &mut self.arena[self.length - 1];
+        if tail.state.delta_t == 0.0 && tail.state.integration == 0.0 {
+            tail.state.d = get_d_from_intensity(intensity);
+        }
+
         let mut idx = 0;
         loop {
             match self.integrate_main(idx, intensity, time, mode) {
@@ -189,7 +207,8 @@ impl PixelArena {
         debug_assert!(self.length <= self.arena.len());
         assert!(self.length > 0);
 
-        self.arena[0].state.d == D_MAX || self.arena[0].state.delta_t as DeltaT >= *dtm
+        self.need_to_pop_top =
+            self.arena[0].state.d == D_MAX || self.arena[0].state.delta_t as DeltaT >= *dtm;
     }
 
     pub fn integrate_main(
@@ -199,13 +218,6 @@ impl PixelArena {
         time: f32,
         mode: &Mode,
     ) -> Option<(Intensity, f32)> {
-        if index == 0
-            && self.arena[index].state.integration == 0.0
-            && D_SHIFT[self.arena[index].state.d as usize] > intensity as u32
-        {
-            panic!("");
-        }
-
         let node = &mut self.arena[index];
         if node.state.integration + intensity >= D_SHIFT[node.state.d as usize] as f32 {
             let prop =
