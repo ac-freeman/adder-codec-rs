@@ -1,14 +1,11 @@
 use crate::transcoder::event_pixel_tree::Mode::{Continuous, FramePerfect};
-use crate::{Coord, Event, EventCoordless, SourceCamera, D_MAX, D_SHIFT};
-use generational_arena::{Arena, Index};
+use crate::{Coord, Event, D_MAX, D_SHIFT};
 use smallvec::{smallvec, SmallVec};
-use std::collections::VecDeque;
-use std::mem;
 
 /// Decimation value; a pixel's sensitivity.
 pub type D = u8;
 
-type Integration = f32;
+// type Integration = f32;
 
 /// Number of ticks elapsed since a given pixel last fired an [`pixel::Event`]
 pub type DeltaT = u32;
@@ -17,9 +14,9 @@ pub type DeltaT = u32;
 pub type Intensity = f32;
 
 /// Pixel x- or y- coordinate address in the ADΔER model
-pub type PixelAddress = u16;
+// pub type PixelAddress = u16;
 
-pub(crate) enum Mode {
+pub enum Mode {
     FramePerfect,
     Continuous,
 }
@@ -95,7 +92,7 @@ impl PixelArena {
                         }
                     }
                     self.length += 1;
-                    return self.pop_top_event(next_intensity);
+                    self.pop_top_event(next_intensity)
                     // panic!("No best event! TODO: handle it")
                 }
             }
@@ -148,7 +145,6 @@ impl PixelArena {
     /// extremely rare, or when delta_t_max is hit
     pub fn integrate(
         &mut self,
-        index: usize,
         mut intensity: Intensity,
         mut time: f32,
         mode: &Mode,
@@ -188,7 +184,7 @@ impl PixelArena {
         debug_assert!(self.length <= self.arena.len());
         assert!(self.length > 0);
 
-        return self.arena[0].state.d == D_MAX || self.arena[0].state.delta_t as DeltaT >= *dtm;
+        self.arena[0].state.d == D_MAX || self.arena[0].state.delta_t as DeltaT >= *dtm
     }
 
     pub fn integrate_main(
@@ -199,7 +195,7 @@ impl PixelArena {
         mode: &Mode,
     ) -> Option<(Intensity, f32)> {
         let node = &mut self.arena[index];
-        return if node.state.integration + intensity >= D_SHIFT[node.state.d as usize] as f32 {
+        if node.state.integration + intensity >= D_SHIFT[node.state.d as usize] as f32 {
             let prop =
                 (D_SHIFT[node.state.d as usize] as f32 - node.state.integration) as f32 / intensity;
             assert!(prop > 0.0);
@@ -238,7 +234,7 @@ impl PixelArena {
             node.state.integration += intensity;
             node.state.delta_t += time;
             None
-        };
+        }
     }
 }
 

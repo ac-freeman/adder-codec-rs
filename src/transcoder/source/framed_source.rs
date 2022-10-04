@@ -1,22 +1,19 @@
 use crate::transcoder::source::video::Source;
 use crate::transcoder::source::video::Video;
 use crate::transcoder::source::video::{show_display, SourceError};
-use crate::{Codec, Coord, Event, PixelAddress, D, D_MAX};
+use crate::{Codec, Coord, Event, D};
 use core::default::Default;
 use rayon::iter::ParallelIterator;
-use rayon::iter::{IndexedParallelIterator, IntoParallelIterator, IntoParallelRefMutIterator};
+use rayon::iter::{IndexedParallelIterator, IntoParallelIterator};
 use std::cmp::max;
 use std::collections::VecDeque;
 use std::mem::swap;
-use std::sync::mpsc::{channel, Receiver, Sender};
-use std::time::Instant;
 
 use crate::transcoder::source::video::SourceError::*;
 use ndarray::Axis;
 use opencv::core::{Mat, Size};
 use opencv::videoio::{VideoCapture, CAP_PROP_FPS, CAP_PROP_FRAME_COUNT, CAP_PROP_POS_FRAMES};
 use opencv::{imgproc, prelude::*, videoio, Result};
-use rayon::iter::IntoParallelRefIterator;
 
 use crate::transcoder::d_controller::DecimationMode;
 use crate::transcoder::event_pixel_tree::Mode::FramePerfect;
@@ -296,9 +293,7 @@ impl Source for FramedSource {
 
         let frame_arr: &[u8] = self.input_frame_scaled.data_bytes().unwrap();
 
-        let dtm = self.video.delta_t_max;
         let ref_time = self.video.ref_time as f32;
-        let tmp = rayon::current_num_threads();
         let chunk_rows = self.video.height as usize / rayon::current_num_threads() as usize;
         let px_per_chunk: usize =
             chunk_rows * self.video.width as usize * self.video.channels as usize;
@@ -324,7 +319,6 @@ impl Source for FramedSource {
                     }
 
                     match px.integrate(
-                        0,
                         frame_val as Intensity,
                         ref_time,
                         &FramePerfect,
