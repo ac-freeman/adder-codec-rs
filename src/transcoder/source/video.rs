@@ -1,6 +1,4 @@
-use opencv::core::{
-    no_array, normalize, Mat, Point, Size, BORDER_DEFAULT, CV_8U, CV_8UC3, NORM_MINMAX,
-};
+use opencv::core::{Mat, Size, CV_8U, CV_8UC3};
 
 use std::path::Path;
 use std::sync::mpsc::{channel, Receiver, Sender};
@@ -8,16 +6,15 @@ use std::sync::mpsc::{channel, Receiver, Sender};
 use crate::raw::raw_stream::RawStream;
 use crate::{Codec, Coord, Event, D_MAX, D_SHIFT};
 use opencv::highgui;
-use opencv::imgproc::{bounding_rect, contour_area, rectangle, resize, RETR_EXTERNAL};
+use opencv::imgproc::resize;
 use opencv::prelude::*;
 
 use crate::transcoder::d_controller::DecimationMode;
-use crate::transcoder::event_pixel_tree::{DeltaT, PixelArena, PixelNode};
+use crate::transcoder::event_pixel_tree::{DeltaT, PixelArena};
 use crate::SourceCamera;
 use ndarray::Array3;
-use ndarray::Axis;
-use rayon::iter::IntoParallelIterator;
-use rayon::iter::{IndexedParallelIterator, ParallelIterator};
+
+use rayon::iter::IndexedParallelIterator;
 
 #[derive(Debug)]
 pub enum SourceError {
@@ -45,11 +42,9 @@ pub struct Video {
     pub(crate) show_live: bool,
     pub in_interval_count: u32,
     pub(crate) instantaneous_display_frame: Mat,
-    pub(crate) motion_frame_mat: Mat,
     pub(crate) instantaneous_frame: Mat,
     pub event_sender: Sender<Vec<Event>>,
     pub(crate) write_out: bool,
-    pub(crate) communicate_events: bool,
     pub channels: usize,
     pub(crate) stream: RawStream,
 }
@@ -66,7 +61,7 @@ impl Video {
         tps: DeltaT,
         ref_time: DeltaT,
         delta_t_max: DeltaT,
-        d_mode: DecimationMode,
+        _d_mode: DecimationMode,
         write_out: bool,
         communicate_events: bool,
         show_display: bool,
@@ -153,11 +148,9 @@ impl Video {
             show_live: false,
             in_interval_count: 0,
             instantaneous_display_frame: Mat::default(),
-            motion_frame_mat,
             instantaneous_frame,
             event_sender,
             write_out,
-            communicate_events,
             channels,
             stream,
         }

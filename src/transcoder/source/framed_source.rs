@@ -37,8 +37,6 @@ pub struct FramedSource {
     c_thresh_pos: u8,
     c_thresh_neg: u8,
 
-    /// Only used when [`look_ahead`](MyArgs::look_ahead) is `true`
-    lookahead_frames_scaled: VecDeque<Box<Mat>>,
     scale: f64,
     color_input: bool,
     pub(crate) video: Video,
@@ -215,7 +213,6 @@ impl FramedSource {
             last_input_frame_scaled: Default::default(),
             c_thresh_pos: builder.c_thresh_pos,
             c_thresh_neg: builder.c_thresh_neg,
-            lookahead_frames_scaled: Default::default(),
             scale: builder.scale,
             color_input: builder.color_input,
             video,
@@ -310,7 +307,7 @@ impl Source for FramedSource {
                 for (chunk_px_idx, px) in chunk.iter_mut().enumerate() {
                     let px_idx = chunk_px_idx + px_per_chunk * chunk_idx;
                     let frame_val: u8 = frame_arr[px_idx];
-                    let mut base_val = &mut px.base_val;
+                    let base_val = &mut px.base_val;
                     if frame_val < base_val.saturating_sub(self.c_thresh_neg)
                         || frame_val > base_val.saturating_add(self.c_thresh_pos)
                     {
@@ -376,124 +373,6 @@ fn resize_input(
         swap(input_frame_gray, input_frame_scaled);
     }
     Ok(())
-}
-
-struct FrameBuffer {
-    input_frame_queue: VecDeque<Box<Mat>>,
-    cap: VideoCapture,
-    frame_skip_interval: u8,
-    buffer_size: usize,
-    frame_holder: Mat,
-    frame_gray_holder: Mat,
-    resize_scale: f64,
-    color_input: bool,
-}
-
-impl FrameBuffer {
-    pub fn new(
-        buffer_size: usize,
-        cap: VideoCapture,
-        frame_skip_interval: u8,
-        resize_scale: f64,
-        color_input: bool,
-    ) -> FrameBuffer {
-        let input_frame_queue: VecDeque<Box<Mat>> = VecDeque::with_capacity(10);
-
-        FrameBuffer {
-            input_frame_queue,
-            cap,
-            frame_skip_interval,
-            buffer_size,
-            frame_holder: Mat::default(),
-            frame_gray_holder: Mat::default(),
-            resize_scale,
-            color_input,
-        }
-    }
-
-    fn fill_buffer(&mut self) {
-        // Fill the buffer
-
-        while self.input_frame_queue.len() < self.buffer_size {
-            let current_len = self.input_frame_queue.len();
-            match self.get_next_image() {
-                false => break,
-                _ => {
-                    if self.input_frame_queue.len() == current_len {
-                        break; // Then we're at the end of the video and have emptied the buffer
-                    }
-                }
-            };
-        }
-    }
-
-    fn get_next_image(&mut self) -> bool {
-        for _ in 0..self.frame_skip_interval {
-            // Grab (but don't decode or process at all) the frames we're going to to ignore
-            match self.cap.grab() {
-                Ok(_) => {}
-                Err(e) => {
-                    eprintln!("{}, could not grab", e)
-                }
-            };
-        }
-        match self.cap.read(&mut self.frame_holder) {
-            Ok(_) => {}
-            Err(e) => {
-                eprintln!("{}, could not read", e)
-            }
-        };
-
-        if !self.color_input {
-            // Yields an 8-bit grayscale mat
-            match imgproc::cvt_color(
-                &self.frame_holder,
-                &mut self.frame_gray_holder,
-                imgproc::COLOR_BGR2GRAY,
-                1,
-            ) {
-                Ok(_) => {}
-                Err(_) => {
-                    // don't do anything with the error. This happens when we reach the end of
-                    // the video, so there's nothing to convert.
-                    return true;
-                }
-            }
-        } else {
-            self.frame_gray_holder = self.frame_holder.clone();
-        }
-
-        match resize_input(
-            &mut self.frame_gray_holder,
-            &mut self.frame_holder,
-            self.resize_scale,
-        ) {
-            Ok(_) => {}
-            Err(_) => return true,
-        };
-
-        self.input_frame_queue
-            .push_back(Box::new(self.frame_holder.clone()));
-        true
-    }
-
-    pub fn prep_frame(&mut self) {
-        if self.input_frame_queue.len() < max(self.buffer_size.saturating_sub(30), self.buffer_size)
-        {
-            self.fill_buffer();
-        }
-    }
-
-    pub fn ensure_one_frame(&mut self) -> bool {
-        if self.input_frame_queue.is_empty() {
-            return self.get_next_image();
-        }
-        true
-    }
-
-    pub fn pop_frame(&mut self) -> Option<Box<Mat>> {
-        self.input_frame_queue.pop_front()
-    }
 }
 
 fn resize_frame(input: &Mat, output: &mut Mat, color: bool, scale: f64) {

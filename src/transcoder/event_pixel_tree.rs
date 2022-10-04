@@ -1,6 +1,6 @@
 use crate::transcoder::event_pixel_tree::Mode::{Continuous, FramePerfect};
 use crate::{Coord, Event, D_MAX, D_SHIFT};
-use smallvec::{smallvec, SmallVec};
+
 
 /// Decimation value; a pixel's sensitivity.
 pub type D = u8;
