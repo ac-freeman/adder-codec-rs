@@ -34,9 +34,6 @@ pub struct IndirectCoord {
 /// Attributes of a framed video -> ADΔER transcode
 pub struct FramedSource {
     cap: VideoCapture,
-    // frame_buffer: FrameBuffer,
-    // buffer_tx: Sender<i32>,
-    // frame_rx: Receiver<Box<Mat>>,
     pub(crate) input_frame_scaled: Mat,
     pub(crate) input_frame: Mat,
     pub frame_idx_start: u32,
@@ -214,64 +211,8 @@ impl FramedSource {
             builder.source_camera,
         );
 
-        // let mut frame_buffer: FrameBuffer = FrameBuffer::new(
-        //     (builder.delta_t_max / builder.ref_time) as usize + 1,
-        //     cap,
-        //     builder.frame_skip_interval,
-        //     builder.scale,
-        //     builder.color_input,
-        // );
-        // let (buffer_tx, buffer_rx): (Sender<i32>, Receiver<i32>) = channel();
-        // let (frame_tx, frame_rx): (Sender<Box<Mat>>, Receiver<Box<Mat>>) = channel();
-        //
-        // // Spin off a thread for managing the input frame buffer. It will keep the buffer filled,
-        // // and pre-process the next input frame (grayscale conversion and rescaling)
-        // rayon::spawn(move || loop {
-        //     match buffer_rx.recv() {
-        //         Ok(_) => {
-        //             match frame_buffer.ensure_one_frame() {
-        //                 true => {}
-        //                 false => {
-        //                     eprintln!("Reached end of video file. Exiting channel.");
-        //                     break;
-        //                 }
-        //             };
-        //             match frame_buffer.pop_frame() {
-        //                 None => {
-        //                     eprintln!("Video is over. Exiting channel.");
-        //                     break;
-        //                 }
-        //                 Some(frame) => {
-        //                     match frame_tx.send(frame) {
-        //                         Ok(_) => {}
-        //                         Err(_) => {
-        //                             eprintln!(
-        //                                 "Frame buffer transmitter is closed. Exiting channel."
-        //                             );
-        //                             break;
-        //                         }
-        //                     };
-        //                 }
-        //             }
-        //             frame_buffer.prep_frame();
-        //             if frame_buffer.input_frame_queue.is_empty() {
-        //                 println!("END OF FRAME BUFFER");
-        //                 break;
-        //             }
-        //         }
-        //         Err(_) => {
-        //             eprintln!("Frame buffer receiver is closed. Exiting channel.");
-        //             break;
-        //         }
-        //     };
-        // });
-        // buffer_tx.send(1).unwrap();
-
         Ok(FramedSource {
             cap,
-            // frame_buffer,
-            // buffer_tx,
-            // frame_rx,
             input_frame_scaled: Default::default(),
             input_frame: Default::default(),
             frame_idx_start: builder.frame_idx_start,
@@ -376,19 +317,10 @@ impl Source for FramedSource {
                     let px_idx = chunk_px_idx + px_per_chunk * chunk_idx;
                     let frame_val: u8 = frame_arr[px_idx];
                     let mut base_val = &mut px.base_val;
-                    if px.coord.x == 602
-                        && px.coord.y == 113
-                        && px.coord.c.unwrap() == 2
-                        && self.video.in_interval_count > 330
-                    {
-                        dbg!(self.video.in_interval_count);
-                        dbg!(frame_val);
-                    }
                     if frame_val < base_val.saturating_sub(self.c_thresh_neg)
                         || frame_val > base_val.saturating_add(self.c_thresh_pos)
                     {
                         px.pop_best_events(Some(frame_val as Intensity), &mut buffer);
-                        // buffer.append(&mut events);
                         px.base_val = frame_val;
                     }
 
@@ -406,7 +338,6 @@ impl Source for FramedSource {
                         false => {}
                     }
                 }
-                // dbg!(buffer.len());
                 buffer
             })
             .collect();
@@ -435,8 +366,6 @@ fn resize_input(
     input_frame_scaled: &mut Mat,
     resize_scale: f64,
 ) -> Result<(), opencv::Error> {
-    // *input_frame_gray = input_frame_gray.col_range(&Range::new(2450 as i32, 2600 as i32).unwrap()).unwrap();
-    // *input_frame_gray = input_frame_gray.row_range(&Range::new(1500 as i32, 1530 as i32).unwrap()).unwrap();
     if resize_scale != 1.0 {
         opencv::imgproc::resize(
             input_frame_gray,
@@ -451,7 +380,7 @@ fn resize_input(
         )?;
     } else {
         // For performance. We don't need to read input_frame_gray again anyway
-        std::mem::swap(input_frame_gray, input_frame_scaled);
+        swap(input_frame_gray, input_frame_scaled);
     }
     Ok(())
 }

@@ -40,9 +40,6 @@ pub enum SourceError {
 pub struct Video {
     pub width: u16,
     pub height: u16,
-
-    // NB: as of 4/15, boxing this attribute hurts performance slightly
-    pub(crate) event_pixels: Array3<EventPixel>,
     pub(crate) event_pixel_trees: Array3<PixelArena>,
     pub(crate) ref_time: u32,
     pub(crate) delta_t_max: u32,
@@ -114,27 +111,6 @@ impl Video {
         for y in 0..height {
             for x in 0..width {
                 for c in 0..channels {
-                    let px = EventPixel::new(
-                        y as PixelAddress,
-                        x as PixelAddress,
-                        c as u8,
-                        ref_time,
-                        delta_t_max,
-                        d_mode,
-                        channels.try_into().unwrap(),
-                    );
-                    data.push(px);
-                }
-            }
-        }
-
-        let event_pixels: Array3<EventPixel> =
-            Array3::from_shape_vec((height.into(), width.into(), channels), data).unwrap();
-
-        let mut data = Vec::new();
-        for y in 0..height {
-            for x in 0..width {
-                for c in 0..channels {
                     let px = PixelArena::new(
                         1.0,
                         Coord {
@@ -172,7 +148,6 @@ impl Video {
         Video {
             width,
             height,
-            event_pixels,
             event_pixel_trees,
             ref_time,
             delta_t_max,
