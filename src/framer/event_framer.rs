@@ -324,6 +324,9 @@ impl<T: Clone + Default + FrameValue<Output = T> + Copy + Serialize + Send + Syn
                     for event in a {
                         let channel = event.coord.c.unwrap_or(0);
                         let chunk_num = event.coord.y as usize / self.chunk_rows;
+                        if event.coord.x == 2 && event.coord.y == 4 {
+                            dbg!("look");
+                        }
                         event.coord.y -= (chunk_num * self.chunk_rows) as u16; // Modify the coordinate here, so it gets ingested at the right place
                         let last_filled_frame_ref = &mut chunk_last_filled_tracker
                             [[event.coord.y.into(), event.coord.x.into(), channel.into()]];
@@ -557,6 +560,7 @@ fn ingest_event_for_chunk<
                         *frame_idx_offset += a;
                     }
                     a if a < 0 => {
+                        // dbg!("look");
                         // We can get here if we've forcibly popped a frame before it's ready.
                         // Increment pixel ts trackers as normal, but don't actually do anything
                         // with the intensities if they correspond to frames that we've already

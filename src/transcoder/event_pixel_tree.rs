@@ -1,7 +1,6 @@
 use crate::transcoder::event_pixel_tree::Mode::{Continuous, FramePerfect};
 use crate::{Coord, Event, D_MAX, D_SHIFT};
 
-
 /// Decimation value; a pixel's sensitivity.
 pub type D = u8;
 
@@ -102,6 +101,7 @@ impl PixelArena {
                     self.arena[i] = self.arena[i + 1].clone();
                 }
                 self.length -= 1;
+                debug_assert!(self.arena[self.length - 1].alt.is_none());
 
                 // let alt = self.alt.as_deref_mut().unwrap();
                 // *self = alt.clone();
@@ -122,9 +122,14 @@ impl PixelArena {
                         return;
                     }
                 }
-                Some(event) => buffer.push(event),
+                Some(event) => {
+                    debug_assert_ne!(node_idx, self.length - 1);
+                    buffer.push(event)
+                }
             }
         }
+
+        // Move the last node to the front
         self.arena.swap(0, self.length - 1);
         debug_assert!(self.arena[0].alt.is_none());
         self.length = 1;
@@ -194,6 +199,13 @@ impl PixelArena {
         time: f32,
         mode: &Mode,
     ) -> Option<(Intensity, f32)> {
+        if index == 0
+            && self.arena[index].state.integration == 0.0
+            && D_SHIFT[self.arena[index].state.d as usize] > intensity as u32
+        {
+            panic!("");
+        }
+
         let node = &mut self.arena[index];
         if node.state.integration + intensity >= D_SHIFT[node.state.d as usize] as f32 {
             let prop =

@@ -291,7 +291,10 @@ impl Source for FramedSource {
         let frame_arr: &[u8] = self.input_frame_scaled.data_bytes().unwrap();
 
         let ref_time = self.video.ref_time as f32;
-        let chunk_rows = self.video.height as usize / rayon::current_num_threads() as usize;
+        let chunk_rows = max(
+            self.video.height as usize / rayon::current_num_threads() as usize,
+            1,
+        );
         let px_per_chunk: usize =
             chunk_rows * self.video.width as usize * self.video.channels as usize;
         let big_buffer: Vec<_> = self
@@ -299,7 +302,7 @@ impl Source for FramedSource {
             // .event_pixels
             .event_pixel_trees
             .axis_chunks_iter_mut(Axis(0), chunk_rows)
-            .into_par_iter()
+            // .into_par_iter()
             .enumerate()
             .map(|(chunk_idx, mut chunk)| {
                 let mut buffer: Vec<Event> = Vec::with_capacity(px_per_chunk);
@@ -308,6 +311,9 @@ impl Source for FramedSource {
                     let px_idx = chunk_px_idx + px_per_chunk * chunk_idx;
                     let frame_val: u8 = frame_arr[px_idx];
                     let base_val = &mut px.base_val;
+                    if px.coord.x == 2 && px.coord.y == 5 && self.video.in_interval_count > 74 {
+                        dbg!(&px.arena[0]);
+                    }
                     if frame_val < base_val.saturating_sub(self.c_thresh_neg)
                         || frame_val > base_val.saturating_add(self.c_thresh_pos)
                     {
