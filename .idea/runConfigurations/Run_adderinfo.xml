@@ -1,6 +1,6 @@
 <component name="ProjectRunConfigurationManager">
   <configuration default="false" name="Run adderinfo" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
-    <option name="command" value="run --bin adderinfo -- -i $USER_HOME$/Downloads/lake/out_20.adder -d" />
+    <option name="command" value="run --bin adderinfo -- -i $USER_HOME$/Downloads/bunny_og.adder -d" />
     <option name="workingDirectory" value="file://$PROJECT_DIR$" />
     <option name="channel" value="DEFAULT" />
     <option name="requiredFeatures" value="true" />

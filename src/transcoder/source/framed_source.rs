@@ -6,7 +6,6 @@ use core::default::Default;
 use rayon::iter::ParallelIterator;
 use rayon::iter::{IndexedParallelIterator, IntoParallelIterator};
 use std::cmp::max;
-use std::collections::VecDeque;
 use std::mem::swap;
 
 use crate::transcoder::source::video::SourceError::*;
@@ -302,7 +301,7 @@ impl Source for FramedSource {
             // .event_pixels
             .event_pixel_trees
             .axis_chunks_iter_mut(Axis(0), chunk_rows)
-            // .into_par_iter()
+            .into_par_iter()
             .enumerate()
             .map(|(chunk_idx, mut chunk)| {
                 let mut buffer: Vec<Event> = Vec::with_capacity(px_per_chunk);
@@ -310,10 +309,13 @@ impl Source for FramedSource {
                 for (chunk_px_idx, px) in chunk.iter_mut().enumerate() {
                     let px_idx = chunk_px_idx + px_per_chunk * chunk_idx;
                     let frame_val: u8 = frame_arr[px_idx];
-                    let base_val = &mut px.base_val;
-                    if px.coord.x == 2 && px.coord.y == 5 && self.video.in_interval_count > 74 {
-                        dbg!(&px.arena[0]);
+                    if px.need_to_pop_top {
+                        let event = px.pop_top_event(Some(frame_val as Intensity));
+                        buffer.push(event);
                     }
+
+                    let base_val = &mut px.base_val;
+
                     if frame_val < base_val.saturating_sub(self.c_thresh_neg)
                         || frame_val > base_val.saturating_add(self.c_thresh_pos)
                     {
@@ -321,18 +323,12 @@ impl Source for FramedSource {
                         px.base_val = frame_val;
                     }
 
-                    match px.integrate(
+                    px.integrate(
                         frame_val as Intensity,
                         ref_time,
                         &FramePerfect,
                         &self.video.delta_t_max,
-                    ) {
-                        true => {
-                            let event = px.pop_top_event(Some(frame_val as Intensity));
-                            buffer.push(event);
-                        }
-                        false => {}
-                    }
+                    );
                 }
                 buffer
             })

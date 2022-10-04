@@ -1,5 +1,6 @@
 use crate::transcoder::event_pixel_tree::Mode::{Continuous, FramePerfect};
 use crate::{Coord, Event, D_MAX, D_SHIFT};
+use smallvec::{smallvec, SmallVec};
 
 /// Decimation value; a pixel's sensitivity.
 pub type D = u8;
@@ -37,23 +38,41 @@ pub struct PixelNode {
 }
 
 pub struct PixelArena {
-    pub arena: Vec<PixelNode>,
+    pub arena: SmallVec<[PixelNode; 7]>,
     length: usize,
     pub coord: Coord,
     pub base_val: u8,
+    pub need_to_pop_top: bool,
 }
 
 impl PixelArena {
     pub(crate) fn new(start_intensity: Intensity, coord: Coord) -> PixelArena {
-        let mut arena = Vec::with_capacity(5);
-        // let mut arena = smallvec![];
+        // let mut arena = Vec::with_capacity(5);
+        let mut arena = smallvec![];
         arena.push(PixelNode::new(start_intensity));
         PixelArena {
             arena,
             length: 1,
             coord,
             base_val: 0,
+            need_to_pop_top: false,
         }
+    }
+
+    fn get_zero_event(&mut self, idx: usize, next_intensity: Option<Intensity>) -> Event {
+        let mut node = &mut self.arena[idx];
+        let ret_event = Event {
+            coord: self.coord,
+            d: 254,
+            delta_t: node.state.delta_t as DeltaT,
+        };
+        node.state.delta_t = 0.0;
+        match next_intensity {
+            None => {}
+            Some(intensity) => node.state.d = get_d_from_intensity(intensity),
+        }
+        debug_assert!(node.alt.is_none());
+        ret_event
     }
 
     /// Pop just the topmost event. Should be called only when dtm is reached for main node
@@ -103,8 +122,6 @@ impl PixelArena {
                 self.length -= 1;
                 debug_assert!(self.arena[self.length - 1].alt.is_none());
 
-                // let alt = self.alt.as_deref_mut().unwrap();
-                // *self = alt.clone();
                 event
             }
         }
@@ -117,9 +134,10 @@ impl PixelArena {
         for node_idx in 0..self.length {
             match self.arena[node_idx].best_event {
                 None => {
-                    if node_idx == 0 && self.arena[0].state.delta_t > 0.0 {
-                        buffer.push(self.pop_top_event(next_intensity));
-                        return;
+                    if self.arena[node_idx].state.delta_t > 0.0
+                        && self.arena[node_idx].state.integration == 0.0
+                    {
+                        buffer.push(self.get_zero_event(node_idx, next_intensity));
                     }
                 }
                 Some(event) => {
@@ -154,11 +172,12 @@ impl PixelArena {
         mut time: f32,
         mode: &Mode,
         dtm: &DeltaT,
-    ) -> bool {
-        // debug_assert!(intensity <= 255.0);
-        // debug_assert_ne!(intensity, 0.0);
-        // debug_assert_ne!(time, 0.0);
-        // assert_ne!(self.state.d, D_MAX);
+    ) {
+        let tail = &mut self.arena[self.length - 1];
+        if tail.state.delta_t == 0.0 && tail.state.integration == 0.0 {
+            tail.state.d = get_d_from_intensity(intensity);
+        }
+
         let mut idx = 0;
         loop {
             match self.integrate_main(idx, intensity, time, mode) {
@@ -189,7 +208,8 @@ impl PixelArena {
         debug_assert!(self.length <= self.arena.len());
         assert!(self.length > 0);
 
-        self.arena[0].state.d == D_MAX || self.arena[0].state.delta_t as DeltaT >= *dtm
+        self.need_to_pop_top =
+            self.arena[0].state.d == D_MAX || self.arena[0].state.delta_t as DeltaT >= *dtm;
     }
 
     pub fn integrate_main(
@@ -199,13 +219,6 @@ impl PixelArena {
         time: f32,
         mode: &Mode,
     ) -> Option<(Intensity, f32)> {
-        if index == 0
-            && self.arena[index].state.integration == 0.0
-            && D_SHIFT[self.arena[index].state.d as usize] > intensity as u32
-        {
-            panic!("");
-        }
-
         let node = &mut self.arena[index];
         if node.state.integration + intensity >= D_SHIFT[node.state.d as usize] as f32 {
             let prop =
@@ -293,7 +306,7 @@ mod tests {
             },
         );
         assert_eq!(tree.arena[0].state.d, 6);
-        tree.integrate(0, 100.0, 20.0, &Continuous, &dtm);
+        tree.integrate(100.0, 20.0, &Continuous, &dtm);
         assert!(tree.arena[0].best_event.is_some());
         assert_eq!(tree.arena[0].best_event.unwrap().d, 6);
         assert_eq!(tree.arena[0].best_event.unwrap().delta_t, 12);
@@ -306,7 +319,7 @@ mod tests {
         assert_eq!(tree.arena[1].state.integration, 36.0);
         assert!(f32_slack(tree.arena[1].state.delta_t, 7.2));
 
-        tree.integrate(0, 100.0, 20.0, &Continuous, &dtm);
+        tree.integrate(100.0, 20.0, &Continuous, &dtm);
         assert_eq!(tree.arena[0].best_event.unwrap().d, 7);
         // Since we're casting, the delta t gets rounded down
         assert_eq!(tree.arena[0].best_event.unwrap().delta_t, 25);
@@ -341,7 +354,7 @@ mod tests {
     fn make_tree2() -> PixelArena {
         let dtm = 10000;
         let mut tree = make_tree();
-        tree.integrate(0, 30.0, 34.0, &Continuous, &dtm);
+        tree.integrate(30.0, 34.0, &Continuous, &dtm);
 
         {
             let root = &tree.arena[0];
@@ -367,7 +380,7 @@ mod tests {
         //                                         \
         //                                    (6,12)--------------------6, 38, 35.6
 
-        tree.integrate(0, 26.0, 34.0, &Continuous, &dtm);
+        tree.integrate(26.0, 34.0, &Continuous, &dtm);
         // Main node just filled
         assert_eq!(tree.arena[0].state.d, 9);
         assert!(f32_slack(tree.arena[0].state.integration, 256.0));
@@ -439,8 +452,8 @@ mod tests {
                 c: None,
             },
         );
-        let need_to_pop = tree.integrate(0, 1048500.0, 1000.0, &Continuous, &dtm);
-        assert!(need_to_pop);
+        tree.integrate(1048500.0, 1000.0, &Continuous, &dtm);
+        assert!(tree.need_to_pop_top);
         let mut events = Vec::new();
         tree.pop_best_events(None, &mut events);
         assert_eq!(events.len(), 1);
@@ -468,12 +481,12 @@ mod tests {
                 c: None,
             },
         );
-        for i in 0..47 {
-            tree.integrate(0, 245.0, 5000.0, &FramePerfect, &dtm);
+        for _ in 0..47 {
+            tree.integrate(245.0, 5000.0, &FramePerfect, &dtm);
         }
-        let need_to_pop = tree.integrate(0, 245.0, 5000.0, &FramePerfect, &dtm);
-        assert!(need_to_pop);
-        let ret = tree.pop_top_event(Some(245.0));
+        tree.integrate(245.0, 5000.0, &FramePerfect, &dtm);
+        assert!(tree.need_to_pop_top);
+        let _ = tree.pop_top_event(Some(245.0));
         assert_eq!(tree.arena[0].state.delta_t, 70000.0)
     }
 

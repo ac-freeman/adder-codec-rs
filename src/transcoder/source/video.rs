@@ -14,8 +14,6 @@ use crate::transcoder::event_pixel_tree::{DeltaT, PixelArena};
 use crate::SourceCamera;
 use ndarray::Array3;
 
-use rayon::iter::IndexedParallelIterator;
-
 #[derive(Debug)]
 pub enum SourceError {
     /// Could not open source file
