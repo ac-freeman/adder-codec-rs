@@ -915,6 +915,67 @@ fn test_framed_to_adder_bunny2() {
     assert_eq!(gt_events.len(), test_events.len());
 }
 
+#[test]
+fn test_framed_to_adder_bunny4() {
+    let mut source = FramedSourceBuilder::new(
+        "./tests/samples/bunny_crop4.mp4".to_string(),
+        SourceCamera::FramedU8,
+    )
+    .frame_start(360)
+    .scale(1.0)
+    .communicate_events(true)
+    // .output_events_filename("./tests/samples/TEST_bunny2.adder".to_string())
+    .color(false)
+    .contrast_thresholds(5, 5)
+    .show_display(false)
+    .time_parameters(120000, 240000)
+    .finish();
+
+    let frame_max = 250;
+
+    let mut event_count: usize = 0;
+    let mut test_events = Vec::new();
+    loop {
+        if event_count == 64 {
+            dbg!("");
+        }
+        match source.consume(1) {
+            Ok(events_events) => {
+                for events in events_events {
+                    for event in events {
+                        if event.coord.x == 0 && event.coord.y == 186 {
+                            // let gt_event = gt_events[event_count];
+                            // assert_eq!(event, gt_event);
+                            test_events.push(event);
+                            event_count += 1;
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                println!("Err: {:?}", e);
+                break;
+            }
+        }
+
+        let video = source.get_video();
+        if frame_max != 0 && video.in_interval_count >= frame_max {
+            break;
+        }
+    }
+
+    source.get_video_mut().end_write_stream();
+
+    // assert_eq!(test_events[64].d, 8);
+    // assert_eq!(test_events[64].delta_t, 10508);
+    // for i in 0..gt_events.len() {
+    //     let gt_event = gt_events[i];
+    //     let test_event = test_events[i];
+    //     assert_eq!(gt_events[i], test_events[i]);
+    // }
+    // assert_eq!(gt_events.len(), test_events.len());
+}
+
 // #[test]
 // fn get_frame_bytes_u8_integration() {
 //     use adder_codec_rs::{Coord, Event};

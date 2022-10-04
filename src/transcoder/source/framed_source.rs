@@ -310,14 +310,14 @@ impl Source for FramedSource {
                 for (chunk_px_idx, px) in chunk.iter_mut().enumerate() {
                     let px_idx = chunk_px_idx + px_per_chunk * chunk_idx;
                     let frame_val: u8 = frame_arr[px_idx];
-                    if px.coord.x == 0 && px.coord.y == 0 {
+                    if px.coord.x == 0 && px.coord.y == 186 {
                         dbg!(&px.arena[0]);
                     }
                     if px.need_to_pop_top {
                         let event = px.pop_top_event(Some(frame_val as Intensity));
-                        if event.d == 8 && event.delta_t == 10508 {
-                            dbg!(event);
-                        }
+                        // if event.d == 8 && event.delta_t == 10508 {
+                        //     dbg!(event);
+                        // }
                         buffer.push(event);
                     }
 
@@ -327,17 +327,17 @@ impl Source for FramedSource {
                         || frame_val > base_val.saturating_add(self.c_thresh_pos)
                     {
                         px.pop_best_events(Some(frame_val as Intensity), &mut buffer);
-                        if buffer.contains(&Event {
-                            coord: Coord {
-                                x: 0,
-                                y: 0,
-                                c: None,
-                            },
-                            d: 6,
-                            delta_t: 2990,
-                        }) {
-                            dbg!("look");
-                        }
+                        // if buffer.contains(&Event {
+                        //                         //     coord: Coord {
+                        //                         //         x: 0,
+                        //                         //         y: 0,
+                        //                         //         c: None,
+                        //                         //     },
+                        //                         //     d: 6,
+                        //                         //     delta_t: 2990,
+                        //                         // }) {
+                        //                         //     dbg!("look");
+                        //                         // }
                         px.base_val = frame_val;
                     }
 

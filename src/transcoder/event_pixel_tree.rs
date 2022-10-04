@@ -58,6 +58,22 @@ impl PixelArena {
         }
     }
 
+    fn get_zero_event(&mut self, idx: usize, next_intensity: Option<Intensity>) -> Event {
+        let mut node = &mut self.arena[idx];
+        let ret_event = Event {
+            coord: self.coord,
+            d: 254,
+            delta_t: node.state.delta_t as DeltaT,
+        };
+        node.state.delta_t = 0.0;
+        match next_intensity {
+            None => {}
+            Some(intensity) => node.state.d = get_d_from_intensity(intensity),
+        }
+        debug_assert!(node.alt.is_none());
+        ret_event
+    }
+
     /// Pop just the topmost event. Should be called only when dtm is reached for main node
     pub fn pop_top_event(&mut self, next_intensity: Option<Intensity>) -> Event {
         let mut root = &mut self.arena[0];
@@ -123,9 +139,10 @@ impl PixelArena {
         for node_idx in 0..self.length {
             match self.arena[node_idx].best_event {
                 None => {
-                    if node_idx == 0 && self.arena[0].state.delta_t > 0.0 {
-                        buffer.push(self.pop_top_event(next_intensity));
-                        return;
+                    if self.arena[node_idx].state.delta_t > 0.0
+                        && self.arena[node_idx].state.integration == 0.0
+                    {
+                        buffer.push(self.get_zero_event(node_idx, next_intensity));
                     }
                 }
                 Some(event) => {
@@ -165,12 +182,12 @@ impl PixelArena {
         // debug_assert_ne!(intensity, 0.0);
         // debug_assert_ne!(time, 0.0);
         // assert_ne!(self.state.d, D_MAX);
-        if self.coord.x == 0 && self.coord.y == 0 && intensity == 115.0 {
-            dbg!(&self.arena[0]);
-        }
-        if self.coord.x == 0 && self.coord.y == 0 {
-            dbg!(&self.arena[0]);
-        }
+        // if self.coord.x == 0 && self.coord.y == 0 && intensity == 115.0 {
+        //     dbg!(&self.arena[0]);
+        // }
+        // if self.coord.x == 0 && self.coord.y == 0 {
+        //     dbg!(&self.arena[0]);
+        // }
 
         let tail = &mut self.arena[self.length - 1];
         if tail.state.delta_t == 0.0 && tail.state.integration == 0.0 {
