@@ -6,7 +6,6 @@ use core::default::Default;
 use rayon::iter::ParallelIterator;
 use rayon::iter::{IndexedParallelIterator, IntoParallelIterator};
 use std::cmp::max;
-use std::collections::VecDeque;
 use std::mem::swap;
 
 use crate::transcoder::source::video::SourceError::*;
@@ -302,7 +301,7 @@ impl Source for FramedSource {
             // .event_pixels
             .event_pixel_trees
             .axis_chunks_iter_mut(Axis(0), chunk_rows)
-            // .into_par_iter()
+            .into_par_iter()
             .enumerate()
             .map(|(chunk_idx, mut chunk)| {
                 let mut buffer: Vec<Event> = Vec::with_capacity(px_per_chunk);
@@ -312,9 +311,6 @@ impl Source for FramedSource {
                     let frame_val: u8 = frame_arr[px_idx];
                     if px.need_to_pop_top {
                         let event = px.pop_top_event(Some(frame_val as Intensity));
-                        // if event.d == 8 && event.delta_t == 10508 {
-                        //     dbg!(event);
-                        // }
                         buffer.push(event);
                     }
 
@@ -324,17 +320,6 @@ impl Source for FramedSource {
                         || frame_val > base_val.saturating_add(self.c_thresh_pos)
                     {
                         px.pop_best_events(Some(frame_val as Intensity), &mut buffer);
-                        // if buffer.contains(&Event {
-                        //                         //     coord: Coord {
-                        //                         //         x: 0,
-                        //                         //         y: 0,
-                        //                         //         c: None,
-                        //                         //     },
-                        //                         //     d: 6,
-                        //                         //     delta_t: 2990,
-                        //                         // }) {
-                        //                         //     dbg!("look");
-                        //                         // }
                         px.base_val = frame_val;
                     }
 
@@ -344,13 +329,6 @@ impl Source for FramedSource {
                         &FramePerfect,
                         &self.video.delta_t_max,
                     );
-                    // {
-                    //     true => {
-                    //         let event = px.pop_top_event(Some(frame_val as Intensity));
-                    //         buffer.push(event);
-                    //     }
-                    //     false => {}
-                    // }
                 }
                 buffer
             })

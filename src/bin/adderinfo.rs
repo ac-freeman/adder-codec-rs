@@ -70,9 +70,6 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         loop {
             match stream.decode_event() {
                 Ok(event) => {
-                    if event.coord.x == 0 && event.coord.y == 0 {
-                        dbg!(event);
-                    }
                     match event_to_intensity(&event) {
                         _ if event.d == 255 => {
                             // ignore empty events

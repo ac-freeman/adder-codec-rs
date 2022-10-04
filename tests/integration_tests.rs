@@ -9,15 +9,12 @@ use std::process::Command;
 
 use adder_codec_rs::framer::event_framer::FramerMode::INSTANTANEOUS;
 use adder_codec_rs::framer::event_framer::{FrameSequence, Framer, FramerBuilder};
-use adder_codec_rs::framer::scale_intensity::event_to_intensity;
-use adder_codec_rs::raw::raw_stream::{RawStream, StreamError};
+use adder_codec_rs::raw::raw_stream::RawStream;
 use adder_codec_rs::transcoder::source::framed_source::FramedSourceBuilder;
 use adder_codec_rs::transcoder::source::video::Source;
 use adder_codec_rs::SourceCamera::FramedU8;
 use adder_codec_rs::{Codec, Coord, Event, SourceCamera};
 use rand::Rng;
-use serde::{Deserialize, Serialize};
-use serde_json::Result;
 
 #[test]
 fn test_set_stream_position() {

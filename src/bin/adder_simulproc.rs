@@ -332,8 +332,6 @@ mod tests {
     use adder_codec_rs::transcoder::source::video::Source;
     use adder_codec_rs::SourceCamera::FramedU8;
     use std::fs;
-    use std::fs::File;
-    use std::io::{Seek, SeekFrom};
     use std::path::PathBuf;
     use std::process::Command;
     use std::thread::sleep;
@@ -395,11 +393,6 @@ mod tests {
                     * simul_processor.source.get_video().height as u64),
             0
         );
-        let tmp = fs::metadata(output_path).unwrap().len();
-        let mut file = File::open(output_path).unwrap();
-        let trunc_filesize = 313
-            * (simul_processor.source.get_video().width as u64
-                * simul_processor.source.get_video().height as u64);
 
         let output = if !cfg!(target_os = "windows") {
             Command::new("sh")
@@ -411,7 +404,6 @@ mod tests {
             fs::remove_file(output_path).unwrap();
             return;
         };
-        let tmp = String::from_utf8(output.stdout.clone()).unwrap();
         // println!("{}", String::from_utf8(output.stdout.clone()).unwrap());
 
         // Note the file might be larger than that given in ./tests/samples, if the method for
