@@ -1,10 +1,23 @@
-use crate::transcoder::event_pixel::{Intensity, D};
 use crate::transcoder::event_pixel_tree::Mode::{Continuous, FramePerfect};
-use crate::{Coord, DeltaT, Event, EventCoordless, SourceCamera, D_MAX, D_SHIFT};
+use crate::{Coord, Event, EventCoordless, SourceCamera, D_MAX, D_SHIFT};
 use generational_arena::{Arena, Index};
 use smallvec::{smallvec, SmallVec};
 use std::collections::VecDeque;
 use std::mem;
+
+/// Decimation value; a pixel's sensitivity.
+pub type D = u8;
+
+type Integration = f32;
+
+/// Number of ticks elapsed since a given pixel last fired an [`pixel::Event`]
+pub type DeltaT = u32;
+
+/// Measure of an amount of light intensity
+pub type Intensity = f32;
+
+/// Pixel x- or y- coordinate address in the ADΔER model
+pub type PixelAddress = u16;
 
 pub(crate) enum Mode {
     FramePerfect,

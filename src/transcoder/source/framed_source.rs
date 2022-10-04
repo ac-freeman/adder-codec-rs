@@ -1,4 +1,3 @@
-use crate::transcoder::event_pixel::{DeltaT, IntegrationTracker, Intensity};
 use crate::transcoder::source::video::Source;
 use crate::transcoder::source::video::Video;
 use crate::transcoder::source::video::{show_display, SourceError};
@@ -20,8 +19,8 @@ use opencv::{imgproc, prelude::*, videoio, Result};
 use rayon::iter::IntoParallelRefIterator;
 
 use crate::transcoder::d_controller::DecimationMode;
-use crate::transcoder::event_pixel::pixel::Transition;
 use crate::transcoder::event_pixel_tree::Mode::FramePerfect;
+use crate::transcoder::event_pixel_tree::{DeltaT, Intensity};
 use crate::SourceCamera;
 
 #[derive(Debug, Copy, Clone)]

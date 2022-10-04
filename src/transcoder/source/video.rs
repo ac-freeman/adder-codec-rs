@@ -6,15 +6,13 @@ use std::path::Path;
 use std::sync::mpsc::{channel, Receiver, Sender};
 
 use crate::raw::raw_stream::RawStream;
-use crate::transcoder::event_pixel::pixel::EventPixel;
-use crate::transcoder::event_pixel::{DeltaT, PixelAddress};
 use crate::{Codec, Coord, Event, D_MAX, D_SHIFT};
 use opencv::highgui;
 use opencv::imgproc::{bounding_rect, contour_area, rectangle, resize, RETR_EXTERNAL};
 use opencv::prelude::*;
 
 use crate::transcoder::d_controller::DecimationMode;
-use crate::transcoder::event_pixel_tree::{PixelArena, PixelNode};
+use crate::transcoder::event_pixel_tree::{DeltaT, PixelArena, PixelNode};
 use crate::SourceCamera;
 use ndarray::Array3;
 use ndarray::Axis;
