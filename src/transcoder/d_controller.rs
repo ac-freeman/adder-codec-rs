@@ -1,7 +1,6 @@
+use crate::transcoder::event_pixel_tree::{DeltaT, D};
 use crate::D_MAX;
 use std::cmp::min;
-
-use crate::transcoder::event_pixel::{DeltaT, D};
 
 #[derive(Copy, Clone)]
 pub enum DecimationMode {

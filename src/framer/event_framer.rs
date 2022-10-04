@@ -467,10 +467,7 @@ impl<T: Clone + Default + FrameValue<Output = T> + Serialize> FrameSequence<T> {
                             &mut *writer,
                             match px {
                                 Some(event) => event,
-                                None => {
-                                    dbg!();
-                                    &none_val
-                                }
+                                None => &none_val,
                             },
                         ) {
                             Ok(_) => {}

@@ -200,7 +200,12 @@ impl SimulProcessor {
         T: FrameValue<Output = T>,
         T: Serialize,
     {
-        let thread_pool = rayon::ThreadPoolBuilder::new()
+        let thread_pool_framer = rayon::ThreadPoolBuilder::new()
+            // .num_threads(1)
+            .num_threads(current_num_threads() / 2)
+            .build()
+            .unwrap();
+        let thread_pool_transcoder = rayon::ThreadPoolBuilder::new()
             // .num_threads(1)
             .num_threads(current_num_threads() / 2)
             .build()
@@ -213,7 +218,7 @@ impl SimulProcessor {
         let width = source.get_video().width as usize;
         let channels = source.get_video().channels as usize;
 
-        let mut framer = thread_pool.install(|| {
+        let mut framer = thread_pool_framer.install(|| {
             FramerBuilder::new(height, width, channels)
                 .codec_version(1)
                 .time_parameters(tps, ref_time, reconstructed_frame_rate)
@@ -246,10 +251,10 @@ impl SimulProcessor {
                                 frames_returned => {
                                     frame_count += frames_returned;
                                     print!(
-                                        "\rOutput frame {}. Got {} frames in  {}ms\t",
+                                        "\rOutput frame {}. Got {} frames in  {} ms/frame\t",
                                         frame_count,
                                         frames_returned,
-                                        now.elapsed().as_millis()
+                                        now.elapsed().as_millis() / frames_returned as u128
                                     );
                                     io::stdout().flush().unwrap();
                                     now = Instant::now();
@@ -274,7 +279,7 @@ impl SimulProcessor {
 
         SimulProcessor {
             source,
-            thread_pool,
+            thread_pool: thread_pool_transcoder,
             events_tx,
         }
     }
@@ -324,10 +329,13 @@ impl SimulProcessor {
 mod tests {
     use crate::{MyArgs, SimulProcessor};
     use adder_codec_rs::transcoder::source::framed_source::FramedSourceBuilder;
+    use adder_codec_rs::transcoder::source::video::Source;
     use adder_codec_rs::SourceCamera::FramedU8;
     use std::fs;
     use std::path::PathBuf;
     use std::process::Command;
+    use std::thread::sleep;
+    use std::time::Duration;
 
     #[test]
     fn dark() {
@@ -376,8 +384,16 @@ mod tests {
         );
 
         simul_processor.run().unwrap();
+        sleep(Duration::from_secs(5));
 
         let output_path = "./tests/samples/TEST_lake_scaled_hd_crop";
+        assert_eq!(
+            fs::metadata(output_path).unwrap().len()
+                % (simul_processor.source.get_video().width as u64
+                    * simul_processor.source.get_video().height as u64),
+            0
+        );
+
         let output = if !cfg!(target_os = "windows") {
             Command::new("sh")
                 .arg("-c")
@@ -388,21 +404,15 @@ mod tests {
             fs::remove_file(output_path).unwrap();
             return;
         };
+        // println!("{}", String::from_utf8(output.stdout.clone()).unwrap());
+
+        // Note the file might be larger than that given in ./tests/samples, if the method for
+        // framing generates more frames at the end than the original method used. This assertion
+        // should still pass if all the frames before that are identical.
         assert_eq!(output.stdout.len(), 0);
         fs::remove_file(output_path).unwrap();
 
         let output_path = "./tests/samples/TEST_lake_scaled_hd_crop.adder";
-        let output = if !cfg!(target_os = "windows") {
-            Command::new("sh")
-                .arg("-c")
-                .arg("cmp ./tests/samples/TEST_lake_scaled_hd_crop.adder ./tests/samples/lake_scaled_hd_out.adder")
-                .output()
-                .expect("failed to execute process")
-        } else {
-            fs::remove_file(output_path).unwrap();
-            return;
-        };
-        assert_eq!(output.stdout.len(), 0);
         fs::remove_file(output_path).unwrap();
     }
 }

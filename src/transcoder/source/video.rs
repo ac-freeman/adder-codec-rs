@@ -1,23 +1,18 @@
-use opencv::core::{
-    no_array, normalize, Mat, Point, Size, BORDER_DEFAULT, CV_8U, CV_8UC3, NORM_MINMAX,
-};
+use opencv::core::{Mat, Size, CV_8U, CV_8UC3};
 
 use std::path::Path;
 use std::sync::mpsc::{channel, Receiver, Sender};
 
 use crate::raw::raw_stream::RawStream;
-use crate::transcoder::event_pixel::pixel::EventPixel;
-use crate::transcoder::event_pixel::{DeltaT, PixelAddress};
-use crate::{Codec, Event};
-use opencv::imgproc::{bounding_rect, contour_area, rectangle, resize, RETR_EXTERNAL};
+use crate::{Codec, Coord, Event, D_MAX, D_SHIFT};
+use opencv::highgui;
+use opencv::imgproc::resize;
 use opencv::prelude::*;
 
 use crate::transcoder::d_controller::DecimationMode;
+use crate::transcoder::event_pixel_tree::{DeltaT, PixelArena};
 use crate::SourceCamera;
 use ndarray::Array3;
-use ndarray::Axis;
-use rayon::iter::IntoParallelIterator;
-use rayon::iter::{IndexedParallelIterator, ParallelIterator};
 
 #[derive(Debug)]
 pub enum SourceError {
@@ -38,20 +33,16 @@ pub enum SourceError {
 pub struct Video {
     pub width: u16,
     pub height: u16,
-
-    // NB: as of 4/15, boxing this attribute hurts performance slightly
-    pub(crate) event_pixels: Array3<EventPixel>,
+    pub(crate) event_pixel_trees: Array3<PixelArena>,
     pub(crate) ref_time: u32,
     pub(crate) delta_t_max: u32,
     pub(crate) show_display: bool,
     pub(crate) show_live: bool,
     pub in_interval_count: u32,
     pub(crate) instantaneous_display_frame: Mat,
-    pub(crate) motion_frame_mat: Mat,
     pub(crate) instantaneous_frame: Mat,
     pub event_sender: Sender<Vec<Event>>,
     pub(crate) write_out: bool,
-    pub(crate) communicate_events: bool,
     pub channels: usize,
     pub(crate) stream: RawStream,
 }
@@ -68,12 +59,13 @@ impl Video {
         tps: DeltaT,
         ref_time: DeltaT,
         delta_t_max: DeltaT,
-        d_mode: DecimationMode,
+        _d_mode: DecimationMode,
         write_out: bool,
         communicate_events: bool,
         show_display: bool,
         source_camera: SourceCamera,
     ) -> Video {
+        assert_eq!(D_SHIFT.len(), D_MAX as usize + 1);
         if write_out {
             assert!(communicate_events);
         }
@@ -110,21 +102,23 @@ impl Video {
         for y in 0..height {
             for x in 0..width {
                 for c in 0..channels {
-                    let px = EventPixel::new(
-                        y as PixelAddress,
-                        x as PixelAddress,
-                        c as u8,
-                        ref_time,
-                        delta_t_max,
-                        d_mode,
-                        channels.try_into().unwrap(),
+                    let px = PixelArena::new(
+                        1.0,
+                        Coord {
+                            x,
+                            y,
+                            c: match channels {
+                                1 => None,
+                                _ => Some(c as u8),
+                            },
+                        },
                     );
                     data.push(px);
                 }
             }
         }
 
-        let event_pixels: Array3<EventPixel> =
+        let event_pixel_trees: Array3<PixelArena> =
             Array3::from_shape_vec((height.into(), width.into(), channels), data).unwrap();
 
         let mut instantaneous_frame = Mat::default();
@@ -145,18 +139,16 @@ impl Video {
         Video {
             width,
             height,
-            event_pixels,
+            event_pixel_trees,
             ref_time,
             delta_t_max,
             show_display,
             show_live: false,
             in_interval_count: 0,
             instantaneous_display_frame: Mat::default(),
-            motion_frame_mat,
             instantaneous_frame,
             event_sender,
             write_out,
-            communicate_events,
             channels,
             stream,
         }
@@ -186,14 +178,14 @@ pub fn show_display(window_name: &str, mat: &Mat, wait: i32, video: &Video) {
                 0,
             )
             .unwrap();
-            // highgui::imshow(window_name, &tmp).unwrap();
+            highgui::imshow(window_name, &tmp).unwrap();
         } else {
-            // highgui::imshow(window_name, mat).unwrap();
+            highgui::imshow(window_name, mat).unwrap();
         }
 
         // highgui::imshow(window_name, &tmp).unwrap();
 
-        // highgui::wait_key(wait).unwrap();
+        highgui::wait_key(wait).unwrap();
         // resize_window(window_name, mat.cols() / 540, 540);
     }
 }

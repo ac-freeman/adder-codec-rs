@@ -69,22 +69,24 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         let mut event_count: u64 = 0;
         loop {
             match stream.decode_event() {
-                Ok(event) => match event_to_intensity(&event) {
-                    _ if event.d == 255 => {
-                        // ignore empty events
-                    }
-                    a if a < min_intensity => {
-                        if event.d == 254 {
-                            min_intensity = 1.0 / event.delta_t as f64;
-                        } else {
-                            min_intensity = a;
+                Ok(event) => {
+                    match event_to_intensity(&event) {
+                        _ if event.d == 255 => {
+                            // ignore empty events
                         }
+                        a if a < min_intensity => {
+                            if event.d == 254 {
+                                min_intensity = 1.0 / event.delta_t as f64;
+                            } else {
+                                min_intensity = a;
+                            }
+                        }
+                        a if a > max_intensity => {
+                            max_intensity = a;
+                        }
+                        _ => {}
                     }
-                    a if a > max_intensity => {
-                        max_intensity = a;
-                    }
-                    _ => {}
-                },
+                }
                 Err(_e) => {
                     break;
                 }

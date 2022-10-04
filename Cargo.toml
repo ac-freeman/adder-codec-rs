@@ -32,7 +32,7 @@ docs-only = ["opencv/docs-only", "dep:fast-math"]
 version = '0.66.0'
 package = 'opencv'
 default-features = false
-features = ['videoio', 'imgproc']
+features = ['videoio', 'imgproc', 'highgui']
 optional = true
 
 [dependencies]
@@ -40,6 +40,7 @@ rand = "0.8.5"
 itertools = "0.10.3"
 duplicate = "0.4.1"
 serde = {version = "1.0.140", features = ["derive"]}
+serde_json = "1.0"
 serde_bytes = "0.11.6"
 bincode = "1.3.3"
 rayon = "1.5.3"
@@ -50,6 +51,9 @@ fast-math = {version = "0.1", optional = true}
 reqwest = "0.11.11"
 tokio = {version = "1.20.1", features = ["full"]}
 clap = { version = "3.0.10", features = ["derive"] }
+generational-arena = "0.2"
+smallvec = "1.9.0"
+#davis-edi-rs = { path = "../davis-EDI-rs" }
 
 [package.metadata.docs.rs]
 no-default-features = true
@@ -60,4 +64,4 @@ features = ["docs-only"]
 opt-level = 0
 
 [profile.test]
-opt-level = 2
+opt-level = 0
