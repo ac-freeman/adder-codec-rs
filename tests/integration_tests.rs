@@ -16,6 +16,8 @@ use adder_codec_rs::transcoder::source::video::Source;
 use adder_codec_rs::SourceCamera::FramedU8;
 use adder_codec_rs::{Codec, Coord, Event, SourceCamera};
 use rand::Rng;
+use serde::{Deserialize, Serialize};
+use serde_json::Result;
 
 #[test]
 fn test_set_stream_position() {
@@ -837,15 +839,16 @@ fn test_sample_ordered() {
 }
 
 #[test]
-fn test_framed_to_adder_bunny2() {
+fn test_framed_to_adder_bunny4() {
+    let data = fs::read_to_string("./tests/samples/bunny4.json").expect("Unable to read file");
+    let gt_events: Vec<Event> = serde_json::from_str(data.as_str()).unwrap();
     let mut source = FramedSourceBuilder::new(
-        "./tests/samples/bunny_crop2.mp4".to_string(),
+        "./tests/samples/bunny_crop4.mp4".to_string(),
         SourceCamera::FramedU8,
     )
-    .frame_start(400)
+    .frame_start(360)
     .scale(1.0)
     .communicate_events(true)
-    // .output_events_filename("./tests/samples/TEST_bunny2.adder".to_string())
     .color(false)
     .contrast_thresholds(5, 5)
     .show_display(false)
@@ -854,35 +857,14 @@ fn test_framed_to_adder_bunny2() {
 
     let frame_max = 250;
 
-    // Open GT file
-    let mut stream: RawStream = Codec::new();
-    stream
-        .open_reader("./tests/samples/bunny2.adder")
-        .expect("Invalid path");
-    let _ = stream.decode_header().expect("Invalid header");
-    let mut gt_events = Vec::new();
-    loop {
-        match stream.decode_event() {
-            Ok(event_gt) => {
-                if event_gt.coord.x == 0 && event_gt.coord.y == 0 {
-                    gt_events.push(event_gt)
-                }
-            }
-            Err(_) => break,
-        };
-    }
-
     let mut event_count: usize = 0;
     let mut test_events = Vec::new();
     loop {
-        if event_count == 64 {
-            dbg!("");
-        }
         match source.consume(1) {
             Ok(events_events) => {
                 for events in events_events {
                     for event in events {
-                        if event.coord.x == 0 && event.coord.y == 0 {
+                        if event.coord.x == 0 && event.coord.y == 186 {
                             let gt_event = gt_events[event_count];
                             assert_eq!(event, gt_event);
                             test_events.push(event);
@@ -902,125 +884,7 @@ fn test_framed_to_adder_bunny2() {
             break;
         }
     }
-
-    source.get_video_mut().end_write_stream();
-
-    assert_eq!(test_events[64].d, 8);
-    assert_eq!(test_events[64].delta_t, 10508);
-    for i in 0..gt_events.len() {
-        let gt_event = gt_events[i];
-        let test_event = test_events[i];
-        assert_eq!(gt_events[i], test_events[i]);
-    }
     assert_eq!(gt_events.len(), test_events.len());
+    // let j = serde_json::to_string(&test_events).unwrap();
+    // fs::write("./tmp.txt", j).expect("Unable to write file");
 }
-
-#[test]
-fn test_framed_to_adder_bunny4() {
-    let mut source = FramedSourceBuilder::new(
-        "./tests/samples/bunny_crop4.mp4".to_string(),
-        SourceCamera::FramedU8,
-    )
-    .frame_start(360)
-    .scale(1.0)
-    .communicate_events(true)
-    // .output_events_filename("./tests/samples/TEST_bunny2.adder".to_string())
-    .color(false)
-    .contrast_thresholds(5, 5)
-    .show_display(false)
-    .time_parameters(120000, 240000)
-    .finish();
-
-    let frame_max = 250;
-
-    let mut event_count: usize = 0;
-    let mut test_events = Vec::new();
-    loop {
-        if event_count == 64 {
-            dbg!("");
-        }
-        match source.consume(1) {
-            Ok(events_events) => {
-                for events in events_events {
-                    for event in events {
-                        if event.coord.x == 0 && event.coord.y == 186 {
-                            // let gt_event = gt_events[event_count];
-                            // assert_eq!(event, gt_event);
-                            test_events.push(event);
-                            event_count += 1;
-                        }
-                    }
-                }
-            }
-            Err(e) => {
-                println!("Err: {:?}", e);
-                break;
-            }
-        }
-
-        let video = source.get_video();
-        if frame_max != 0 && video.in_interval_count >= frame_max {
-            break;
-        }
-    }
-
-    source.get_video_mut().end_write_stream();
-
-    // assert_eq!(test_events[64].d, 8);
-    // assert_eq!(test_events[64].delta_t, 10508);
-    // for i in 0..gt_events.len() {
-    //     let gt_event = gt_events[i];
-    //     let test_event = test_events[i];
-    //     assert_eq!(gt_events[i], test_events[i]);
-    // }
-    // assert_eq!(gt_events.len(), test_events.len());
-}
-
-// #[test]
-// fn get_frame_bytes_u8_integration() {
-//     use adder_codec_rs::{Coord, Event};
-//     use adder_codec_rs::framer::framer::FramerMode::INSTANTANEOUS;
-//     use adder_codec_rs::framer::framer::{FrameSequence, Framer, EventCoordless};
-//     use adder_codec_rs::framer::framer::SourceType::U8;
-//     let mut frame_sequence: FrameSequence<u8> = FrameSequence::<u8>::new(5, 5, 1, 50000, 50, 15, 50000, INTEGRATION, U8);
-//
-//     for i in 0..5 {
-//         for j in 0..5{
-//             let event: Event = Event {
-//                 coord: Coord {
-//                     x: i,
-//                     y: j,
-//                     c: None
-//                 },
-//                 d: 5,
-//                 delta_t: 5100
-//             };
-//             let filled = frame_sequence.ingest_event(&event).unwrap();
-//             if i < 4 || j < 4 {
-//                 assert_eq!(filled, false)
-//             } else {
-//                 assert_eq!(filled, true)
-//             }
-//         }
-//         if i < 4 {
-//             assert_eq!(frame_sequence.is_frame_filled(0).unwrap(), false);
-//         } else {
-//             assert_eq!(frame_sequence.is_frame_filled(0).unwrap(), true);
-//         }
-//
-//     }
-//     match frame_sequence.get_frame_bytes() {
-//         None => {}
-//         Some(frame_bytes) => {
-//             let n: u32 = rand::thread_rng().gen();
-//             let path = "./TEST_".to_owned() + n.to_string().as_str() + ".addr";
-//             let file = File::create(&path).unwrap();
-//             let mut output_writer = BufWriter::new(file);
-//             output_writer.write_all(&*frame_bytes);
-//             output_writer.flush().unwrap();
-//             std::mem::drop(output_writer);
-//             assert_eq!(fs::metadata(&path).unwrap().len(), 25);
-//             fs::remove_file(&path);  // Don't check the error
-//         }
-//     }
-// }
