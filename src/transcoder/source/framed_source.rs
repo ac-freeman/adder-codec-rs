@@ -294,6 +294,7 @@ impl Source for FramedSource {
             self.video.height as usize / rayon::current_num_threads() as usize,
             1,
         );
+        let chunk_rows = 1;
         let px_per_chunk: usize =
             chunk_rows * self.video.width as usize * self.video.channels as usize;
         let big_buffer: Vec<_> = self
