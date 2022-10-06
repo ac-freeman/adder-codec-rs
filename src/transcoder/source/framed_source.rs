@@ -290,32 +290,29 @@ impl Source for FramedSource {
         let frame_arr: &[u8] = self.input_frame_scaled.data_bytes().unwrap();
 
         let ref_time = self.video.ref_time as f32;
-        let chunk_rows = max(
-            self.video.height as usize / rayon::current_num_threads() as usize,
-            1,
-        );
         let chunk_rows = 1;
         let px_per_chunk: usize =
             chunk_rows * self.video.width as usize * self.video.channels as usize;
         let big_buffer: Vec<_> = self
             .video
-            // .event_pixels
             .event_pixel_trees
             .axis_chunks_iter_mut(Axis(0), chunk_rows)
             .into_par_iter()
             .enumerate()
             .map(|(chunk_idx, mut chunk)| {
                 let mut buffer: Vec<Event> = Vec::with_capacity(px_per_chunk);
+                let mut event = Default::default();
+                let mut base_val = &mut 0;
                 // let mut events = vec![];
                 for (chunk_px_idx, px) in chunk.iter_mut().enumerate() {
                     let px_idx = chunk_px_idx + px_per_chunk * chunk_idx;
                     let frame_val: u8 = frame_arr[px_idx];
                     if px.need_to_pop_top {
-                        let event = px.pop_top_event(Some(frame_val as Intensity));
+                        event = px.pop_top_event(Some(frame_val as Intensity));
                         buffer.push(event);
                     }
 
-                    let base_val = &mut px.base_val;
+                    base_val = &mut px.base_val;
 
                     if frame_val < base_val.saturating_sub(self.c_thresh_neg)
                         || frame_val > base_val.saturating_add(self.c_thresh_pos)
