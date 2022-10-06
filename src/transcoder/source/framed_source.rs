@@ -2,6 +2,7 @@ use crate::transcoder::source::video::Source;
 use crate::transcoder::source::video::Video;
 use crate::transcoder::source::video::{show_display, SourceError};
 use crate::{Codec, Coord, Event, D};
+use bumpalo::Bump;
 use core::default::Default;
 use rayon::iter::ParallelIterator;
 use rayon::iter::{IndexedParallelIterator, IntoParallelIterator};
@@ -293,36 +294,41 @@ impl Source for FramedSource {
         let chunk_rows = 1;
         let px_per_chunk: usize =
             chunk_rows * self.video.width as usize * self.video.channels as usize;
-        let big_buffer: Vec<_> = self
+        let big_buffer: Vec<Vec<Event>> = self
             .video
             .event_pixel_trees
             .axis_chunks_iter_mut(Axis(0), chunk_rows)
             .into_par_iter()
             .enumerate()
             .map(|(chunk_idx, mut chunk)| {
-                let mut buffer: Vec<Event> = Vec::with_capacity(px_per_chunk);
-                let mut event = Default::default();
-                let mut base_val = &mut 0;
+                // Don't put vec in arena
+                let mut buffer = Vec::with_capacity(px_per_chunk);
+
+                // Create arena for these values used in each iteration
+                let bump = Bump::new();
+                let mut base_val = bump.alloc(0);
+                let px_idx = bump.alloc(0);
+                let frame_val = bump.alloc(0);
+
                 // let mut events = vec![];
                 for (chunk_px_idx, px) in chunk.iter_mut().enumerate() {
-                    let px_idx = chunk_px_idx + px_per_chunk * chunk_idx;
-                    let frame_val: u8 = frame_arr[px_idx];
+                    *px_idx = chunk_px_idx + px_per_chunk * chunk_idx;
+                    *frame_val = frame_arr[*px_idx];
                     if px.need_to_pop_top {
-                        event = px.pop_top_event(Some(frame_val as Intensity));
-                        buffer.push(event);
+                        buffer.push(px.pop_top_event(Some(*frame_val as Intensity)));
                     }
 
                     base_val = &mut px.base_val;
 
-                    if frame_val < base_val.saturating_sub(self.c_thresh_neg)
-                        || frame_val > base_val.saturating_add(self.c_thresh_pos)
+                    if *frame_val < base_val.saturating_sub(self.c_thresh_neg)
+                        || *frame_val > base_val.saturating_add(self.c_thresh_pos)
                     {
-                        px.pop_best_events(Some(frame_val as Intensity), &mut buffer);
-                        px.base_val = frame_val;
+                        px.pop_best_events(Some(*frame_val as Intensity), &mut buffer);
+                        px.base_val = *frame_val;
                     }
 
                     px.integrate(
-                        frame_val as Intensity,
+                        *frame_val as Intensity,
                         ref_time,
                         &FramePerfect,
                         &self.video.delta_t_max,
