@@ -20,7 +20,7 @@ pub enum Mode {
     FramePerfect,
     Continuous,
 }
-
+#[repr(packed)]
 #[derive(Copy, Clone, Debug)]
 struct PixelState {
     d: D,
@@ -28,7 +28,8 @@ struct PixelState {
     delta_t: f32,
 }
 
-#[derive(Clone, Debug)]
+#[repr(packed)]
+#[derive(Clone, Copy, Debug)]
 pub struct PixelNode {
     /// Will have the smaller D value
     alt: Option<()>,
