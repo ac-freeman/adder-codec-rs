@@ -39,11 +39,11 @@ pub struct PixelNode {
 }
 
 pub struct PixelArena {
-    pub arena: SmallVec<[PixelNode; 7]>,
-    length: usize,
     pub coord: Coord,
+    length: usize,
     pub base_val: u8,
     pub need_to_pop_top: bool,
+    pub arena: SmallVec<[PixelNode; 6]>,
 }
 
 impl PixelArena {
@@ -52,11 +52,11 @@ impl PixelArena {
         let mut arena = smallvec![];
         arena.push(PixelNode::new(start_intensity));
         PixelArena {
-            arena,
-            length: 1,
             coord,
+            length: 1,
             base_val: 0,
             need_to_pop_top: false,
+            arena,
         }
     }
 
