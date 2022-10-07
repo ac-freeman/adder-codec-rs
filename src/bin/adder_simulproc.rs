@@ -12,6 +12,7 @@ use adder_codec_rs::{DeltaT, Event};
 use clap::Parser;
 use rayon::{current_num_threads, ThreadPool};
 use serde::Serialize;
+use std::cmp::max;
 use std::error::Error;
 use std::fs::File;
 use std::io;
@@ -81,6 +82,11 @@ pub struct MyArgs {
     /// to create a frame division.  Only used when look_ahead = 1 and framed input
     #[clap(long, default_value_t = 5)]
     pub(crate) c_thresh_neg: u8,
+
+    /// Number of threads to use. If not provided, will default to the number of cores on the
+    /// system.
+    #[clap(long, default_value_t = 0)]
+    pub(crate) thread_count: u8,
 }
 
 #[allow(dead_code)]
@@ -135,6 +141,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let height = source.get_video().height;
 
     let ref_time = source.get_ref_time();
+    let num_threads = match args.thread_count {
+        0 => current_num_threads(),
+        num => num as usize,
+    };
+
     let mut simul_processor = SimulProcessor::new::<u8>(
         source,
         ref_time,
@@ -142,6 +153,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         args.fps,
         args.output_raw_video_filename.as_str(),
         args.frame_count_max as i32,
+        num_threads,
     );
 
     let now = std::time::Instant::now();
@@ -191,6 +203,7 @@ impl SimulProcessor {
         fps: u32,
         output_path: &str,
         frame_max: i32,
+        num_threads: usize,
     ) -> SimulProcessor
     where
         T: Clone + std::marker::Sync + std::marker::Send + 'static,
@@ -201,13 +214,13 @@ impl SimulProcessor {
         T: Serialize,
     {
         let thread_pool_framer = rayon::ThreadPoolBuilder::new()
-            // .num_threads(1)
-            .num_threads(current_num_threads() / 2)
+            .num_threads(max(num_threads / 2, 1))
+            // .num_threads(current_num_threads() / 2)
             .build()
             .unwrap();
         let thread_pool_transcoder = rayon::ThreadPoolBuilder::new()
-            // .num_threads(16)
-            .num_threads(current_num_threads() / 2)
+            .num_threads(max(num_threads / 2, 1))
+            // .num_threads(current_num_threads() / 2)
             .build()
             .unwrap();
         let reconstructed_frame_rate = fps;
@@ -358,6 +371,7 @@ mod tests {
             scale: 1.0,
             c_thresh_pos: 0,
             c_thresh_neg: 0,
+            thread_count: 1, // Multithreading causes some issues in testing
         };
         let mut source_builder = FramedSourceBuilder::new(args.input_filename, FramedU8)
             .frame_start(args.frame_idx_start)
@@ -380,6 +394,7 @@ mod tests {
             args.fps,
             args.output_raw_video_filename.as_str(),
             args.frame_count_max as i32,
+            1,
         );
 
         simul_processor.run().unwrap();
