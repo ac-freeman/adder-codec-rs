@@ -318,14 +318,8 @@ impl Source for FramedSource {
                 let px_idx = bump.alloc(0);
                 let frame_val = bump.alloc(0);
 
-                // let mut events = vec![];
                 for (chunk_px_idx, px) in chunk.iter_mut().enumerate() {
-                    *px_idx = px.coord.y as usize
-                        * self.video.width as usize
-                        * self.video.channels as usize
-                        + px.coord.x as usize * self.video.channels as usize
-                        + px.coord.c.unwrap_or(0) as usize;
-                    // chunk_px_idx + px_per_chunk * chunk_idx;
+                    *px_idx = chunk_px_idx + px_per_chunk * chunk_idx;
                     *frame_val = frame_arr[*px_idx];
                     if px.need_to_pop_top {
                         buffer.push(px.pop_top_event(Some(*frame_val as Intensity)));

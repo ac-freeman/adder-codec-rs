@@ -179,7 +179,6 @@ impl<T: Clone + Default + FrameValue<Output = T> + Copy + Serialize + Send + Syn
     type Output = T;
     fn new(builder: FramerBuilder) -> Self {
         let chunk_rows = builder.chunk_rows;
-        println!("chunk_rows: {}", chunk_rows);
         assert!(chunk_rows > 0);
 
         let num_chunks: usize = ((builder.num_rows) as f64 / chunk_rows as f64).ceil() as usize;
@@ -311,6 +310,9 @@ impl<T: Clone + Default + FrameValue<Output = T> + Copy + Serialize + Send + Syn
     }
 
     fn ingest_events_events(&mut self, mut events: Vec<Vec<Event>>) -> bool {
+        // Make sure that the chunk division is aligned between the source and the framer
+        assert_eq!(events.len(), self.frames.len());
+
         (
             &mut events,
             &mut self.frames,
