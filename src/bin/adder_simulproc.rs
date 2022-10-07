@@ -59,6 +59,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     //////////////////////////////////////////////////////
 
     let mut source_builder = FramedSourceBuilder::new(args.input_filename, FramedU8)
+        .chunk_rows(4)
         .frame_start(args.frame_idx_start)
         .scale(args.scale)
         .communicate_events(true)

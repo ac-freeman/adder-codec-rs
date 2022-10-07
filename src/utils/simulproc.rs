@@ -117,8 +117,8 @@ impl SimulProcessor {
             .build()
             .unwrap();
         let thread_pool_transcoder = rayon::ThreadPoolBuilder::new()
-            .num_threads(max(num_threads / 2, 1))
-            // .num_threads(current_num_threads() / 2)
+            // .num_threads(max(num_threads / 2, 1))
+            .num_threads(1)
             .build()
             .unwrap();
         let reconstructed_frame_rate = fps;
@@ -130,7 +130,7 @@ impl SimulProcessor {
         let channels = source.get_video().channels as usize;
 
         let mut framer = thread_pool_framer.install(|| {
-            FramerBuilder::new(height, width, channels)
+            FramerBuilder::new(height, width, channels, source.video.chunk_rows)
                 .codec_version(1)
                 .time_parameters(tps, ref_time, reconstructed_frame_rate)
                 .mode(INSTANTANEOUS)

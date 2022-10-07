@@ -4,6 +4,7 @@ use std::fs;
 use std::fs::File;
 use std::io::{BufWriter, Write};
 
+use ndarray::{Array3, Axis};
 use std::path::Path;
 use std::process::Command;
 
@@ -884,4 +885,43 @@ fn test_framed_to_adder_bunny4() {
     assert_eq!(gt_events.len(), test_events.len());
     // let j = serde_json::to_string(&test_events).unwrap();
     // fs::write("./tmp.txt", j).expect("Unable to write file");
+}
+
+#[test]
+fn array3_test() {
+    let mut data = Vec::new();
+    let height = 6_usize;
+    let width = 6_usize;
+    let channels = 3_usize;
+    for y in 0..height {
+        for x in 0..width {
+            for c in 0..channels {
+                let px = 0;
+                data.push(px);
+            }
+        }
+    }
+
+    let mut event_pixel_trees: Array3<i32> =
+        Array3::from_shape_vec((height.into(), width.into(), channels), data).unwrap();
+    let tmp = event_pixel_trees
+        .axis_chunks_iter_mut(Axis(0), 4)
+        .enumerate()
+        .len();
+    println!("{}", tmp);
+
+    let ret: Vec<i32> = event_pixel_trees
+        .axis_chunks_iter_mut(Axis(0), 4)
+        .enumerate()
+        .map(|(chunk_idx, mut chunk)| {
+            if chunk_idx == 0 {
+                assert_eq!(chunk.len(), 72);
+            }
+            if chunk_idx == 1 {
+                assert_eq!(chunk.len(), 36);
+            }
+            1
+        })
+        .collect();
+    assert_eq!(ret, vec![1, 1]);
 }

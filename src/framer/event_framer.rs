@@ -46,14 +46,21 @@ pub struct FramerBuilder {
     codec_version: u8,
     source_camera: SourceCamera,
     ref_interval: DeltaT,
+    pub chunk_rows: usize,
 }
 
 impl FramerBuilder {
-    pub fn new(num_rows: usize, num_cols: usize, num_channels: usize) -> FramerBuilder {
+    pub fn new(
+        num_rows: usize,
+        num_cols: usize,
+        num_channels: usize,
+        chunk_rows: usize,
+    ) -> FramerBuilder {
         FramerBuilder {
             num_rows,
             num_cols,
             num_channels,
+            chunk_rows,
             tps: 150000,
             output_fps: 30,
             mode: FramerMode::INSTANTANEOUS,
@@ -171,7 +178,8 @@ impl<T: Clone + Default + FrameValue<Output = T> + Copy + Serialize + Send + Syn
 {
     type Output = T;
     fn new(builder: FramerBuilder) -> Self {
-        let chunk_rows = max(builder.num_rows / current_num_threads(), 1);
+        let chunk_rows = builder.chunk_rows;
+        println!("chunk_rows: {}", chunk_rows);
         assert!(chunk_rows > 0);
 
         let num_chunks: usize = ((builder.num_rows) as f64 / chunk_rows as f64).ceil() as usize;

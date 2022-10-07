@@ -14,6 +14,7 @@ use ndarray::Axis;
 use opencv::core::{Mat, Size};
 use opencv::videoio::{VideoCapture, CAP_PROP_FPS, CAP_PROP_FRAME_COUNT, CAP_PROP_POS_FRAMES};
 use opencv::{imgproc, prelude::*, videoio, Result};
+use rayon::current_num_threads;
 
 use crate::transcoder::d_controller::DecimationMode;
 use crate::transcoder::event_pixel_tree::Mode::FramePerfect;
@@ -46,6 +47,7 @@ pub struct FramedSourceBuilder {
     input_filename: String,
     output_events_filename: Option<String>,
     frame_idx_start: u32,
+    chunk_rows: usize,
     ref_time: DeltaT,
     tps: DeltaT,
     delta_t_max: DeltaT,
@@ -66,6 +68,7 @@ impl FramedSourceBuilder {
             input_filename,
             output_events_filename: None,
             frame_idx_start: 0,
+            chunk_rows: 0,
             ref_time: 5000,
             tps: 150000,
             delta_t_max: 150000,
@@ -89,6 +92,11 @@ impl FramedSourceBuilder {
 
     pub fn frame_start(mut self, frame_idx_start: u32) -> FramedSourceBuilder {
         self.frame_idx_start = frame_idx_start;
+        self
+    }
+
+    pub fn chunk_rows(mut self, chunk_rows: usize) -> FramedSourceBuilder {
+        self.chunk_rows = chunk_rows;
         self
     }
 
@@ -193,6 +201,7 @@ impl FramedSource {
         let video = Video::new(
             init_frame.size()?.width as u16,
             init_frame.size()?.height as u16,
+            builder.chunk_rows,
             builder.output_events_filename,
             channels,
             builder.tps,
@@ -291,20 +300,19 @@ impl Source for FramedSource {
         let frame_arr: &[u8] = self.input_frame_scaled.data_bytes().unwrap();
 
         let ref_time = self.video.ref_time as f32;
-        let chunk_rows = 1;
         let px_per_chunk: usize =
-            chunk_rows * self.video.width as usize * self.video.channels as usize;
+            self.video.chunk_rows * self.video.width as usize * self.video.channels as usize;
+
+        // Imporant: if framing the events simultaneously, then the chunk division must be
+        // exactly the same as it is for the framer
         let big_buffer: Vec<Vec<Event>> = self
             .video
             .event_pixel_trees
-            .axis_chunks_iter_mut(Axis(0), chunk_rows)
-            .into_par_iter()
+            .axis_chunks_iter_mut(Axis(0), self.video.chunk_rows)
+            .into_iter()
             .enumerate()
             .map(|(chunk_idx, mut chunk)| {
-                // Don't put vec in arena
-                let mut buffer = Vec::with_capacity(px_per_chunk);
-
-                // Create arena for these values used in each iteration
+                let mut buffer: Vec<Event> = Vec::with_capacity(px_per_chunk);
                 let bump = Bump::new();
                 let mut base_val = bump.alloc(0);
                 let px_idx = bump.alloc(0);
@@ -312,7 +320,12 @@ impl Source for FramedSource {
 
                 // let mut events = vec![];
                 for (chunk_px_idx, px) in chunk.iter_mut().enumerate() {
-                    *px_idx = chunk_px_idx + px_per_chunk * chunk_idx;
+                    *px_idx = px.coord.y as usize
+                        * self.video.width as usize
+                        * self.video.channels as usize
+                        + px.coord.x as usize * self.video.channels as usize
+                        + px.coord.c.unwrap_or(0) as usize;
+                    // chunk_px_idx + px_per_chunk * chunk_idx;
                     *frame_val = frame_arr[*px_idx];
                     if px.need_to_pop_top {
                         buffer.push(px.pop_top_event(Some(*frame_val as Intensity)));
