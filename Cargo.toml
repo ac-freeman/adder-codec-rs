@@ -57,7 +57,7 @@ bumpalo = "3.11.0"
 #davis-edi-rs = { path = "../davis-EDI-rs" }
 
 [dev-dependencies]
-criterion = "0.3"
+criterion = "0.3.6"
 criterion-perf-events = "0.2.0"
 perfcnt = "0.8.0"
 

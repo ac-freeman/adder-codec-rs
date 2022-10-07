@@ -101,7 +101,6 @@ pub type PixelAddress = u16;
 
 pub const EOF_PX_ADDRESS: PixelAddress = u16::MAX;
 
-#[repr(packed)]
 #[derive(Debug, Copy, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct Coord {
     pub x: PixelAddress,
@@ -116,7 +115,6 @@ pub struct CoordSingle {
 }
 
 /// An ADΔER event representation
-#[repr(packed)]
 #[derive(Debug, Copy, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct Event {
     pub coord: Coord,
