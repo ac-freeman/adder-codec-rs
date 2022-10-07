@@ -38,6 +38,8 @@ pub struct PixelNode {
     best_event: Option<Event>,
 }
 
+// Each PixelNode is ~20 bytes. Each PixelArena is at least 20 + (6*20) 140 bytes, but takes at
+// least 144 bytes of space, I think?
 pub struct PixelArena {
     pub coord: Coord,
     length: usize,

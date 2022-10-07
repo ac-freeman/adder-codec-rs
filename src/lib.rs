@@ -115,6 +115,7 @@ pub struct CoordSingle {
 }
 
 /// An ADΔER event representation
+#[repr(packed)]
 #[derive(Debug, Copy, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct Event {
     pub coord: Coord,
@@ -122,7 +123,7 @@ pub struct Event {
     pub delta_t: DeltaT,
 }
 
-/// An ADΔER event representation
+/// An ADΔER event representation, without the channel component
 #[derive(Debug, Copy, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct EventSingle {
     pub coord: CoordSingle,
