@@ -31,7 +31,7 @@ async fn download_file(
     Ok(())
 }
 
-fn simul_proc(video_path: &str, scale: f64, thread_count: u8) {
+fn simul_proc(video_path: &str, scale: f64, thread_count: u8, chunk_rows: usize) {
     let d = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let manifest_path_str = d.as_path().to_str().unwrap().to_owned();
 
@@ -41,7 +41,7 @@ fn simul_proc(video_path: &str, scale: f64, thread_count: u8) {
         fps: 24,
         ref_time: 5000,
         delta_t_max: 120000,
-        frame_count_max: 100,
+        frame_count_max: 300,
         frame_idx_start: 0,
         show_display: 0,
         input_filename: video_path.to_string(),
@@ -53,6 +53,7 @@ fn simul_proc(video_path: &str, scale: f64, thread_count: u8) {
         thread_count, // Multithreading causes some issues in testing
     };
     let mut source_builder = FramedSourceBuilder::new(args.input_filename, FramedU8)
+        .chunk_rows(chunk_rows)
         .frame_start(args.frame_idx_start)
         .scale(args.scale)
         .communicate_events(true)
@@ -85,17 +86,17 @@ fn bench_simul_proc_dark() {
     let d = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let manifest_path_str = d.as_path().to_str().unwrap().to_owned();
     let path_str = manifest_path_str.clone() + "/tests/samples/lake_scaled_hd_crop.mp4";
-    simul_proc(&path_str, 1.0, 1);
+    simul_proc(&path_str, 1.0, 1, 4);
 }
 
-fn bench_simul_proc_drop(scale: f64) {
+fn bench_simul_proc_drop(scale: f64, chunk_rows: usize) {
     let path_str = "./benches/run/drop.mp4";
     let video_url = "https://www.pexels.com/video/2603664/download/";
     dbg!("before async");
     let mut rt = tokio::runtime::Runtime::new().unwrap();
     rt.block_on(download_file(path_str, video_url))
         .expect("TODO: panic message");
-    simul_proc(path_str, scale, 16);
+    simul_proc(path_str, scale, 16, chunk_rows);
 }
 
 fn bench(c: &mut Criterion<Perf>) {
@@ -105,13 +106,17 @@ fn bench(c: &mut Criterion<Perf>) {
     //     b.iter(|| bench_simul_proc_dark())
     // });
 
-    for i in [0.1_f64, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0].iter() {
-        let id = BenchmarkId::from_parameter(i);
-        // let func = |b, i| b.iter(|| bench_simul_proc_drop(i));
+    for r in [1, 32, 64, 128, 256, 512].iter() {
+        // for i in [0.1_f64, 0.5, 1.0].iter() {
+        for i in [0.5_f64].iter() {
+            let function_name = "chunks ".to_owned() + r.to_string().as_str() + ";";
+            let id = BenchmarkId::new(function_name, i);
+            // let func = |b, i| b.iter(|| bench_simul_proc_drop(i));
 
-        group.bench_with_input(id, i, |b: &mut Bencher<Perf>, i| {
-            b.iter(|| bench_simul_proc_drop(*i))
-        });
+            group.bench_with_input(id, i, |b: &mut Bencher<Perf>, i| {
+                b.iter(|| bench_simul_proc_drop(*i, *r))
+            });
+        }
     }
 
     group.finish()

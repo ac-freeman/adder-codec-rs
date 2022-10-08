@@ -309,7 +309,7 @@ impl Source for FramedSource {
             .video
             .event_pixel_trees
             .axis_chunks_iter_mut(Axis(0), self.video.chunk_rows)
-            .into_iter()
+            .into_par_iter()
             .enumerate()
             .map(|(chunk_idx, mut chunk)| {
                 let mut buffer: Vec<Event> = Vec::with_capacity(px_per_chunk);
