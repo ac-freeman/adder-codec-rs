@@ -1,3 +1,5 @@
+mod davis_to_adder;
+
 use adder_codec_rs::framer::scale_intensity::event_to_intensity;
 use adder_codec_rs::raw::raw_stream::RawStream;
 use adder_codec_rs::{Codec, Intensity, D_SHIFT};

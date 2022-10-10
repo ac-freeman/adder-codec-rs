@@ -1,0 +1,13 @@
+scale = 0.5
+input-filename= "/home/andrew/Code/adder-codec-rs/benches/run/drop.mp4"
+output-raw-video-filename = "/home/andrew/Downloads/waves_out"
+tps = 240000
+fps = 24
+output-events-filename = ""
+c_thresh_pos = 15
+c-thresh-neg = 15
+color-input = 1
+show-display = 0
+frame-idx-start = 360
+frame-count-max = 200
+thread-count = 16
