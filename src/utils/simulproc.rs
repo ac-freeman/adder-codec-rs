@@ -113,12 +113,10 @@ impl SimulProcessor {
     {
         let thread_pool_framer = rayon::ThreadPoolBuilder::new()
             .num_threads(max(num_threads / 2, 1))
-            // .num_threads(current_num_threads() / 2)
             .build()
             .unwrap();
         let thread_pool_transcoder = rayon::ThreadPoolBuilder::new()
-            // .num_threads(max(num_threads / 2, 1))
-            .num_threads(1)
+            .num_threads(max(num_threads / 2, 1))
             .build()
             .unwrap();
         let reconstructed_frame_rate = fps;

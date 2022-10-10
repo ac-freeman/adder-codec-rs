@@ -1,6 +1,6 @@
 <component name="ProjectRunConfigurationManager">
   <configuration default="false" name="Run simul release" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
-    <option name="command" value="run --release --bin adder_simulproc -- --scale 0.1 --input-filename &quot;$PROJECT_DIR$/benches/run/drop.mp4&quot; --output-raw-video-filename &quot;$USER_HOME$/Downloads/waves_out&quot; --tps 240000 --fps 24 --output-events-filename &quot;&quot; --c-thresh-pos 15 --c-thresh-neg 15 --color-input 1 --show-display 0 --frame-idx-start 360 --frame-count-max 200 --thread-count 16" />
+    <option name="command" value="run --release --bin adder_simulproc -- --scale 0.5 --input-filename &quot;$PROJECT_DIR$/benches/run/drop.mp4&quot; --output-raw-video-filename &quot;$USER_HOME$/Downloads/waves_out&quot; --tps 240000 --fps 24 --output-events-filename &quot;&quot; --c-thresh-pos 15 --c-thresh-neg 15 --color-input 1 --show-display 0 --frame-idx-start 360 --frame-count-max 200 --thread-count 16" />
     <option name="workingDirectory" value="file://$PROJECT_DIR$" />
     <option name="channel" value="DEFAULT" />
     <option name="requiredFeatures" value="true" />
