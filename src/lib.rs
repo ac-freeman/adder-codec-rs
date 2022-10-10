@@ -11,7 +11,8 @@ pub mod framer;
 mod header;
 pub mod raw;
 #[cfg(feature = "opencv")]
-pub mod transcoder; // Have to enable the 'transcoder' feature. Requires OpenCV to be installed.
+pub mod transcoder;
+pub mod utils; // Have to enable the 'transcoder' feature. Requires OpenCV to be installed.
 
 /// Decimation value; a pixel's sensitivity.
 pub type D = u8;
@@ -100,6 +101,7 @@ pub type PixelAddress = u16;
 
 pub const EOF_PX_ADDRESS: PixelAddress = u16::MAX;
 
+#[repr(packed)]
 #[derive(Debug, Copy, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct Coord {
     pub x: PixelAddress,
@@ -114,6 +116,7 @@ pub struct CoordSingle {
 }
 
 /// An ADΔER event representation
+#[repr(packed)]
 #[derive(Debug, Copy, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct Event {
     pub coord: Coord,
@@ -121,7 +124,7 @@ pub struct Event {
     pub delta_t: DeltaT,
 }
 
-/// An ADΔER event representation
+/// An ADΔER event representation, without the channel component
 #[derive(Debug, Copy, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct EventSingle {
     pub coord: CoordSingle,

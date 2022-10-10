@@ -20,7 +20,7 @@ pub enum Mode {
     FramePerfect,
     Continuous,
 }
-
+#[repr(packed)]
 #[derive(Copy, Clone, Debug)]
 struct PixelState {
     d: D,
@@ -28,7 +28,8 @@ struct PixelState {
     delta_t: f32,
 }
 
-#[derive(Clone, Debug)]
+#[repr(packed)]
+#[derive(Clone, Copy, Debug)]
 pub struct PixelNode {
     /// Will have the smaller D value
     alt: Option<()>,
@@ -37,12 +38,14 @@ pub struct PixelNode {
     best_event: Option<Event>,
 }
 
+// Each PixelNode is ~20 bytes. Each PixelArena is at least 20 + (6*20) 140 bytes, but takes at
+// least 144 bytes of space, I think?
 pub struct PixelArena {
-    pub arena: SmallVec<[PixelNode; 7]>,
-    length: usize,
     pub coord: Coord,
+    length: usize,
     pub base_val: u8,
     pub need_to_pop_top: bool,
+    pub arena: SmallVec<[PixelNode; 6]>,
 }
 
 impl PixelArena {
@@ -51,11 +54,11 @@ impl PixelArena {
         let mut arena = smallvec![];
         arena.push(PixelNode::new(start_intensity));
         PixelArena {
-            arena,
-            length: 1,
             coord,
+            length: 1,
             base_val: 0,
             need_to_pop_top: false,
+            arena,
         }
     }
 
@@ -117,7 +120,7 @@ impl PixelArena {
             Some(event) => {
                 assert!(self.length > 1);
                 for i in 0..self.length - 1 {
-                    self.arena[i] = self.arena[i + 1].clone();
+                    self.arena[i] = self.arena[i + 1];
                 }
                 self.length -= 1;
                 debug_assert!(self.arena[self.length - 1].alt.is_none());
@@ -305,24 +308,40 @@ mod tests {
                 c: None,
             },
         );
+
         assert_eq!(tree.arena[0].state.d, 6);
         tree.integrate(100.0, 20.0, &Continuous, &dtm);
         assert!(tree.arena[0].best_event.is_some());
-        assert_eq!(tree.arena[0].best_event.unwrap().d, 6);
-        assert_eq!(tree.arena[0].best_event.unwrap().delta_t, 12);
+        let node = &tree.arena[0];
+        match node.best_event {
+            None => {
+                panic!()
+            }
+            Some(event) => {
+                assert_eq!(event.d, 6);
+
+                // Refer to https://github.com/rust-lang/rust/issues/82523
+                let tmp = event.delta_t;
+                assert_eq!(tmp, 12);
+            }
+        }
         assert_eq!(tree.arena[0].state.d, 7);
         assert!(f32_slack(tree.arena[0].state.integration, 100.0));
         assert!(f32_slack(tree.arena[0].state.delta_t, 20.0));
         assert!(tree.arena[0].alt.is_some());
-        assert!(tree.arena[1].best_event.is_none());
-        assert_eq!(tree.arena[1].state.d, 6);
-        assert_eq!(tree.arena[1].state.integration, 36.0);
+
+        let node = &tree.arena[1];
+        assert!(node.best_event.is_none());
+        assert_eq!(node.state.d, 6);
+        let tmp = node.state.integration;
+        assert_eq!(tmp, 36.0);
         assert!(f32_slack(tree.arena[1].state.delta_t, 7.2));
 
         tree.integrate(100.0, 20.0, &Continuous, &dtm);
         assert_eq!(tree.arena[0].best_event.unwrap().d, 7);
         // Since we're casting, the delta t gets rounded down
-        assert_eq!(tree.arena[0].best_event.unwrap().delta_t, 25);
+        let tmp = tree.arena[0].best_event.unwrap().delta_t;
+        assert_eq!(tmp, 25);
         assert_eq!(tree.arena[0].state.d, 8);
         assert!(f32_slack(tree.arena[0].state.integration, 200.0));
         assert!(f32_slack(tree.arena[0].state.delta_t, 40.0));
@@ -331,7 +350,8 @@ mod tests {
         assert!(f32_slack(tree.arena[1].state.integration, 72.0));
         assert!(f32_slack(tree.arena[1].state.delta_t, 14.4));
         assert_eq!(tree.arena[1].best_event.unwrap().d, 6);
-        assert_eq!(tree.arena[1].best_event.unwrap().delta_t, 12);
+        let tmp = tree.arena[1].best_event.unwrap().delta_t;
+        assert_eq!(tmp, 12);
         assert!(tree.arena[1].alt.is_some());
         let alt_alt = &tree.arena[2];
         assert_eq!(alt_alt.state.d, 6);
@@ -387,7 +407,8 @@ mod tests {
         assert!(f32_slack(tree.arena[0].state.delta_t, 108.0));
 
         assert_eq!(tree.arena[0].best_event.unwrap().d, 8);
-        assert_eq!(tree.arena[0].best_event.unwrap().delta_t, 108);
+        let tmp = tree.arena[0].best_event.unwrap().delta_t;
+        assert_eq!(tmp, 108);
 
         let alt = &tree.arena[1];
         assert_eq!(alt.state.d, 4);
@@ -419,9 +440,11 @@ mod tests {
         tree.pop_best_events(None, &mut events);
         assert_eq!(events.len(), 2);
         assert_eq!(events[0].d, 7);
-        assert_eq!(events[0].delta_t, 25);
+        let tmp = events[0].delta_t;
+        assert_eq!(tmp, 25);
         assert_eq!(events[1].d, 6);
-        assert_eq!(events[1].delta_t, 12);
+        let tmp = events[1].delta_t;
+        assert_eq!(tmp, 12);
         assert_eq!(tree.arena[0].state.d, 6);
         assert!(f32_slack(tree.arena[0].state.integration, 8.0));
         assert!(f32_slack(tree.arena[0].state.delta_t, 1.6));
@@ -434,7 +457,8 @@ mod tests {
         tree.pop_best_events(None, &mut events);
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].d, 8);
-        assert_eq!(events[0].delta_t, 108);
+        let tmp = events[0].delta_t;
+        assert_eq!(tmp, 108);
         assert_eq!(tree.arena[0].state.d, 4);
         assert!(f32_slack(tree.arena[0].state.integration, 0.0));
         assert!(f32_slack(tree.arena[0].state.delta_t, 0.0));
@@ -458,7 +482,8 @@ mod tests {
         tree.pop_best_events(None, &mut events);
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].d, 19);
-        assert_eq!(events[0].delta_t, 500);
+        let tmp = events[0].delta_t;
+        assert_eq!(tmp, 500);
         assert!(f32_slack(tree.arena[0].state.integration, 524212.0));
         // let need_to_pop = tree.integrate(1048500.0, 1000.0);
         // assert!(need_to_pop);
@@ -487,7 +512,8 @@ mod tests {
         tree.integrate(245.0, 5000.0, &FramePerfect, &dtm);
         assert!(tree.need_to_pop_top);
         let _ = tree.pop_top_event(Some(245.0));
-        assert_eq!(tree.arena[0].state.delta_t, 70000.0)
+        let tmp = tree.arena[0].state.delta_t;
+        assert_eq!(tmp, 70000.0)
     }
 
     fn f32_slack(num0: f32, num1: f32) -> bool {
@@ -495,6 +521,6 @@ mod tests {
         if num1 - slack <= num0 && num1 + slack >= num0 {
             return true;
         }
-        return false;
+        false
     }
 }

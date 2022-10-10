@@ -33,6 +33,7 @@ pub enum SourceError {
 pub struct Video {
     pub width: u16,
     pub height: u16,
+    pub chunk_rows: usize,
     pub(crate) event_pixel_trees: Array3<PixelArena>,
     pub(crate) ref_time: u32,
     pub(crate) delta_t_max: u32,
@@ -54,6 +55,7 @@ impl Video {
     pub fn new(
         width: u16,
         height: u16,
+        chunk_rows: usize,
         output_filename: Option<String>,
         channels: usize,
         tps: DeltaT,
@@ -134,11 +136,12 @@ impl Video {
                     .unwrap();
             },
         }
-        let motion_frame_mat = instantaneous_frame.clone();
+        let _motion_frame_mat = instantaneous_frame.clone();
 
         Video {
             width,
             height,
+            chunk_rows,
             event_pixel_trees,
             ref_time,
             delta_t_max,

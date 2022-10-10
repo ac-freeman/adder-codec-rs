@@ -2,10 +2,11 @@ use crate::transcoder::source::video::Source;
 use crate::transcoder::source::video::Video;
 use crate::transcoder::source::video::{show_display, SourceError};
 use crate::{Codec, Coord, Event, D};
+use bumpalo::Bump;
 use core::default::Default;
 use rayon::iter::ParallelIterator;
 use rayon::iter::{IndexedParallelIterator, IntoParallelIterator};
-use std::cmp::max;
+
 use std::mem::swap;
 
 use crate::transcoder::source::video::SourceError::*;
@@ -13,6 +14,7 @@ use ndarray::Axis;
 use opencv::core::{Mat, Size};
 use opencv::videoio::{VideoCapture, CAP_PROP_FPS, CAP_PROP_FRAME_COUNT, CAP_PROP_POS_FRAMES};
 use opencv::{imgproc, prelude::*, videoio, Result};
+
 
 use crate::transcoder::d_controller::DecimationMode;
 use crate::transcoder::event_pixel_tree::Mode::FramePerfect;
@@ -45,6 +47,7 @@ pub struct FramedSourceBuilder {
     input_filename: String,
     output_events_filename: Option<String>,
     frame_idx_start: u32,
+    chunk_rows: usize,
     ref_time: DeltaT,
     tps: DeltaT,
     delta_t_max: DeltaT,
@@ -65,6 +68,7 @@ impl FramedSourceBuilder {
             input_filename,
             output_events_filename: None,
             frame_idx_start: 0,
+            chunk_rows: 0,
             ref_time: 5000,
             tps: 150000,
             delta_t_max: 150000,
@@ -88,6 +92,11 @@ impl FramedSourceBuilder {
 
     pub fn frame_start(mut self, frame_idx_start: u32) -> FramedSourceBuilder {
         self.frame_idx_start = frame_idx_start;
+        self
+    }
+
+    pub fn chunk_rows(mut self, chunk_rows: usize) -> FramedSourceBuilder {
+        self.chunk_rows = chunk_rows;
         self
     }
 
@@ -192,6 +201,7 @@ impl FramedSource {
         let video = Video::new(
             init_frame.size()?.width as u16,
             init_frame.size()?.height as u16,
+            builder.chunk_rows,
             builder.output_events_filename,
             channels,
             builder.tps,
@@ -240,13 +250,11 @@ impl Source for FramedSource {
                 }
             };
 
-            // self.buffer_tx.send(1).unwrap();
             self.last_input_frame_scaled = self.input_frame_scaled.clone();
 
             let frame_arr = self.input_frame_scaled.data_bytes().unwrap();
 
             self.video
-                // .event_pixels
                 .event_pixel_trees
                 .iter_mut()
                 .enumerate()
@@ -257,11 +265,6 @@ impl Source for FramedSource {
                     px.base_val = intensity;
                 });
         } else {
-            // swap(
-            //     &mut self.last_input_frame_scaled,
-            //     &mut self.input_frame_scaled,
-            // );
-            // self.input_frame_scaled = self.lookahead_frames_scaled.pop_front().unwrap();
             match self.cap.read(&mut self.input_frame) {
                 Ok(_) => resize_frame(
                     &self.input_frame,
@@ -290,41 +293,42 @@ impl Source for FramedSource {
         let frame_arr: &[u8] = self.input_frame_scaled.data_bytes().unwrap();
 
         let ref_time = self.video.ref_time as f32;
-        let chunk_rows = max(
-            self.video.height as usize / rayon::current_num_threads() as usize,
-            1,
-        );
         let px_per_chunk: usize =
-            chunk_rows * self.video.width as usize * self.video.channels as usize;
-        let big_buffer: Vec<_> = self
+            self.video.chunk_rows * self.video.width as usize * self.video.channels as usize;
+
+        // Important: if framing the events simultaneously, then the chunk division must be
+        // exactly the same as it is for the framer
+        let big_buffer: Vec<Vec<Event>> = self
             .video
-            // .event_pixels
             .event_pixel_trees
-            .axis_chunks_iter_mut(Axis(0), chunk_rows)
+            .axis_chunks_iter_mut(Axis(0), self.video.chunk_rows)
             .into_par_iter()
             .enumerate()
             .map(|(chunk_idx, mut chunk)| {
                 let mut buffer: Vec<Event> = Vec::with_capacity(px_per_chunk);
-                // let mut events = vec![];
+                let bump = Bump::new();
+                let mut base_val = bump.alloc(0);
+                let px_idx = bump.alloc(0);
+                let frame_val = bump.alloc(0);
+
                 for (chunk_px_idx, px) in chunk.iter_mut().enumerate() {
-                    let px_idx = chunk_px_idx + px_per_chunk * chunk_idx;
-                    let frame_val: u8 = frame_arr[px_idx];
+                    *px_idx = chunk_px_idx + px_per_chunk * chunk_idx;
+                    *frame_val = frame_arr[*px_idx];
                     if px.need_to_pop_top {
-                        let event = px.pop_top_event(Some(frame_val as Intensity));
-                        buffer.push(event);
+                        buffer.push(px.pop_top_event(Some(*frame_val as Intensity)));
                     }
 
-                    let base_val = &mut px.base_val;
+                    base_val = &mut px.base_val;
 
-                    if frame_val < base_val.saturating_sub(self.c_thresh_neg)
-                        || frame_val > base_val.saturating_add(self.c_thresh_pos)
+                    if *frame_val < base_val.saturating_sub(self.c_thresh_neg)
+                        || *frame_val > base_val.saturating_add(self.c_thresh_pos)
                     {
-                        px.pop_best_events(Some(frame_val as Intensity), &mut buffer);
-                        px.base_val = frame_val;
+                        px.pop_best_events(Some(*frame_val as Intensity), &mut buffer);
+                        px.base_val = *frame_val;
                     }
 
                     px.integrate(
-                        frame_val as Intensity,
+                        *frame_val as Intensity,
                         ref_time,
                         &FramePerfect,
                         &self.video.delta_t_max,
