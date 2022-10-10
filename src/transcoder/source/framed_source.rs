@@ -250,13 +250,11 @@ impl Source for FramedSource {
                 }
             };
 
-            // self.buffer_tx.send(1).unwrap();
             self.last_input_frame_scaled = self.input_frame_scaled.clone();
 
             let frame_arr = self.input_frame_scaled.data_bytes().unwrap();
 
             self.video
-                // .event_pixels
                 .event_pixel_trees
                 .iter_mut()
                 .enumerate()
@@ -267,11 +265,6 @@ impl Source for FramedSource {
                     px.base_val = intensity;
                 });
         } else {
-            // swap(
-            //     &mut self.last_input_frame_scaled,
-            //     &mut self.input_frame_scaled,
-            // );
-            // self.input_frame_scaled = self.lookahead_frames_scaled.pop_front().unwrap();
             match self.cap.read(&mut self.input_frame) {
                 Ok(_) => resize_frame(
                     &self.input_frame,
@@ -303,7 +296,7 @@ impl Source for FramedSource {
         let px_per_chunk: usize =
             self.video.chunk_rows * self.video.width as usize * self.video.channels as usize;
 
-        // Imporant: if framing the events simultaneously, then the chunk division must be
+        // Important: if framing the events simultaneously, then the chunk division must be
         // exactly the same as it is for the framer
         let big_buffer: Vec<Vec<Event>> = self
             .video

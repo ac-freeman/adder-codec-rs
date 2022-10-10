@@ -92,7 +92,6 @@ fn bench_simul_proc_dark() {
 fn bench_simul_proc_drop(scale: f64, chunk_rows: usize) {
     let path_str = "./benches/run/drop.mp4";
     let video_url = "https://www.pexels.com/video/2603664/download/";
-    dbg!("before async");
     let mut rt = tokio::runtime::Runtime::new().unwrap();
     rt.block_on(download_file(path_str, video_url))
         .expect("TODO: panic message");
@@ -102,16 +101,11 @@ fn bench_simul_proc_drop(scale: f64, chunk_rows: usize) {
 fn bench(c: &mut Criterion<Perf>) {
     let mut group = c.benchmark_group("simul_proc");
 
-    // group.bench_function(BenchmarkId::new("simul_proc_dark", "dark"), |b| {
-    //     b.iter(|| bench_simul_proc_dark())
-    // });
-
     for r in [1, 32, 64, 128, 256, 512].iter() {
         // for i in [0.1_f64, 0.5, 1.0].iter() {
         for i in [0.5_f64].iter() {
             let function_name = "chunks ".to_owned() + r.to_string().as_str() + ";";
             let id = BenchmarkId::new(function_name, i);
-            // let func = |b, i| b.iter(|| bench_simul_proc_drop(i));
 
             group.bench_with_input(id, i, |b: &mut Bencher<Perf>, i| {
                 b.iter(|| bench_simul_proc_drop(*i, *r))
