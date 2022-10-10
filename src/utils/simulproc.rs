@@ -117,8 +117,8 @@ impl SimulProcessor {
             .build()
             .unwrap();
         let thread_pool_transcoder = rayon::ThreadPoolBuilder::new()
-            // .num_threads(max(num_threads / 2, 1))
-            .num_threads(1)
+            .num_threads(max(num_threads / 2, 1))
+            // .num_threads(1)
             .build()
             .unwrap();
         let reconstructed_frame_rate = fps;
@@ -201,12 +201,12 @@ impl SimulProcessor {
         loop {
             match self.thread_pool.install(|| self.source.consume(1)) {
                 Ok(events) => {
-                    match self.events_tx.send(events) {
-                        Ok(_) => {}
-                        Err(_) => {
-                            break;
-                        }
-                    };
+                    // match self.events_tx.send(events) {
+                    //     Ok(_) => {}
+                    //     Err(_) => {
+                    //         break;
+                    //     }
+                    // };
                 }
                 Err(e) => {
                     println!("Err: {:?}", e);

@@ -237,6 +237,9 @@ impl Source for FramedSource {
     /// Get pixel-wise intensities directly from source frame, and integrate them with
     /// [`ref_time`](Video::ref_time) (the number of ticks each frame is said to span)
     fn consume(&mut self, view_interval: u32) -> Result<Vec<Vec<Event>>, SourceError> {
+        if self.video.in_interval_count > 500 {
+            return Err(SourceError::NoData);
+        }
         if self.video.in_interval_count == 0 {
             match self.cap.read(&mut self.input_frame) {
                 Ok(_) => resize_frame(
@@ -301,14 +304,14 @@ impl Source for FramedSource {
 
         let ref_time = self.video.ref_time as f32;
         let px_per_chunk: usize =
-            self.video.chunk_rows * self.video.width as usize * self.video.channels as usize;
+            self.video.chunk_rows * self.video.height as usize * self.video.channels as usize;
 
         // Imporant: if framing the events simultaneously, then the chunk division must be
         // exactly the same as it is for the framer
         let big_buffer: Vec<Vec<Event>> = self
             .video
             .event_pixel_trees
-            .axis_chunks_iter_mut(Axis(0), self.video.chunk_rows)
+            .axis_chunks_iter_mut(Axis(1), self.video.chunk_rows)
             .into_par_iter()
             .enumerate()
             .map(|(chunk_idx, mut chunk)| {
@@ -320,6 +323,9 @@ impl Source for FramedSource {
 
                 for (chunk_px_idx, px) in chunk.iter_mut().enumerate() {
                     *px_idx = chunk_px_idx + px_per_chunk * chunk_idx;
+                    *px_idx = px.coord.y as usize * self.video.width as usize * self.video.channels
+                        + px.coord.x as usize * self.video.channels
+                        + px.coord.c.unwrap_or(0) as usize;
                     *frame_val = frame_arr[*px_idx];
                     if px.need_to_pop_top {
                         buffer.push(px.pop_top_event(Some(*frame_val as Intensity)));

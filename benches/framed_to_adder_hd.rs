@@ -7,6 +7,7 @@ use adder_codec_rs::transcoder::source::framed_source::FramedSourceBuilder;
 use adder_codec_rs::transcoder::source::video::Source;
 use adder_codec_rs::utils::simulproc::{SimulProcArgs, SimulProcessor};
 use adder_codec_rs::SourceCamera::FramedU8;
+use rayon::current_num_threads;
 use std::fs;
 use std::fs::File;
 use std::io::Cursor;
@@ -100,7 +101,8 @@ fn bench_simul_proc_drop(scale: f64, chunk_rows: usize) {
 }
 
 fn bench(c: &mut Criterion<Perf>) {
-    let mut group = c.benchmark_group("simul_proc");
+    println!("{} THREADS", current_num_threads());
+    let mut group = c.benchmark_group("simul_proc_horiz_1080");
 
     // group.bench_function(BenchmarkId::new("simul_proc_dark", "dark"), |b| {
     //     b.iter(|| bench_simul_proc_dark())
