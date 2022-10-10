@@ -161,6 +161,7 @@ mod tests {
             thread_count: 1, // Multithreading causes some issues in testing
         };
         let mut source_builder = FramedSourceBuilder::new(args.input_filename, FramedU8)
+            .chunk_rows(64)
             .frame_start(args.frame_idx_start)
             .scale(args.scale)
             .communicate_events(true)

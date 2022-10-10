@@ -257,7 +257,7 @@ impl<T: Clone + Default + FrameValue<Output = T> + Copy + Serialize + Send + Syn
     ///
     /// let mut frame_sequence: FrameSequence<u8> =
     /// FramerBuilder::new(
-    ///             10, 10, 3)
+    ///             10, 10, 3, 64)
     ///             .codec_version(1)
     ///             .time_parameters(50000, 1500, 50)
     ///             .mode(INSTANTANEOUS)

@@ -55,6 +55,7 @@ fn test_sample_perfect_dt() {
         stream.height.into(),
         stream.width.into(),
         stream.channels.into(),
+        64,
     )
     .codec_version(stream.codec_version)
     .time_parameters(stream.tps, stream.ref_interval, reconstructed_frame_rate)
@@ -119,6 +120,7 @@ fn test_sample_perfect_dt_color() {
         stream.height.into(),
         stream.width.into(),
         stream.channels.into(),
+        64,
     )
     .codec_version(stream.codec_version)
     .time_parameters(stream.tps, stream.ref_interval, reconstructed_frame_rate)
@@ -317,7 +319,7 @@ fn test_event_framer_ingest() {
     use adder_codec_rs::framer::event_framer::{EventCoordless, FrameSequence, Framer};
     use adder_codec_rs::{Coord, Event};
 
-    let mut frame_sequence: FrameSequence<EventCoordless> = FramerBuilder::new(10, 10, 3)
+    let mut frame_sequence: FrameSequence<EventCoordless> = FramerBuilder::new(10, 10, 3, 64)
         .codec_version(1)
         .time_parameters(50000, 1000, 50)
         .mode(INSTANTANEOUS)
@@ -352,7 +354,7 @@ fn test_event_framer_ingest_get_filled() {
     use adder_codec_rs::framer::event_framer::SourceType::U8;
     use adder_codec_rs::framer::event_framer::{EventCoordless, FrameSequence, Framer};
     use adder_codec_rs::{Coord, Event};
-    let mut frame_sequence: FrameSequence<EventCoordless> = FramerBuilder::new(5, 5, 1)
+    let mut frame_sequence: FrameSequence<EventCoordless> = FramerBuilder::new(5, 5, 1, 64)
         .codec_version(1)
         .time_parameters(50000, 1000, 50)
         .mode(INSTANTANEOUS)
@@ -391,7 +393,7 @@ fn get_frame_bytes_eventcoordless() {
     use adder_codec_rs::framer::event_framer::SourceType::U8;
     use adder_codec_rs::framer::event_framer::{EventCoordless, FrameSequence, Framer};
     use adder_codec_rs::{Coord, Event};
-    let mut frame_sequence: FrameSequence<EventCoordless> = FramerBuilder::new(5, 5, 1)
+    let mut frame_sequence: FrameSequence<EventCoordless> = FramerBuilder::new(5, 5, 1, 64)
         .codec_version(1)
         .time_parameters(50000, 1000, 50)
         .mode(INSTANTANEOUS)
@@ -450,7 +452,7 @@ fn get_frame_bytes_u8() {
     use adder_codec_rs::framer::event_framer::SourceType::U8;
     use adder_codec_rs::framer::event_framer::{FrameSequence, Framer};
     use adder_codec_rs::{Coord, Event};
-    let mut frame_sequence: FrameSequence<u8> = FramerBuilder::new(5, 5, 1)
+    let mut frame_sequence: FrameSequence<u8> = FramerBuilder::new(5, 5, 1, 64)
         .codec_version(1)
         .time_parameters(50000, 1000, 50)
         .mode(INSTANTANEOUS)
@@ -508,7 +510,7 @@ fn get_frame_bytes_u16() {
     use adder_codec_rs::framer::event_framer::SourceType::U8;
     use adder_codec_rs::framer::event_framer::{FrameSequence, Framer};
     use adder_codec_rs::{Coord, Event};
-    let mut frame_sequence: FrameSequence<u16> = FramerBuilder::new(5, 5, 1)
+    let mut frame_sequence: FrameSequence<u16> = FramerBuilder::new(5, 5, 1, 64)
         .codec_version(1)
         .time_parameters(50000, 1000, 50)
         .mode(INSTANTANEOUS)
@@ -565,7 +567,7 @@ fn get_frame_bytes_u32() {
     use adder_codec_rs::framer::event_framer::SourceType::U8;
     use adder_codec_rs::framer::event_framer::{FrameSequence, Framer};
     use adder_codec_rs::{Coord, Event};
-    let mut frame_sequence: FrameSequence<u32> = FramerBuilder::new(5, 5, 1)
+    let mut frame_sequence: FrameSequence<u32> = FramerBuilder::new(5, 5, 1, 46)
         .codec_version(1)
         .time_parameters(50000, 1000, 50)
         .mode(INSTANTANEOUS)
@@ -622,7 +624,7 @@ fn get_frame_bytes_u64() {
     use adder_codec_rs::framer::event_framer::SourceType::U8;
     use adder_codec_rs::framer::event_framer::{FrameSequence, Framer};
     use adder_codec_rs::{Coord, Event};
-    let mut frame_sequence: FrameSequence<u64> = FramerBuilder::new(5, 5, 1)
+    let mut frame_sequence: FrameSequence<u64> = FramerBuilder::new(5, 5, 1, 64)
         .codec_version(1)
         .time_parameters(50000, 1000, 50)
         .mode(INSTANTANEOUS)
@@ -679,7 +681,7 @@ fn test_get_empty_frame() {
     use adder_codec_rs::framer::event_framer::SourceType::U8;
     use adder_codec_rs::framer::event_framer::{FrameSequence, Framer};
     use adder_codec_rs::{Coord, Event};
-    let mut frame_sequence: FrameSequence<u8> = FramerBuilder::new(5, 5, 1)
+    let mut frame_sequence: FrameSequence<u8> = FramerBuilder::new(5, 5, 1, 64)
         .codec_version(1)
         .time_parameters(50000, 1000, 50)
         .mode(INSTANTANEOUS)
@@ -728,6 +730,7 @@ fn test_sample_unordered() {
         stream.height.into(),
         stream.width.into(),
         stream.channels.into(),
+        64,
     )
     .codec_version(stream.codec_version)
     .time_parameters(stream.tps, stream.ref_interval, reconstructed_frame_rate)
@@ -791,6 +794,7 @@ fn test_sample_ordered() {
         stream.height.into(),
         stream.width.into(),
         stream.channels.into(),
+        64,
     )
     .codec_version(stream.codec_version)
     .time_parameters(stream.tps, stream.ref_interval, reconstructed_frame_rate)
@@ -844,6 +848,7 @@ fn test_framed_to_adder_bunny4() {
         "./tests/samples/bunny_crop4.mp4".to_string(),
         SourceCamera::FramedU8,
     )
+    .chunk_rows(64)
     .frame_start(360)
     .scale(1.0)
     .communicate_events(true)
