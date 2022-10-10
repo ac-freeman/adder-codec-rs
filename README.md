@@ -48,6 +48,9 @@ We can transcode an arbitrary framed video to the ADΔER format. Run the program
         
         // Which frame of the input video to begin your transcode
         .frame_start(1420)  
+	
+	// How many rows of event pixels per chunk. Chunks are distributed between the number of available threads.
+	.chunk_rows(64)
         
         // Input video is scaled by this amount before transcoding
         .scale(0.5)         
