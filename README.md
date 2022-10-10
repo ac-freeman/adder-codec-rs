@@ -90,7 +90,7 @@ ffmpeg -f rawvideo -pix_fmt gray -s:v 960x540 -r 60 -i ./events.adder -crf 0 -c:
 This is the most thorough example, complete with an argument parser so you don't have to edit the code. Run the program `/src/bin/adder_simulproc.rs`, like this:
 
 ```
-cargo run --release --bin transcode_and_frame_simultaneous -- 
+cargo run --release --bin adder_simulproc -- 
     --scale 1.0 
     --input-filename "/path/to/video"
     --output-raw-video-filename "/path/to/output_video"
