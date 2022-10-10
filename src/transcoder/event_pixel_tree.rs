@@ -120,7 +120,7 @@ impl PixelArena {
             Some(event) => {
                 assert!(self.length > 1);
                 for i in 0..self.length - 1 {
-                    self.arena[i] = self.arena[i + 1].clone();
+                    self.arena[i] = self.arena[i + 1];
                 }
                 self.length -= 1;
                 debug_assert!(self.arena[self.length - 1].alt.is_none());
@@ -521,6 +521,6 @@ mod tests {
         if num1 - slack <= num0 && num1 + slack >= num0 {
             return true;
         }
-        return false;
+        false
     }
 }

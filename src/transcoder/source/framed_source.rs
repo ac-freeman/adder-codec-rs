@@ -6,7 +6,7 @@ use bumpalo::Bump;
 use core::default::Default;
 use rayon::iter::ParallelIterator;
 use rayon::iter::{IndexedParallelIterator, IntoParallelIterator};
-use std::cmp::max;
+
 use std::mem::swap;
 
 use crate::transcoder::source::video::SourceError::*;
@@ -14,7 +14,7 @@ use ndarray::Axis;
 use opencv::core::{Mat, Size};
 use opencv::videoio::{VideoCapture, CAP_PROP_FPS, CAP_PROP_FRAME_COUNT, CAP_PROP_POS_FRAMES};
 use opencv::{imgproc, prelude::*, videoio, Result};
-use rayon::current_num_threads;
+
 
 use crate::transcoder::d_controller::DecimationMode;
 use crate::transcoder::event_pixel_tree::Mode::FramePerfect;

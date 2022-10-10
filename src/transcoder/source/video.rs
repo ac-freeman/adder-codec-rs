@@ -136,7 +136,7 @@ impl Video {
                     .unwrap();
             },
         }
-        let motion_frame_mat = instantaneous_frame.clone();
+        let _motion_frame_mat = instantaneous_frame.clone();
 
         Video {
             width,

@@ -3,7 +3,7 @@ use crate::{BigT, DeltaT, Event, SourceCamera, D};
 use bincode::config::{BigEndian, FixintEncoding, WithOtherEndian, WithOtherIntEncoding};
 use bincode::{DefaultOptions, Options};
 use rayon::iter::ParallelIterator;
-use std::cmp::max;
+
 use std::collections::VecDeque;
 use std::fs::File;
 use std::io::BufWriter;
@@ -169,7 +169,7 @@ pub struct FrameSequence<T> {
 }
 
 use ndarray::Array3;
-use rayon::current_num_threads;
+
 use rayon::prelude::IntoParallelIterator;
 use serde::Serialize;
 

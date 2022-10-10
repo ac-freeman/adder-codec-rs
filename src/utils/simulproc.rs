@@ -3,20 +3,20 @@ use crate::framer::event_framer::SourceType::U8;
 use crate::framer::event_framer::{Framer, FramerBuilder};
 use crate::framer::scale_intensity;
 use crate::framer::scale_intensity::FrameValue;
-use crate::transcoder::source::framed_source::{FramedSource, FramedSourceBuilder};
+use crate::transcoder::source::framed_source::{FramedSource};
 use crate::transcoder::source::video::Source;
 use crate::SourceCamera::FramedU8;
 use crate::{DeltaT, Event};
 use clap::Parser;
-use rayon::{current_num_threads, ThreadPool};
+use rayon::{ThreadPool};
 use serde::Serialize;
 use std::cmp::max;
 use std::error::Error;
 use std::fs::File;
 use std::io;
-use std::io::{BufWriter, Cursor, Write};
-use std::path::Path;
-use std::process::Command;
+use std::io::{BufWriter, Write};
+
+
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::time::Instant;
 

@@ -1,27 +1,27 @@
 extern crate core;
 
-use adder_codec_rs::framer::event_framer::FramerMode::INSTANTANEOUS;
-use adder_codec_rs::framer::event_framer::SourceType::U8;
-use adder_codec_rs::framer::event_framer::{Framer, FramerBuilder};
-use adder_codec_rs::framer::scale_intensity;
-use adder_codec_rs::framer::scale_intensity::FrameValue;
-use adder_codec_rs::transcoder::source::framed_source::{FramedSource, FramedSourceBuilder};
+
+
+use adder_codec_rs::framer::event_framer::{Framer};
+
+
+use adder_codec_rs::transcoder::source::framed_source::{FramedSourceBuilder};
 use adder_codec_rs::transcoder::source::video::Source;
 use adder_codec_rs::utils::simulproc::{SimulProcArgs, SimulProcessor};
 use adder_codec_rs::SourceCamera::FramedU8;
-use adder_codec_rs::{DeltaT, Event};
+
 use clap::Parser;
-use rayon::{current_num_threads, ThreadPool};
-use serde::Serialize;
-use std::cmp::max;
+use rayon::{current_num_threads};
+
+
 use std::error::Error;
 use std::fs::File;
-use std::io;
-use std::io::{BufWriter, Cursor, Write};
+
+use std::io::{Cursor};
 use std::path::Path;
 use std::process::Command;
-use std::sync::mpsc::{channel, Receiver, Sender};
-use std::time::Instant;
+
+
 
 #[allow(dead_code)]
 async fn download_file() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {

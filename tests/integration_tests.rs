@@ -898,9 +898,9 @@ fn array3_test() {
     let height = 6_usize;
     let width = 6_usize;
     let channels = 3_usize;
-    for y in 0..height {
-        for x in 0..width {
-            for c in 0..channels {
+    for _y in 0..height {
+        for _x in 0..width {
+            for _c in 0..channels {
                 let px = 0;
                 data.push(px);
             }
@@ -908,7 +908,7 @@ fn array3_test() {
     }
 
     let mut event_pixel_trees: Array3<i32> =
-        Array3::from_shape_vec((height.into(), width.into(), channels), data).unwrap();
+        Array3::from_shape_vec((height, width, channels), data).unwrap();
     let tmp = event_pixel_trees
         .axis_chunks_iter_mut(Axis(0), 4)
         .enumerate()
@@ -918,7 +918,7 @@ fn array3_test() {
     let ret: Vec<i32> = event_pixel_trees
         .axis_chunks_iter_mut(Axis(0), 4)
         .enumerate()
-        .map(|(chunk_idx, mut chunk)| {
+        .map(|(chunk_idx, chunk)| {
             if chunk_idx == 0 {
                 assert_eq!(chunk.len(), 72);
             }
