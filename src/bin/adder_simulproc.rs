@@ -1,27 +1,19 @@
 extern crate core;
 
-
-
-use adder_codec_rs::framer::event_framer::{Framer};
-
-
-use adder_codec_rs::transcoder::source::framed_source::{FramedSourceBuilder};
+use adder_codec_rs::transcoder::source::framed_source::FramedSourceBuilder;
 use adder_codec_rs::transcoder::source::video::Source;
 use adder_codec_rs::utils::simulproc::{SimulProcArgs, SimulProcessor};
 use adder_codec_rs::SourceCamera::FramedU8;
 
 use clap::Parser;
-use rayon::{current_num_threads};
-
+use rayon::current_num_threads;
 
 use std::error::Error;
 use std::fs::File;
 
-use std::io::{Cursor};
+use std::io::Cursor;
 use std::path::Path;
 use std::process::Command;
-
-
 
 #[allow(dead_code)]
 async fn download_file() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
