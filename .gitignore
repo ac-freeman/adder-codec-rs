@@ -18,3 +18,4 @@ Cargo.lock
 #Cargo.lock
 
 /tests/samples/videos/*
+/benches/run/*.mp4
