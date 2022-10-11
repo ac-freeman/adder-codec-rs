@@ -3,12 +3,12 @@ use crate::framer::event_framer::SourceType::U8;
 use crate::framer::event_framer::{Framer, FramerBuilder};
 use crate::framer::scale_intensity;
 use crate::framer::scale_intensity::FrameValue;
-use crate::transcoder::source::framed_source::{FramedSource};
+use crate::transcoder::source::framed_source::FramedSource;
 use crate::transcoder::source::video::Source;
 use crate::SourceCamera::FramedU8;
 use crate::{DeltaT, Event};
 use clap::Parser;
-use rayon::{ThreadPool};
+use rayon::ThreadPool;
 use serde::Serialize;
 use std::cmp::max;
 use std::error::Error;
@@ -16,14 +16,17 @@ use std::fs::File;
 use std::io;
 use std::io::{BufWriter, Write};
 
-
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::time::Instant;
 
 /// Command line argument parser
-#[derive(Parser, Debug, Default)]
+#[derive(Parser, Debug, Default, serde::Deserialize)]
 #[clap(author, version, about, long_about = None)]
 pub struct SimulProcArgs {
+    /// Filename for args (optional; must be in .toml format)
+    #[clap(short, long, default_value = "")]
+    pub args_filename: String,
+
     /// Use color? (For framed input, most likely) (1=yes,0=no)
     #[clap(long, default_value_t = 1)]
     pub color_input: u32,

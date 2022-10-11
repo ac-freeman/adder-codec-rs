@@ -15,10 +15,9 @@ use opencv::core::{Mat, Size};
 use opencv::videoio::{VideoCapture, CAP_PROP_FPS, CAP_PROP_FRAME_COUNT, CAP_PROP_POS_FRAMES};
 use opencv::{imgproc, prelude::*, videoio, Result};
 
-
 use crate::transcoder::d_controller::DecimationMode;
 use crate::transcoder::event_pixel_tree::Mode::FramePerfect;
-use crate::transcoder::event_pixel_tree::{DeltaT, Intensity};
+use crate::transcoder::event_pixel_tree::{DeltaT, Intensity_32};
 use crate::SourceCamera;
 
 #[derive(Debug, Copy, Clone)]
@@ -315,7 +314,7 @@ impl Source for FramedSource {
                     *px_idx = chunk_px_idx + px_per_chunk * chunk_idx;
                     *frame_val = frame_arr[*px_idx];
                     if px.need_to_pop_top {
-                        buffer.push(px.pop_top_event(Some(*frame_val as Intensity)));
+                        buffer.push(px.pop_top_event(Some(*frame_val as Intensity_32)));
                     }
 
                     base_val = &mut px.base_val;
@@ -323,12 +322,12 @@ impl Source for FramedSource {
                     if *frame_val < base_val.saturating_sub(self.c_thresh_neg)
                         || *frame_val > base_val.saturating_add(self.c_thresh_pos)
                     {
-                        px.pop_best_events(Some(*frame_val as Intensity), &mut buffer);
+                        px.pop_best_events(Some(*frame_val as Intensity_32), &mut buffer);
                         px.base_val = *frame_val;
                     }
 
                     px.integrate(
-                        *frame_val as Intensity,
+                        *frame_val as Intensity_32,
                         ref_time,
                         &FramePerfect,
                         &self.video.delta_t_max,

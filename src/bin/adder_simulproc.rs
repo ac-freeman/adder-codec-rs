@@ -39,7 +39,11 @@ async fn download_file() -> Result<(), Box<dyn std::error::Error + Send + Sync>>
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    let args: SimulProcArgs = SimulProcArgs::parse();
+    let mut args: SimulProcArgs = SimulProcArgs::parse();
+    if !args.args_filename.is_empty() {
+        let content = std::fs::read_to_string(args.args_filename)?;
+        args = toml::from_str(&content).unwrap();
+    }
     println!("c_pos: {}, c_neg: {}", args.c_thresh_pos, args.c_thresh_neg);
 
     //////////////////////////////////////////////////////

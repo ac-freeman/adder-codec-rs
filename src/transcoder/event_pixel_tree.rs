@@ -11,7 +11,7 @@ pub type D = u8;
 pub type DeltaT = u32;
 
 /// Measure of an amount of light intensity
-pub type Intensity = f32;
+pub type Intensity_32 = f32;
 
 /// Pixel x- or y- coordinate address in the ADΔER model
 // pub type PixelAddress = u16;
@@ -24,7 +24,7 @@ pub enum Mode {
 #[derive(Copy, Clone, Debug)]
 struct PixelState {
     d: D,
-    integration: Intensity,
+    integration: Intensity_32,
     delta_t: f32,
 }
 
@@ -35,7 +35,7 @@ pub struct PixelNode {
     alt: Option<()>,
 
     state: PixelState,
-    best_event: Option<Event>,
+    pub best_event: Option<Event>, // TODO: make private
 }
 
 // Each PixelNode is ~20 bytes. Each PixelArena is at least 20 + (6*20) 140 bytes, but takes at
@@ -49,7 +49,7 @@ pub struct PixelArena {
 }
 
 impl PixelArena {
-    pub(crate) fn new(start_intensity: Intensity, coord: Coord) -> PixelArena {
+    pub(crate) fn new(start_intensity: Intensity_32, coord: Coord) -> PixelArena {
         // let mut arena = Vec::with_capacity(5);
         let mut arena = smallvec![];
         arena.push(PixelNode::new(start_intensity));
@@ -62,7 +62,7 @@ impl PixelArena {
         }
     }
 
-    fn get_zero_event(&mut self, idx: usize, next_intensity: Option<Intensity>) -> Event {
+    fn get_zero_event(&mut self, idx: usize, next_intensity: Option<Intensity_32>) -> Event {
         let mut node = &mut self.arena[idx];
         let ret_event = Event {
             coord: self.coord,
@@ -79,7 +79,7 @@ impl PixelArena {
     }
 
     /// Pop just the topmost event. Should be called only when dtm is reached for main node
-    pub fn pop_top_event(&mut self, next_intensity: Option<Intensity>) -> Event {
+    pub fn pop_top_event(&mut self, next_intensity: Option<Intensity_32>) -> Event {
         let mut root = &mut self.arena[0];
         match root.best_event {
             None => {
@@ -131,7 +131,11 @@ impl PixelArena {
     }
 
     /// Recursively pop all the alt events
-    pub fn pop_best_events(&mut self, next_intensity: Option<Intensity>, buffer: &mut Vec<Event>) {
+    pub fn pop_best_events(
+        &mut self,
+        next_intensity: Option<Intensity_32>,
+        buffer: &mut Vec<Event>,
+    ) {
         // let mut events = Vec::new();
 
         for node_idx in 0..self.length {
@@ -171,7 +175,7 @@ impl PixelArena {
     /// extremely rare, or when delta_t_max is hit
     pub fn integrate(
         &mut self,
-        mut intensity: Intensity,
+        mut intensity: Intensity_32,
         mut time: f32,
         mode: &Mode,
         dtm: &DeltaT,
@@ -218,10 +222,10 @@ impl PixelArena {
     pub fn integrate_main(
         &mut self,
         index: usize,
-        intensity: Intensity,
+        intensity: Intensity_32,
         time: f32,
         mode: &Mode,
-    ) -> Option<(Intensity, f32)> {
+    ) -> Option<(Intensity_32, f32)> {
         let node = &mut self.arena[index];
         if node.state.integration + intensity >= D_SHIFT[node.state.d as usize] as f32 {
             let prop =
@@ -244,7 +248,7 @@ impl PixelArena {
                     }
                 }
             } else {
-                // dbg!(self.state.integration);
+                // dbg!(node.state.integration);
             }
 
             if intensity - (intensity * prop) >= 0.0 {
@@ -266,7 +270,7 @@ impl PixelArena {
     }
 }
 
-fn get_d_from_intensity(intensity: Intensity) -> D {
+fn get_d_from_intensity(intensity: Intensity_32) -> D {
     match intensity > 0.0 {
         true => fast_math::log2_raw(intensity) as D,
         false => 0,
@@ -274,7 +278,7 @@ fn get_d_from_intensity(intensity: Intensity) -> D {
 }
 
 impl PixelNode {
-    pub fn new(start_intensity: Intensity) -> PixelNode {
+    pub fn new(start_intensity: Intensity_32) -> PixelNode {
         let start_d = get_d_from_intensity(start_intensity);
         assert!(start_d <= D_MAX);
         PixelNode {

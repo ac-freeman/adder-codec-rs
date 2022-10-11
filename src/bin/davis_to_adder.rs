@@ -25,10 +25,13 @@ pub struct Args {
     /// Path to output events file
     #[clap(long, default_value = "")]
     pub output_events_filename: String,
+
+    /// Show live view displays? (1=yes,0=no)
+    #[clap(short, long, default_value_t = 0)]
+    pub show_display: u32,
 }
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn error::Error>> {
+fn main() -> Result<(), Box<dyn error::Error>> {
     let mut args: Args = Args::parse();
     if !args.args_filename.is_empty() {
         let content = std::fs::read_to_string(args.args_filename)?;
@@ -47,7 +50,8 @@ async fn main() -> Result<(), Box<dyn error::Error>> {
         args = toml::from_str(&content).unwrap();
     }
 
-    let mut reconstructor = Reconstructor::new(
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let mut reconstructor = rt.block_on(Reconstructor::new(
         edi_args.base_path,
         edi_args.events_filename_0,
         edi_args.events_filename_1,
@@ -61,15 +65,14 @@ async fn main() -> Result<(), Box<dyn error::Error>> {
         Compression::None,
         346,
         260,
-    )
-    .await;
+    ));
 
     let mut davis_source = DavisSource::new(
         reconstructor,
         Some(args.output_events_filename),
         (edi_args.output_fps * 5000.0) as u32,
         (edi_args.output_fps * 5000.0) as u32,
-        true,
+        args.show_display != 0,
     )
     .unwrap();
 

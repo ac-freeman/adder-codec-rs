@@ -1,3 +1,4 @@
 args_filename = ""
 edi_args_filename = "./src/bin/args/edi_args.toml"
 output_events_filename = "/home/andrew/Downloads/davis.adder"
+show_display = 1
