@@ -610,7 +610,7 @@ fn ingest_event_for_chunk<
             SourceCamera::FramedF32 => true,
             SourceCamera::FramedF64 => true,
             SourceCamera::Dvs => false,
-            SourceCamera::DavisU8 => false,
+            SourceCamera::DavisU8 => false, // TODO: switch statement on the transcode MODE (frame-perfect or continuous), not just the source
             SourceCamera::Atis => false,
             SourceCamera::Asint => false,
         }

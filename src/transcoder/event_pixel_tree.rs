@@ -201,6 +201,8 @@ impl PixelArena {
                     self.arena[idx].alt = Some(());
                     intensity = next_intensity;
                     time = next_time;
+
+                    // TODO: Fix for continuous mode
                     match mode {
                         FramePerfect => break,
                         Continuous => {}
