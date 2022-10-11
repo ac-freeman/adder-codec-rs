@@ -1,7 +1,7 @@
 use crate::transcoder::source::video::Source;
 use crate::transcoder::source::video::Video;
 use crate::transcoder::source::video::{show_display, SourceError};
-use crate::{Codec, Coord, Event, D};
+use crate::{Codec, Coord, Event, SourceType, D};
 use bumpalo::Bump;
 use core::default::Default;
 use rayon::iter::ParallelIterator;
@@ -9,6 +9,7 @@ use rayon::iter::{IndexedParallelIterator, IntoParallelIterator};
 
 use std::mem::swap;
 
+use crate::framer::scale_intensity::FrameValue;
 use crate::transcoder::source::video::SourceError::*;
 use ndarray::Axis;
 use opencv::core::{Mat, Size};
@@ -342,7 +343,20 @@ impl Source for FramedSource {
         }
 
         show_display("Gray input", &self.input_frame_scaled, 1, &self.video);
-        self.video.instantaneous_display_frame = (self.input_frame_scaled).clone();
+        // self.video.instantaneous_display_frame = (self.input_frame_scaled).clone();
+
+        // for r in 0..self.video.height as i32 {
+        //     for c in 0..self.video.width as i32 {
+        //         let inst_px: &mut u8 = self.video.instantaneous_frame.at_2d_mut(r, c).unwrap();
+        //         let px = &mut self.video.event_pixel_trees[[r as usize, c as usize, 0]];
+        //         *inst_px = match px.arena[0].best_event.clone() {
+        //             Some(event) => u8::get_frame_value(&event, SourceType::U8, ref_time as DeltaT),
+        //             None => 0,
+        //         };
+        //     }
+        // }
+        // show_display("instance", &self.video.instantaneous_frame, 1, &self.video);
+
         Ok(big_buffer)
     }
 

@@ -10,7 +10,7 @@ use bumpalo::Bump;
 use davis_edi_rs::util::reconstructor::Reconstructor;
 use davis_edi_rs::*;
 use ndarray::Axis;
-use opencv::core::Mat;
+use opencv::core::{Mat, CV_8U};
 use opencv::{imgproc, prelude::*, videoio, Result};
 use rayon::iter::IndexedParallelIterator;
 use rayon::iter::IntoParallelIterator;
@@ -116,11 +116,17 @@ impl Source for DavisSource {
         let mut frame_arr = Vec::with_capacity(
             self.video.width as usize * self.video.height as usize * self.video.channels,
         );
+        let mut image_8u = Mat::default();
+        self.input_frame_scaled
+            .clone()
+            .convert_to(&mut image_8u, CV_8U, 255.0, 0.0)
+            .unwrap();
         unsafe {
-            for idx in 0..self.video.height as i32 * self.video.width as i32 {
-                let val: *const u8 =
-                    self.input_frame_scaled.at_unchecked(idx).unwrap() as *const u8;
-                frame_arr.push(*val);
+            for r in 0..self.video.height as i32 {
+                for c in 0..self.video.width as i32 {
+                    let val: *const u8 = image_8u.at_2d(r, c).unwrap() as *const u8;
+                    frame_arr.push(*val);
+                }
             }
         }
 
@@ -165,7 +171,7 @@ impl Source for DavisSource {
                     px.integrate(
                         *frame_val as Intensity_32,
                         ref_time,
-                        &FramePerfect,
+                        &Continuous,
                         &self.video.delta_t_max,
                     );
                 }
