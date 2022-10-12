@@ -200,7 +200,7 @@ impl SimulProcessor {
         let mut now = Instant::now();
 
         loop {
-            match self.thread_pool.install(|| self.source.consume(1)) {
+            match self.source.consume(1, &self.thread_pool) {
                 Ok(events) => {
                     match self.events_tx.send(events) {
                         Ok(_) => {}

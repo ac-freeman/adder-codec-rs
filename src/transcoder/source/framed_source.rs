@@ -15,6 +15,7 @@ use ndarray::Axis;
 use opencv::core::{Mat, Size};
 use opencv::videoio::{VideoCapture, CAP_PROP_FPS, CAP_PROP_FRAME_COUNT, CAP_PROP_POS_FRAMES};
 use opencv::{imgproc, prelude::*, videoio, Result};
+use rayon::ThreadPool;
 
 use crate::transcoder::d_controller::DecimationMode;
 use crate::transcoder::event_pixel_tree::Mode::{Continuous, FramePerfect};
@@ -236,7 +237,11 @@ impl FramedSource {
 impl Source for FramedSource {
     /// Get pixel-wise intensities directly from source frame, and integrate them with
     /// [`ref_time`](Video::ref_time) (the number of ticks each frame is said to span)
-    fn consume(&mut self, view_interval: u32) -> Result<Vec<Vec<Event>>, SourceError> {
+    fn consume(
+        &mut self,
+        view_interval: u32,
+        thread_pool: &ThreadPool,
+    ) -> Result<Vec<Vec<Event>>, SourceError> {
         if self.video.in_interval_count == 0 {
             match self.cap.read(&mut self.input_frame) {
                 Ok(_) => resize_frame(

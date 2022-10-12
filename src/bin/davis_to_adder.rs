@@ -50,7 +50,10 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         args = toml::from_str(&content).unwrap();
     }
 
-    let rt = tokio::runtime::Runtime::new().unwrap();
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(12)
+        .build()
+        .unwrap();
     let mut reconstructor = rt.block_on(Reconstructor::new(
         edi_args.base_path,
         edi_args.events_filename_0,
@@ -73,13 +76,18 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         (edi_args.output_fps * 5000.0) as u32,
         (edi_args.output_fps * 5000.0) as u32,
         args.show_display != 0,
+        rt,
     )
     .unwrap();
 
     let mut now = Instant::now();
+    let thread_pool_integration = rayon::ThreadPoolBuilder::new()
+        .num_threads(4)
+        .build()
+        .unwrap();
 
     loop {
-        match davis_source.consume(1) {
+        match davis_source.consume(1, &thread_pool_integration) {
             Ok(events) => {}
             Err(e) => {
                 println!("Err: {:?}", e);
