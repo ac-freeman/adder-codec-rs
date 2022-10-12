@@ -9,7 +9,7 @@ use crate::{Codec, DeltaT, Event, SourceType};
 use bumpalo::Bump;
 use davis_edi_rs::util::reconstructor::Reconstructor;
 use davis_edi_rs::*;
-use ndarray::Axis;
+use ndarray::{Axis, Ix};
 use opencv::core::{parallel_for_, Mat, CV_8U};
 use opencv::{imgproc, prelude::*, videoio, Result};
 use rayon::iter::IntoParallelIterator;
@@ -114,16 +114,15 @@ impl Source for DavisSource {
         if self.video.in_interval_count == 0 {
             let frame_arr = self.input_frame_scaled.data_bytes().unwrap();
 
-            self.video
-                .event_pixel_trees
-                .iter_mut()
-                .enumerate()
-                .for_each(|(idx, px)| {
-                    let intensity = frame_arr[idx];
-                    let d_start = (intensity as f32).log2().floor() as D;
-                    px.arena[0].set_d(d_start);
-                    px.base_val = intensity;
-                });
+            self.video.event_pixel_trees.par_map_inplace(|px| {
+                let iidx = px.coord.y as usize * self.video.width as usize * self.video.channels
+                    + px.coord.x as usize * self.video.channels
+                    + px.coord.c.unwrap_or(0) as usize;
+                let intensity = frame_arr[iidx];
+                let d_start = (intensity as f32).log2().floor() as D;
+                px.arena[0].set_d(d_start);
+                px.base_val = intensity;
+            });
         }
 
         self.video.in_interval_count += 1;
