@@ -56,8 +56,8 @@ impl DavisSource {
         let davis_source = DavisSource {
             reconstructor,
             input_frame_scaled: Mat::default(),
-            c_thresh_pos: 15, // TODO
-            c_thresh_neg: 15, // TODO
+            c_thresh_pos: 0, // TODO
+            c_thresh_neg: 0, // TODO
             video,
             image_8u: Mat::default(),
         };
@@ -86,7 +86,7 @@ impl Source for DavisSource {
         self.input_frame_scaled = mat_opt.unwrap();
 
         // Copied from framed_source.rs. TODO: break out the common code and share it
-        if self.video.in_interval_count == 0 {
+        if self.video.in_interval_count == 1000 {
             let frame_arr = self.input_frame_scaled.data_bytes().unwrap();
 
             self.video
@@ -102,6 +102,11 @@ impl Source for DavisSource {
         }
 
         self.video.in_interval_count += 1;
+
+        if self.video.in_interval_count <= 1000 {
+            return Ok(vec![vec![]]);
+        }
+
         if self.video.in_interval_count % view_interval == 0 {
             self.video.show_live = true;
         } else {
@@ -153,7 +158,12 @@ impl Source for DavisSource {
 
                 for (chunk_px_idx, px) in chunk.iter_mut().enumerate() {
                     *px_idx = chunk_px_idx + px_per_chunk * chunk_idx;
+
                     *frame_val = frame_arr[*px_idx];
+
+                    if px.coord.x == 100 && px.coord.y == 90 {
+                        // dbg!(*frame_val);
+                    }
 
                     if px.need_to_pop_top {
                         buffer.push(px.pop_top_event(Some(*frame_val as Intensity_32)));
@@ -166,6 +176,13 @@ impl Source for DavisSource {
                     {
                         px.pop_best_events(Some(*frame_val as Intensity_32), &mut buffer);
                         px.base_val = *frame_val;
+
+                        // If continuous mode and the D value needs to be different now
+                        // TODO: make it modular
+                        match px.set_d_for_continuous(*frame_val as Intensity_32) {
+                            None => {}
+                            Some(event) => buffer.push(event),
+                        };
                     }
 
                     px.integrate(

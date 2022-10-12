@@ -17,7 +17,7 @@ use opencv::videoio::{VideoCapture, CAP_PROP_FPS, CAP_PROP_FRAME_COUNT, CAP_PROP
 use opencv::{imgproc, prelude::*, videoio, Result};
 
 use crate::transcoder::d_controller::DecimationMode;
-use crate::transcoder::event_pixel_tree::Mode::FramePerfect;
+use crate::transcoder::event_pixel_tree::Mode::{Continuous, FramePerfect};
 use crate::transcoder::event_pixel_tree::{DeltaT, Intensity_32};
 use crate::SourceCamera;
 
@@ -330,7 +330,7 @@ impl Source for FramedSource {
                     px.integrate(
                         *frame_val as Intensity_32,
                         ref_time,
-                        &FramePerfect,
+                        &Continuous,
                         &self.video.delta_t_max,
                     );
                 }
