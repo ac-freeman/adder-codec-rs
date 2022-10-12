@@ -170,6 +170,26 @@ impl PixelArena {
         };
     }
 
+    pub fn set_d_for_continuous(&mut self, next_intensity: Intensity_32) -> Option<Event> {
+        let head = &mut self.arena[0];
+        let next_d = get_d_from_intensity(next_intensity);
+        let ret = match next_d < head.state.d && head.state.delta_t > 0.0 {
+            true => {
+                let ret = Some(Event {
+                    coord: self.coord,
+                    d: 0xFF,
+                    delta_t: (head.state.delta_t) as DeltaT,
+                });
+                head.state.delta_t = 0.0;
+                head.state.integration = 0.0;
+                ret
+            }
+            false => None,
+        };
+        head.state.d = next_d;
+        ret
+    }
+
     /// Integrates the intensity. Returns bool indicating whether or not the topmost event MUST be popped
     /// or else risk losing accuracy. Should only return true when d=D_MAX, which should be
     /// extremely rare, or when delta_t_max is hit
@@ -187,8 +207,8 @@ impl PixelArena {
 
         let mut idx = 0;
         loop {
-            match self.integrate_main(idx, intensity, time, mode) {
-                None => {}
+            let filled = match self.integrate_main(idx, intensity, time, mode) {
+                None => false,
                 Some((next_intensity, next_time)) => {
                     // self.arena.drain(idx + 1..);
                     match self.arena.len() > idx + 1 {
@@ -201,15 +221,25 @@ impl PixelArena {
                     self.arena[idx].alt = Some(());
                     intensity = next_intensity;
                     time = next_time;
+                    true
+                }
+            };
 
-                    // TODO: Fix for continuous mode
-                    match mode {
-                        FramePerfect => break,
-                        Continuous => {}
+            idx += 1;
+
+            if filled {
+                // TODO: Fix for continuous mode
+                match mode {
+                    FramePerfect => break,
+
+                    // If continuous, we need to integrate the remaining intensity for the current
+                    // node and the branching nodes
+                    Continuous => {
+                        // idx -= 1
                     }
                 }
             }
-            idx += 1;
+
             if idx >= self.length {
                 break;
             }
@@ -221,6 +251,8 @@ impl PixelArena {
             self.arena[0].state.d == D_MAX || self.arena[0].state.delta_t as DeltaT >= *dtm;
     }
 
+    /// Integrate an intensity for a given node. Returns `Some()` if the node fires an event, so
+    /// that the newly-created branch's node only gets integrated with the remaining intensity.
     pub fn integrate_main(
         &mut self,
         index: usize,

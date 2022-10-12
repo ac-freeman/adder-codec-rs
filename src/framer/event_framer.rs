@@ -546,6 +546,7 @@ fn ingest_event_for_chunk<
                 }
             }
             _ => {
+                // Set the frame's value from the event
                 let scaled_intensity: T = T::get_frame_value(event, source, tpf);
                 *last_filled_frame_ref = (*running_ts_ref - 1) as i64 / tpf as i64;
 
@@ -603,7 +604,7 @@ fn ingest_event_for_chunk<
     // If framed video source, we can take advantage of scheme that reduces event rate by half
     if codec_version > 0
         && match source_camera {
-            SourceCamera::FramedU8 => true,
+            SourceCamera::FramedU8 => true, // TODO: revert
             SourceCamera::FramedU16 => true,
             SourceCamera::FramedU32 => true,
             SourceCamera::FramedU64 => true,

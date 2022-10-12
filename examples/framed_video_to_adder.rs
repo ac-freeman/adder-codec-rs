@@ -32,7 +32,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let frame_max = 500;
 
     loop {
-        match pool.install(|| source.consume(1)) {
+        match source.consume(1, &pool) {
             Ok(_) => {} // Returns Vec<Vec<Event>>, but we're just writing the events out in this example
             Err(e) => {
                 println!("Err: {:?}", e);

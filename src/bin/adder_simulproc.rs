@@ -138,6 +138,7 @@ mod tests {
         let manifest_path_str = d.as_path().to_str().unwrap().to_owned();
 
         let args: SimulProcArgs = SimulProcArgs {
+            args_filename: "".to_string(),
             color_input: 0,
             tps: 120000,
             fps: 24,

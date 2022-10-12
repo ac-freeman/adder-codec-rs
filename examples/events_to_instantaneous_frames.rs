@@ -27,7 +27,7 @@ fn main() {
         stream.height.into(),
         stream.width.into(),
         stream.channels.into(),
-        64,
+        260,
     )
     .codec_version(stream.codec_version)
     .time_parameters(stream.tps, stream.ref_interval, reconstructed_frame_rate)

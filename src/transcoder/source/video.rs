@@ -13,6 +13,7 @@ use crate::transcoder::d_controller::DecimationMode;
 use crate::transcoder::event_pixel_tree::{DeltaT, PixelArena};
 use crate::SourceCamera;
 use ndarray::Array3;
+use rayon::ThreadPool;
 
 #[derive(Debug)]
 pub enum SourceError {
@@ -196,7 +197,17 @@ pub fn show_display(window_name: &str, mat: &Mat, wait: i32, video: &Video) {
 pub trait Source {
     /// Intake one input interval worth of data from the source stream into the ADΔER model as
     /// intensities
-    fn consume(&mut self, view_interval: u32) -> Result<Vec<Vec<Event>>, SourceError>;
+    fn consume(
+        &mut self,
+        view_interval: u32,
+        thread_pool: &ThreadPool,
+    ) -> Result<Vec<Vec<Event>>, SourceError>;
+
+    fn integrate_matrix(
+        &mut self,
+        matrix: Mat,
+        time: f32,
+    ) -> std::result::Result<Vec<Vec<Event>>, SourceError>;
 
     fn get_video_mut(&mut self) -> &mut Video;
 
