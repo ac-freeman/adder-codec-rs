@@ -198,6 +198,12 @@ pub trait Source {
     /// intensities
     fn consume(&mut self, view_interval: u32) -> Result<Vec<Vec<Event>>, SourceError>;
 
+    fn integrate_matrix(
+        &mut self,
+        matrix: Mat,
+        time: f32,
+    ) -> std::result::Result<Vec<Vec<Event>>, SourceError>;
+
     fn get_video_mut(&mut self) -> &mut Video;
 
     fn get_video(&self) -> &Video;

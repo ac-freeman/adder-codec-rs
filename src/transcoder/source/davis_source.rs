@@ -10,11 +10,13 @@ use bumpalo::Bump;
 use davis_edi_rs::util::reconstructor::Reconstructor;
 use davis_edi_rs::*;
 use ndarray::Axis;
-use opencv::core::{Mat, CV_8U};
+use opencv::core::{parallel_for_, Mat, CV_8U};
 use opencv::{imgproc, prelude::*, videoio, Result};
-use rayon::iter::IndexedParallelIterator;
 use rayon::iter::IntoParallelIterator;
 use rayon::iter::ParallelIterator;
+use rayon::iter::{IndexedParallelIterator, IntoParallelRefIterator};
+use rayon::{current_num_threads, ThreadPool};
+use std::cmp::max;
 use std::sync::mpsc::{Receiver, Sender};
 
 /// Attributes of a framed video -> ADΔER transcode
@@ -26,6 +28,8 @@ pub struct DavisSource {
 
     pub(crate) video: Video,
     image_8u: Mat,
+    thread_pool_edi: ThreadPool,
+    thread_pool_integration: ThreadPool,
 }
 
 impl DavisSource {
@@ -53,6 +57,15 @@ impl DavisSource {
             show_display_b,
             DavisU8,
         );
+        let thread_pool_edi = rayon::ThreadPoolBuilder::new()
+            .num_threads(max(current_num_threads() - 4, 1))
+            .build()
+            .unwrap();
+        let thread_pool_integration = rayon::ThreadPoolBuilder::new()
+            .num_threads(max(4, 1))
+            .build()
+            .unwrap();
+
         let davis_source = DavisSource {
             reconstructor,
             input_frame_scaled: Mat::default(),
@@ -60,6 +73,8 @@ impl DavisSource {
             c_thresh_neg: 60, // TODO
             video,
             image_8u: Mat::default(),
+            thread_pool_edi,
+            thread_pool_integration,
         };
         Ok(davis_source)
     }
@@ -79,14 +94,17 @@ impl Source for DavisSource {
         //          create a new branch for (2)
 
         let rt = tokio::runtime::Runtime::new().unwrap();
-        let mat_opt = rt.block_on(get_next_image(&mut self.reconstructor));
+        let mat_opt = rt.block_on(get_next_image(
+            &mut self.reconstructor,
+            &self.thread_pool_edi,
+        ));
         if mat_opt.is_none() {
             return Err(SourceError::NoData);
         }
         self.input_frame_scaled = mat_opt.unwrap();
 
         // Copied from framed_source.rs. TODO: break out the common code and share it
-        if self.video.in_interval_count == 1000 {
+        if self.video.in_interval_count == 0 {
             let frame_arr = self.input_frame_scaled.data_bytes().unwrap();
 
             self.video
@@ -103,10 +121,6 @@ impl Source for DavisSource {
 
         self.video.in_interval_count += 1;
 
-        if self.video.in_interval_count <= 1000 {
-            return Ok(vec![vec![]]);
-        }
-
         if self.video.in_interval_count % view_interval == 0 {
             self.video.show_live = true;
         } else {
@@ -118,26 +132,30 @@ impl Source for DavisSource {
             return Err(BufferEmpty);
         }
 
-        let mut frame_arr = Vec::with_capacity(
-            self.video.width as usize * self.video.height as usize * self.video.channels,
-        );
         let mut image_8u = Mat::default();
+
+        // While `input_frame_scaled` may not be continuous (which would cause problems with
+        // iterating over the pixels), cloning it ensures that it is made continuous.
+        // https://stackoverflow.com/questions/33665241/is-opencv-matrix-data-guaranteed-to-be-continuous
         self.input_frame_scaled
             .clone()
             .convert_to(&mut image_8u, CV_8U, 255.0, 0.0)
             .unwrap();
-        unsafe {
-            for r in 0..self.video.height as i32 {
-                for c in 0..self.video.width as i32 {
-                    let val: *const u8 = image_8u.at_2d(r, c).unwrap() as *const u8;
-                    frame_arr.push(*val);
-                }
-            }
-        }
 
-        // let frame_arr: &[u8] = self.input_frame_scaled.data_bytes().unwrap();
+        let thread_pool_integration = rayon::ThreadPoolBuilder::new()
+            .num_threads(4)
+            .build()
+            .unwrap();
+        thread_pool_integration
+            .install(|| self.integrate_matrix(image_8u, self.video.ref_time as f32))
+    }
 
-        let ref_time = self.video.ref_time as f32;
+    fn integrate_matrix(
+        &mut self,
+        matrix: Mat,
+        ref_time: f32,
+    ) -> std::result::Result<Vec<Vec<Event>>, SourceError> {
+        let frame_arr: &[u8] = matrix.data_bytes().unwrap();
         let px_per_chunk: usize =
             self.video.chunk_rows * self.video.width as usize * self.video.channels as usize;
 
@@ -197,19 +215,6 @@ impl Source for DavisSource {
         }
 
         show_display("Gray input", &self.input_frame_scaled, 1, &self.video);
-        // self.video.instantaneous_display_frame = (self.input_frame_scaled).clone();
-        // TODO: temporary
-        // for r in 0..self.video.height as i32 {
-        //     for c in 0..self.video.width as i32 {
-        //         let inst_px: &mut u8 = self.video.instantaneous_frame.at_2d_mut(r, c).unwrap();
-        //         let px = &mut self.video.event_pixel_trees[[r as usize, c as usize, 0]];
-        //         *inst_px = match px.arena[0].best_event.clone() {
-        //             Some(event) => u8::get_frame_value(&event, SourceType::U8, ref_time as DeltaT),
-        //             None => 0,
-        //         };
-        //     }
-        // }
-        // show_display("instance", &self.video.instantaneous_frame, 1, &self.video);
 
         Ok(big_buffer)
     }
@@ -223,20 +228,27 @@ impl Source for DavisSource {
     }
 }
 
-async fn get_next_image(reconstructor: &mut Reconstructor) -> Option<Mat> {
-    match reconstructor.next().await {
-        None => {
-            println!("\nFinished!");
-            None
-        }
-        Some(image) => {
-            // frame_count += 1;
-            match image {
-                Ok(a) => Some(a),
-                Err(_) => {
-                    panic!("No image")
+async fn get_next_image(
+    reconstructor: &mut Reconstructor,
+    thread_pool: &ThreadPool,
+) -> Option<Mat> {
+    thread_pool
+        .install(|| async {
+            match reconstructor.next().await {
+                None => {
+                    println!("\nFinished!");
+                    None
+                }
+                Some(image) => {
+                    // frame_count += 1;
+                    match image {
+                        Ok(a) => Some(a),
+                        Err(_) => {
+                            panic!("No image")
+                        }
+                    }
                 }
             }
-        }
-    }
+        })
+        .await
 }

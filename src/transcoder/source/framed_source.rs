@@ -290,9 +290,15 @@ impl Source for FramedSource {
             return Err(BufferEmpty);
         }
 
-        let frame_arr: &[u8] = self.input_frame_scaled.data_bytes().unwrap();
+        self.integrate_matrix(self.input_frame_scaled.clone(), self.video.ref_time as f32)
+    }
 
-        let ref_time = self.video.ref_time as f32;
+    fn integrate_matrix(
+        &mut self,
+        matrix: Mat,
+        ref_time: f32,
+    ) -> std::result::Result<Vec<Vec<Event>>, SourceError> {
+        let frame_arr: &[u8] = matrix.data_bytes().unwrap();
         let px_per_chunk: usize =
             self.video.chunk_rows * self.video.width as usize * self.video.channels as usize;
 
@@ -343,19 +349,6 @@ impl Source for FramedSource {
         }
 
         show_display("Gray input", &self.input_frame_scaled, 1, &self.video);
-        // self.video.instantaneous_display_frame = (self.input_frame_scaled).clone();
-
-        // for r in 0..self.video.height as i32 {
-        //     for c in 0..self.video.width as i32 {
-        //         let inst_px: &mut u8 = self.video.instantaneous_frame.at_2d_mut(r, c).unwrap();
-        //         let px = &mut self.video.event_pixel_trees[[r as usize, c as usize, 0]];
-        //         *inst_px = match px.arena[0].best_event.clone() {
-        //             Some(event) => u8::get_frame_value(&event, SourceType::U8, ref_time as DeltaT),
-        //             None => 0,
-        //         };
-        //     }
-        // }
-        // show_display("instance", &self.video.instantaneous_frame, 1, &self.video);
 
         Ok(big_buffer)
     }
