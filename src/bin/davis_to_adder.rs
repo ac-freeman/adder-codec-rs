@@ -7,7 +7,7 @@ use davis_edi_rs::Args as EdiArgs;
 use opencv::core::Mat;
 use serde::Deserialize;
 use std::fs::File;
-use std::io::BufWriter;
+use std::io::{BufWriter, Write};
 use std::time::Instant;
 use std::{error, io};
 use tokio::io::AsyncBufRead;
@@ -94,6 +94,15 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 break;
             }
         };
+        if davis_source.get_video().in_interval_count % 30 == 0 {
+            println!(
+                "\rDavis recon frame to ADDER {} in  {}ms",
+                davis_source.get_video().in_interval_count,
+                now.elapsed().as_millis()
+            );
+            io::stdout().flush().unwrap();
+            now = Instant::now();
+        }
     }
 
     Ok(())

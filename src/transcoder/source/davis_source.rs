@@ -115,10 +115,10 @@ impl Source for DavisSource {
             let frame_arr = self.input_frame_scaled.data_bytes().unwrap();
 
             self.video.event_pixel_trees.par_map_inplace(|px| {
-                let iidx = px.coord.y as usize * self.video.width as usize * self.video.channels
+                let idx = px.coord.y as usize * self.video.width as usize * self.video.channels
                     + px.coord.x as usize * self.video.channels
                     + px.coord.c.unwrap_or(0) as usize;
-                let intensity = frame_arr[iidx];
+                let intensity = frame_arr[idx];
                 let d_start = (intensity as f32).log2().floor() as D;
                 px.arena[0].set_d(d_start);
                 px.base_val = intensity;
