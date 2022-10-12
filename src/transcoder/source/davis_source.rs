@@ -43,6 +43,8 @@ impl DavisSource {
         tps: DeltaT,
         delta_t_max: DeltaT,
         show_display_b: bool,
+        adder_c_thresh_pos: u8,
+        adder_c_thresh_neg: u8,
         rt: Runtime,
     ) -> Result<DavisSource> {
         let video = Video::new(
@@ -72,8 +74,8 @@ impl DavisSource {
         let davis_source = DavisSource {
             reconstructor,
             input_frame_scaled: Mat::default(),
-            c_thresh_pos: 60, // TODO
-            c_thresh_neg: 60, // TODO
+            c_thresh_pos: adder_c_thresh_pos,
+            c_thresh_neg: adder_c_thresh_neg,
             video,
             image_8u: Mat::default(),
             thread_pool_edi,

@@ -29,6 +29,21 @@ pub struct Args {
     /// Show live view displays? (1=yes,0=no)
     #[clap(short, long, default_value_t = 0)]
     pub show_display: u32,
+
+    /// Positive contrast threshold, in intensity units. How much an intensity must increase
+    /// to launch a D-value reset.
+    #[clap(long, default_value_t = 5)]
+    pub adder_c_thresh_pos: u8,
+
+    /// Negative contrast threshold, in intensity units. How much an intensity must decrease
+    /// to launch a D-value reset.
+    #[clap(long, default_value_t = 5)]
+    pub adder_c_thresh_neg: u8,
+
+    /// Multiplier for max number of ticks for any event. delta_t_max := (ticks per second) * (this
+    /// multiplier)
+    #[clap(short, long, default_value_t = 1.0)]
+    pub delta_t_max_multiplier: f64,
 }
 
 fn main() -> Result<(), Box<dyn error::Error>> {
@@ -73,9 +88,11 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let mut davis_source = DavisSource::new(
         reconstructor,
         Some(args.output_events_filename),
-        (edi_args.output_fps * 5000.0) as u32,
-        (edi_args.output_fps * 5000.0) as u32,
+        (edi_args.output_fps * 5000.0) as u32, // TODO
+        (edi_args.output_fps * 5000.0 * args.delta_t_max_multiplier) as u32, // TODO
         args.show_display != 0,
+        args.adder_c_thresh_pos,
+        args.adder_c_thresh_neg,
         rt,
     )
     .unwrap();
