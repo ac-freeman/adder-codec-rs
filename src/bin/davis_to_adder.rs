@@ -4,10 +4,10 @@ use aedat::base::ioheader_generated::Compression;
 use clap::Parser;
 use davis_edi_rs::util::reconstructor::Reconstructor;
 use davis_edi_rs::Args as EdiArgs;
-use opencv::core::Mat;
+
 use serde::Deserialize;
-use std::fs::File;
-use std::io::{BufWriter, Write};
+
+use std::io::Write;
 use std::time::Instant;
 use std::{error, io};
 use tokio::io::AsyncBufRead;
@@ -69,7 +69,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         .worker_threads(12)
         .build()
         .unwrap();
-    let mut reconstructor = rt.block_on(Reconstructor::new(
+    let reconstructor = rt.block_on(Reconstructor::new(
         edi_args.base_path,
         edi_args.events_filename_0,
         edi_args.events_filename_1,
@@ -83,6 +83,8 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         Compression::None,
         346,
         260,
+        edi_args.deblur_only != 0,
+        edi_args.target_latency,
     ));
 
     let mut davis_source = DavisSource::new(
@@ -105,7 +107,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
     loop {
         match davis_source.consume(1, &thread_pool_integration) {
-            Ok(events) => {}
+            Ok(_events) => {}
             Err(e) => {
                 println!("Err: {:?}", e);
                 break;

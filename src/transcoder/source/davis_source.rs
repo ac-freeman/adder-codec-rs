@@ -1,23 +1,23 @@
-use crate::framer::scale_intensity::{event_to_intensity, FrameValue};
+
 use crate::transcoder::d_controller::DecimationMode;
-use crate::transcoder::event_pixel_tree::Mode::{Continuous, FramePerfect};
+use crate::transcoder::event_pixel_tree::Mode::{Continuous};
 use crate::transcoder::event_pixel_tree::{Intensity_32, D};
 use crate::transcoder::source::video::SourceError::BufferEmpty;
 use crate::transcoder::source::video::{show_display, Source, SourceError, Video};
 use crate::SourceCamera::DavisU8;
-use crate::{Codec, DeltaT, Event, SourceType};
+use crate::{Codec, DeltaT, Event};
 use bumpalo::Bump;
 use davis_edi_rs::util::reconstructor::Reconstructor;
-use davis_edi_rs::*;
-use ndarray::{Axis, Ix};
-use opencv::core::{parallel_for_, Mat, CV_8U};
-use opencv::{imgproc, prelude::*, videoio, Result};
+
+use ndarray::{Axis};
+use opencv::core::{Mat, CV_8U};
+use opencv::{prelude::*, Result};
 use rayon::iter::IntoParallelIterator;
 use rayon::iter::ParallelIterator;
-use rayon::iter::{IndexedParallelIterator, IntoParallelRefIterator};
+use rayon::iter::{IndexedParallelIterator};
 use rayon::{current_num_threads, ThreadPool};
 use std::cmp::max;
-use std::sync::mpsc::{Receiver, Sender};
+
 use tokio::runtime::Runtime;
 
 /// Attributes of a framed video -> ADΔER transcode
@@ -38,7 +38,7 @@ impl DavisSource {
     /// Initialize the framed source and read first frame of source, in order to get `height`
     /// and `width` and initialize [`Video`]
     pub fn new(
-        mut reconstructor: Reconstructor,
+        reconstructor: Reconstructor,
         output_events_filename: Option<String>,
         tps: DeltaT,
         delta_t_max: DeltaT,

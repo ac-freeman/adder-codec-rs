@@ -1,7 +1,7 @@
 use crate::transcoder::source::video::Source;
 use crate::transcoder::source::video::Video;
 use crate::transcoder::source::video::{show_display, SourceError};
-use crate::{Codec, Coord, Event, SourceType, D};
+use crate::{Codec, Coord, Event, D};
 use bumpalo::Bump;
 use core::default::Default;
 use rayon::iter::ParallelIterator;
@@ -9,7 +9,7 @@ use rayon::iter::{IndexedParallelIterator, IntoParallelIterator};
 
 use std::mem::swap;
 
-use crate::framer::scale_intensity::FrameValue;
+
 use crate::transcoder::source::video::SourceError::*;
 use ndarray::Axis;
 use opencv::core::{Mat, Size};
@@ -18,7 +18,7 @@ use opencv::{imgproc, prelude::*, videoio, Result};
 use rayon::ThreadPool;
 
 use crate::transcoder::d_controller::DecimationMode;
-use crate::transcoder::event_pixel_tree::Mode::{Continuous, FramePerfect};
+use crate::transcoder::event_pixel_tree::Mode::{FramePerfect};
 use crate::transcoder::event_pixel_tree::{DeltaT, Intensity_32};
 use crate::SourceCamera;
 
