@@ -174,7 +174,7 @@ impl Source for DavisSource {
                     if *frame_val < base_val.saturating_sub(self.c_thresh_neg)
                         || *frame_val > base_val.saturating_add(self.c_thresh_pos)
                     {
-                        px.pop_best_events(Some(*frame_val as Intensity_32), &mut buffer);
+                        px.pop_best_events(None, &mut buffer);
                         px.base_val = *frame_val;
 
                         // If continuous mode and the D value needs to be different now

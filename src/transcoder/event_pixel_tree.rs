@@ -163,9 +163,9 @@ impl PixelArena {
             None => {}
             // TODO: match on mode instead. This is disjoint.
             Some(intensity) => {
-                // self.arena[0].state.d = get_d_from_intensity(intensity);
-                // self.arena[0].state.integration = 0.0;
-                // self.arena[0].state.delta_t = 0.0;
+                self.arena[0].state.d = get_d_from_intensity(intensity);
+                self.arena[0].state.integration = 0.0;
+                self.arena[0].state.delta_t = 0.0;
             }
         };
     }
@@ -234,7 +234,9 @@ impl PixelArena {
 
                     // If continuous, we need to integrate the remaining intensity for the current
                     // node and the branching nodes
-                    Continuous => idx -= 1,
+                    Continuous => {
+                        // idx -= 1
+                    }
                 }
             }
 
