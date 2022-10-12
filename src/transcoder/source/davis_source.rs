@@ -56,8 +56,8 @@ impl DavisSource {
         let davis_source = DavisSource {
             reconstructor,
             input_frame_scaled: Mat::default(),
-            c_thresh_pos: 0, // TODO
-            c_thresh_neg: 0, // TODO
+            c_thresh_pos: 60, // TODO
+            c_thresh_neg: 60, // TODO
             video,
             image_8u: Mat::default(),
         };
@@ -161,10 +161,6 @@ impl Source for DavisSource {
 
                     *frame_val = frame_arr[*px_idx];
 
-                    if px.coord.x == 100 && px.coord.y == 90 {
-                        // dbg!(*frame_val);
-                    }
-
                     if px.need_to_pop_top {
                         buffer.push(px.pop_top_event(Some(*frame_val as Intensity_32)));
                     }
@@ -203,16 +199,16 @@ impl Source for DavisSource {
         show_display("Gray input", &self.input_frame_scaled, 1, &self.video);
         // self.video.instantaneous_display_frame = (self.input_frame_scaled).clone();
         // TODO: temporary
-        for r in 0..self.video.height as i32 {
-            for c in 0..self.video.width as i32 {
-                let inst_px: &mut u8 = self.video.instantaneous_frame.at_2d_mut(r, c).unwrap();
-                let px = &mut self.video.event_pixel_trees[[r as usize, c as usize, 0]];
-                *inst_px = match px.arena[0].best_event.clone() {
-                    Some(event) => u8::get_frame_value(&event, SourceType::U8, ref_time as DeltaT),
-                    None => 0,
-                };
-            }
-        }
+        // for r in 0..self.video.height as i32 {
+        //     for c in 0..self.video.width as i32 {
+        //         let inst_px: &mut u8 = self.video.instantaneous_frame.at_2d_mut(r, c).unwrap();
+        //         let px = &mut self.video.event_pixel_trees[[r as usize, c as usize, 0]];
+        //         *inst_px = match px.arena[0].best_event.clone() {
+        //             Some(event) => u8::get_frame_value(&event, SourceType::U8, ref_time as DeltaT),
+        //             None => 0,
+        //         };
+        //     }
+        // }
         show_display("instance", &self.video.instantaneous_frame, 1, &self.video);
 
         Ok(big_buffer)

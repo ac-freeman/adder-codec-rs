@@ -330,7 +330,7 @@ impl Source for FramedSource {
                     px.integrate(
                         *frame_val as Intensity_32,
                         ref_time,
-                        &Continuous,
+                        &FramePerfect,
                         &self.video.delta_t_max,
                     );
                 }
