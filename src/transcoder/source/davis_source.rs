@@ -209,7 +209,7 @@ impl Source for DavisSource {
         //         };
         //     }
         // }
-        show_display("instance", &self.video.instantaneous_frame, 1, &self.video);
+        // show_display("instance", &self.video.instantaneous_frame, 1, &self.video);
 
         Ok(big_buffer)
     }
