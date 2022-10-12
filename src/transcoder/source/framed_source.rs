@@ -295,7 +295,9 @@ impl Source for FramedSource {
             return Err(BufferEmpty);
         }
 
-        self.integrate_matrix(self.input_frame_scaled.clone(), self.video.ref_time as f32)
+        thread_pool.install(|| {
+            self.integrate_matrix(self.input_frame_scaled.clone(), self.video.ref_time as f32)
+        })
     }
 
     fn integrate_matrix(
