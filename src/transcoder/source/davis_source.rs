@@ -16,6 +16,16 @@ use std::cmp::max;
 
 use tokio::runtime::Runtime;
 
+// https://stackoverflow.com/questions/51344951/how-do-you-unwrap-a-result-on-ok-or-return-from-the-function-on-err
+macro_rules! unwrap_or_return {
+    ( $e:expr ) => {
+        match $e {
+            Some(x) => x,
+            None => return,
+        }
+    };
+}
+
 pub struct Framed {}
 pub struct Raw {}
 
@@ -95,9 +105,13 @@ impl DavisSource {
 
     // TODO: need to return the events for simultaneously reframing?
     pub fn integrate_dvs_events(&mut self) {
-        match &self.dvs_events {
-            None => {}
-            Some(dvs_events) => {}
+        // Using a macro so that CLion still pretty prints correctly
+        let dvs_events = unwrap_or_return!(self.dvs_events.as_ref());
+        let end_of_frame_timestamp = unwrap_or_return!(self.end_of_frame_timestamp.as_ref());
+        for event in dvs_events.iter() {
+            if event.t() > *end_of_frame_timestamp {
+                println!(" ");
+            }
         }
     }
 }
@@ -119,10 +133,14 @@ impl Source for DavisSource {
         // ---------if (1) fills up for the higher D, then delete (2) and
         //          create a new branch for (2)
 
+        let with_events = match self.mode {
+            DavisTranscoderMode::Framed => false,
+            DavisTranscoderMode::Raw => true,
+        };
         let mat_opt = self.rt.block_on(get_next_image(
             &mut self.reconstructor,
             &self.thread_pool_edi,
-            false,
+            with_events,
         ));
         match mat_opt {
             None => {

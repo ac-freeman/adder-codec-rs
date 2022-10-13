@@ -131,6 +131,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 break;
             }
         };
+        davis_source.integrate_dvs_events();
         if davis_source.get_video().in_interval_count % 30 == 0 {
             println!(
                 "\rDavis recon frame to ADDER {} in  {}ms",
