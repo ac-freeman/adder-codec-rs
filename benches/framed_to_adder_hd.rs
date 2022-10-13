@@ -36,6 +36,7 @@ fn simul_proc(video_path: &str, scale: f64, thread_count: u8, chunk_rows: usize)
     let manifest_path_str = d.as_path().to_str().unwrap().to_owned();
 
     let args: SimulProcArgs = SimulProcArgs {
+        args_filename: "".to_string(),
         color_input: 0,
         tps: 120000,
         fps: 24,

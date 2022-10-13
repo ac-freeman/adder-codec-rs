@@ -10,7 +10,6 @@ use serde::Deserialize;
 use std::io::Write;
 use std::time::Instant;
 use std::{error, io};
-use tokio::io::AsyncBufRead;
 
 enum DavisTranscodeMode {
     Framed,
@@ -75,7 +74,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         args = toml::from_str(&content).unwrap();
     }
 
-    let transcode_mode = match args.transcode_from.as_str() {
+    let _transcode_mode = match args.transcode_from.as_str() {
         "raw" => DavisTranscodeMode::Raw,
         _ => DavisTranscodeMode::Framed,
     };

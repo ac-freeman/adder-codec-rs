@@ -238,13 +238,13 @@ impl Video {
                         // If continuous mode and the D value needs to be different now
                         // TODO: make it modular
                         match pixel_tree_mode {
-                            FramePerfect => {}
                             Continuous => {
                                 match px.set_d_for_continuous(*frame_val as Intensity32) {
                                     None => {}
                                     Some(event) => buffer.push(event),
                                 };
                             }
+                            _ => {}
                         }
                     }
 
@@ -263,7 +263,7 @@ impl Video {
             self.stream.encode_events_events(&big_buffer);
         }
 
-        show_display("Input", &matrix, 1, &self);
+        show_display("Input", &matrix, 1, self);
 
         Ok(big_buffer)
     }

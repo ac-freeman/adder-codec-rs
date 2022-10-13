@@ -1,16 +1,14 @@
 use crate::transcoder::d_controller::DecimationMode;
 use crate::transcoder::event_pixel_tree::Mode::Continuous;
 use crate::transcoder::source::video::SourceError::BufferEmpty;
-use crate::transcoder::source::video::{show_display, Source, SourceError, Video};
+use crate::transcoder::source::video::{Source, SourceError, Video};
 use crate::SourceCamera::DavisU8;
-use crate::{Codec, DeltaT, Event};
+use crate::{DeltaT, Event};
 use davis_edi_rs::util::reconstructor::Reconstructor;
 
 use opencv::core::{Mat, CV_8U};
 use opencv::{prelude::*, Result};
-use rayon::iter::IndexedParallelIterator;
-use rayon::iter::IntoParallelIterator;
-use rayon::iter::ParallelIterator;
+
 use rayon::{current_num_threads, ThreadPool};
 use std::cmp::max;
 
@@ -110,23 +108,18 @@ impl Source for DavisSource {
             return Err(BufferEmpty);
         }
 
-        let mut image_8u = Mat::default();
-
         // While `input_frame_scaled` may not be continuous (which would cause problems with
         // iterating over the pixels), cloning it ensures that it is made continuous.
         // https://stackoverflow.com/questions/33665241/is-opencv-matrix-data-guaranteed-to-be-continuous
         self.input_frame_scaled
             .clone()
-            .convert_to(&mut image_8u, CV_8U, 255.0, 0.0)
+            .convert_to(&mut self.image_8u, CV_8U, 255.0, 0.0)
             .unwrap();
 
+        let tmp = self.image_8u.clone();
         thread_pool.install(|| {
-            self.video.integrate_matrix(
-                image_8u,
-                self.video.ref_time as f32,
-                Continuous,
-                view_interval,
-            )
+            self.video
+                .integrate_matrix(tmp, self.video.ref_time as f32, Continuous, view_interval)
         })
     }
 
