@@ -33,6 +33,7 @@ pub struct DavisSource {
     thread_pool_edi: ThreadPool,
     thread_pool_integration: ThreadPool,
     dvs_events: Option<Vec<DvsEvent>>,
+    end_of_frame_timestamp: Option<i64>,
     pub rt: Runtime,
     mode: DavisTranscoderMode, // phantom: PhantomData<T>,
 }
@@ -85,6 +86,7 @@ impl DavisSource {
             thread_pool_edi,
             thread_pool_integration,
             dvs_events: None,
+            end_of_frame_timestamp: None,
             rt,
             mode,
         };
@@ -126,9 +128,13 @@ impl Source for DavisSource {
             None => {
                 return Err(SourceError::NoData);
             }
-            Some((mat, events)) => {
+            Some((mat, Some((events, timestamp)))) => {
                 self.input_frame_scaled = mat;
-                self.dvs_events = events;
+                self.dvs_events = Some(events);
+                self.end_of_frame_timestamp = Some(timestamp);
+            }
+            Some((mat, None)) => {
+                self.input_frame_scaled = mat;
             }
         }
 
