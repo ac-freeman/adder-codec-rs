@@ -143,14 +143,13 @@ impl Source for DavisSource {
             return Err(BufferEmpty);
         }
 
-        // While `input_frame_scaled` may not be continuous (which would cause problems with
-        // iterating over the pixels), cloning it ensures that it is made continuous.
-        // https://stackoverflow.com/questions/33665241/is-opencv-matrix-data-guaranteed-to-be-continuous
         self.input_frame_scaled
-            .clone()
             .convert_to(&mut self.image_8u, CV_8U, 255.0, 0.0)
             .unwrap();
 
+        // While `input_frame_scaled` may not be continuous (which would cause problems with
+        // iterating over the pixels), cloning it ensures that it is made continuous.
+        // https://stackoverflow.com/questions/33665241/is-opencv-matrix-data-guaranteed-to-be-continuous
         let tmp = self.image_8u.clone();
         thread_pool.install(|| {
             self.video
