@@ -1,9 +1,11 @@
 use crate::transcoder::d_controller::DecimationMode;
 use crate::transcoder::event_pixel_tree::Mode::Continuous;
 use crate::transcoder::source::video::SourceError::BufferEmpty;
-use crate::transcoder::source::video::{integrate_for_px, Source, SourceError, Video};
+use crate::transcoder::source::video::{
+    integrate_for_px, show_display, Source, SourceError, Video,
+};
 use crate::SourceCamera::DavisU8;
-use crate::{Codec, DeltaT, Event};
+use crate::{Codec, DeltaT, Event, SourceType};
 use aedat::events_generated::Event as DvsEvent;
 use davis_edi_rs::util::reconstructor::{IterVal, Reconstructor};
 use rayon::iter::IndexedParallelIterator;
@@ -19,6 +21,7 @@ use rayon::iter::IntoParallelIterator;
 use rayon::{current_num_threads, ThreadPool};
 use std::cmp::max;
 
+use crate::framer::scale_intensity::FrameValue;
 use crate::transcoder::event_pixel_tree::Intensity32;
 use tokio::runtime::Runtime;
 
@@ -138,6 +141,9 @@ impl DavisSource {
                     - self.dvs_last_timestamps[[event.y() as usize, event.x() as usize, 0]];
                 let ticks_per_micro = self.video.tps as f32 / 1e6;
                 let delta_t_ticks = delta_t_micro as f32 * ticks_per_micro;
+                if delta_t_ticks <= 0.0 {
+                    continue; // TODO: do better
+                }
                 assert!(delta_t_ticks > 0.0);
                 let frame_delta_t = self.video.ref_time;
                 // integrate_for_px(px, base_val, &frame_val, 0.0, 0.0, Mode::FramePerfect, &mut vec![], &0, &0, &0)
@@ -161,8 +167,8 @@ impl DavisSource {
                 // Then, integrate a tiny amount of the next intensity
                 let mut frame_val = (base_val as Intensity32);
                 frame_val += match event.on() {
-                    true => 20.0,
-                    false => -20.0, // TODO: temporary, just for debugging setup
+                    true => 0.0,
+                    false => -0.0, // TODO: temporary, just for debugging setup
                 };
                 let frame_val = frame_val as u8;
 
@@ -231,10 +237,14 @@ impl DavisSource {
                         - self.dvs_last_timestamps[[px.coord.y as usize, px.coord.x as usize, 0]];
 
                     let delta_t_ticks = delta_t_micro as f32 * ticks_per_micro;
+                    if delta_t_ticks <= 0.0 {
+                        continue; // TODO: a hacky way around the problem. Need to also get the frame start timestamp
+                    }
                     assert!(delta_t_ticks > 0.0);
 
                     let integration =
                         (*base_val as Intensity32) / self.video.ref_time as f32 * delta_t_ticks;
+                    assert!(integration >= 0.0);
 
                     integrate_for_px(
                         px,
@@ -256,6 +266,21 @@ impl DavisSource {
         if self.video.write_out {
             self.video.stream.encode_events_events(&big_buffer);
         }
+
+        // TODO: temporary
+        for r in 0..self.video.height as i32 {
+            for c in 0..self.video.width as i32 {
+                let inst_px: &mut u8 = self.video.instantaneous_frame.at_2d_mut(r, c).unwrap();
+                let px = &mut self.video.event_pixel_trees[[r as usize, c as usize, 0]];
+                *inst_px = match px.arena[0].best_event.clone() {
+                    Some(event) => {
+                        u8::get_frame_value(&event, SourceType::U8, self.video.ref_time as DeltaT)
+                    }
+                    None => 0,
+                };
+            }
+        }
+        show_display("instance", &self.video.instantaneous_frame, 1, &self.video);
     }
 }
 

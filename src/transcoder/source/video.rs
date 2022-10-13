@@ -5,11 +5,12 @@ use std::path::Path;
 use std::sync::mpsc::{channel, Receiver, Sender};
 
 use crate::raw::raw_stream::RawStream;
-use crate::{Codec, Coord, Event, D, D_MAX, D_SHIFT};
+use crate::{Codec, Coord, Event, SourceType, D, D_MAX, D_SHIFT};
 use opencv::highgui;
 use opencv::imgproc::resize;
 use opencv::prelude::*;
 
+use crate::framer::scale_intensity::FrameValue;
 use crate::transcoder::d_controller::DecimationMode;
 use crate::transcoder::event_pixel_tree::Mode::Continuous;
 use crate::transcoder::event_pixel_tree::{DeltaT, Intensity32, Mode, PixelArena};
@@ -238,6 +239,19 @@ impl Video {
         }
 
         show_display("Input", &matrix, 1, self);
+
+        // TODO: temporary
+        for r in 0..self.height as i32 {
+            for c in 0..self.width as i32 {
+                let inst_px: &mut u8 = self.instantaneous_frame.at_2d_mut(r, c).unwrap();
+                let px = &mut self.event_pixel_trees[[r as usize, c as usize, 0]];
+                *inst_px = match px.arena[0].best_event.clone() {
+                    Some(event) => u8::get_frame_value(&event, SourceType::U8, ref_time as DeltaT),
+                    None => 0,
+                };
+            }
+        }
+        show_display("instance", &self.instantaneous_frame, 1, &self);
 
         Ok(big_buffer)
     }
