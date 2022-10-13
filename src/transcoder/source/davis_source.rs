@@ -6,12 +6,16 @@ use crate::SourceCamera::DavisU8;
 use crate::{Codec, DeltaT, Event};
 use aedat::events_generated::Event as DvsEvent;
 use davis_edi_rs::util::reconstructor::{IterVal, Reconstructor};
+use rayon::iter::IndexedParallelIterator;
+use rayon::iter::ParallelIterator;
 use std::marker::PhantomData;
 
 use opencv::core::{Mat, CV_8U};
 use opencv::{prelude::*, Result};
 
-use ndarray::Array3;
+use bumpalo::Bump;
+use ndarray::{Array3, Axis};
+use rayon::iter::IntoParallelIterator;
 use rayon::{current_num_threads, ThreadPool};
 use std::cmp::max;
 
@@ -134,6 +138,7 @@ impl DavisSource {
                     - self.dvs_last_timestamps[[event.y() as usize, event.x() as usize, 0]];
                 let ticks_per_micro = self.video.tps as f32 / 1e6;
                 let delta_t_ticks = delta_t_micro as f32 * ticks_per_micro;
+                assert!(delta_t_ticks > 0.0);
                 let frame_delta_t = self.video.ref_time;
                 // integrate_for_px(px, base_val, &frame_val, 0.0, 0.0, Mode::FramePerfect, &mut vec![], &0, &0, &0)
 
@@ -182,12 +187,74 @@ impl DavisSource {
                 //     &delta_t_max,
                 // );
 
-                println!(" ");
+                self.dvs_last_timestamps[[event.y() as usize, event.x() as usize, 0]] = event.t();
             }
         }
 
         if self.video.write_out {
             self.video.stream.encode_events(&buffer);
+        }
+    }
+
+    fn integrate_frame_gaps(&mut self) {
+        let px_per_chunk: usize =
+            self.video.chunk_rows * self.video.width as usize * self.video.channels as usize;
+
+        // Important: if framing the events simultaneously, then the chunk division must be
+        // exactly the same as it is for the framer
+        let big_buffer: Vec<Vec<Event>> = self
+            .video
+            .event_pixel_trees
+            .axis_chunks_iter_mut(Axis(0), self.video.chunk_rows)
+            .into_par_iter()
+            .enumerate()
+            .map(|(chunk_idx, mut chunk)| {
+                let mut buffer: Vec<Event> = Vec::with_capacity(px_per_chunk);
+                let bump = Bump::new();
+                let mut base_val = bump.alloc(0);
+                let px_idx = bump.alloc(0);
+                let frame_val = bump.alloc(0);
+
+                for (chunk_px_idx, px) in chunk.iter_mut().enumerate() {
+                    *px_idx = chunk_px_idx + px_per_chunk * chunk_idx;
+
+                    *frame_val = *base_val;
+
+                    // TODO: Also need start of video timestamp
+                    let ticks_per_micro = self.video.tps as f32 / 1e6;
+                    let tmp_0 = self.end_of_frame_timestamp.unwrap();
+                    let tmp_1 = (self.video.ref_time as f32 * ticks_per_micro) as i64;
+                    let tmp_2 =
+                        self.dvs_last_timestamps[[px.coord.y as usize, px.coord.x as usize, 0]];
+                    let delta_t_micro = self.end_of_frame_timestamp.unwrap()
+                        - (self.video.ref_time as f32 / ticks_per_micro) as i64
+                        - self.dvs_last_timestamps[[px.coord.y as usize, px.coord.x as usize, 0]];
+
+                    let delta_t_ticks = delta_t_micro as f32 * ticks_per_micro;
+                    assert!(delta_t_ticks > 0.0);
+
+                    let integration =
+                        (*base_val as Intensity32) / self.video.ref_time as f32 * delta_t_ticks;
+
+                    integrate_for_px(
+                        px,
+                        &mut base_val,
+                        frame_val,
+                        integration, // In this case, frame val is the same as intensity to integrate
+                        delta_t_ticks,
+                        Continuous,
+                        &mut buffer,
+                        &self.video.c_thresh_pos,
+                        &self.video.c_thresh_neg,
+                        &self.video.delta_t_max,
+                    )
+                }
+                buffer
+            })
+            .collect();
+
+        if self.video.write_out {
+            self.video.stream.encode_events_events(&big_buffer);
         }
     }
 }
@@ -226,13 +293,21 @@ impl Source for DavisSource {
                 self.input_frame_scaled = mat;
                 self.dvs_events = Some(events);
                 self.end_of_frame_timestamp = Some(timestamp);
-                self.dvs_last_timestamps.par_map_inplace(|ts| {
-                    *ts = timestamp;
-                });
+                // self.dvs_last_timestamps.par_map_inplace(|ts| {
+                //     *ts = timestamp;
+                // });
             }
             Some((mat, None)) => {
                 self.input_frame_scaled = mat;
             }
+        }
+
+        if self.video.in_interval_count == 0 {
+            self.dvs_last_timestamps.par_map_inplace(|ts| {
+                *ts = self.end_of_frame_timestamp.unwrap();
+            });
+        } else {
+            self.integrate_frame_gaps();
         }
 
         if self.input_frame_scaled.empty() {

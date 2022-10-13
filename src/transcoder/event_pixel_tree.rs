@@ -80,6 +80,7 @@ impl PixelArena {
 
     /// Pop just the topmost event. Should be called only when dtm is reached for main node
     pub fn pop_top_event(&mut self, next_intensity: Option<Intensity32>) -> Event {
+        self.need_to_pop_top = false;
         let mut root = &mut self.arena[0];
         match root.best_event {
             None => {
@@ -168,6 +169,7 @@ impl PixelArena {
                 self.arena[0].state.delta_t = 0.0;
             }
         };
+        self.need_to_pop_top = false;
     }
 
     pub fn set_d_for_continuous(&mut self, next_intensity: Intensity32) -> Option<Event> {
@@ -518,6 +520,7 @@ mod tests {
         assert!(tree.need_to_pop_top);
         let mut events = Vec::new();
         tree.pop_best_events(None, &mut events);
+        assert!(!tree.need_to_pop_top);
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].d, 19);
         let tmp = events[0].delta_t;
@@ -550,6 +553,7 @@ mod tests {
         tree.integrate(245.0, 5000.0, &FramePerfect, &dtm);
         assert!(tree.need_to_pop_top);
         let _ = tree.pop_top_event(Some(245.0));
+        assert!(!tree.need_to_pop_top);
         let tmp = tree.arena[0].state.delta_t;
         assert_eq!(tmp, 70000.0)
     }
