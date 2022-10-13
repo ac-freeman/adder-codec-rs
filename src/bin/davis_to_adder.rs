@@ -7,14 +7,11 @@ use davis_edi_rs::Args as EdiArgs;
 
 use serde::Deserialize;
 
+use adder_codec_rs::transcoder::source::davis_source::DavisTranscoderMode::{Framed, Raw};
+use std::any::Any;
 use std::io::Write;
 use std::time::Instant;
 use std::{error, io};
-
-enum DavisTranscodeMode {
-    Framed,
-    Raw,
-}
 
 #[derive(Parser, Debug, Deserialize, Default)]
 pub struct Args {
@@ -73,11 +70,12 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         let content = std::fs::read_to_string(args.args_filename)?;
         args = toml::from_str(&content).unwrap();
     }
+    let args = args;
 
-    let _transcode_mode = match args.transcode_from.as_str() {
-        "raw" => DavisTranscodeMode::Raw,
-        _ => DavisTranscodeMode::Framed,
-    };
+    // let transcode_type = match args.transcode_from.as_str() {
+    //     "raw" => Raw,
+    //     _ => Framed,
+    // };
 
     let rt = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(12)
@@ -101,6 +99,11 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         edi_args.target_latency,
     ));
 
+    let mode = match args.transcode_from.as_str() {
+        "raw" => Raw,
+        _ => Framed,
+    };
+
     let mut davis_source = DavisSource::new(
         reconstructor,
         Some(args.output_events_filename),
@@ -110,6 +113,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         args.adder_c_thresh_pos,
         args.adder_c_thresh_neg,
         rt,
+        mode,
     )
     .unwrap();
 

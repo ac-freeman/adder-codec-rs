@@ -180,18 +180,9 @@ impl Video {
         pixel_tree_mode: Mode,
         view_interval: u32,
     ) -> std::result::Result<Vec<Vec<Event>>, SourceError> {
-        // Copied from framed_source.rs. TODO: break out the common code and share it
         let frame_arr: &[u8] = matrix.data_bytes().unwrap();
         if self.in_interval_count == 0 {
-            self.event_pixel_trees.par_map_inplace(|px| {
-                let idx = px.coord.y as usize * self.width as usize * self.channels
-                    + px.coord.x as usize * self.channels
-                    + px.coord.c.unwrap_or(0) as usize;
-                let intensity = frame_arr[idx];
-                let d_start = (intensity as f32).log2().floor() as D;
-                px.arena[0].set_d(d_start);
-                px.base_val = intensity;
-            });
+            self.set_initial_d(frame_arr);
         }
 
         self.in_interval_count += 1;
@@ -266,6 +257,18 @@ impl Video {
         show_display("Input", &matrix, 1, self);
 
         Ok(big_buffer)
+    }
+
+    fn set_initial_d(&mut self, frame_arr: &[u8]) {
+        self.event_pixel_trees.par_map_inplace(|px| {
+            let idx = px.coord.y as usize * self.width as usize * self.channels
+                + px.coord.x as usize * self.channels
+                + px.coord.c.unwrap_or(0) as usize;
+            let intensity = frame_arr[idx];
+            let d_start = (intensity as f32).log2().floor() as D;
+            px.arena[0].set_d(d_start);
+            px.base_val = intensity;
+        });
     }
 }
 

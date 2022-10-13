@@ -4,7 +4,9 @@ use crate::transcoder::source::video::SourceError::BufferEmpty;
 use crate::transcoder::source::video::{Source, SourceError, Video};
 use crate::SourceCamera::DavisU8;
 use crate::{DeltaT, Event};
-use davis_edi_rs::util::reconstructor::Reconstructor;
+use aedat::events_generated::Event as DvsEvent;
+use davis_edi_rs::util::reconstructor::{IterVal, Reconstructor};
+use std::marker::PhantomData;
 
 use opencv::core::{Mat, CV_8U};
 use opencv::{prelude::*, Result};
@@ -14,6 +16,14 @@ use std::cmp::max;
 
 use tokio::runtime::Runtime;
 
+pub struct Framed {}
+pub struct Raw {}
+
+pub enum DavisTranscoderMode {
+    Framed,
+    Raw,
+}
+
 /// Attributes of a framed video -> ADΔER transcode
 pub struct DavisSource {
     reconstructor: Reconstructor,
@@ -22,7 +32,9 @@ pub struct DavisSource {
     image_8u: Mat,
     thread_pool_edi: ThreadPool,
     thread_pool_integration: ThreadPool,
+    dvs_events: Option<Vec<DvsEvent>>,
     pub rt: Runtime,
+    mode: DavisTranscoderMode, // phantom: PhantomData<T>,
 }
 
 impl DavisSource {
@@ -37,6 +49,7 @@ impl DavisSource {
         adder_c_thresh_pos: u8,
         adder_c_thresh_neg: u8,
         rt: Runtime,
+        mode: DavisTranscoderMode,
     ) -> Result<DavisSource> {
         let video = Video::new(
             reconstructor.width as u16,
@@ -71,9 +84,19 @@ impl DavisSource {
             image_8u: Mat::default(),
             thread_pool_edi,
             thread_pool_integration,
+            dvs_events: None,
             rt,
+            mode,
         };
         Ok(davis_source)
+    }
+
+    // TODO: need to return the events for simultaneously reframing?
+    pub fn integrate_dvs_events(&mut self) {
+        match &self.dvs_events {
+            None => {}
+            Some(dvs_events) => {}
+        }
     }
 }
 
@@ -97,11 +120,17 @@ impl Source for DavisSource {
         let mat_opt = self.rt.block_on(get_next_image(
             &mut self.reconstructor,
             &self.thread_pool_edi,
+            false,
         ));
-        if mat_opt.is_none() {
-            return Err(SourceError::NoData);
+        match mat_opt {
+            None => {
+                return Err(SourceError::NoData);
+            }
+            Some((mat, events)) => {
+                self.input_frame_scaled = mat;
+                self.dvs_events = events;
+            }
         }
-        self.input_frame_scaled = mat_opt.unwrap();
 
         if self.input_frame_scaled.empty() {
             eprintln!("End of video");
@@ -135,23 +164,21 @@ impl Source for DavisSource {
 async fn get_next_image(
     reconstructor: &mut Reconstructor,
     thread_pool: &ThreadPool,
-) -> Option<Mat> {
+    with_events: bool,
+) -> Option<IterVal> {
     thread_pool
         .install(|| async {
-            match reconstructor.next().await {
+            match reconstructor.next(with_events).await {
                 None => {
                     println!("\nFinished!");
                     None
                 }
-                Some(image) => {
-                    // frame_count += 1;
-                    match image {
-                        Ok(a) => Some(a),
-                        Err(_) => {
-                            panic!("No image")
-                        }
+                Some(res) => match res {
+                    Ok(a) => Some(a),
+                    Err(_) => {
+                        panic!("No image")
                     }
-                }
+                },
             }
         })
         .await
