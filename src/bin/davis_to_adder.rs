@@ -12,6 +12,11 @@ use std::time::Instant;
 use std::{error, io};
 use tokio::io::AsyncBufRead;
 
+enum DavisTranscodeMode {
+    Framed,
+    Raw,
+}
+
 #[derive(Parser, Debug, Deserialize, Default)]
 pub struct Args {
     /// Filename for EDI args (optional; must be in .toml format)
@@ -44,6 +49,11 @@ pub struct Args {
     /// multiplier)
     #[clap(short, long, default_value_t = 1.0)]
     pub delta_t_max_multiplier: f64,
+
+    /// Transcode from the framed video of DAVIS reconstruction, or from deblurred APS frames and
+    /// raw DVS events? (options are "framed", "raw")
+    #[clap(short, long, default_value = "")]
+    pub transcode_from: String,
 }
 
 fn main() -> Result<(), Box<dyn error::Error>> {
@@ -64,6 +74,11 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         let content = std::fs::read_to_string(args.args_filename)?;
         args = toml::from_str(&content).unwrap();
     }
+
+    let transcode_mode = match args.transcode_from.as_str() {
+        "raw" => DavisTranscodeMode::Raw,
+        _ => DavisTranscodeMode::Framed,
+    };
 
     let rt = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(12)

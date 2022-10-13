@@ -1,18 +1,23 @@
 use opencv::core::{Mat, Size, CV_8U, CV_8UC3};
 
+use bumpalo::Bump;
 use std::path::Path;
 use std::sync::mpsc::{channel, Receiver, Sender};
 
 use crate::raw::raw_stream::RawStream;
-use crate::{Codec, Coord, Event, D_MAX, D_SHIFT};
+use crate::{Codec, Coord, Event, D, D_MAX, D_SHIFT};
 use opencv::highgui;
 use opencv::imgproc::resize;
 use opencv::prelude::*;
 
 use crate::transcoder::d_controller::DecimationMode;
-use crate::transcoder::event_pixel_tree::{DeltaT, PixelArena};
+use crate::transcoder::event_pixel_tree::Mode::Continuous;
+use crate::transcoder::event_pixel_tree::{DeltaT, Intensity32, Mode, PixelArena};
 use crate::SourceCamera;
-use ndarray::Array3;
+use ndarray::{Array3, Axis};
+use rayon::iter::IndexedParallelIterator;
+use rayon::iter::IntoParallelIterator;
+use rayon::iter::ParallelIterator;
 use rayon::ThreadPool;
 
 #[derive(Debug)]
@@ -46,6 +51,8 @@ pub struct Video {
     pub event_sender: Sender<Vec<Event>>,
     pub(crate) write_out: bool,
     pub channels: usize,
+    c_thresh_pos: u8,
+    c_thresh_neg: u8,
     pub(crate) stream: RawStream,
 }
 
@@ -67,6 +74,8 @@ impl Video {
         communicate_events: bool,
         show_display: bool,
         source_camera: SourceCamera,
+        c_thresh_pos: u8,
+        c_thresh_neg: u8,
     ) -> Video {
         assert_eq!(D_SHIFT.len(), D_MAX as usize + 1);
         if write_out {
@@ -155,11 +164,108 @@ impl Video {
             write_out,
             channels,
             stream,
+            c_thresh_pos,
+            c_thresh_neg,
         }
     }
 
     pub fn end_write_stream(&mut self) {
         self.stream.close_writer();
+    }
+
+    pub(crate) fn integrate_matrix(
+        &mut self,
+        matrix: Mat,
+        ref_time: f32,
+        pixel_tree_mode: Mode,
+        view_interval: u32,
+    ) -> std::result::Result<Vec<Vec<Event>>, SourceError> {
+        // Copied from framed_source.rs. TODO: break out the common code and share it
+        let frame_arr: &[u8] = matrix.data_bytes().unwrap();
+        if self.in_interval_count == 0 {
+            self.event_pixel_trees.par_map_inplace(|px| {
+                let idx = px.coord.y as usize * self.width as usize * self.channels
+                    + px.coord.x as usize * self.channels
+                    + px.coord.c.unwrap_or(0) as usize;
+                let intensity = frame_arr[idx];
+                let d_start = (intensity as f32).log2().floor() as D;
+                px.arena[0].set_d(d_start);
+                px.base_val = intensity;
+            });
+        }
+
+        self.in_interval_count += 1;
+
+        if self.in_interval_count % view_interval == 0 {
+            self.show_live = true;
+        } else {
+            self.show_live = false;
+        }
+
+        let px_per_chunk: usize = self.chunk_rows * self.width as usize * self.channels as usize;
+
+        // Important: if framing the events simultaneously, then the chunk division must be
+        // exactly the same as it is for the framer
+        let big_buffer: Vec<Vec<Event>> = self
+            .event_pixel_trees
+            .axis_chunks_iter_mut(Axis(0), self.chunk_rows)
+            .into_par_iter()
+            .enumerate()
+            .map(|(chunk_idx, mut chunk)| {
+                let mut buffer: Vec<Event> = Vec::with_capacity(px_per_chunk);
+                let bump = Bump::new();
+                let mut base_val = bump.alloc(0);
+                let px_idx = bump.alloc(0);
+                let frame_val = bump.alloc(0);
+
+                for (chunk_px_idx, px) in chunk.iter_mut().enumerate() {
+                    *px_idx = chunk_px_idx + px_per_chunk * chunk_idx;
+
+                    *frame_val = frame_arr[*px_idx];
+
+                    if px.need_to_pop_top {
+                        buffer.push(px.pop_top_event(Some(*frame_val as Intensity32)));
+                    }
+
+                    base_val = &mut px.base_val;
+
+                    if *frame_val < base_val.saturating_sub(self.c_thresh_neg)
+                        || *frame_val > base_val.saturating_add(self.c_thresh_pos)
+                    {
+                        px.pop_best_events(None, &mut buffer);
+                        px.base_val = *frame_val;
+
+                        // If continuous mode and the D value needs to be different now
+                        // TODO: make it modular
+                        match pixel_tree_mode {
+                            FramePerfect => {}
+                            Continuous => {
+                                match px.set_d_for_continuous(*frame_val as Intensity32) {
+                                    None => {}
+                                    Some(event) => buffer.push(event),
+                                };
+                            }
+                        }
+                    }
+
+                    px.integrate(
+                        *frame_val as Intensity32,
+                        ref_time,
+                        &pixel_tree_mode,
+                        &self.delta_t_max,
+                    );
+                }
+                buffer
+            })
+            .collect();
+
+        if self.write_out {
+            self.stream.encode_events_events(&big_buffer);
+        }
+
+        show_display("Input", &matrix, 1, &self);
+
+        Ok(big_buffer)
     }
 }
 
@@ -202,12 +308,6 @@ pub trait Source {
         view_interval: u32,
         thread_pool: &ThreadPool,
     ) -> Result<Vec<Vec<Event>>, SourceError>;
-
-    fn integrate_matrix(
-        &mut self,
-        matrix: Mat,
-        time: f32,
-    ) -> std::result::Result<Vec<Vec<Event>>, SourceError>;
 
     fn get_video_mut(&mut self) -> &mut Video;
 
