@@ -11,6 +11,7 @@ use std::marker::PhantomData;
 use opencv::core::{Mat, CV_8U};
 use opencv::{prelude::*, Result};
 
+use ndarray::Array3;
 use rayon::{current_num_threads, ThreadPool};
 use std::cmp::max;
 
@@ -45,6 +46,7 @@ pub struct DavisSource {
     dvs_events: Option<Vec<DvsEvent>>,
     end_of_frame_timestamp: Option<i64>,
     pub rt: Runtime,
+    dvs_last_timestamps: Array3<i64>,
     mode: DavisTranscoderMode, // phantom: PhantomData<T>,
 }
 
@@ -88,6 +90,15 @@ impl DavisSource {
             .build()
             .unwrap();
 
+        let timestamps =
+            vec![0_i64; video.height as usize * video.width as usize * video.channels as usize];
+
+        let dvs_last_timestamps: Array3<i64> = Array3::from_shape_vec(
+            (video.height.into(), video.width.into(), video.channels),
+            timestamps,
+        )
+        .unwrap();
+
         let davis_source = DavisSource {
             reconstructor,
             input_frame_scaled: Mat::default(),
@@ -98,6 +109,7 @@ impl DavisSource {
             dvs_events: None,
             end_of_frame_timestamp: None,
             rt,
+            dvs_last_timestamps,
             mode,
         };
         Ok(davis_source)
@@ -110,6 +122,12 @@ impl DavisSource {
         let end_of_frame_timestamp = unwrap_or_return!(self.end_of_frame_timestamp.as_ref());
         for event in dvs_events.iter() {
             if event.t() > *end_of_frame_timestamp {
+                let px =
+                    &mut self.video.event_pixel_trees[[event.y() as usize, event.x() as usize, 0]];
+                let base_val = &px.base_val;
+                let delta_t = event.t()
+                    - self.dvs_last_timestamps[[event.y() as usize, event.x() as usize, 0]];
+
                 println!(" ");
             }
         }
@@ -150,6 +168,9 @@ impl Source for DavisSource {
                 self.input_frame_scaled = mat;
                 self.dvs_events = Some(events);
                 self.end_of_frame_timestamp = Some(timestamp);
+                self.dvs_last_timestamps.par_map_inplace(|ts| {
+                    *ts = timestamp;
+                });
             }
             Some((mat, None)) => {
                 self.input_frame_scaled = mat;

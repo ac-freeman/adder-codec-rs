@@ -214,37 +214,18 @@ impl Video {
 
                     *frame_val = frame_arr[*px_idx];
 
-                    if px.need_to_pop_top {
-                        buffer.push(px.pop_top_event(Some(*frame_val as Intensity32)));
-                    }
-
-                    base_val = &mut px.base_val;
-
-                    if *frame_val < base_val.saturating_sub(self.c_thresh_neg)
-                        || *frame_val > base_val.saturating_add(self.c_thresh_pos)
-                    {
-                        px.pop_best_events(None, &mut buffer);
-                        px.base_val = *frame_val;
-
-                        // If continuous mode and the D value needs to be different now
-                        // TODO: make it modular
-                        match pixel_tree_mode {
-                            Continuous => {
-                                match px.set_d_for_continuous(*frame_val as Intensity32) {
-                                    None => {}
-                                    Some(event) => buffer.push(event),
-                                };
-                            }
-                            _ => {}
-                        }
-                    }
-
-                    px.integrate(
+                    integrate_for_px(
+                        px,
+                        &mut base_val,
+                        frame_val,
                         *frame_val as Intensity32,
                         ref_time,
-                        &pixel_tree_mode,
+                        pixel_tree_mode,
+                        &mut buffer,
+                        &self.c_thresh_pos,
+                        &self.c_thresh_neg,
                         &self.delta_t_max,
-                    );
+                    )
                 }
                 buffer
             })
@@ -259,6 +240,19 @@ impl Video {
         Ok(big_buffer)
     }
 
+    pub(crate) fn integrate_single_intensity(
+        &mut self,
+        y: usize,
+        x: usize,
+        c: usize,
+        intensity: Intensity32,
+        ref_time: f32,
+        pixel_tree_mode: Mode,
+    ) -> std::result::Result<Vec<Event>, SourceError> {
+        let px = &mut self.event_pixel_trees[[y, x, c]];
+        todo!()
+    }
+
     fn set_initial_d(&mut self, frame_arr: &[u8]) {
         self.event_pixel_trees.par_map_inplace(|px| {
             let idx = px.coord.y as usize * self.width as usize * self.channels
@@ -270,6 +264,51 @@ impl Video {
             px.base_val = intensity;
         });
     }
+}
+
+pub(crate) fn integrate_for_px(
+    px: &mut PixelArena,
+    base_val: &mut u8,
+    frame_val: &u8,
+    intensity: Intensity32,
+    ref_time: f32,
+    pixel_tree_mode: Mode,
+    mut buffer: &mut Vec<Event>,
+    c_thresh_pos: &u8,
+    c_thresh_neg: &u8,
+    delta_t_max: &u32,
+) {
+    if px.need_to_pop_top {
+        buffer.push(px.pop_top_event(Some(intensity)));
+    }
+
+    *base_val = px.base_val;
+
+    if *frame_val < base_val.saturating_sub(*c_thresh_neg)
+        || *frame_val > base_val.saturating_add(*c_thresh_pos)
+    {
+        px.pop_best_events(None, &mut buffer);
+        px.base_val = *frame_val;
+
+        // If continuous mode and the D value needs to be different now
+        // TODO: make it modular
+        match pixel_tree_mode {
+            Continuous => {
+                match px.set_d_for_continuous(intensity) {
+                    None => {}
+                    Some(event) => buffer.push(event),
+                };
+            }
+            _ => {}
+        }
+    }
+
+    px.integrate(
+        *frame_val as Intensity32,
+        ref_time,
+        &pixel_tree_mode,
+        &delta_t_max,
+    );
 }
 
 /// If [`MyArgs`]`.show_display`, shows the given [`Mat`] in an OpenCV window
