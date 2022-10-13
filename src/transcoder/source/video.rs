@@ -319,12 +319,7 @@ pub fn integrate_for_px(
         }
     }
 
-    px.integrate(
-        *frame_val as Intensity32,
-        ref_time,
-        &pixel_tree_mode,
-        &delta_t_max,
-    );
+    px.integrate(intensity, ref_time, &pixel_tree_mode, &delta_t_max);
 }
 
 /// If [`MyArgs`]`.show_display`, shows the given [`Mat`] in an OpenCV window

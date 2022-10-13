@@ -107,8 +107,8 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let mut davis_source = DavisSource::new(
         reconstructor,
         Some(args.output_events_filename),
-        (edi_args.output_fps * 5000.0) as u32, // TODO
-        (edi_args.output_fps * 5000.0 * args.delta_t_max_multiplier) as u32, // TODO
+        (1000000) as u32,                                 // TODO
+        (1000000.0 * args.delta_t_max_multiplier) as u32, // TODO
         args.show_display != 0,
         args.adder_c_thresh_pos,
         args.adder_c_thresh_neg,
@@ -131,7 +131,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 break;
             }
         };
-        // davis_source.integrate_dvs_events();
+        davis_source.integrate_dvs_events();
         if davis_source.get_video().in_interval_count % 30 == 0 {
             println!(
                 "\rDavis recon frame to ADDER {} in  {}ms",

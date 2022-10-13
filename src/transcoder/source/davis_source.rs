@@ -245,6 +245,9 @@ impl DavisSource {
                     let integration =
                         (*base_val as Intensity32) / self.video.ref_time as f32 * delta_t_ticks;
                     assert!(integration >= 0.0);
+                    if integration > 0.0 {
+                        println!("");
+                    }
 
                     integrate_for_px(
                         px,
