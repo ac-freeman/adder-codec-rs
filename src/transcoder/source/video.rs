@@ -51,8 +51,9 @@ pub struct Video {
     pub event_sender: Sender<Vec<Event>>,
     pub(crate) write_out: bool,
     pub channels: usize,
-    c_thresh_pos: u8,
-    c_thresh_neg: u8,
+    pub(crate) c_thresh_pos: u8,
+    pub(crate) c_thresh_neg: u8,
+    pub(crate) tps: DeltaT,
     pub(crate) stream: RawStream,
 }
 
@@ -166,6 +167,7 @@ impl Video {
             stream,
             c_thresh_pos,
             c_thresh_neg,
+            tps,
         }
     }
 
@@ -218,7 +220,7 @@ impl Video {
                         px,
                         &mut base_val,
                         frame_val,
-                        *frame_val as Intensity32,
+                        *frame_val as Intensity32, // In this case, frame val is the same as intensity to integrate
                         ref_time,
                         pixel_tree_mode,
                         &mut buffer,
@@ -240,18 +242,18 @@ impl Video {
         Ok(big_buffer)
     }
 
-    pub(crate) fn integrate_single_intensity(
-        &mut self,
-        y: usize,
-        x: usize,
-        c: usize,
-        intensity: Intensity32,
-        ref_time: f32,
-        pixel_tree_mode: Mode,
-    ) -> std::result::Result<Vec<Event>, SourceError> {
-        let px = &mut self.event_pixel_trees[[y, x, c]];
-        todo!()
-    }
+    // pub(crate) fn integrate_single_intensity(
+    //     &mut self,
+    //     y: usize,
+    //     x: usize,
+    //     c: usize,
+    //     intensity: Intensity32,
+    //     ref_time: f32,
+    //     pixel_tree_mode: Mode,
+    // ) -> std::result::Result<Vec<Event>, SourceError> {
+    //     let px = &mut self.event_pixel_trees[[y, x, c]];
+    //     todo!()
+    // }
 
     fn set_initial_d(&mut self, frame_arr: &[u8]) {
         self.event_pixel_trees.par_map_inplace(|px| {
@@ -266,7 +268,7 @@ impl Video {
     }
 }
 
-pub(crate) fn integrate_for_px(
+pub fn integrate_for_px(
     px: &mut PixelArena,
     base_val: &mut u8,
     frame_val: &u8,

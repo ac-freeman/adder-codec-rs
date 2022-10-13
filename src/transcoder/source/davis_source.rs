@@ -1,9 +1,9 @@
 use crate::transcoder::d_controller::DecimationMode;
 use crate::transcoder::event_pixel_tree::Mode::Continuous;
 use crate::transcoder::source::video::SourceError::BufferEmpty;
-use crate::transcoder::source::video::{Source, SourceError, Video};
+use crate::transcoder::source::video::{integrate_for_px, Source, SourceError, Video};
 use crate::SourceCamera::DavisU8;
-use crate::{DeltaT, Event};
+use crate::{Codec, DeltaT, Event};
 use aedat::events_generated::Event as DvsEvent;
 use davis_edi_rs::util::reconstructor::{IterVal, Reconstructor};
 use std::marker::PhantomData;
@@ -15,6 +15,7 @@ use ndarray::Array3;
 use rayon::{current_num_threads, ThreadPool};
 use std::cmp::max;
 
+use crate::transcoder::event_pixel_tree::Intensity32;
 use tokio::runtime::Runtime;
 
 // https://stackoverflow.com/questions/51344951/how-do-you-unwrap-a-result-on-ok-or-return-from-the-function-on-err
@@ -118,18 +119,75 @@ impl DavisSource {
     // TODO: need to return the events for simultaneously reframing?
     pub fn integrate_dvs_events(&mut self) {
         // Using a macro so that CLion still pretty prints correctly
+        let mut buffer: Vec<Event> = Vec::with_capacity(500); // TODO: experiment with capacity
         let dvs_events = unwrap_or_return!(self.dvs_events.as_ref());
         let end_of_frame_timestamp = unwrap_or_return!(self.end_of_frame_timestamp.as_ref());
         for event in dvs_events.iter() {
             if event.t() > *end_of_frame_timestamp {
                 let px =
                     &mut self.video.event_pixel_trees[[event.y() as usize, event.x() as usize, 0]];
-                let base_val = &px.base_val;
-                let delta_t = event.t()
+                let base_val = px.base_val;
+
+                // in microseconds (1 million per second)
+
+                let delta_t_micro = event.t()
                     - self.dvs_last_timestamps[[event.y() as usize, event.x() as usize, 0]];
+                let ticks_per_micro = self.video.tps as f32 / 1e6;
+                let delta_t_ticks = delta_t_micro as f32 * ticks_per_micro;
+                let frame_delta_t = self.video.ref_time;
+                // integrate_for_px(px, base_val, &frame_val, 0.0, 0.0, Mode::FramePerfect, &mut vec![], &0, &0, &0)
+
+                // First, integrate the previous value enough to fill the time since then
+                let first_integration =
+                    (base_val as Intensity32) / self.video.ref_time as f32 * delta_t_ticks;
+
+                if px.need_to_pop_top {
+                    buffer.push(px.pop_top_event(Some(first_integration)));
+                }
+
+                px.integrate(
+                    first_integration,
+                    delta_t_ticks,
+                    &Continuous,
+                    &self.video.delta_t_max,
+                );
+
+                ///////////////////////////////////////////////////////
+                // Then, integrate a tiny amount of the next intensity
+                let mut frame_val = (base_val as Intensity32);
+                frame_val += match event.on() {
+                    true => 20.0,
+                    false => -20.0, // TODO: temporary, just for debugging setup
+                };
+                let frame_val = frame_val as u8;
+
+                if frame_val < base_val.saturating_sub(self.video.c_thresh_neg)
+                    || frame_val > base_val.saturating_add(self.video.c_thresh_pos)
+                {
+                    px.pop_best_events(None, &mut buffer);
+                    px.base_val = frame_val;
+
+                    // If continuous mode and the D value needs to be different now
+                    match px.set_d_for_continuous(0.0) {
+                        // TODO: This may cause issues if events are very close together in time
+                        None => {}
+                        Some(event) => buffer.push(event),
+                    };
+                }
+
+                // px.integrate(
+                //     *frame_val as Intensity32,
+                //     ref_time,
+                //     &pixel_tree_mode,
+                //     &delta_t_max,
+                // );
 
                 println!(" ");
             }
+        }
+
+        if self.video.write_out {
+            self.video.stream.encode_events(&buffer);
         }
     }
 }
