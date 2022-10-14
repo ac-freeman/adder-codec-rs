@@ -237,7 +237,10 @@ impl PixelArena {
                     // If continuous, we need to integrate the remaining intensity for the current
                     // node and the branching nodes
                     Continuous => {
-                        // idx -= 1
+                        // TODO: temporary hack. Get number from caller.
+                        if time > 2000.0 {
+                            self.arena[idx].state.d = get_d_from_intensity(intensity);
+                        }
                     }
                 }
             }
