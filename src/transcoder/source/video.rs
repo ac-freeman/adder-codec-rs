@@ -296,6 +296,11 @@ pub fn integrate_for_px(
     c_thresh_neg: &u8,
     delta_t_max: &u32,
 ) {
+    // TODO: tmp
+    if px.coord.x == 0 && px.coord.y == 0 {
+        dbg!(intensity);
+    }
+
     if px.need_to_pop_top {
         buffer.push(px.pop_top_event(Some(intensity)));
     }

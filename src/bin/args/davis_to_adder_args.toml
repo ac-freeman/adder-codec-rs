@@ -1,8 +1,8 @@
 args_filename = ""
 edi_args_filename = "./src/bin/args/edi_args.toml"
 output_events_filename = "/home/andrew/Downloads/davis.adder"
-adder_c_thresh_pos = 15
-adder_c_thresh_neg = 15
+adder_c_thresh_pos = 0
+adder_c_thresh_neg = 0
 delta_t_max_multiplier = 1.0
 transcode_from = "raw"
 show_display = 1

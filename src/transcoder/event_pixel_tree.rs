@@ -264,6 +264,10 @@ impl PixelArena {
     ) -> Option<(Intensity32, f32)> {
         let node = &mut self.arena[index];
         if node.state.integration + intensity >= D_SHIFT[node.state.d as usize] as f32 {
+            // If the new intensity is much bigger, then we need to increase D accordingly, first
+            let new_d = get_d_from_intensity(node.state.integration + intensity);
+            node.state.d = new_d;
+
             let prop =
                 (D_SHIFT[node.state.d as usize] as f32 - node.state.integration) as f32 / intensity;
             assert!(prop > 0.0);
@@ -277,6 +281,8 @@ impl PixelArena {
             if node.state.d < D_MAX {
                 node.state.integration += intensity;
                 node.state.delta_t += time;
+
+                // TODO: this is slow and dumb
                 loop {
                     node.state.d += 1;
                     if D_SHIFT[node.state.d as usize] > node.state.integration as u32 {
@@ -556,6 +562,30 @@ mod tests {
         assert!(!tree.need_to_pop_top);
         let tmp = tree.arena[0].state.delta_t;
         assert_eq!(tmp, 70000.0)
+    }
+
+    #[test]
+    fn test_big_integration() {
+        let dtm = 1000000;
+        let mut tree = PixelArena::new(
+            146.0,
+            Coord {
+                x: 0,
+                y: 0,
+                c: None,
+            },
+        );
+        tree.integrate(146.0, 2000.0, &Continuous, &dtm);
+        tree.integrate(2790.86304, 38231.0, &Continuous, &dtm);
+
+        let head = tree.arena[0];
+        let integ = head.state.integration;
+        let dt = head.state.delta_t;
+        let d = head.state.d;
+        assert_eq!(integ, 2790.86304 + 146.0);
+        assert_eq!(dt, 38231.0 + 2000.0);
+        assert_eq!(head.best_event.unwrap().d, d - 1);
+        print!("");
     }
 
     fn f32_slack(num0: f32, num1: f32) -> bool {
