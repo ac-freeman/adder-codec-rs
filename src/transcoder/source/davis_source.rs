@@ -52,9 +52,9 @@ pub struct DavisSource {
     thread_pool_edi: ThreadPool,
     thread_pool_integration: ThreadPool,
     dvs_events: Option<Vec<DvsEvent>>,
-    end_of_frame_timestamp: Option<i64>,
+    pub end_of_frame_timestamp: Option<i64>,
     pub rt: Runtime,
-    dvs_last_timestamps: Array3<i64>,
+    pub dvs_last_timestamps: Array3<i64>,
     mode: DavisTranscoderMode, // phantom: PhantomData<T>,
 }
 
