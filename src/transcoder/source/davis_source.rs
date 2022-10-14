@@ -223,7 +223,7 @@ impl DavisSource {
 
                 for (chunk_px_idx, px) in chunk.iter_mut().enumerate() {
                     *px_idx = chunk_px_idx + px_per_chunk * chunk_idx;
-
+                    *base_val = px.base_val;
                     *frame_val = *base_val;
 
                     // TODO: Also need start of video timestamp
@@ -242,18 +242,24 @@ impl DavisSource {
                     }
                     assert!(delta_t_ticks > 0.0);
 
+                    let tmp_ref = self.video.ref_time as f32;
+                    let tmp_00 = *base_val as f64 / self.video.ref_time as f64;
+                    let tmp_01 = delta_t_ticks as f64;
                     let integration =
-                        (*base_val as Intensity32) / self.video.ref_time as f32 * delta_t_ticks;
+                        (*base_val as f64 / self.video.ref_time as f64) * delta_t_ticks as f64;
+                    if *base_val > 0 {
+                        assert!(integration > 0.0);
+                    }
                     assert!(integration >= 0.0);
                     if integration > 0.0 {
-                        println!("");
+                        print!("");
                     }
 
                     integrate_for_px(
                         px,
                         &mut base_val,
                         frame_val,
-                        integration, // In this case, frame val is the same as intensity to integrate
+                        integration as f32, // In this case, frame val is the same as intensity to integrate
                         delta_t_ticks,
                         Continuous,
                         &mut buffer,
@@ -317,7 +323,7 @@ impl Source for DavisSource {
             None => {
                 return Err(SourceError::NoData);
             }
-            Some((mat, Some((events, timestamp)))) => {
+            Some((mat, Some((events, img_start_ts, timestamp)))) => {
                 self.input_frame_scaled = mat;
                 self.dvs_events = Some(events);
                 self.end_of_frame_timestamp = Some(timestamp);
