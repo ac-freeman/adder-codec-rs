@@ -529,7 +529,7 @@ fn ingest_event_for_chunk<
 
     if ((*running_ts_ref - 1) as i64 / tpf as i64) > *last_filled_frame_ref {
         match event.d {
-            d if d == 0xFF && event.delta_t < tpf => {
+            d if d == 0xFF => {
                 // Don't do anything -- it's an empty event
                 // Except in special case where delta_t == tpf
                 if *running_ts_ref == tpf as BigT && event.delta_t == tpf {

@@ -52,6 +52,7 @@ pub struct DavisSource {
     thread_pool_edi: ThreadPool,
     thread_pool_integration: ThreadPool,
     dvs_events: Option<Vec<DvsEvent>>,
+    pub start_of_frame_timestamp: Option<i64>,
     pub end_of_frame_timestamp: Option<i64>,
     pub rt: Runtime,
     pub dvs_last_timestamps: Array3<i64>,
@@ -115,6 +116,7 @@ impl DavisSource {
             thread_pool_edi,
             thread_pool_integration,
             dvs_events: None,
+            start_of_frame_timestamp: None,
             end_of_frame_timestamp: None,
             rt,
             dvs_last_timestamps,
@@ -228,12 +230,14 @@ impl DavisSource {
 
                     // TODO: Also need start of video timestamp
                     let ticks_per_micro = self.video.tps as f32 / 1e6;
-                    let tmp_0 = self.end_of_frame_timestamp.unwrap();
+
+                    // TODO TODO: Need to sort out / correct the difference between the timestamps here,
+                    // and what's being returned from edi
+                    let tmp_0 = self.start_of_frame_timestamp.unwrap();
                     let tmp_1 = (self.video.ref_time as f32 * ticks_per_micro) as i64;
                     let tmp_2 =
                         self.dvs_last_timestamps[[px.coord.y as usize, px.coord.x as usize, 0]];
-                    let delta_t_micro = self.end_of_frame_timestamp.unwrap()
-                        - (self.video.ref_time as f32 / ticks_per_micro) as i64
+                    let delta_t_micro = self.start_of_frame_timestamp.unwrap()
                         - self.dvs_last_timestamps[[px.coord.y as usize, px.coord.x as usize, 0]];
 
                     let delta_t_ticks = delta_t_micro as f32 * ticks_per_micro;
@@ -241,6 +245,11 @@ impl DavisSource {
                         continue; // TODO: a hacky way around the problem. Need to also get the frame start timestamp
                     }
                     assert!(delta_t_ticks > 0.0);
+                    assert_eq!(
+                        self.end_of_frame_timestamp.unwrap()
+                            - self.start_of_frame_timestamp.unwrap(),
+                        (self.video.ref_time as f32 / ticks_per_micro as f32) as i64
+                    );
 
                     let tmp_ref = self.video.ref_time as f32;
                     let tmp_00 = *base_val as f64 / self.video.ref_time as f64;
@@ -326,7 +335,12 @@ impl Source for DavisSource {
             Some((mat, Some((events, img_start_ts, timestamp)))) => {
                 self.input_frame_scaled = mat;
                 self.dvs_events = Some(events);
+                self.start_of_frame_timestamp = Some(img_start_ts);
                 self.end_of_frame_timestamp = Some(timestamp);
+                assert_eq!(
+                    self.end_of_frame_timestamp.unwrap(),
+                    self.start_of_frame_timestamp.unwrap() + self.video.ref_time as i64
+                )
                 // self.dvs_last_timestamps.par_map_inplace(|ts| {
                 //     *ts = timestamp;
                 // });
@@ -338,7 +352,7 @@ impl Source for DavisSource {
 
         if self.video.in_interval_count == 0 {
             self.dvs_last_timestamps.par_map_inplace(|ts| {
-                *ts = self.end_of_frame_timestamp.unwrap();
+                *ts = self.start_of_frame_timestamp.unwrap();
             });
         } else {
             self.integrate_frame_gaps();
@@ -357,10 +371,14 @@ impl Source for DavisSource {
         // iterating over the pixels), cloning it ensures that it is made continuous.
         // https://stackoverflow.com/questions/33665241/is-opencv-matrix-data-guaranteed-to-be-continuous
         let tmp = self.image_8u.clone();
-        thread_pool.install(|| {
+        let ret = thread_pool.install(|| {
             self.video
                 .integrate_matrix(tmp, self.video.ref_time as f32, Continuous, view_interval)
-        })
+        });
+        self.dvs_last_timestamps.par_map_inplace(|ts| {
+            *ts = self.end_of_frame_timestamp.unwrap();
+        });
+        ret
     }
 
     fn get_video_mut(&mut self) -> &mut Video {

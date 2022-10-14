@@ -22,7 +22,7 @@ impl FrameValue for u8 {
     fn get_frame_value(event: &Event, source_type: SourceType, tpf: DeltaT) -> Self::Output {
         let intensity = event_to_intensity(event);
 
-        match source_type {
+        let tmp = match source_type {
             SourceType::U8 => (intensity * tpf as f64) as u8,
             SourceType::U16 => (intensity / u16::MAX as f64 * tpf as f64 * u8::MAX as f64) as u8,
             SourceType::U32 => (intensity / u32::MAX as f64 * tpf as f64 * u8::MAX as f64) as u8,
@@ -33,7 +33,11 @@ impl FrameValue for u8 {
             SourceType::F64 => {
                 todo!()
             }
+        };
+        if tmp == 0 && event.coord.y < 160 {
+            print!("");
         }
+        tmp
     }
 }
 
