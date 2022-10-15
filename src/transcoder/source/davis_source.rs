@@ -169,31 +169,24 @@ impl DavisSource {
                 // Then, integrate a tiny amount of the next intensity
                 let mut frame_val = (base_val as Intensity32);
                 frame_val += match event.on() {
-                    true => 0.0,
-                    false => -0.0, // TODO: temporary, just for debugging setup
+                    true => 5.0,
+                    false => -5.0, // TODO: temporary, just for debugging setup
                 };
-                let frame_val = frame_val as u8;
+                let frame_val_u8 = frame_val as u8; // TODO: don't let this be lossy here
 
-                if frame_val < base_val.saturating_sub(self.video.c_thresh_neg)
-                    || frame_val > base_val.saturating_add(self.video.c_thresh_pos)
+                if frame_val_u8 < base_val.saturating_sub(self.video.c_thresh_neg)
+                    || frame_val_u8 > base_val.saturating_add(self.video.c_thresh_pos)
                 {
                     px.pop_best_events(None, &mut buffer);
-                    px.base_val = frame_val;
+                    px.base_val = frame_val_u8;
 
                     // If continuous mode and the D value needs to be different now
-                    match px.set_d_for_continuous(0.0) {
+                    match px.set_d_for_continuous(frame_val) {
                         // TODO: This may cause issues if events are very close together in time
                         None => {}
                         Some(event) => buffer.push(event),
                     };
                 }
-
-                // px.integrate(
-                //     *frame_val as Intensity32,
-                //     ref_time,
-                //     &pixel_tree_mode,
-                //     &delta_t_max,
-                // );
 
                 self.dvs_last_timestamps[[event.y() as usize, event.x() as usize, 0]] = event.t();
             }
