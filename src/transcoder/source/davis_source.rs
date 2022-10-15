@@ -168,10 +168,14 @@ impl DavisSource {
                 ///////////////////////////////////////////////////////
                 // Then, integrate a tiny amount of the next intensity
                 let mut frame_val = (base_val as Intensity32);
-                frame_val += match event.on() {
-                    true => 5.0,
-                    false => -5.0, // TODO: temporary, just for debugging setup
+                let mut lat_frame_val = (frame_val / 255.0).ln();
+
+                let c = 0.15_f32; // TODO: Get c from edi
+                lat_frame_val += match event.on() {
+                    true => c,
+                    false => -c, // TODO: temporary, just for debugging setup
                 };
+                frame_val = lat_frame_val.exp() * 255.0;
                 let frame_val_u8 = frame_val as u8; // TODO: don't let this be lossy here
 
                 if frame_val_u8 < base_val.saturating_sub(self.video.c_thresh_neg)
