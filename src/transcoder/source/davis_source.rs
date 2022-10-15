@@ -57,6 +57,7 @@ pub struct DavisSource {
     pub end_of_frame_timestamp: Option<i64>,
     pub rt: Runtime,
     pub dvs_last_timestamps: Array3<i64>,
+    pub dvs_last_ln_val: Array3<f64>,
     mode: DavisTranscoderMode, // phantom: PhantomData<T>,
 }
 
@@ -109,6 +110,15 @@ impl DavisSource {
         )
         .unwrap();
 
+        let timestamps =
+            vec![0.0_f64; video.height as usize * video.width as usize * video.channels as usize];
+
+        let dvs_last_ln_val: Array3<f64> = Array3::from_shape_vec(
+            (video.height.into(), video.width.into(), video.channels),
+            timestamps,
+        )
+        .unwrap();
+
         let davis_source = DavisSource {
             reconstructor,
             input_frame_scaled: Mat::default(),
@@ -122,6 +132,7 @@ impl DavisSource {
             end_of_frame_timestamp: None,
             rt,
             dvs_last_timestamps,
+            dvs_last_ln_val,
             mode,
         };
         Ok(davis_source)
@@ -138,6 +149,9 @@ impl DavisSource {
                 let px =
                     &mut self.video.event_pixel_trees[[event.y() as usize, event.x() as usize, 0]];
                 let base_val = px.base_val;
+                let last_val_ln =
+                    &mut self.dvs_last_ln_val[[event.y() as usize, event.x() as usize, 0]];
+                let last_val = last_val_ln.exp() * 255.0;
 
                 // in microseconds (1 million per second)
 
@@ -154,7 +168,7 @@ impl DavisSource {
 
                 // First, integrate the previous value enough to fill the time since then
                 let first_integration =
-                    (base_val as Intensity32) / self.video.ref_time as f32 * delta_t_ticks;
+                    (last_val as Intensity32) / self.video.ref_time as f32 * delta_t_ticks;
 
                 if px.need_to_pop_top {
                     buffer.push(px.pop_top_event(Some(first_integration)));
@@ -169,14 +183,14 @@ impl DavisSource {
 
                 ///////////////////////////////////////////////////////
                 // Then, integrate a tiny amount of the next intensity
-                let mut frame_val = (base_val as f64);
-                let mut lat_frame_val = (frame_val / 255.0).ln();
+                // let mut frame_val = (base_val as f64);
+                // let mut lat_frame_val = (frame_val / 255.0).ln();
 
-                lat_frame_val += match event.on() {
+                *last_val_ln += match event.on() {
                     true => self.dvs_c,
                     false => -self.dvs_c,
                 };
-                frame_val = lat_frame_val.exp() * 255.0;
+                let frame_val = last_val_ln.exp() * 255.0;
                 let frame_val_u8 = frame_val as u8; // TODO: don't let this be lossy here
 
                 if frame_val_u8 < base_val.saturating_sub(self.video.c_thresh_neg)
@@ -214,18 +228,28 @@ impl DavisSource {
             .event_pixel_trees
             .axis_chunks_iter_mut(Axis(0), self.video.chunk_rows)
             .into_par_iter()
+            .zip(
+                self.dvs_last_ln_val
+                    .axis_chunks_iter_mut(Axis(0), self.video.chunk_rows)
+                    .into_par_iter(),
+            )
             .enumerate()
-            .map(|(chunk_idx, mut chunk)| {
+            .map(|(chunk_idx, (mut chunk_px, mut chunk_ln_val))| {
                 let mut buffer: Vec<Event> = Vec::with_capacity(px_per_chunk);
                 let bump = Bump::new();
                 let mut base_val = bump.alloc(0);
                 let px_idx = bump.alloc(0);
                 let frame_val = bump.alloc(0);
 
-                for (chunk_px_idx, px) in chunk.iter_mut().enumerate() {
+                for (chunk_px_idx, (px, last_val_ln)) in
+                    chunk_px.iter_mut().zip(chunk_ln_val.iter_mut()).enumerate()
+                {
                     *px_idx = chunk_px_idx + px_per_chunk * chunk_idx;
+
+                    let last_val = last_val_ln.exp() * 255.0;
+
                     *base_val = px.base_val;
-                    *frame_val = *base_val;
+                    *frame_val = last_val as u8;
 
                     // TODO: Also need start of video timestamp
                     let ticks_per_micro = self.video.tps as f32 / 1e6;
@@ -254,9 +278,9 @@ impl DavisSource {
                     let tmp_00 = *base_val as f64 / self.video.ref_time as f64;
                     let tmp_01 = delta_t_ticks as f64;
                     let integration =
-                        (*base_val as f64 / self.video.ref_time as f64) * delta_t_ticks as f64;
+                        (last_val / self.video.ref_time as f64) * delta_t_ticks as f64;
                     if *base_val > 0 {
-                        assert!(integration > 0.0);
+                        // assert!(integration > 0.0);
                     }
                     assert!(integration >= 0.0);
                     if integration > 0.0 {
@@ -378,6 +402,16 @@ impl Source for DavisSource {
         self.dvs_last_timestamps.par_map_inplace(|ts| {
             *ts = self.end_of_frame_timestamp.unwrap();
         });
+
+        unsafe {
+            for (idx, val) in self.dvs_last_ln_val.iter_mut().enumerate() {
+                let px = self
+                    .input_frame_scaled
+                    .at_unchecked::<f64>(idx as i32)
+                    .unwrap();
+                *val = px.ln();
+            }
+        }
         ret
     }
 
