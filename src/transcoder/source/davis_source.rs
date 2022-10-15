@@ -51,6 +51,7 @@ pub struct DavisSource {
     image_8u: Mat,
     thread_pool_edi: ThreadPool,
     thread_pool_integration: ThreadPool,
+    dvs_c: f64,
     dvs_events: Option<Vec<DvsEvent>>,
     pub start_of_frame_timestamp: Option<i64>,
     pub end_of_frame_timestamp: Option<i64>,
@@ -115,6 +116,7 @@ impl DavisSource {
             image_8u: Mat::default(),
             thread_pool_edi,
             thread_pool_integration,
+            dvs_c: 0.15,
             dvs_events: None,
             start_of_frame_timestamp: None,
             end_of_frame_timestamp: None,
@@ -167,13 +169,12 @@ impl DavisSource {
 
                 ///////////////////////////////////////////////////////
                 // Then, integrate a tiny amount of the next intensity
-                let mut frame_val = (base_val as Intensity32);
+                let mut frame_val = (base_val as f64);
                 let mut lat_frame_val = (frame_val / 255.0).ln();
 
-                let c = 0.15_f32; // TODO: Get c from edi
                 lat_frame_val += match event.on() {
-                    true => c,
-                    false => -c, // TODO: temporary, just for debugging setup
+                    true => self.dvs_c,
+                    false => -self.dvs_c,
                 };
                 frame_val = lat_frame_val.exp() * 255.0;
                 let frame_val_u8 = frame_val as u8; // TODO: don't let this be lossy here
@@ -185,7 +186,8 @@ impl DavisSource {
                     px.base_val = frame_val_u8;
 
                     // If continuous mode and the D value needs to be different now
-                    match px.set_d_for_continuous(frame_val) {
+                    match px.set_d_for_continuous(0.0) {
+                        // TODO: does it need to be the frameval here?
                         // TODO: This may cause issues if events are very close together in time
                         None => {}
                         Some(event) => buffer.push(event),
@@ -329,8 +331,9 @@ impl Source for DavisSource {
             None => {
                 return Err(SourceError::NoData);
             }
-            Some((mat, Some((events, img_start_ts, timestamp)))) => {
+            Some((mat, Some((c, events, img_start_ts, timestamp)))) => {
                 self.input_frame_scaled = mat;
+                self.dvs_c = c;
                 self.dvs_events = Some(events);
                 self.start_of_frame_timestamp = Some(img_start_ts);
                 self.end_of_frame_timestamp = Some(timestamp);
