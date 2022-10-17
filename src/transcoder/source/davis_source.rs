@@ -21,6 +21,7 @@ use num::clamp;
 use rayon::iter::IntoParallelIterator;
 use rayon::{current_num_threads, ThreadPool};
 use std::cmp::max;
+use std::time::Instant;
 
 use crate::framer::scale_intensity::FrameValue;
 use crate::transcoder::event_pixel_tree::Intensity32;
@@ -59,6 +60,7 @@ pub struct DavisSource {
     pub rt: Runtime,
     pub dvs_last_timestamps: Array3<i64>,
     pub dvs_last_ln_val: Array3<f64>,
+    optimize_adder_controller: bool,
     mode: DavisTranscoderMode, // phantom: PhantomData<T>,
 }
 
@@ -73,6 +75,7 @@ impl DavisSource {
         show_display_b: bool,
         adder_c_thresh_pos: u8,
         adder_c_thresh_neg: u8,
+        optimize_adder_controller: bool,
         rt: Runtime,
         mode: DavisTranscoderMode,
     ) -> Result<DavisSource> {
@@ -134,6 +137,7 @@ impl DavisSource {
             rt,
             dvs_last_timestamps,
             dvs_last_ln_val,
+            optimize_adder_controller,
             mode,
         };
         Ok(davis_source)
@@ -318,6 +322,31 @@ impl DavisSource {
             show_display("instance", &self.video.instantaneous_frame, 1, &self.video);
         }
     }
+
+    fn control_latency(&mut self, opt_timestamp: Option<Instant>) {
+        if self.optimize_adder_controller {
+            match opt_timestamp {
+                None => {}
+                Some(timestamp) => {
+                    let latency = (Instant::now() - timestamp).as_millis();
+                    match latency as f64 >= self.reconstructor.target_latency * 3.0 {
+                        true => {
+                            self.video.c_thresh_pos = self.video.c_thresh_pos.saturating_add(1);
+                            self.video.c_thresh_neg = self.video.c_thresh_neg.saturating_add(1);
+                        }
+                        false => {
+                            self.video.c_thresh_pos = self.video.c_thresh_pos.saturating_sub(1);
+                            self.video.c_thresh_neg = self.video.c_thresh_neg.saturating_sub(1);
+                        }
+                    }
+                    eprintln!(
+                        "    adder latency = {}, adder c = {}",
+                        latency, self.video.c_thresh_pos
+                    );
+                }
+            }
+        }
+    }
 }
 
 impl Source for DavisSource {
@@ -350,7 +379,9 @@ impl Source for DavisSource {
             None => {
                 return Err(SourceError::NoData);
             }
-            Some((mat, Some((c, events, img_start_ts, timestamp)))) => {
+            Some((mat, opt_timestamp, Some((c, events, img_start_ts, timestamp)))) => {
+                self.control_latency(opt_timestamp);
+
                 self.input_frame_scaled = mat;
                 self.dvs_c = c;
                 self.dvs_events = Some(events);
@@ -364,7 +395,8 @@ impl Source for DavisSource {
                 //     *ts = timestamp;
                 // });
             }
-            Some((mat, None)) => {
+            Some((mat, opt_timestamp, None)) => {
+                self.control_latency(opt_timestamp);
                 self.input_frame_scaled = mat;
             }
         }

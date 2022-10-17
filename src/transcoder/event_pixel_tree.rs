@@ -1,6 +1,7 @@
 use crate::transcoder::event_pixel_tree::Mode::{Continuous, FramePerfect};
 use crate::{Coord, Event, D_MAX, D_SHIFT};
 use smallvec::{smallvec, SmallVec};
+use std::cmp::min;
 
 /// Decimation value; a pixel's sensitivity.
 pub type D = u8;
@@ -316,10 +317,15 @@ impl PixelArena {
 }
 
 fn get_d_from_intensity(intensity: Intensity32) -> D {
-    match intensity > 0.0 {
-        true => fast_math::log2_raw(intensity) as D,
-        false => 0,
-    }
+    min(
+        {
+            match intensity > 0.0 {
+                true => fast_math::log2_raw(intensity) as D,
+                false => 0,
+            }
+        },
+        D_MAX,
+    )
 }
 
 impl PixelNode {

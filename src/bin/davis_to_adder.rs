@@ -50,6 +50,13 @@ pub struct Args {
     /// raw DVS events? (options are "framed", "raw")
     #[clap(short, long, default_value = "")]
     pub transcode_from: String,
+
+    /// Optimize the ADDER controller for latency? (1=yes,0=no)
+    /// If yes, then the ADDER transcoder will attempt to maintain the maximum latency as defined
+    /// for the EDI reconstructor, by adjusting the ADDER contrast threshold (and thus the ADDER
+    /// event rate).
+    #[clap(long, default_value_t = 0)]
+    pub optimize_adder_controller: u32,
 }
 
 fn main() -> Result<(), Box<dyn error::Error>> {
@@ -65,12 +72,9 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         edi_args = toml::from_str(&content).unwrap();
     }
 
-    let mut args: Args = Args::parse();
-    if !args.args_filename.is_empty() {
-        let content = std::fs::read_to_string(args.args_filename)?;
-        args = toml::from_str(&content).unwrap();
+    if args.optimize_adder_controller != 0 {
+        assert_ne!(edi_args.optimize_controller, 0);
     }
-    let args = args;
 
     // let transcode_type = match args.transcode_from.as_str() {
     //     "raw" => Raw,
@@ -112,6 +116,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         args.show_display != 0,
         args.adder_c_thresh_pos,
         args.adder_c_thresh_neg,
+        args.optimize_adder_controller != 0,
         rt,
         mode,
     )

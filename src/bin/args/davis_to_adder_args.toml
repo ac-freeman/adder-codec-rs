@@ -5,4 +5,5 @@ adder_c_thresh_pos = 10
 adder_c_thresh_neg = 10
 delta_t_max_multiplier = 1.0
 transcode_from = "raw"
-show_display = 1
+show_display = 0
+optimize_adder_controller = 1
