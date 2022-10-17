@@ -146,7 +146,7 @@ impl DavisSource {
     // TODO: need to return the events for simultaneously reframing?
     pub fn integrate_dvs_events(&mut self) {
         // Using a macro so that CLion still pretty prints correctly
-        let mut buffer: Vec<Event> = Vec::with_capacity(500); // TODO: experiment with capacity
+        let mut buffer: Vec<Event> = Vec::with_capacity(400000); // TODO: experiment with capacity
         let dvs_events = unwrap_or_return!(self.dvs_events.as_ref());
         let end_of_frame_timestamp = unwrap_or_return!(self.end_of_frame_timestamp.as_ref());
         for event in dvs_events.iter() {
@@ -217,6 +217,7 @@ impl DavisSource {
                 self.dvs_last_timestamps[[event.y() as usize, event.x() as usize, 0]] = event.t();
             }
         }
+        dbg!(buffer.len());
 
         if self.video.write_out {
             self.video.stream.encode_events(&buffer);
