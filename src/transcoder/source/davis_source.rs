@@ -209,8 +209,6 @@ impl DavisSource {
 
                     // If continuous mode and the D value needs to be different now
                     match px.set_d_for_continuous(frame_val as Intensity32) {
-                        // TODO: does it need to be the frameval here?
-                        // TODO: This may cause issues if events are very close together in time
                         None => {}
                         Some(event) => buffer.push(event),
                     };
@@ -262,8 +260,6 @@ impl DavisSource {
                     // TODO: Also need start of video timestamp
                     let ticks_per_micro = self.video.tps as f32 / 1e6;
 
-                    // TODO TODO: Need to sort out / correct the difference between the timestamps here,
-                    // and what's being returned from edi
                     let delta_t_micro = self.start_of_frame_timestamp.unwrap()
                         - self.dvs_last_timestamps[[px.coord.y as usize, px.coord.x as usize, 0]];
 

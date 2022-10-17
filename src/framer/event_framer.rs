@@ -604,7 +604,7 @@ fn ingest_event_for_chunk<
     // If framed video source, we can take advantage of scheme that reduces event rate by half
     if codec_version > 0
         && match source_camera {
-            SourceCamera::FramedU8 => true, // TODO: revert
+            SourceCamera::FramedU8 => true,
             SourceCamera::FramedU16 => true,
             SourceCamera::FramedU32 => true,
             SourceCamera::FramedU64 => true,
