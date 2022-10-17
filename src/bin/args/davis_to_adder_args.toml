@@ -8,4 +8,4 @@ transcode_from = "raw"
 #transcode_from = "framed"
 show_display = 1
 write_out = 0
-optimize_adder_controller = 1
+optimize_adder_controller = 0

@@ -109,12 +109,16 @@ impl PixelArena {
                         delta_t: root.state.delta_t as DeltaT,
                     });
                     match self.arena.len() > 1 {
-                        true => self.arena[1] = PixelNode::new(next_intensity.unwrap()),
+                        true => {
+                            self.arena[1] = PixelNode::new(next_intensity.unwrap());
+                            self.length = 2;
+                        }
                         false => {
                             self.arena.push(PixelNode::new(next_intensity.unwrap()));
+                            self.length += 1;
                         }
                     }
-                    self.length += 1;
+
                     self.pop_top_event(next_intensity)
                     // panic!("No best event! TODO: handle it")
                 }
@@ -150,7 +154,7 @@ impl PixelArena {
                     }
                 }
                 Some(event) => {
-                    debug_assert_ne!(node_idx, self.length - 1);
+                    assert_ne!(node_idx, self.length - 1);
                     buffer.push(event)
                 }
             }
@@ -158,7 +162,7 @@ impl PixelArena {
 
         // Move the last node to the front
         self.arena.swap(0, self.length - 1);
-        debug_assert!(self.arena[0].alt.is_none());
+        assert!(self.arena[0].alt.is_none());
         self.length = 1;
 
         match next_intensity {
@@ -307,7 +311,7 @@ impl PixelArena {
                     Continuous => (intensity - (intensity * prop), time - (time * prop)),
                 });
             }
-            None
+            return Some((0.0, 0.0));
         } else {
             node.state.integration += intensity;
             node.state.delta_t += time;
