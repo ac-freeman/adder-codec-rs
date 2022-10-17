@@ -17,6 +17,7 @@ use opencv::{prelude::*, Result};
 
 use bumpalo::Bump;
 use ndarray::{Array3, Axis};
+use num::clamp;
 use rayon::iter::IntoParallelIterator;
 use rayon::{current_num_threads, ThreadPool};
 use std::cmp::max;
@@ -151,7 +152,7 @@ impl DavisSource {
                 let base_val = px.base_val;
                 let last_val_ln =
                     &mut self.dvs_last_ln_val[[event.y() as usize, event.x() as usize, 0]];
-                let last_val = last_val_ln.exp() * 255.0;
+                let last_val = (last_val_ln.exp() - 1.0) * 255.0;
 
                 // in microseconds (1 million per second)
 
@@ -170,6 +171,7 @@ impl DavisSource {
                 let first_integration =
                     (last_val as Intensity32) / self.video.ref_time as f32 * delta_t_ticks;
 
+                assert!(first_integration >= 0.0);
                 if px.need_to_pop_top {
                     buffer.push(px.pop_top_event(Some(first_integration)));
                 }
@@ -190,7 +192,9 @@ impl DavisSource {
                     true => self.dvs_c,
                     false => -self.dvs_c,
                 };
-                let frame_val = last_val_ln.exp() * 255.0;
+                let mut frame_val = (last_val_ln.exp() - 1.0) * 255.0;
+                clamp_u8(&mut frame_val, last_val_ln);
+
                 let frame_val_u8 = frame_val as u8; // TODO: don't let this be lossy here
 
                 if frame_val_u8 < base_val.saturating_sub(self.video.c_thresh_neg)
@@ -200,7 +204,7 @@ impl DavisSource {
                     px.base_val = frame_val_u8;
 
                     // If continuous mode and the D value needs to be different now
-                    match px.set_d_for_continuous(0.0) {
+                    match px.set_d_for_continuous(frame_val as Intensity32) {
                         // TODO: does it need to be the frameval here?
                         // TODO: This may cause issues if events are very close together in time
                         None => {}
@@ -246,7 +250,10 @@ impl DavisSource {
                 {
                     *px_idx = chunk_px_idx + px_per_chunk * chunk_idx;
 
-                    let last_val = last_val_ln.exp() * 255.0;
+                    let mut last_val = (last_val_ln.exp() - 1.0) * 255.0;
+                    if last_val < 0.0 {
+                        last_val = 0.0;
+                    }
 
                     *base_val = px.base_val;
                     *frame_val = last_val as u8;
@@ -409,7 +416,7 @@ impl Source for DavisSource {
                     .input_frame_scaled
                     .at_unchecked::<f64>(idx as i32)
                     .unwrap();
-                *val = px.ln();
+                *val = px.ln_1p();
             }
         }
         ret
@@ -421,6 +428,16 @@ impl Source for DavisSource {
 
     fn get_video(&self) -> &Video {
         &self.video
+    }
+}
+
+fn clamp_u8(frame_val: &mut f64, last_val_ln: &mut f64) {
+    if *frame_val <= 0.0 {
+        *frame_val = 0.0;
+        *last_val_ln = 0.0; // = 0.0_f64.ln_1p();
+    } else if *frame_val > 255.0 {
+        *frame_val = 255.0;
+        *last_val_ln = 255.0_f64.ln_1p();
     }
 }
 
