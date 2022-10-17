@@ -400,13 +400,14 @@ impl Source for DavisSource {
                 self.input_frame_scaled = mat;
             }
         }
-
-        if self.video.in_interval_count == 0 {
-            self.dvs_last_timestamps.par_map_inplace(|ts| {
-                *ts = self.start_of_frame_timestamp.unwrap();
-            });
-        } else {
-            self.integrate_frame_gaps();
+        if with_events {
+            if self.video.in_interval_count == 0 {
+                self.dvs_last_timestamps.par_map_inplace(|ts| {
+                    *ts = self.start_of_frame_timestamp.unwrap();
+                });
+            } else {
+                self.integrate_frame_gaps();
+            }
         }
 
         if self.input_frame_scaled.empty() {
@@ -426,9 +427,6 @@ impl Source for DavisSource {
             self.video
                 .integrate_matrix(tmp, self.video.ref_time as f32, Continuous, view_interval)
         });
-        self.dvs_last_timestamps.par_map_inplace(|ts| {
-            *ts = self.end_of_frame_timestamp.unwrap();
-        });
 
         unsafe {
             for (idx, val) in self.dvs_last_ln_val.iter_mut().enumerate() {
@@ -439,6 +437,15 @@ impl Source for DavisSource {
                 *val = px.ln_1p();
             }
         }
+
+        if with_events {
+            self.dvs_last_timestamps.par_map_inplace(|ts| {
+                *ts = self.end_of_frame_timestamp.unwrap();
+            });
+
+            self.integrate_dvs_events();
+        }
+
         ret
     }
 

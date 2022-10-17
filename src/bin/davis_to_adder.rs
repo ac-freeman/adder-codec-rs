@@ -136,11 +136,6 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 break;
             }
         };
-        davis_source.dvs_last_timestamps.par_map_inplace(|ts| {
-            *ts = davis_source.end_of_frame_timestamp.unwrap();
-        });
-
-        davis_source.integrate_dvs_events();
 
         if davis_source.get_video().in_interval_count % 30 == 0 {
             println!(
