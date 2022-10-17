@@ -16,9 +16,9 @@ use crate::transcoder::event_pixel_tree::Mode::Continuous;
 use crate::transcoder::event_pixel_tree::{DeltaT, Intensity32, Mode, PixelArena};
 use crate::SourceCamera;
 use ndarray::{Array3, Axis};
-use rayon::iter::IndexedParallelIterator;
 use rayon::iter::IntoParallelIterator;
 use rayon::iter::ParallelIterator;
+use rayon::iter::{IndexedParallelIterator, IntoParallelRefMutIterator};
 use rayon::ThreadPool;
 
 #[derive(Debug)]
@@ -240,20 +240,25 @@ impl Video {
 
         show_display("Input", &matrix, 1, self);
 
-        // TODO: temporary. Instantaneous display of most recent events per pixel
-        for r in 0..self.height as i32 {
-            for c in 0..self.width as i32 {
-                let inst_px: &mut u8 = self.instantaneous_frame.at_2d_mut(r, c).unwrap();
-                let px = &mut self.event_pixel_trees[[r as usize, c as usize, 0]];
-                match px.arena[0].best_event.clone() {
+        if self.show_live {
+            let db = self.instantaneous_frame.data_bytes_mut().unwrap();
+            db.par_iter_mut().enumerate().for_each(|(idx, val)| {
+                let y = idx / (self.width as usize * self.channels);
+                let x = idx % (self.width as usize * self.channels);
+                let c = idx % self.channels;
+                *val = match self.event_pixel_trees[[y, x, c]].arena[0]
+                    .best_event
+                    .clone()
+                {
                     Some(event) => {
-                        *inst_px = u8::get_frame_value(&event, SourceType::U8, ref_time as DeltaT)
+                        u8::get_frame_value(&event, SourceType::U8, self.ref_time as DeltaT)
                     }
-                    None => {} // Just popped the event. Keep value the same as before.
+                    None => *val,
                 };
-            }
+            });
+
+            show_display("instance", &self.instantaneous_frame, 1, &self);
         }
-        show_display("instance", &self.instantaneous_frame, 1, &self);
 
         Ok(big_buffer)
     }

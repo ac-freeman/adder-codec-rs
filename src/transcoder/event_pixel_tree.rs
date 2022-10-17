@@ -588,7 +588,6 @@ mod tests {
         assert_eq!(integ, 2790.86304 + 146.0);
         assert_eq!(dt, 38231.0 + 2000.0);
         assert_eq!(head.best_event.unwrap().d, d - 1);
-        print!("");
     }
 
     fn f32_slack(num0: f32, num1: f32) -> bool {

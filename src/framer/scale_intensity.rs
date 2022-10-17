@@ -34,9 +34,6 @@ impl FrameValue for u8 {
                 todo!()
             }
         };
-        if tmp == 0 && event.coord.y < 160 {
-            print!("");
-        }
         tmp
     }
 }

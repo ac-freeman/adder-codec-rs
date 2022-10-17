@@ -8,15 +8,15 @@ use crate::SourceCamera::DavisU8;
 use crate::{Codec, DeltaT, Event, SourceType};
 use aedat::events_generated::Event as DvsEvent;
 use davis_edi_rs::util::reconstructor::{IterVal, Reconstructor};
-use rayon::iter::IndexedParallelIterator;
 use rayon::iter::ParallelIterator;
+use rayon::iter::{IndexedParallelIterator, IntoParallelRefMutIterator};
 use std::marker::PhantomData;
 
 use opencv::core::{Mat, CV_8U};
 use opencv::{prelude::*, Result};
 
 use bumpalo::Bump;
-use ndarray::{Array3, Axis};
+use ndarray::{Array3, Axis, IntoNdProducer};
 use num::clamp;
 use rayon::iter::IntoParallelIterator;
 use rayon::{current_num_threads, ThreadPool};
@@ -251,9 +251,6 @@ impl DavisSource {
                     *px_idx = chunk_px_idx + px_per_chunk * chunk_idx;
 
                     let mut last_val = (last_val_ln.exp() - 1.0) * 255.0;
-                    if last_val < 0.0 {
-                        last_val = 0.0;
-                    }
 
                     *base_val = px.base_val;
                     *frame_val = last_val as u8;
@@ -263,10 +260,6 @@ impl DavisSource {
 
                     // TODO TODO: Need to sort out / correct the difference between the timestamps here,
                     // and what's being returned from edi
-                    let tmp_0 = self.start_of_frame_timestamp.unwrap();
-                    let tmp_1 = (self.video.ref_time as f32 * ticks_per_micro) as i64;
-                    let tmp_2 =
-                        self.dvs_last_timestamps[[px.coord.y as usize, px.coord.x as usize, 0]];
                     let delta_t_micro = self.start_of_frame_timestamp.unwrap()
                         - self.dvs_last_timestamps[[px.coord.y as usize, px.coord.x as usize, 0]];
 
@@ -281,18 +274,9 @@ impl DavisSource {
                         (self.video.ref_time as f32 / ticks_per_micro as f32) as i64
                     );
 
-                    let tmp_ref = self.video.ref_time as f32;
-                    let tmp_00 = *base_val as f64 / self.video.ref_time as f64;
-                    let tmp_01 = delta_t_ticks as f64;
                     let integration =
                         (last_val / self.video.ref_time as f64) * delta_t_ticks as f64;
-                    if *base_val > 0 {
-                        // assert!(integration > 0.0);
-                    }
                     assert!(integration >= 0.0);
-                    if integration > 0.0 {
-                        print!("");
-                    }
 
                     integrate_for_px(
                         px,
@@ -315,20 +299,24 @@ impl DavisSource {
             self.video.stream.encode_events_events(&big_buffer);
         }
 
-        // TODO: temporary
-        for r in 0..self.video.height as i32 {
-            for c in 0..self.video.width as i32 {
-                let inst_px: &mut u8 = self.video.instantaneous_frame.at_2d_mut(r, c).unwrap();
-                let px = &mut self.video.event_pixel_trees[[r as usize, c as usize, 0]];
-                *inst_px = match px.arena[0].best_event.clone() {
+        if self.video.show_live {
+            let db = self.video.instantaneous_frame.data_bytes_mut().unwrap();
+            db.par_iter_mut().enumerate().for_each(|(idx, val)| {
+                let y = idx / self.video.width as usize;
+                let x = idx % self.video.width as usize;
+                *val = match self.video.event_pixel_trees[[y, x, 0]].arena[0]
+                    .best_event
+                    .clone()
+                {
                     Some(event) => {
                         u8::get_frame_value(&event, SourceType::U8, self.video.ref_time as DeltaT)
                     }
-                    None => 0,
+                    None => *val,
                 };
-            }
+            });
+
+            show_display("instance", &self.video.instantaneous_frame, 1, &self.video);
         }
-        show_display("instance", &self.video.instantaneous_frame, 1, &self.video);
     }
 }
 
