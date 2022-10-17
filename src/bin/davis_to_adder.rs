@@ -57,6 +57,10 @@ pub struct Args {
     /// event rate).
     #[clap(long, default_value_t = 0)]
     pub optimize_adder_controller: u32,
+
+    /// Write out ADDER file? (1=yes,0=no)
+    #[clap(short, long, default_value_t = 0)]
+    pub write_out: u32,
 }
 
 fn main() -> Result<(), Box<dyn error::Error>> {
@@ -119,6 +123,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         args.optimize_adder_controller != 0,
         rt,
         mode,
+        args.write_out != 0,
     )
     .unwrap();
 
