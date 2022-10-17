@@ -1,3 +1,4 @@
+mod adder_to_dvs;
 mod davis_to_adder;
 
 use adder_codec_rs::framer::scale_intensity::event_to_intensity;
@@ -13,7 +14,7 @@ use std::{error, io};
 #[derive(Parser, Debug, Default)]
 #[clap(author, version, about, long_about = None)]
 pub struct MyArgs {
-    /// Input video path
+    /// Input ADDER video path
     #[clap(short, long)]
     pub(crate) input: String,
 

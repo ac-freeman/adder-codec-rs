@@ -7,5 +7,5 @@ delta_t_max_multiplier = 10.0
 transcode_from = "raw"
 #transcode_from = "framed"
 show_display = 1
-write_out = 0
-optimize_adder_controller = 0
+write_out = 1
+optimize_adder_controller = 1
