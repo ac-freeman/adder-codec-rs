@@ -1,11 +1,13 @@
 use adder_codec_rs::raw::raw_stream::RawStream;
-use adder_codec_rs::Codec;
+use adder_codec_rs::{Codec, Event};
 use std::io::{SeekFrom, Write};
 use std::path::Path;
 use std::{error, io};
 
+use adder_codec_rs::transcoder::source::video::{show_display, show_display_force};
 use clap::Parser;
 use ndarray::{Array3, Shape};
+use opencv::core::{Mat, MatTrait, MatTraitManual, CV_8U, CV_8UC3};
 use std::option::Option;
 use tokio::io::AsyncSeekExt;
 
@@ -51,9 +53,9 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let mut event_count: u64 = 0;
 
     let mut data: Vec<Option<DvsPixel>> = Vec::new();
-    for y in 0..stream.height {
-        for x in 0..stream.width {
-            for c in 0..stream.channels {
+    for _ in 0..stream.height {
+        for _ in 0..stream.width {
+            for _ in 0..stream.channels {
                 let px = None;
                 data.push(px);
             }
@@ -70,9 +72,46 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     )
     .unwrap();
 
+    let mut instantaneous_frame = Mat::default();
+    match stream.channels {
+        1 => unsafe {
+            instantaneous_frame
+                .create_rows_cols(stream.height as i32, stream.width as i32, CV_8U)
+                .unwrap();
+        },
+        _ => unsafe {
+            instantaneous_frame
+                .create_rows_cols(stream.height as i32, stream.width as i32, CV_8UC3)
+                .unwrap();
+        },
+    }
+
     loop {
+        if event_count % divisor == 0 {
+            write!(
+                handle,
+                "\rTranscoding ADDER to DVS...{}%",
+                (event_count * 100) / num_events as u64
+            )?;
+            handle.flush().unwrap();
+
+            show_display_force("DVS", &instantaneous_frame, 1000 / 30);
+            // Clear the instantaneous frame
+            match instantaneous_frame.data_bytes_mut() {
+                Ok(bytes) => {
+                    for byte in bytes {
+                        *byte = 128;
+                    }
+                }
+                Err(_) => {
+                    panic!("Mat error")
+                }
+            }
+        }
+
         match stream.decode_event() {
             Ok(event) => {
+                event_count += 1;
                 let y = event.coord.y as usize;
                 let x = event.coord.x as usize;
                 let c = event.coord.c.unwrap_or(0) as usize;
@@ -92,14 +131,17 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                                 px.t += event.delta_t as u128;
                                 continue; // Don't update d with this
                             }
-                            a if a < px.d => {
+                            a if a < px.d.saturating_sub(0) => {
                                 // Fire a negative polarity event
+                                set_instant_dvs_pixel(event, &mut instantaneous_frame, -10);
                             }
                             a if a > px.d => {
                                 // Fire a positive polarity event
+                                set_instant_dvs_pixel(event, &mut instantaneous_frame, 20);
                             }
                             _ => {
                                 // D is the same. Don't fire an event.
+                                set_instant_dvs_pixel(event, &mut instantaneous_frame, 128);
                             }
                         }
 
@@ -112,18 +154,25 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 break;
             }
         }
-        event_count += 1;
-        if event_count % divisor == 0 {
-            write!(
-                handle,
-                "\rTranscoding ADDER to DVS...{}%",
-                (event_count * 100) / num_events as u64
-            )?;
-            handle.flush().unwrap();
-        }
     }
 
     handle.flush().unwrap();
     println!("\nFinished!");
     Ok(())
+}
+
+fn set_instant_dvs_pixel(event: Event, frame: &mut Mat, value: i16) {
+    unsafe {
+        let px: &mut u8 = frame
+            .at_3d_unchecked_mut(
+                event.coord.y.into(),
+                event.coord.x.into(),
+                event.coord.c.unwrap_or(0).into(),
+            )
+            .unwrap();
+        match value {
+            128 => *px = 128,
+            a => *px = (*px as i16 + a) as u8,
+        }
+    }
 }

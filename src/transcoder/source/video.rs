@@ -332,32 +332,36 @@ pub fn integrate_for_px(
 /// If [`MyArgs`]`.show_display`, shows the given [`Mat`] in an OpenCV window
 pub fn show_display(window_name: &str, mat: &Mat, wait: i32, video: &Video) {
     if video.show_display {
-        let mut tmp = Mat::default();
-
-        if mat.rows() != 940 {
-            let factor = mat.rows() as f32 / 940.0;
-            resize(
-                mat,
-                &mut tmp,
-                Size {
-                    width: (mat.cols() as f32 / factor) as i32,
-                    height: 940,
-                },
-                0.0,
-                0.0,
-                0,
-            )
-            .unwrap();
-            highgui::imshow(window_name, &tmp).unwrap();
-        } else {
-            highgui::imshow(window_name, mat).unwrap();
-        }
-
-        // highgui::imshow(window_name, &tmp).unwrap();
-
-        highgui::wait_key(wait).unwrap();
-        // resize_window(window_name, mat.cols() / 540, 540);
+        show_display_force(window_name, mat, wait);
     }
+}
+
+pub fn show_display_force(window_name: &str, mat: &Mat, wait: i32) {
+    let mut tmp = Mat::default();
+
+    if mat.rows() != 940 {
+        let factor = mat.rows() as f32 / 940.0;
+        resize(
+            mat,
+            &mut tmp,
+            Size {
+                width: (mat.cols() as f32 / factor) as i32,
+                height: 940,
+            },
+            0.0,
+            0.0,
+            0,
+        )
+        .unwrap();
+        highgui::imshow(window_name, &tmp).unwrap();
+    } else {
+        highgui::imshow(window_name, mat).unwrap();
+    }
+
+    // highgui::imshow(window_name, &tmp).unwrap();
+
+    highgui::wait_key(wait).unwrap();
+    // resize_window(window_name, mat.cols() / 540, 540);
 }
 
 pub trait Source {

@@ -34,9 +34,9 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
     let eof_position_bytes = stream.get_eof_position().unwrap();
     let file_size = Path::new(file_path).metadata().unwrap().len();
-    let num_events = (eof_position_bytes - 1 - header_bytes) / stream.event_size as usize;
+    let num_events = (eof_position_bytes - 1 - header_bytes as u64) / stream.event_size as u64;
     let events_per_px =
-        num_events / (stream.width as usize * stream.height as usize * stream.channels as usize);
+        num_events / (stream.width as u64 * stream.height as u64 * stream.channels as u64);
 
     let stdout = io::stdout();
     let mut handle = io::BufWriter::new(stdout.lock());
