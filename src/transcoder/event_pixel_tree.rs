@@ -311,7 +311,7 @@ impl PixelArena {
                     Continuous => (intensity - (intensity * prop), time - (time * prop)),
                 });
             }
-            return Some((0.0, 0.0));
+            Some((0.0, 0.0))
         } else {
             node.state.integration += intensity;
             node.state.delta_t += time;
@@ -589,13 +589,13 @@ mod tests {
             },
         );
         tree.integrate(146.0, 2000.0, &Continuous, &dtm);
-        tree.integrate(2790.86304, 38231.0, &Continuous, &dtm);
+        tree.integrate(2_790.863, 38231.0, &Continuous, &dtm);
 
         let head = tree.arena[0];
         let integ = head.state.integration;
         let dt = head.state.delta_t;
         let d = head.state.d;
-        assert_eq!(integ, 2790.86304 + 146.0);
+        assert_eq!(integ, 2_790.863 + 146.0);
         assert_eq!(dt, 38231.0 + 2000.0);
         assert_eq!(head.best_event.unwrap().d, d - 1);
     }

@@ -10,14 +10,14 @@ use aedat::events_generated::Event as DvsEvent;
 use davis_edi_rs::util::reconstructor::{IterVal, Reconstructor};
 use rayon::iter::ParallelIterator;
 use rayon::iter::{IndexedParallelIterator, IntoParallelRefMutIterator};
-use std::marker::PhantomData;
 
-use opencv::core::{ElemMul, Mat, CV_8U};
+
+use opencv::core::{Mat, CV_8U};
 use opencv::{prelude::*, Result};
 
 use bumpalo::Bump;
-use ndarray::{Array3, Axis, Dim, IntoNdProducer};
-use num::clamp;
+use ndarray::{Array3, Axis};
+
 use rayon::iter::IntoParallelIterator;
 use rayon::{current_num_threads, ThreadPool};
 use std::cmp::max;
@@ -210,7 +210,7 @@ impl DavisSource {
                                 continue; // TODO: do better
                             }
                             assert!(delta_t_ticks > 0.0);
-                            let frame_delta_t = self.video.ref_time;
+                            let _frame_delta_t = self.video.ref_time;
                             // integrate_for_px(px, base_val, &frame_val, 0.0, 0.0, Mode::FramePerfect, &mut vec![], &0, &0, &0)
 
                             // First, integrate the previous value enough to fill the time since then
@@ -301,7 +301,7 @@ impl DavisSource {
             .map(|(chunk_idx, (mut chunk_px, mut chunk_ln_val))| {
                 let mut buffer: Vec<Event> = Vec::with_capacity(px_per_chunk);
                 let bump = Bump::new();
-                let mut base_val = bump.alloc(0);
+                let base_val = bump.alloc(0);
                 let px_idx = bump.alloc(0);
                 let frame_val = bump.alloc(0);
 
@@ -310,7 +310,7 @@ impl DavisSource {
                 {
                     *px_idx = chunk_px_idx + px_per_chunk * chunk_idx;
 
-                    let mut last_val = (last_val_ln.exp() - 1.0) * 255.0;
+                    let last_val = (last_val_ln.exp() - 1.0) * 255.0;
 
                     *base_val = px.base_val;
                     *frame_val = last_val as u8;
@@ -338,7 +338,7 @@ impl DavisSource {
 
                     integrate_for_px(
                         px,
-                        &mut base_val,
+                        base_val,
                         frame_val,
                         integration as f32, // In this case, frame val is the same as intensity to integrate
                         delta_t_ticks,
@@ -364,7 +364,6 @@ impl DavisSource {
                 let x = idx % self.video.width as usize;
                 *val = match self.video.event_pixel_trees[[y, x, 0]].arena[0]
                     .best_event
-                    .clone()
                 {
                     Some(event) => {
                         u8::get_frame_value(&event, SourceType::U8, self.video.ref_time as DeltaT)
@@ -442,7 +441,7 @@ impl Source for DavisSource {
                     .axis_chunks_iter_mut(Axis(0), self.video.chunk_rows)
                     .into_par_iter()
                     .enumerate()
-                    .map(|(chunk_idx, mut chunk)| {
+                    .map(|(_chunk_idx, mut chunk)| {
                         let mut buffer: Vec<Event> = Vec::with_capacity(px_per_chunk);
                         for (_, px) in chunk.iter_mut().enumerate() {
                             px.pop_best_events(None, &mut buffer);

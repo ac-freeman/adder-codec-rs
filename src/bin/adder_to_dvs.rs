@@ -3,15 +3,15 @@ use adder_codec_rs::{Codec, Event, D_SHIFT};
 use std::cmp::max;
 use std::collections::VecDeque;
 use std::fs::File;
-use std::io::{BufWriter, SeekFrom, Write};
+use std::io::{BufWriter, Write};
 use std::path::Path;
 use std::{error, io};
 
-use adder_codec_rs::transcoder::source::video::{show_display, show_display_force};
+use adder_codec_rs::transcoder::source::video::{show_display_force};
 use adder_codec_rs::utils::viz::{encode_video_ffmpeg, write_frame_to_video};
 use clap::Parser;
-use ndarray::{Array3, Shape};
-use opencv::core::{Mat, MatTrait, MatTraitConstManual, MatTraitManual, CV_8U, CV_8UC3};
+use ndarray::{Array3};
+use opencv::core::{Mat, MatTrait, MatTraitManual, CV_8U, CV_8UC3};
 use std::option::Option;
 
 /// Command line argument parser
@@ -60,7 +60,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let first_event_position = stream.get_input_stream_position().unwrap();
 
     let eof_position_bytes = stream.get_eof_position().unwrap();
-    let file_size = Path::new(file_path).metadata().unwrap().len();
+    let _file_size = Path::new(file_path).metadata().unwrap().len();
     let num_events = (eof_position_bytes - 1 - header_bytes as u64) / stream.event_size as u64;
     let divisor = num_events as u64 / 100;
 

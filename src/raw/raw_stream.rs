@@ -1,7 +1,7 @@
 use crate::header::{EventStreamHeaderExtensionV0, EventStreamHeaderExtensionV1, MAGIC_RAW};
 use crate::raw::raw_stream::StreamError::{Deserialize, Eof};
 use crate::SourceType::{F32, F64, U16, U32, U64, U8};
-use crate::StreamError::BadFile;
+
 use crate::{
     Codec, Coord, DeltaT, Event, EventSingle, EventStreamHeader, SourceCamera, SourceType,
     EOF_PX_ADDRESS,
@@ -198,13 +198,13 @@ impl Codec for RawStream {
         for _ in 0..10 {
             match self.decode_event() {
                 Err(Eof) => {
-                    return Ok((self
+                    return Ok(self
                         .input_stream
                         .as_mut()
                         .unwrap()
                         .stream_position()
                         .unwrap()
-                        - self.event_size as u64));
+                        - self.event_size as u64);
                 }
                 Err(Deserialize) => break,
                 _ => {}

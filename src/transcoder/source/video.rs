@@ -208,7 +208,7 @@ impl Video {
             .map(|(chunk_idx, mut chunk)| {
                 let mut buffer: Vec<Event> = Vec::with_capacity(px_per_chunk);
                 let bump = Bump::new();
-                let mut base_val = bump.alloc(0);
+                let base_val = bump.alloc(0);
                 let px_idx = bump.alloc(0);
                 let frame_val = bump.alloc(0);
 
@@ -219,7 +219,7 @@ impl Video {
 
                     integrate_for_px(
                         px,
-                        &mut base_val,
+                        base_val,
                         frame_val,
                         *frame_val as Intensity32, // In this case, frame val is the same as intensity to integrate
                         ref_time,
@@ -248,7 +248,6 @@ impl Video {
                 let c = idx % self.channels;
                 *val = match self.event_pixel_trees[[y, x, c]].arena[0]
                     .best_event
-                    .clone()
                 {
                     Some(event) => {
                         u8::get_frame_value(&event, SourceType::U8, self.ref_time as DeltaT)
@@ -257,7 +256,7 @@ impl Video {
                 };
             });
 
-            show_display("instance", &self.instantaneous_frame, 1, &self);
+            show_display("instance", &self.instantaneous_frame, 1, self);
         }
 
         Ok(big_buffer)
@@ -296,7 +295,7 @@ pub fn integrate_for_px(
     intensity: Intensity32,
     ref_time: f32,
     pixel_tree_mode: Mode,
-    mut buffer: &mut Vec<Event>,
+    buffer: &mut Vec<Event>,
     c_thresh_pos: &u8,
     c_thresh_neg: &u8,
     delta_t_max: &u32,
@@ -310,7 +309,7 @@ pub fn integrate_for_px(
     if *frame_val < base_val.saturating_sub(*c_thresh_neg)
         || *frame_val > base_val.saturating_add(*c_thresh_pos)
     {
-        px.pop_best_events(None, &mut buffer);
+        px.pop_best_events(None, buffer);
         px.base_val = *frame_val;
 
         // If continuous mode and the D value needs to be different now
@@ -326,7 +325,7 @@ pub fn integrate_for_px(
         }
     }
 
-    px.integrate(intensity, ref_time, &pixel_tree_mode, &delta_t_max);
+    px.integrate(intensity, ref_time, &pixel_tree_mode, delta_t_max);
 }
 
 /// If [`MyArgs`]`.show_display`, shows the given [`Mat`] in an OpenCV window
