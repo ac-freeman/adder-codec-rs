@@ -190,9 +190,10 @@ pub trait Codec {
     /// Go to this position (as a byte address) in the input stream. Returns a [StreamError] if
     /// not aligned to an [Event]
     fn set_input_stream_position(&mut self, pos: u64) -> Result<(), StreamError>;
+    fn set_input_stream_position_from_end(&mut self, pos: i64) -> Result<(), StreamError>;
     fn get_input_stream_position(&mut self) -> Result<u64, StreamError>;
 
-    fn get_eof_position(&mut self) -> Result<usize, StreamError>;
+    fn get_eof_position(&mut self) -> Result<u64, StreamError>;
 
     fn encode_header(
         &mut self,

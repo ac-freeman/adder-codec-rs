@@ -1,7 +1,7 @@
 use crate::header::{EventStreamHeaderExtensionV0, EventStreamHeaderExtensionV1, MAGIC_RAW};
 use crate::raw::raw_stream::StreamError::{Deserialize, Eof};
 use crate::SourceType::{F32, F64, U16, U32, U64, U8};
-use crate::StreamError::BadFile;
+
 use crate::{
     Codec, Coord, DeltaT, Event, EventSingle, EventStreamHeader, SourceCamera, SourceType,
     EOF_PX_ADDRESS,
@@ -158,6 +158,22 @@ impl Codec for RawStream {
         Ok(())
     }
 
+    fn set_input_stream_position_from_end(&mut self, mut pos: i64) -> Result<(), StreamError> {
+        if pos > 0 {
+            pos = -pos;
+        }
+        match &mut self.input_stream {
+            None => {
+                panic!("Input stream not initialized");
+            }
+            Some(stream) => match stream.seek(SeekFrom::End(pos)) {
+                Ok(_) => {}
+                Err(_) => return Err(StreamError::Seek),
+            },
+        };
+        Ok(())
+    }
+
     fn get_input_stream_position(&mut self) -> Result<u64, StreamError> {
         match &mut self.input_stream {
             None => {
@@ -167,7 +183,7 @@ impl Codec for RawStream {
         }
     }
 
-    fn get_eof_position(&mut self) -> Result<usize, StreamError> {
+    fn get_eof_position(&mut self) -> Result<u64, StreamError> {
         match &mut self.input_stream {
             None => {
                 panic!("Input stream not initialized");
@@ -179,20 +195,22 @@ impl Codec for RawStream {
             }
         };
 
-        loop {
+        for _ in 0..10 {
             match self.decode_event() {
                 Err(Eof) => {
-                    return Ok((self
+                    return Ok(self
                         .input_stream
                         .as_mut()
                         .unwrap()
                         .stream_position()
                         .unwrap()
-                        - self.event_size as u64) as usize);
+                        - self.event_size as u64);
                 }
                 Err(Deserialize) => break,
                 _ => {}
             }
+
+            // Keep iterating back, searching for the Eof
             match self
                 .input_stream
                 .as_mut()
@@ -204,7 +222,9 @@ impl Codec for RawStream {
             };
         }
 
-        Err(BadFile)
+        self.set_input_stream_position_from_end(0)
+            .expect("TODO: panic message");
+        self.get_input_stream_position()
     }
 
     /// Encode the header for this [RawStream]. If an [input_stream] is open for this struct

@@ -208,7 +208,7 @@ impl Video {
             .map(|(chunk_idx, mut chunk)| {
                 let mut buffer: Vec<Event> = Vec::with_capacity(px_per_chunk);
                 let bump = Bump::new();
-                let mut base_val = bump.alloc(0);
+                let base_val = bump.alloc(0);
                 let px_idx = bump.alloc(0);
                 let frame_val = bump.alloc(0);
 
@@ -219,7 +219,7 @@ impl Video {
 
                     integrate_for_px(
                         px,
-                        &mut base_val,
+                        base_val,
                         frame_val,
                         *frame_val as Intensity32, // In this case, frame val is the same as intensity to integrate
                         ref_time,
@@ -246,10 +246,7 @@ impl Video {
                 let y = idx / (self.width as usize * self.channels);
                 let x = idx % (self.width as usize * self.channels);
                 let c = idx % self.channels;
-                *val = match self.event_pixel_trees[[y, x, c]].arena[0]
-                    .best_event
-                    .clone()
-                {
+                *val = match self.event_pixel_trees[[y, x, c]].arena[0].best_event {
                     Some(event) => {
                         u8::get_frame_value(&event, SourceType::U8, self.ref_time as DeltaT)
                     }
@@ -257,7 +254,7 @@ impl Video {
                 };
             });
 
-            show_display("instance", &self.instantaneous_frame, 1, &self);
+            show_display("instance", &self.instantaneous_frame, 1, self);
         }
 
         Ok(big_buffer)
@@ -296,7 +293,7 @@ pub fn integrate_for_px(
     intensity: Intensity32,
     ref_time: f32,
     pixel_tree_mode: Mode,
-    mut buffer: &mut Vec<Event>,
+    buffer: &mut Vec<Event>,
     c_thresh_pos: &u8,
     c_thresh_neg: &u8,
     delta_t_max: &u32,
@@ -310,54 +307,55 @@ pub fn integrate_for_px(
     if *frame_val < base_val.saturating_sub(*c_thresh_neg)
         || *frame_val > base_val.saturating_add(*c_thresh_pos)
     {
-        px.pop_best_events(None, &mut buffer);
+        px.pop_best_events(None, buffer);
         px.base_val = *frame_val;
 
         // If continuous mode and the D value needs to be different now
         // TODO: make it modular
-        match pixel_tree_mode {
-            Continuous => {
-                match px.set_d_for_continuous(intensity) {
-                    None => {}
-                    Some(event) => buffer.push(event),
-                };
-            }
-            _ => {}
+        if let Continuous = pixel_tree_mode {
+            match px.set_d_for_continuous(intensity) {
+                None => {}
+                Some(event) => buffer.push(event),
+            };
         }
     }
 
-    px.integrate(intensity, ref_time, &pixel_tree_mode, &delta_t_max);
+    px.integrate(intensity, ref_time, &pixel_tree_mode, delta_t_max);
 }
 
 /// If [`MyArgs`]`.show_display`, shows the given [`Mat`] in an OpenCV window
 pub fn show_display(window_name: &str, mat: &Mat, wait: i32, video: &Video) {
     if video.show_display {
-        let mut tmp = Mat::default();
-
-        if mat.rows() != 940 {
-            let factor = mat.rows() as f32 / 940.0;
-            resize(
-                mat,
-                &mut tmp,
-                Size {
-                    width: (mat.cols() as f32 / factor) as i32,
-                    height: 940,
-                },
-                0.0,
-                0.0,
-                0,
-            )
-            .unwrap();
-            highgui::imshow(window_name, &tmp).unwrap();
-        } else {
-            highgui::imshow(window_name, mat).unwrap();
-        }
-
-        // highgui::imshow(window_name, &tmp).unwrap();
-
-        highgui::wait_key(wait).unwrap();
-        // resize_window(window_name, mat.cols() / 540, 540);
+        show_display_force(window_name, mat, wait);
     }
+}
+
+pub fn show_display_force(window_name: &str, mat: &Mat, wait: i32) {
+    let mut tmp = Mat::default();
+
+    if mat.rows() != 940 {
+        let factor = mat.rows() as f32 / 940.0;
+        resize(
+            mat,
+            &mut tmp,
+            Size {
+                width: (mat.cols() as f32 / factor) as i32,
+                height: 940,
+            },
+            0.0,
+            0.0,
+            0,
+        )
+        .unwrap();
+        highgui::imshow(window_name, &tmp).unwrap();
+    } else {
+        highgui::imshow(window_name, mat).unwrap();
+    }
+
+    // highgui::imshow(window_name, &tmp).unwrap();
+
+    highgui::wait_key(wait).unwrap();
+    // resize_window(window_name, mat.cols() / 540, 540);
 }
 
 pub trait Source {

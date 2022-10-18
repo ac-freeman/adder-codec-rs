@@ -10,14 +10,14 @@ use aedat::events_generated::Event as DvsEvent;
 use davis_edi_rs::util::reconstructor::{IterVal, Reconstructor};
 use rayon::iter::ParallelIterator;
 use rayon::iter::{IndexedParallelIterator, IntoParallelRefMutIterator};
-use std::marker::PhantomData;
+
 
 use opencv::core::{Mat, CV_8U};
 use opencv::{prelude::*, Result};
 
 use bumpalo::Bump;
-use ndarray::{Array3, Axis, Dim, IntoNdProducer};
-use num::clamp;
+use ndarray::{Array3, Axis};
+
 use rayon::iter::IntoParallelIterator;
 use rayon::{current_num_threads, ThreadPool};
 use std::cmp::max;
@@ -42,7 +42,8 @@ pub struct Raw {}
 
 pub enum DavisTranscoderMode {
     Framed,
-    Raw,
+    RawDavis,
+    RawDvs,
 }
 
 /// Attributes of a framed video -> ADΔER transcode
@@ -209,7 +210,7 @@ impl DavisSource {
                                 continue; // TODO: do better
                             }
                             assert!(delta_t_ticks > 0.0);
-                            let frame_delta_t = self.video.ref_time;
+                            let _frame_delta_t = self.video.ref_time;
                             // integrate_for_px(px, base_val, &frame_val, 0.0, 0.0, Mode::FramePerfect, &mut vec![], &0, &0, &0)
 
                             // First, integrate the previous value enough to fill the time since then
@@ -300,7 +301,7 @@ impl DavisSource {
             .map(|(chunk_idx, (mut chunk_px, mut chunk_ln_val))| {
                 let mut buffer: Vec<Event> = Vec::with_capacity(px_per_chunk);
                 let bump = Bump::new();
-                let mut base_val = bump.alloc(0);
+                let base_val = bump.alloc(0);
                 let px_idx = bump.alloc(0);
                 let frame_val = bump.alloc(0);
 
@@ -309,7 +310,7 @@ impl DavisSource {
                 {
                     *px_idx = chunk_px_idx + px_per_chunk * chunk_idx;
 
-                    let mut last_val = (last_val_ln.exp() - 1.0) * 255.0;
+                    let last_val = (last_val_ln.exp() - 1.0) * 255.0;
 
                     *base_val = px.base_val;
                     *frame_val = last_val as u8;
@@ -337,7 +338,7 @@ impl DavisSource {
 
                     integrate_for_px(
                         px,
-                        &mut base_val,
+                        base_val,
                         frame_val,
                         integration as f32, // In this case, frame val is the same as intensity to integrate
                         delta_t_ticks,
@@ -363,7 +364,6 @@ impl DavisSource {
                 let x = idx % self.video.width as usize;
                 *val = match self.video.event_pixel_trees[[y, x, 0]].arena[0]
                     .best_event
-                    .clone()
                 {
                     Some(event) => {
                         u8::get_frame_value(&event, SourceType::U8, self.video.ref_time as DeltaT)
@@ -421,7 +421,8 @@ impl Source for DavisSource {
 
         let with_events = match self.mode {
             DavisTranscoderMode::Framed => false,
-            DavisTranscoderMode::Raw => true,
+            DavisTranscoderMode::RawDavis => true,
+            DavisTranscoderMode::RawDvs => true,
         };
         let mat_opt = self.rt.block_on(get_next_image(
             &mut self.reconstructor,
@@ -430,6 +431,29 @@ impl Source for DavisSource {
         ));
         match mat_opt {
             None => {
+                // We've reached the end of the input. Forcibly pop the last event from each pixel.
+                let px_per_chunk: usize = self.video.chunk_rows
+                    * self.video.width as usize
+                    * self.video.channels as usize;
+                let big_buffer: Vec<Vec<Event>> = self
+                    .video
+                    .event_pixel_trees
+                    .axis_chunks_iter_mut(Axis(0), self.video.chunk_rows)
+                    .into_par_iter()
+                    .enumerate()
+                    .map(|(_chunk_idx, mut chunk)| {
+                        let mut buffer: Vec<Event> = Vec::with_capacity(px_per_chunk);
+                        for (_, px) in chunk.iter_mut().enumerate() {
+                            px.pop_best_events(None, &mut buffer);
+                        }
+                        buffer
+                    })
+                    .collect();
+
+                if self.video.write_out {
+                    self.video.stream.encode_events_events(&big_buffer);
+                }
+
                 return Err(SourceError::NoData);
             }
             Some((mat, opt_timestamp, Some((c, events, img_start_ts, timestamp)))) => {
@@ -475,10 +499,32 @@ impl Source for DavisSource {
         // While `input_frame_scaled` may not be continuous (which would cause problems with
         // iterating over the pixels), cloning it ensures that it is made continuous.
         // https://stackoverflow.com/questions/33665241/is-opencv-matrix-data-guaranteed-to-be-continuous
-        let tmp = self.image_8u.clone();
+        let mut tmp = self.image_8u.clone();
+        let mat_integration_time = match self.mode {
+            DavisTranscoderMode::Framed => self.video.ref_time as f32,
+            DavisTranscoderMode::RawDavis => {
+                (self.end_of_frame_timestamp.unwrap() - self.start_of_frame_timestamp.unwrap())
+                    as f32
+            }
+            DavisTranscoderMode::RawDvs => {
+                self.dvs_c = 0.15;
+                match tmp.data_bytes_mut() {
+                    Ok(bytes) => {
+                        for byte in bytes {
+                            *byte = 0;
+                        }
+                    }
+                    Err(_) => {
+                        panic!("Mat error")
+                    }
+                }
+                0.0
+            }
+        };
+
         let ret = thread_pool.install(|| {
             self.video
-                .integrate_matrix(tmp, self.video.ref_time as f32, Continuous, view_interval)
+                .integrate_matrix(tmp, mat_integration_time, Continuous, view_interval)
         });
 
         unsafe {
@@ -487,7 +533,17 @@ impl Source for DavisSource {
                     .input_frame_scaled
                     .at_unchecked::<f64>(idx as i32)
                     .unwrap();
-                *val = px.ln_1p();
+                match self.mode {
+                    DavisTranscoderMode::Framed => {
+                        *val = px.ln_1p();
+                    }
+                    DavisTranscoderMode::RawDavis => {
+                        *val = px.ln_1p();
+                    }
+                    DavisTranscoderMode::RawDvs => {
+                        *val = 0.5_f64.ln_1p();
+                    }
+                }
             }
         }
 
@@ -521,7 +577,7 @@ fn clamp_u8(frame_val: &mut f64, last_val_ln: &mut f64) {
     }
 }
 
-async fn get_next_image(
+pub async fn get_next_image(
     reconstructor: &mut Reconstructor,
     thread_pool: &ThreadPool,
     with_events: bool,
