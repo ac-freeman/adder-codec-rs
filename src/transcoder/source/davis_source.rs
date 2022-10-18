@@ -12,7 +12,7 @@ use rayon::iter::ParallelIterator;
 use rayon::iter::{IndexedParallelIterator, IntoParallelRefMutIterator};
 use std::marker::PhantomData;
 
-use opencv::core::{Mat, CV_8U};
+use opencv::core::{ElemMul, Mat, CV_8U};
 use opencv::{prelude::*, Result};
 
 use bumpalo::Bump;
@@ -42,7 +42,8 @@ pub struct Raw {}
 
 pub enum DavisTranscoderMode {
     Framed,
-    Raw,
+    RawDavis,
+    RawDvs,
 }
 
 /// Attributes of a framed video -> ADΔER transcode
@@ -421,7 +422,8 @@ impl Source for DavisSource {
 
         let with_events = match self.mode {
             DavisTranscoderMode::Framed => false,
-            DavisTranscoderMode::Raw => true,
+            DavisTranscoderMode::RawDavis => true,
+            DavisTranscoderMode::RawDvs => true,
         };
         let mat_opt = self.rt.block_on(get_next_image(
             &mut self.reconstructor,
@@ -430,6 +432,29 @@ impl Source for DavisSource {
         ));
         match mat_opt {
             None => {
+                // We've reached the end of the input. Forcibly pop the last event from each pixel.
+                let px_per_chunk: usize = self.video.chunk_rows
+                    * self.video.width as usize
+                    * self.video.channels as usize;
+                let big_buffer: Vec<Vec<Event>> = self
+                    .video
+                    .event_pixel_trees
+                    .axis_chunks_iter_mut(Axis(0), self.video.chunk_rows)
+                    .into_par_iter()
+                    .enumerate()
+                    .map(|(chunk_idx, mut chunk)| {
+                        let mut buffer: Vec<Event> = Vec::with_capacity(px_per_chunk);
+                        for (_, px) in chunk.iter_mut().enumerate() {
+                            px.pop_best_events(None, &mut buffer);
+                        }
+                        buffer
+                    })
+                    .collect();
+
+                if self.video.write_out {
+                    self.video.stream.encode_events_events(&big_buffer);
+                }
+
                 return Err(SourceError::NoData);
             }
             Some((mat, opt_timestamp, Some((c, events, img_start_ts, timestamp)))) => {
@@ -475,7 +500,24 @@ impl Source for DavisSource {
         // While `input_frame_scaled` may not be continuous (which would cause problems with
         // iterating over the pixels), cloning it ensures that it is made continuous.
         // https://stackoverflow.com/questions/33665241/is-opencv-matrix-data-guaranteed-to-be-continuous
-        let tmp = self.image_8u.clone();
+        let mut tmp = self.image_8u.clone();
+        match self.mode {
+            DavisTranscoderMode::Framed => {}
+            DavisTranscoderMode::RawDavis => {}
+            DavisTranscoderMode::RawDvs => {
+                self.dvs_c = 0.15;
+                match tmp.data_bytes_mut() {
+                    Ok(bytes) => {
+                        for byte in bytes {
+                            *byte = 128;
+                        }
+                    }
+                    Err(_) => {
+                        panic!("Mat error")
+                    }
+                }
+            }
+        }
         let ret = thread_pool.install(|| {
             self.video
                 .integrate_matrix(tmp, self.video.ref_time as f32, Continuous, view_interval)
@@ -487,7 +529,17 @@ impl Source for DavisSource {
                     .input_frame_scaled
                     .at_unchecked::<f64>(idx as i32)
                     .unwrap();
-                *val = px.ln_1p();
+                match self.mode {
+                    DavisTranscoderMode::Framed => {
+                        *val = px.ln_1p();
+                    }
+                    DavisTranscoderMode::RawDavis => {
+                        *val = px.ln_1p();
+                    }
+                    DavisTranscoderMode::RawDvs => {
+                        *val = 0.5_f64.ln_1p();
+                    }
+                }
             }
         }
 

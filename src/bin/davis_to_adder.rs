@@ -1,4 +1,4 @@
-use adder_codec_rs::transcoder::source::davis_source::DavisSource;
+use adder_codec_rs::transcoder::source::davis_source::{DavisSource, DavisTranscoderMode};
 use adder_codec_rs::transcoder::source::video::Source;
 use aedat::base::ioheader_generated::Compression;
 use clap::Parser;
@@ -7,7 +7,9 @@ use davis_edi_rs::Args as EdiArgs;
 
 use serde::Deserialize;
 
-use adder_codec_rs::transcoder::source::davis_source::DavisTranscoderMode::{Framed, Raw};
+use adder_codec_rs::transcoder::source::davis_source::DavisTranscoderMode::{
+    Framed, RawDavis, RawDvs,
+};
 use std::any::Any;
 use std::io::Write;
 use std::time::Instant;
@@ -84,6 +86,17 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     //     "raw" => Raw,
     //     _ => Framed,
     // };
+    let mode = match args.transcode_from.as_str() {
+        "raw-davis" => RawDavis,
+        "raw-dvs" => RawDvs,
+        _ => Framed,
+    };
+
+    let events_only = match mode {
+        Framed => false,
+        RawDavis => false,
+        RawDvs => true,
+    };
 
     let rt = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(12)
@@ -104,14 +117,9 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         346,
         260,
         edi_args.deblur_only != 0,
-        false, // TODO: make this an option when we just want to transcode the DVS events
+        events_only,
         edi_args.target_latency,
     ));
-
-    let mode = match args.transcode_from.as_str() {
-        "raw" => Raw,
-        _ => Framed,
-    };
 
     let mut davis_source = DavisSource::new(
         reconstructor,
