@@ -501,26 +501,31 @@ impl Source for DavisSource {
         // iterating over the pixels), cloning it ensures that it is made continuous.
         // https://stackoverflow.com/questions/33665241/is-opencv-matrix-data-guaranteed-to-be-continuous
         let mut tmp = self.image_8u.clone();
-        match self.mode {
-            DavisTranscoderMode::Framed => {}
-            DavisTranscoderMode::RawDavis => {}
+        let mat_integration_time = match self.mode {
+            DavisTranscoderMode::Framed => self.video.ref_time as f32,
+            DavisTranscoderMode::RawDavis => {
+                (self.end_of_frame_timestamp.unwrap() - self.start_of_frame_timestamp.unwrap())
+                    as f32
+            }
             DavisTranscoderMode::RawDvs => {
                 self.dvs_c = 0.15;
                 match tmp.data_bytes_mut() {
                     Ok(bytes) => {
                         for byte in bytes {
-                            *byte = 128;
+                            *byte = 0;
                         }
                     }
                     Err(_) => {
                         panic!("Mat error")
                     }
                 }
+                0.0
             }
-        }
+        };
+
         let ret = thread_pool.install(|| {
             self.video
-                .integrate_matrix(tmp, self.video.ref_time as f32, Continuous, view_interval)
+                .integrate_matrix(tmp, mat_integration_time, Continuous, view_interval)
         });
 
         unsafe {
