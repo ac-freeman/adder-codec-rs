@@ -7,8 +7,9 @@ use davis_edi_rs::Args as EdiArgs;
 
 use serde::Deserialize;
 
-use adder_codec_rs::transcoder::source::davis_source::DavisTranscoderMode::{Framed, Raw};
-use std::any::Any;
+use adder_codec_rs::transcoder::source::davis_source::DavisTranscoderMode::{
+    Framed, RawDavis, RawDvs,
+};
 use std::io::Write;
 use std::time::Instant;
 use std::{error, io};
@@ -50,6 +51,17 @@ pub struct Args {
     /// raw DVS events? (options are "framed", "raw")
     #[clap(short, long, default_value = "")]
     pub transcode_from: String,
+
+    /// Optimize the ADDER controller for latency? (1=yes,0=no)
+    /// If yes, then the ADDER transcoder will attempt to maintain the maximum latency as defined
+    /// for the EDI reconstructor, by adjusting the ADDER contrast threshold (and thus the ADDER
+    /// event rate).
+    #[clap(long, default_value_t = 0)]
+    pub optimize_adder_controller: u32,
+
+    /// Write out ADDER file? (1=yes,0=no)
+    #[clap(short, long, default_value_t = 0)]
+    pub write_out: u32,
 }
 
 fn main() -> Result<(), Box<dyn error::Error>> {
@@ -65,17 +77,25 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         edi_args = toml::from_str(&content).unwrap();
     }
 
-    let mut args: Args = Args::parse();
-    if !args.args_filename.is_empty() {
-        let content = std::fs::read_to_string(args.args_filename)?;
-        args = toml::from_str(&content).unwrap();
+    if args.optimize_adder_controller != 0 {
+        assert_ne!(edi_args.optimize_controller, 0);
     }
-    let args = args;
 
     // let transcode_type = match args.transcode_from.as_str() {
     //     "raw" => Raw,
     //     _ => Framed,
     // };
+    let mode = match args.transcode_from.as_str() {
+        "raw-davis" => RawDavis,
+        "raw-dvs" => RawDvs,
+        _ => Framed,
+    };
+
+    let events_only = match mode {
+        Framed => false,
+        RawDavis => false,
+        RawDvs => true,
+    };
 
     let rt = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(12)
@@ -96,24 +116,22 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         346,
         260,
         edi_args.deblur_only != 0,
+        events_only,
         edi_args.target_latency,
     ));
-
-    let mode = match args.transcode_from.as_str() {
-        "raw" => Raw,
-        _ => Framed,
-    };
 
     let mut davis_source = DavisSource::new(
         reconstructor,
         Some(args.output_events_filename),
-        (edi_args.output_fps * 5000.0) as u32, // TODO
-        (edi_args.output_fps * 5000.0 * args.delta_t_max_multiplier) as u32, // TODO
+        (1000000) as u32,                                 // TODO
+        (1000000.0 * args.delta_t_max_multiplier) as u32, // TODO
         args.show_display != 0,
         args.adder_c_thresh_pos,
         args.adder_c_thresh_neg,
+        args.optimize_adder_controller != 0,
         rt,
         mode,
+        args.write_out != 0,
     )
     .unwrap();
 
@@ -131,7 +149,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 break;
             }
         };
-        davis_source.integrate_dvs_events();
+
         if davis_source.get_video().in_interval_count % 30 == 0 {
             println!(
                 "\rDavis recon frame to ADDER {} in  {}ms",

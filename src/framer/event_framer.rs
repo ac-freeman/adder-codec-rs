@@ -529,7 +529,7 @@ fn ingest_event_for_chunk<
 
     if ((*running_ts_ref - 1) as i64 / tpf as i64) > *last_filled_frame_ref {
         match event.d {
-            d if d == 0xFF && event.delta_t < tpf => {
+            d if d == 0xFF => {
                 // Don't do anything -- it's an empty event
                 // Except in special case where delta_t == tpf
                 if *running_ts_ref == tpf as BigT && event.delta_t == tpf {
@@ -604,7 +604,7 @@ fn ingest_event_for_chunk<
     // If framed video source, we can take advantage of scheme that reduces event rate by half
     if codec_version > 0
         && match source_camera {
-            SourceCamera::FramedU8 => true, // TODO: revert
+            SourceCamera::FramedU8 => true,
             SourceCamera::FramedU16 => true,
             SourceCamera::FramedU32 => true,
             SourceCamera::FramedU64 => true,

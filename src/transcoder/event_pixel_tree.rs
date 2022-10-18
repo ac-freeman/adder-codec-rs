@@ -1,6 +1,7 @@
 use crate::transcoder::event_pixel_tree::Mode::{Continuous, FramePerfect};
 use crate::{Coord, Event, D_MAX, D_SHIFT};
 use smallvec::{smallvec, SmallVec};
+use std::cmp::min;
 
 /// Decimation value; a pixel's sensitivity.
 pub type D = u8;
@@ -80,6 +81,7 @@ impl PixelArena {
 
     /// Pop just the topmost event. Should be called only when dtm is reached for main node
     pub fn pop_top_event(&mut self, next_intensity: Option<Intensity32>) -> Event {
+        self.need_to_pop_top = false;
         let mut root = &mut self.arena[0];
         match root.best_event {
             None => {
@@ -107,12 +109,16 @@ impl PixelArena {
                         delta_t: root.state.delta_t as DeltaT,
                     });
                     match self.arena.len() > 1 {
-                        true => self.arena[1] = PixelNode::new(next_intensity.unwrap()),
+                        true => {
+                            self.arena[1] = PixelNode::new(next_intensity.unwrap());
+                            self.length = 2;
+                        }
                         false => {
                             self.arena.push(PixelNode::new(next_intensity.unwrap()));
+                            self.length += 1;
                         }
                     }
-                    self.length += 1;
+
                     self.pop_top_event(next_intensity)
                     // panic!("No best event! TODO: handle it")
                 }
@@ -148,7 +154,7 @@ impl PixelArena {
                     }
                 }
                 Some(event) => {
-                    debug_assert_ne!(node_idx, self.length - 1);
+                    assert_ne!(node_idx, self.length - 1);
                     buffer.push(event)
                 }
             }
@@ -156,7 +162,7 @@ impl PixelArena {
 
         // Move the last node to the front
         self.arena.swap(0, self.length - 1);
-        debug_assert!(self.arena[0].alt.is_none());
+        assert!(self.arena[0].alt.is_none());
         self.length = 1;
 
         match next_intensity {
@@ -168,6 +174,7 @@ impl PixelArena {
                 self.arena[0].state.delta_t = 0.0;
             }
         };
+        self.need_to_pop_top = false;
     }
 
     pub fn set_d_for_continuous(&mut self, next_intensity: Intensity32) -> Option<Event> {
@@ -235,7 +242,10 @@ impl PixelArena {
                     // If continuous, we need to integrate the remaining intensity for the current
                     // node and the branching nodes
                     Continuous => {
-                        // idx -= 1
+                        // TODO: temporary hack. Get number from caller.
+                        if time > 2000.0 {
+                            self.arena[idx].state.d = get_d_from_intensity(intensity);
+                        }
                     }
                 }
             }
@@ -262,6 +272,10 @@ impl PixelArena {
     ) -> Option<(Intensity32, f32)> {
         let node = &mut self.arena[index];
         if node.state.integration + intensity >= D_SHIFT[node.state.d as usize] as f32 {
+            // If the new intensity is much bigger, then we need to increase D accordingly, first
+            let new_d = get_d_from_intensity(node.state.integration + intensity);
+            node.state.d = new_d;
+
             let prop =
                 (D_SHIFT[node.state.d as usize] as f32 - node.state.integration) as f32 / intensity;
             assert!(prop > 0.0);
@@ -275,6 +289,8 @@ impl PixelArena {
             if node.state.d < D_MAX {
                 node.state.integration += intensity;
                 node.state.delta_t += time;
+
+                // TODO: this is slow and dumb
                 loop {
                     node.state.d += 1;
                     if D_SHIFT[node.state.d as usize] > node.state.integration as u32 {
@@ -295,7 +311,7 @@ impl PixelArena {
                     Continuous => (intensity - (intensity * prop), time - (time * prop)),
                 });
             }
-            None
+            Some((0.0, 0.0))
         } else {
             node.state.integration += intensity;
             node.state.delta_t += time;
@@ -305,10 +321,15 @@ impl PixelArena {
 }
 
 fn get_d_from_intensity(intensity: Intensity32) -> D {
-    match intensity > 0.0 {
-        true => fast_math::log2_raw(intensity) as D,
-        false => 0,
-    }
+    min(
+        {
+            match intensity > 0.0 {
+                true => fast_math::log2_raw(intensity) as D,
+                false => 0,
+            }
+        },
+        D_MAX,
+    )
 }
 
 impl PixelNode {
@@ -518,6 +539,7 @@ mod tests {
         assert!(tree.need_to_pop_top);
         let mut events = Vec::new();
         tree.pop_best_events(None, &mut events);
+        assert!(!tree.need_to_pop_top);
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].d, 19);
         let tmp = events[0].delta_t;
@@ -550,8 +572,32 @@ mod tests {
         tree.integrate(245.0, 5000.0, &FramePerfect, &dtm);
         assert!(tree.need_to_pop_top);
         let _ = tree.pop_top_event(Some(245.0));
+        assert!(!tree.need_to_pop_top);
         let tmp = tree.arena[0].state.delta_t;
         assert_eq!(tmp, 70000.0)
+    }
+
+    #[test]
+    fn test_big_integration() {
+        let dtm = 1000000;
+        let mut tree = PixelArena::new(
+            146.0,
+            Coord {
+                x: 0,
+                y: 0,
+                c: None,
+            },
+        );
+        tree.integrate(146.0, 2000.0, &Continuous, &dtm);
+        tree.integrate(2_790.863, 38231.0, &Continuous, &dtm);
+
+        let head = tree.arena[0];
+        let integ = head.state.integration;
+        let dt = head.state.delta_t;
+        let d = head.state.d;
+        assert_eq!(integ, 2_790.863 + 146.0);
+        assert_eq!(dt, 38231.0 + 2000.0);
+        assert_eq!(head.best_event.unwrap().d, d - 1);
     }
 
     fn f32_slack(num0: f32, num1: f32) -> bool {

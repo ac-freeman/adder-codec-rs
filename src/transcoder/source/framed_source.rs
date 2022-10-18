@@ -300,19 +300,12 @@ fn resize_frame(input: &Mat, output: &mut Mat, color: bool, scale: f64) {
     let mut holder = Mat::default();
     if !color {
         // Yields an 8-bit grayscale mat
-        match imgproc::cvt_color(&input, &mut holder, imgproc::COLOR_BGR2GRAY, 1) {
-            Ok(_) => {}
-            Err(_) => {
-                // don't do anything with the error. This happens when we reach the end of
-                // the video, so there's nothing to convert.
-            }
-        }
+        imgproc::cvt_color(&input, &mut holder, imgproc::COLOR_BGR2GRAY, 1).unwrap();
+        // don't do anything with the error. This happens when we reach the end of
+        // the video, so there's nothing to convert.
     } else {
         holder = input.clone();
     }
 
-    match resize_input(&mut holder, output, scale) {
-        Ok(_) => {}
-        Err(_) => {}
-    };
+    resize_input(&mut holder, output, scale).unwrap();
 }

@@ -5,19 +5,20 @@ use std::path::Path;
 use std::sync::mpsc::{channel, Receiver, Sender};
 
 use crate::raw::raw_stream::RawStream;
-use crate::{Codec, Coord, Event, D, D_MAX, D_SHIFT};
+use crate::{Codec, Coord, Event, SourceType, D, D_MAX, D_SHIFT};
 use opencv::highgui;
 use opencv::imgproc::resize;
 use opencv::prelude::*;
 
+use crate::framer::scale_intensity::FrameValue;
 use crate::transcoder::d_controller::DecimationMode;
 use crate::transcoder::event_pixel_tree::Mode::Continuous;
 use crate::transcoder::event_pixel_tree::{DeltaT, Intensity32, Mode, PixelArena};
 use crate::SourceCamera;
 use ndarray::{Array3, Axis};
-use rayon::iter::IndexedParallelIterator;
 use rayon::iter::IntoParallelIterator;
 use rayon::iter::ParallelIterator;
+use rayon::iter::{IndexedParallelIterator, IntoParallelRefMutIterator};
 use rayon::ThreadPool;
 
 #[derive(Debug)]
@@ -51,8 +52,9 @@ pub struct Video {
     pub event_sender: Sender<Vec<Event>>,
     pub(crate) write_out: bool,
     pub channels: usize,
-    c_thresh_pos: u8,
-    c_thresh_neg: u8,
+    pub(crate) c_thresh_pos: u8,
+    pub(crate) c_thresh_neg: u8,
+    pub(crate) tps: DeltaT,
     pub(crate) stream: RawStream,
 }
 
@@ -166,6 +168,7 @@ impl Video {
             stream,
             c_thresh_pos,
             c_thresh_neg,
+            tps,
         }
     }
 
@@ -205,7 +208,7 @@ impl Video {
             .map(|(chunk_idx, mut chunk)| {
                 let mut buffer: Vec<Event> = Vec::with_capacity(px_per_chunk);
                 let bump = Bump::new();
-                let mut base_val = bump.alloc(0);
+                let base_val = bump.alloc(0);
                 let px_idx = bump.alloc(0);
                 let frame_val = bump.alloc(0);
 
@@ -216,9 +219,9 @@ impl Video {
 
                     integrate_for_px(
                         px,
-                        &mut base_val,
+                        base_val,
                         frame_val,
-                        *frame_val as Intensity32,
+                        *frame_val as Intensity32, // In this case, frame val is the same as intensity to integrate
                         ref_time,
                         pixel_tree_mode,
                         &mut buffer,
@@ -237,21 +240,38 @@ impl Video {
 
         show_display("Input", &matrix, 1, self);
 
+        if self.show_live {
+            let db = self.instantaneous_frame.data_bytes_mut().unwrap();
+            db.par_iter_mut().enumerate().for_each(|(idx, val)| {
+                let y = idx / (self.width as usize * self.channels);
+                let x = idx % (self.width as usize * self.channels);
+                let c = idx % self.channels;
+                *val = match self.event_pixel_trees[[y, x, c]].arena[0].best_event {
+                    Some(event) => {
+                        u8::get_frame_value(&event, SourceType::U8, self.ref_time as DeltaT)
+                    }
+                    None => *val,
+                };
+            });
+
+            show_display("instance", &self.instantaneous_frame, 1, self);
+        }
+
         Ok(big_buffer)
     }
 
-    pub(crate) fn integrate_single_intensity(
-        &mut self,
-        y: usize,
-        x: usize,
-        c: usize,
-        intensity: Intensity32,
-        ref_time: f32,
-        pixel_tree_mode: Mode,
-    ) -> std::result::Result<Vec<Event>, SourceError> {
-        let px = &mut self.event_pixel_trees[[y, x, c]];
-        todo!()
-    }
+    // pub(crate) fn integrate_single_intensity(
+    //     &mut self,
+    //     y: usize,
+    //     x: usize,
+    //     c: usize,
+    //     intensity: Intensity32,
+    //     ref_time: f32,
+    //     pixel_tree_mode: Mode,
+    // ) -> std::result::Result<Vec<Event>, SourceError> {
+    //     let px = &mut self.event_pixel_trees[[y, x, c]];
+    //     todo!()
+    // }
 
     fn set_initial_d(&mut self, frame_arr: &[u8]) {
         self.event_pixel_trees.par_map_inplace(|px| {
@@ -266,14 +286,14 @@ impl Video {
     }
 }
 
-pub(crate) fn integrate_for_px(
+pub fn integrate_for_px(
     px: &mut PixelArena,
     base_val: &mut u8,
     frame_val: &u8,
     intensity: Intensity32,
     ref_time: f32,
     pixel_tree_mode: Mode,
-    mut buffer: &mut Vec<Event>,
+    buffer: &mut Vec<Event>,
     c_thresh_pos: &u8,
     c_thresh_neg: &u8,
     delta_t_max: &u32,
@@ -287,59 +307,55 @@ pub(crate) fn integrate_for_px(
     if *frame_val < base_val.saturating_sub(*c_thresh_neg)
         || *frame_val > base_val.saturating_add(*c_thresh_pos)
     {
-        px.pop_best_events(None, &mut buffer);
+        px.pop_best_events(None, buffer);
         px.base_val = *frame_val;
 
         // If continuous mode and the D value needs to be different now
         // TODO: make it modular
-        match pixel_tree_mode {
-            Continuous => {
-                match px.set_d_for_continuous(intensity) {
-                    None => {}
-                    Some(event) => buffer.push(event),
-                };
-            }
-            _ => {}
+        if let Continuous = pixel_tree_mode {
+            match px.set_d_for_continuous(intensity) {
+                None => {}
+                Some(event) => buffer.push(event),
+            };
         }
     }
 
-    px.integrate(
-        *frame_val as Intensity32,
-        ref_time,
-        &pixel_tree_mode,
-        &delta_t_max,
-    );
+    px.integrate(intensity, ref_time, &pixel_tree_mode, delta_t_max);
 }
 
 /// If [`MyArgs`]`.show_display`, shows the given [`Mat`] in an OpenCV window
 pub fn show_display(window_name: &str, mat: &Mat, wait: i32, video: &Video) {
     if video.show_display {
-        let mut tmp = Mat::default();
-
-        if mat.rows() != 940 {
-            let factor = mat.rows() as f32 / 940.0;
-            resize(
-                mat,
-                &mut tmp,
-                Size {
-                    width: (mat.cols() as f32 / factor) as i32,
-                    height: 940,
-                },
-                0.0,
-                0.0,
-                0,
-            )
-            .unwrap();
-            highgui::imshow(window_name, &tmp).unwrap();
-        } else {
-            highgui::imshow(window_name, mat).unwrap();
-        }
-
-        // highgui::imshow(window_name, &tmp).unwrap();
-
-        highgui::wait_key(wait).unwrap();
-        // resize_window(window_name, mat.cols() / 540, 540);
+        show_display_force(window_name, mat, wait);
     }
+}
+
+pub fn show_display_force(window_name: &str, mat: &Mat, wait: i32) {
+    let mut tmp = Mat::default();
+
+    if mat.rows() != 940 {
+        let factor = mat.rows() as f32 / 940.0;
+        resize(
+            mat,
+            &mut tmp,
+            Size {
+                width: (mat.cols() as f32 / factor) as i32,
+                height: 940,
+            },
+            0.0,
+            0.0,
+            0,
+        )
+        .unwrap();
+        highgui::imshow(window_name, &tmp).unwrap();
+    } else {
+        highgui::imshow(window_name, mat).unwrap();
+    }
+
+    // highgui::imshow(window_name, &tmp).unwrap();
+
+    highgui::wait_key(wait).unwrap();
+    // resize_window(window_name, mat.cols() / 540, 540);
 }
 
 pub trait Source {
