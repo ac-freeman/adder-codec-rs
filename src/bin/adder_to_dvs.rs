@@ -12,7 +12,6 @@ use clap::Parser;
 use ndarray::{Array3, Shape};
 use opencv::core::{Mat, MatTrait, MatTraitConstManual, MatTraitManual, CV_8U, CV_8UC3};
 use std::option::Option;
-use tokio::io::AsyncSeekExt;
 
 /// Command line argument parser
 #[derive(Parser, Debug, Default)]
@@ -62,28 +61,38 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     stream.set_input_stream_position(first_event_position)?;
 
     let mut video_writer: BufWriter<File> = BufWriter::new(File::create(raw_path).unwrap());
+    let mut text_writer: BufWriter<File> = BufWriter::new(File::create(output_text_path).unwrap());
+    {
+        // Write the width and height as first line header
+        let dims_str = stream.width.to_string() + " " + &*stream.height.to_string() + "\n";
+        text_writer
+            .write(dims_str.as_ref())
+            .expect("Could not write");
+    }
 
     let mut event_count: u64 = 0;
 
-    let mut data: Vec<Option<DvsPixel>> = Vec::new();
-    for _ in 0..stream.height {
-        for _ in 0..stream.width {
-            for _ in 0..stream.channels {
-                let px = None;
-                data.push(px);
+    let mut pixels: Array3<Option<DvsPixel>> = {
+        let mut data: Vec<Option<DvsPixel>> = Vec::new();
+        for _ in 0..stream.height {
+            for _ in 0..stream.width {
+                for _ in 0..stream.channels {
+                    let px = None;
+                    data.push(px);
+                }
             }
         }
-    }
 
-    let mut pixels: Array3<Option<DvsPixel>> = Array3::from_shape_vec(
-        (
-            stream.height.into(),
-            stream.width.into(),
-            stream.channels.into(),
-        ),
-        data,
-    )
-    .unwrap();
+        Array3::from_shape_vec(
+            (
+                stream.height.into(),
+                stream.width.into(),
+                stream.channels.into(),
+            ),
+            data,
+        )
+        .unwrap()
+    };
 
     let mut event_counts: Array3<u16> = Array3::zeros((
         stream.height.into(),
@@ -91,21 +100,23 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         stream.channels.into(),
     ));
 
-    let mut instantaneous_frame = Mat::default();
-    match stream.channels {
-        1 => unsafe {
-            instantaneous_frame
-                .create_rows_cols(stream.height as i32, stream.width as i32, CV_8U)
-                .unwrap();
-        },
-        _ => unsafe {
-            instantaneous_frame
-                .create_rows_cols(stream.height as i32, stream.width as i32, CV_8UC3)
-                .unwrap();
-        },
-    }
+    let mut instantaneous_frame_deque = {
+        let mut instantaneous_frame = Mat::default();
+        match stream.channels {
+            1 => unsafe {
+                instantaneous_frame
+                    .create_rows_cols(stream.height as i32, stream.width as i32, CV_8U)
+                    .unwrap();
+            },
+            _ => unsafe {
+                instantaneous_frame
+                    .create_rows_cols(stream.height as i32, stream.width as i32, CV_8UC3)
+                    .unwrap();
+            },
+        }
 
-    let mut instantaneous_frame_deque = VecDeque::from([instantaneous_frame]);
+        VecDeque::from([instantaneous_frame])
+    };
 
     let frame_length = (stream.tps / 100) as u128; // length in ticks
     let mut frame_count = 0_usize;
@@ -167,6 +178,8 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                                 continue; // Don't update d with this
                             }
                             _ => {
+                                let x = event.coord.x;
+                                let y = event.coord.y;
                                 let new_intensity_ln =
                                     event_to_frame_intensity(&event, frame_length);
                                 let c = 0.15;
@@ -180,6 +193,16 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                                             frame_count,
                                             255,
                                         );
+                                        let dvs_string = px.t.to_string()
+                                            + " "
+                                            + x.to_string().as_str()
+                                            + " "
+                                            + y.to_string().as_str()
+                                            + " "
+                                            + "1\n";
+                                        text_writer
+                                            .write(dvs_string.as_ref())
+                                            .expect("Could not write");
                                     }
                                     (a, b) if a <= b - c => {
                                         // Fire a negative polarity event
@@ -190,6 +213,16 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                                             frame_count,
                                             0,
                                         );
+                                        let dvs_string = px.t.to_string()
+                                            + " "
+                                            + x.to_string().as_str()
+                                            + " "
+                                            + y.to_string().as_str()
+                                            + " "
+                                            + "-1\n";
+                                        text_writer
+                                            .write(dvs_string.as_ref())
+                                            .expect("Could not write");
                                     }
                                     (_, _) => {}
                                 }
@@ -205,6 +238,9 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             }
         }
     }
+
+    text_writer.flush().expect("Could not flush");
+    drop(text_writer);
 
     let mut event_count_mat = instantaneous_frame_deque[0].clone();
     unsafe {
