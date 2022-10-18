@@ -23,8 +23,12 @@ pub struct MyArgs {
     pub(crate) input: String,
 
     /// Output DVS event text file path
-    #[clap(short, long)]
-    pub(crate) output: String,
+    #[clap(long)]
+    pub(crate) output_text: String,
+
+    /// Output DVS event video file path
+    #[clap(long)]
+    pub(crate) output_video: String,
 }
 
 struct DvsPixel {
@@ -37,7 +41,9 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let args: MyArgs = MyArgs::parse();
     let file_path = args.input.as_str();
 
-    let output_file_path = args.output.as_str();
+    let output_text_path = args.output_text.as_str();
+    let output_video_path = args.output_video.as_str();
+    let raw_path = "./dvs.gray8";
 
     let mut stream: RawStream = Codec::new();
     stream.open_reader(file_path).expect("Invalid path");
@@ -55,7 +61,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
     stream.set_input_stream_position(first_event_position)?;
 
-    let mut video_writer: BufWriter<File> = BufWriter::new(File::create("./dvs.gray8").unwrap());
+    let mut video_writer: BufWriter<File> = BufWriter::new(File::create(raw_path).unwrap());
 
     let mut event_count: u64 = 0;
 
@@ -218,10 +224,12 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         show_display_force("DVS", &frame, 1);
         write_frame_to_video(&frame, &mut video_writer);
     }
-    show_display_force("Event counts", &event_count_mat, 0);
+    println!("\n");
+    show_display_force("Event counts", &event_count_mat, 1);
+    encode_video_ffmpeg(raw_path, output_video_path);
 
     handle.flush().unwrap();
-    println!("\nFinished!");
+    println!("Finished!");
     Ok(())
 }
 
@@ -252,10 +260,10 @@ fn set_instant_dvs_pixel(
     unsafe {
         let px: &mut u8 = match event.coord.c {
             None => frames[frame_idx - frame_count]
-                .at_2d_mut(event.coord.y.into(), event.coord.x.into())
+                .at_2d_unchecked_mut(event.coord.y.into(), event.coord.x.into())
                 .unwrap(),
             Some(c) => frames[frame_idx - frame_count]
-                .at_3d_mut(event.coord.y.into(), event.coord.x.into(), c.into())
+                .at_3d_unchecked_mut(event.coord.y.into(), event.coord.x.into(), c.into())
                 .unwrap(),
         };
         *px = value as u8;
@@ -280,4 +288,18 @@ fn write_frame_to_video(frame: &Mat, video_writer: &mut BufWriter<File>) {
                 .unwrap();
         }
     }
+}
+
+use std::process::Command;
+
+fn encode_video_ffmpeg(raw_path: &str, video_path: &str) {
+    // ffmpeg -f rawvideo -pix_fmt gray -s:v 346x260 -r 60 -i ./tmp.gray8 -crf 0 -c:v libx264 ./output_file.mp4
+    println!("Writing reconstruction as .mp4 with ffmpeg");
+    Command::new("ffmpeg")
+        .args(&[
+            "-f", "rawvideo", "-pix_fmt", "gray", "-s:v", "346x260", "-r", "30", "-i", raw_path,
+            "-crf", "0", "-c:v", "libx264", "-y", video_path,
+        ])
+        .output()
+        .expect("failed to execute process");
 }
