@@ -1,0 +1,11 @@
+args_filename = ""
+edi_args_filename = "./src/bin/args/edi_args.toml"
+output_events_filename = "/home/andrew/Downloads/davis.adder"
+adder_c_thresh_pos = 0
+adder_c_thresh_neg = 0
+delta_t_max_multiplier = 10.0
+transcode_from = "raw-dvs"
+#transcode_from = "framed"
+show_display = 1
+write_out = 1
+optimize_adder_controller = 0

@@ -1,0 +1,16 @@
+args_filename = ""
+scale = 0.5
+input_filename= "/home/andrew/Downloads/excerpt.mp4"
+output_raw_video_filename = "/home/andrew/Downloads/waves_out"
+tps = 300000
+fps = 60
+output_events_filename = ""
+c_thresh_pos = 15
+c_thresh_neg = 15
+color_input = 0
+show_display = 1
+frame_idx_start = 0
+ref_time = 5000
+delta_t_max = 300000
+frame_count_max = 200
+thread_count = 16

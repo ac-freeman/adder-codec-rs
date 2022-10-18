@@ -1,24 +1,22 @@
 use crate::transcoder::source::video::Source;
+use crate::transcoder::source::video::SourceError;
 use crate::transcoder::source::video::Video;
-use crate::transcoder::source::video::{show_display, SourceError};
-use crate::{Codec, Coord, Event, D};
-use bumpalo::Bump;
+use crate::{Coord, Event};
+
 use core::default::Default;
-use rayon::iter::ParallelIterator;
-use rayon::iter::{IndexedParallelIterator, IntoParallelIterator};
 
 use std::mem::swap;
 
 use crate::transcoder::source::video::SourceError::*;
-use ndarray::Axis;
+
 use opencv::core::{Mat, Size};
 use opencv::videoio::{VideoCapture, CAP_PROP_FPS, CAP_PROP_FRAME_COUNT, CAP_PROP_POS_FRAMES};
 use opencv::{imgproc, prelude::*, videoio, Result};
-
+use rayon::ThreadPool;
 
 use crate::transcoder::d_controller::DecimationMode;
+use crate::transcoder::event_pixel_tree::DeltaT;
 use crate::transcoder::event_pixel_tree::Mode::FramePerfect;
-use crate::transcoder::event_pixel_tree::{DeltaT, Intensity};
 use crate::SourceCamera;
 
 #[derive(Debug, Copy, Clone)]
@@ -34,10 +32,6 @@ pub struct FramedSource {
     pub(crate) input_frame_scaled: Mat,
     pub(crate) input_frame: Mat,
     pub frame_idx_start: u32,
-    last_input_frame_scaled: Mat,
-    c_thresh_pos: u8,
-    c_thresh_neg: u8,
-
     scale: f64,
     color_input: bool,
     pub(crate) video: Video,
@@ -212,6 +206,8 @@ impl FramedSource {
             builder.communicate_events,
             builder.show_display_b,
             builder.source_camera,
+            builder.c_thresh_pos,
+            builder.c_thresh_neg,
         );
 
         Ok(FramedSource {
@@ -219,9 +215,6 @@ impl FramedSource {
             input_frame_scaled: Default::default(),
             input_frame: Default::default(),
             frame_idx_start: builder.frame_idx_start,
-            last_input_frame_scaled: Default::default(),
-            c_thresh_pos: builder.c_thresh_pos,
-            c_thresh_neg: builder.c_thresh_neg,
             scale: builder.scale,
             color_input: builder.color_input,
             video,
@@ -236,115 +229,37 @@ impl FramedSource {
 impl Source for FramedSource {
     /// Get pixel-wise intensities directly from source frame, and integrate them with
     /// [`ref_time`](Video::ref_time) (the number of ticks each frame is said to span)
-    fn consume(&mut self, view_interval: u32) -> Result<Vec<Vec<Event>>, SourceError> {
-        if self.video.in_interval_count == 0 {
-            match self.cap.read(&mut self.input_frame) {
-                Ok(_) => resize_frame(
-                    &self.input_frame,
-                    &mut self.input_frame_scaled,
-                    self.color_input,
-                    self.scale,
-                ),
-                Err(e) => {
-                    panic!("{}", e);
-                }
-            };
-
-            self.last_input_frame_scaled = self.input_frame_scaled.clone();
-
-            let frame_arr = self.input_frame_scaled.data_bytes().unwrap();
-
-            self.video
-                .event_pixel_trees
-                .iter_mut()
-                .enumerate()
-                .for_each(|(idx, px)| {
-                    let intensity = frame_arr[idx];
-                    let d_start = (intensity as f32).log2().floor() as D;
-                    px.arena[0].set_d(d_start);
-                    px.base_val = intensity;
-                });
-        } else {
-            match self.cap.read(&mut self.input_frame) {
-                Ok(_) => resize_frame(
-                    &self.input_frame,
-                    &mut self.input_frame_scaled,
-                    self.color_input,
-                    self.scale,
-                ),
-                Err(e) => {
-                    panic!("{}", e);
-                }
-            };
-        }
-
-        self.video.in_interval_count += 1;
-        if self.video.in_interval_count % view_interval == 0 {
-            self.video.show_live = true;
-        } else {
-            self.video.show_live = false;
-        }
+    fn consume(
+        &mut self,
+        view_interval: u32,
+        thread_pool: &ThreadPool,
+    ) -> Result<Vec<Vec<Event>>, SourceError> {
+        match self.cap.read(&mut self.input_frame) {
+            Ok(_) => resize_frame(
+                &self.input_frame,
+                &mut self.input_frame_scaled,
+                self.color_input,
+                self.scale,
+            ),
+            Err(e) => {
+                panic!("{}", e);
+            }
+        };
 
         if self.input_frame_scaled.empty() {
             eprintln!("End of video");
             return Err(BufferEmpty);
         }
 
-        let frame_arr: &[u8] = self.input_frame_scaled.data_bytes().unwrap();
-
-        let ref_time = self.video.ref_time as f32;
-        let px_per_chunk: usize =
-            self.video.chunk_rows * self.video.width as usize * self.video.channels as usize;
-
-        // Important: if framing the events simultaneously, then the chunk division must be
-        // exactly the same as it is for the framer
-        let big_buffer: Vec<Vec<Event>> = self
-            .video
-            .event_pixel_trees
-            .axis_chunks_iter_mut(Axis(0), self.video.chunk_rows)
-            .into_par_iter()
-            .enumerate()
-            .map(|(chunk_idx, mut chunk)| {
-                let mut buffer: Vec<Event> = Vec::with_capacity(px_per_chunk);
-                let bump = Bump::new();
-                let mut base_val = bump.alloc(0);
-                let px_idx = bump.alloc(0);
-                let frame_val = bump.alloc(0);
-
-                for (chunk_px_idx, px) in chunk.iter_mut().enumerate() {
-                    *px_idx = chunk_px_idx + px_per_chunk * chunk_idx;
-                    *frame_val = frame_arr[*px_idx];
-                    if px.need_to_pop_top {
-                        buffer.push(px.pop_top_event(Some(*frame_val as Intensity)));
-                    }
-
-                    base_val = &mut px.base_val;
-
-                    if *frame_val < base_val.saturating_sub(self.c_thresh_neg)
-                        || *frame_val > base_val.saturating_add(self.c_thresh_pos)
-                    {
-                        px.pop_best_events(Some(*frame_val as Intensity), &mut buffer);
-                        px.base_val = *frame_val;
-                    }
-
-                    px.integrate(
-                        *frame_val as Intensity,
-                        ref_time,
-                        &FramePerfect,
-                        &self.video.delta_t_max,
-                    );
-                }
-                buffer
-            })
-            .collect();
-
-        if self.video.write_out {
-            self.video.stream.encode_events_events(&big_buffer);
-        }
-
-        show_display("Gray input", &self.input_frame_scaled, 1, &self.video);
-        self.video.instantaneous_display_frame = (self.input_frame_scaled).clone();
-        Ok(big_buffer)
+        let tmp = self.input_frame_scaled.clone();
+        thread_pool.install(|| {
+            self.video.integrate_matrix(
+                tmp,
+                self.video.ref_time as f32,
+                FramePerfect,
+                view_interval,
+            )
+        })
     }
 
     fn get_video_mut(&mut self) -> &mut Video {
@@ -385,19 +300,12 @@ fn resize_frame(input: &Mat, output: &mut Mat, color: bool, scale: f64) {
     let mut holder = Mat::default();
     if !color {
         // Yields an 8-bit grayscale mat
-        match imgproc::cvt_color(&input, &mut holder, imgproc::COLOR_BGR2GRAY, 1) {
-            Ok(_) => {}
-            Err(_) => {
-                // don't do anything with the error. This happens when we reach the end of
-                // the video, so there's nothing to convert.
-            }
-        }
+        imgproc::cvt_color(&input, &mut holder, imgproc::COLOR_BGR2GRAY, 1).unwrap();
+        // don't do anything with the error. This happens when we reach the end of
+        // the video, so there's nothing to convert.
     } else {
         holder = input.clone();
     }
 
-    match resize_input(&mut holder, output, scale) {
-        Ok(_) => {}
-        Err(_) => {}
-    };
+    resize_input(&mut holder, output, scale).unwrap();
 }

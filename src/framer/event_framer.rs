@@ -529,7 +529,7 @@ fn ingest_event_for_chunk<
 
     if ((*running_ts_ref - 1) as i64 / tpf as i64) > *last_filled_frame_ref {
         match event.d {
-            d if d == 0xFF && event.delta_t < tpf => {
+            d if d == 0xFF => {
                 // Don't do anything -- it's an empty event
                 // Except in special case where delta_t == tpf
                 if *running_ts_ref == tpf as BigT && event.delta_t == tpf {
@@ -546,6 +546,7 @@ fn ingest_event_for_chunk<
                 }
             }
             _ => {
+                // Set the frame's value from the event
                 let scaled_intensity: T = T::get_frame_value(event, source, tpf);
                 *last_filled_frame_ref = (*running_ts_ref - 1) as i64 / tpf as i64;
 
@@ -610,7 +611,7 @@ fn ingest_event_for_chunk<
             SourceCamera::FramedF32 => true,
             SourceCamera::FramedF64 => true,
             SourceCamera::Dvs => false,
-            SourceCamera::DavisU8 => false,
+            SourceCamera::DavisU8 => false, // TODO: switch statement on the transcode MODE (frame-perfect or continuous), not just the source
             SourceCamera::Atis => false,
             SourceCamera::Asint => false,
         }

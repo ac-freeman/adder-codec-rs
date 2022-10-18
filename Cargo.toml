@@ -1,6 +1,6 @@
 [package]
 name = "adder-codec-rs"
-version = "0.1.15"
+version = "0.1.16"
 edition = "2021"
 authors = ["Andrew C. Freeman"]
 description = """Encoder/transcoder/decoder for ADΔER (Address, Decimation, Δt Event Representation) streams.
@@ -55,6 +55,9 @@ generational-arena = "0.2"
 smallvec = "1.9.0"
 bumpalo = "3.11.0"
 #davis-edi-rs = { path = "../davis-EDI-rs" }
+davis-edi-rs = "0.1.2"
+toml = "0.5.8"
+aedat = "1.2.7"
 
 [dev-dependencies]
 criterion = "0.3.6"

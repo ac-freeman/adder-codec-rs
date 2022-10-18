@@ -16,6 +16,7 @@ use adder_codec_rs::transcoder::source::video::Source;
 use adder_codec_rs::SourceCamera::FramedU8;
 use adder_codec_rs::{Codec, Coord, Event, SourceCamera};
 use rand::Rng;
+use rayon::current_num_threads;
 
 #[test]
 fn test_set_stream_position() {
@@ -862,8 +863,12 @@ fn test_framed_to_adder_bunny4() {
 
     let mut event_count: usize = 0;
     let mut test_events = Vec::new();
+    let pool = rayon::ThreadPoolBuilder::new()
+        .num_threads(current_num_threads())
+        .build()
+        .unwrap();
     loop {
-        match source.consume(1) {
+        match source.consume(1, &pool) {
             Ok(events_events) => {
                 for events in events_events {
                     for event in events {

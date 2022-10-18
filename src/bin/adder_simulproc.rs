@@ -39,7 +39,11 @@ async fn download_file() -> Result<(), Box<dyn std::error::Error + Send + Sync>>
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    let args: SimulProcArgs = SimulProcArgs::parse();
+    let mut args: SimulProcArgs = SimulProcArgs::parse();
+    if !args.args_filename.is_empty() {
+        let content = std::fs::read_to_string(args.args_filename)?;
+        args = toml::from_str(&content).unwrap();
+    }
     println!("c_pos: {}, c_neg: {}", args.c_thresh_pos, args.c_thresh_neg);
 
     //////////////////////////////////////////////////////
@@ -134,6 +138,7 @@ mod tests {
         let manifest_path_str = d.as_path().to_str().unwrap().to_owned();
 
         let args: SimulProcArgs = SimulProcArgs {
+            args_filename: "".to_string(),
             color_input: 0,
             tps: 120000,
             fps: 24,

@@ -1,6 +1,6 @@
 <component name="ProjectRunConfigurationManager">
   <configuration default="false" name="Run simul" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
-    <option name="command" value="run --bin adder_simulproc -- --scale 1.0 --input-filename &quot;$USER_HOME$/Downloads/bunny_crop3.mp4&quot; --output-raw-video-filename &quot;$USER_HOME$/Downloads/waves_out&quot; --output-events-filename &quot;./bunny.adder&quot; --tps 120000 --fps 24 --c-thresh-pos 5 --c-thresh-neg 5 --color-input 0 --show-display 1 --frame-idx-start 400 --frame-count-max 250" />
+    <option name="command" value="run --bin adder_simulproc -- --args-filename &quot;./src/bin/args/framed_to_adder_args.toml&quot;" />
     <option name="workingDirectory" value="file://$PROJECT_DIR$" />
     <option name="channel" value="DEFAULT" />
     <option name="requiredFeatures" value="true" />
