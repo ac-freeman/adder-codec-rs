@@ -521,7 +521,7 @@ fn clamp_u8(frame_val: &mut f64, last_val_ln: &mut f64) {
     }
 }
 
-async fn get_next_image(
+pub async fn get_next_image(
     reconstructor: &mut Reconstructor,
     thread_pool: &ThreadPool,
     with_events: bool,

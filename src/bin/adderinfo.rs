@@ -1,4 +1,5 @@
 mod adder_to_dvs;
+mod aedat4_dvs_visualize;
 mod davis_to_adder;
 
 use adder_codec_rs::framer::scale_intensity::event_to_intensity;

@@ -104,6 +104,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         346,
         260,
         edi_args.deblur_only != 0,
+        false, // TODO: make this an option when we just want to transcode the DVS events
         edi_args.target_latency,
     ));
 

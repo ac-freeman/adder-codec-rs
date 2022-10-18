@@ -8,6 +8,7 @@ use std::path::Path;
 use std::{error, io};
 
 use adder_codec_rs::transcoder::source::video::{show_display, show_display_force};
+use adder_codec_rs::utils::viz::{encode_video_ffmpeg, write_frame_to_video};
 use clap::Parser;
 use ndarray::{Array3, Shape};
 use opencv::core::{Mat, MatTrait, MatTraitConstManual, MatTraitManual, CV_8U, CV_8UC3};
@@ -28,6 +29,9 @@ pub struct MyArgs {
     /// Output DVS event video file path
     #[clap(long)]
     pub(crate) output_video: String,
+
+    #[clap(long, default_value_t = 100.0)]
+    pub fps: f32,
 }
 
 struct DvsPixel {
@@ -36,6 +40,11 @@ struct DvsPixel {
     t: u128,
 }
 
+///
+/// This program transcodes an ADDER file to DVS events in a human-readable text representation.
+/// Performance is fast. The resulting DVS stream is visualized during the transcode and written
+/// out as an mp4 file.
+///
 fn main() -> Result<(), Box<dyn error::Error>> {
     let args: MyArgs = MyArgs::parse();
     let file_path = args.input.as_str();
@@ -118,7 +127,22 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         VecDeque::from([instantaneous_frame])
     };
 
-    let frame_length = (stream.tps / 100) as u128; // length in ticks
+    match instantaneous_frame_deque
+        .back_mut()
+        .unwrap()
+        .data_bytes_mut()
+    {
+        Ok(bytes) => {
+            for byte in bytes {
+                *byte = 128;
+            }
+        }
+        Err(_) => {
+            panic!("Mat error")
+        }
+    }
+
+    let frame_length = (stream.tps as f32 / args.fps) as u128; // length in ticks
     let mut frame_count = 0_usize;
     let mut current_t = 0;
     let mut max_px_event_count = 0;
@@ -145,9 +169,6 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
         match stream.decode_event() {
             Ok(event) => {
-                if event.coord.y > 130 {
-                    // dbg!(event);
-                }
                 event_count += 1;
                 let y = event.coord.y as usize;
                 let x = event.coord.x as usize;
@@ -313,29 +334,4 @@ fn set_instant_dvs_pixel(
 fn event_to_frame_intensity(event: &Event, frame_length: u128) -> f64 {
     (((D_SHIFT[event.d as usize] as f64 / event.delta_t as f64) * frame_length as f64) / 255.0)
         .ln_1p()
-}
-
-fn write_frame_to_video(frame: &Mat, video_writer: &mut BufWriter<File>) {
-    unsafe {
-        for idx in 0..frame.size().unwrap().width * frame.size().unwrap().height {
-            let val: *const u8 = frame.at_unchecked(idx).unwrap() as *const u8;
-            video_writer
-                .write(std::slice::from_raw_parts(val, 1))
-                .unwrap();
-        }
-    }
-}
-
-use std::process::Command;
-
-fn encode_video_ffmpeg(raw_path: &str, video_path: &str) {
-    // ffmpeg -f rawvideo -pix_fmt gray -s:v 346x260 -r 60 -i ./tmp.gray8 -crf 0 -c:v libx264 ./output_file.mp4
-    println!("Writing reconstruction as .mp4 with ffmpeg");
-    Command::new("ffmpeg")
-        .args(&[
-            "-f", "rawvideo", "-pix_fmt", "gray", "-s:v", "346x260", "-r", "30", "-i", raw_path,
-            "-crf", "0", "-c:v", "libx264", "-y", video_path,
-        ])
-        .output()
-        .expect("failed to execute process");
 }
