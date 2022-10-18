@@ -4,8 +4,7 @@ use adder_codec_rs::utils::viz::{encode_video_ffmpeg, write_frame_to_video};
 use aedat::base::ioheader_generated::Compression;
 use aedat::events_generated::Event;
 use clap::Parser;
-use davis_edi_rs::util::reconstructor::{IterVal, Reconstructor};
-use davis_edi_rs::Args as EdiArgs;
+use davis_edi_rs::util::reconstructor::Reconstructor;
 use opencv::core::{Mat, MatTrait, MatTraitManual, CV_8U};
 use rayon::current_num_threads;
 use std::cmp::max;
@@ -108,7 +107,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             None => {
                 break;
             }
-            Some((mat, opt_timestamp, Some((c, events, img_start_ts, timestamp)))) => {
+            Some((_, _, Some((_, events, _, _)))) => {
                 for event in events {
                     if current_t > (frame_count as u128 * frame_length) + 1000000 {
                         match instantaneous_frame_deque.pop_front() {
@@ -135,7 +134,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                     );
                 }
             }
-            Some((mat, opt_timestamp, None)) => {
+            Some((_, _, None)) => {
                 break;
             }
         }

@@ -246,9 +246,7 @@ impl Video {
                 let y = idx / (self.width as usize * self.channels);
                 let x = idx % (self.width as usize * self.channels);
                 let c = idx % self.channels;
-                *val = match self.event_pixel_trees[[y, x, c]].arena[0]
-                    .best_event
-                {
+                *val = match self.event_pixel_trees[[y, x, c]].arena[0].best_event {
                     Some(event) => {
                         u8::get_frame_value(&event, SourceType::U8, self.ref_time as DeltaT)
                     }
@@ -314,14 +312,11 @@ pub fn integrate_for_px(
 
         // If continuous mode and the D value needs to be different now
         // TODO: make it modular
-        match pixel_tree_mode {
-            Continuous => {
-                match px.set_d_for_continuous(intensity) {
-                    None => {}
-                    Some(event) => buffer.push(event),
-                };
-            }
-            _ => {}
+        if let Continuous = pixel_tree_mode {
+            match px.set_d_for_continuous(intensity) {
+                None => {}
+                Some(event) => buffer.push(event),
+            };
         }
     }
 

@@ -1,4 +1,4 @@
-use adder_codec_rs::transcoder::source::davis_source::{DavisSource, DavisTranscoderMode};
+use adder_codec_rs::transcoder::source::davis_source::DavisSource;
 use adder_codec_rs::transcoder::source::video::Source;
 use aedat::base::ioheader_generated::Compression;
 use clap::Parser;
@@ -10,7 +10,6 @@ use serde::Deserialize;
 use adder_codec_rs::transcoder::source::davis_source::DavisTranscoderMode::{
     Framed, RawDavis, RawDvs,
 };
-use std::any::Any;
 use std::io::Write;
 use std::time::Instant;
 use std::{error, io};
