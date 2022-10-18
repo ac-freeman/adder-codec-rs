@@ -1,13 +1,16 @@
 use adder_codec_rs::raw::raw_stream::RawStream;
-use adder_codec_rs::{Codec, Event};
-use std::io::{SeekFrom, Write};
+use adder_codec_rs::{Codec, Event, D_SHIFT};
+use std::cmp::max;
+use std::collections::VecDeque;
+use std::fs::File;
+use std::io::{BufWriter, SeekFrom, Write};
 use std::path::Path;
 use std::{error, io};
 
 use adder_codec_rs::transcoder::source::video::{show_display, show_display_force};
 use clap::Parser;
 use ndarray::{Array3, Shape};
-use opencv::core::{Mat, MatTrait, MatTraitManual, CV_8U, CV_8UC3};
+use opencv::core::{Mat, MatTrait, MatTraitConstManual, MatTraitManual, CV_8U, CV_8UC3};
 use std::option::Option;
 use tokio::io::AsyncSeekExt;
 
@@ -19,13 +22,14 @@ pub struct MyArgs {
     #[clap(short, long)]
     pub(crate) input: String,
 
-    /// Output DVS video path (text file
+    /// Output DVS event text file path
     #[clap(short, long)]
     pub(crate) output: String,
 }
 
 struct DvsPixel {
     d: u8,
+    frame_intensity_ln: f64,
     t: u128,
 }
 
@@ -50,6 +54,9 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let mut handle = io::BufWriter::new(stdout.lock());
 
     stream.set_input_stream_position(first_event_position)?;
+
+    let mut video_writer: BufWriter<File> = BufWriter::new(File::create("./dvs.gray8").unwrap());
+
     let mut event_count: u64 = 0;
 
     let mut data: Vec<Option<DvsPixel>> = Vec::new();
@@ -72,6 +79,12 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     )
     .unwrap();
 
+    let mut event_counts: Array3<u16> = Array3::zeros((
+        stream.height.into(),
+        stream.width.into(),
+        stream.channels.into(),
+    ));
+
     let mut instantaneous_frame = Mat::default();
     match stream.channels {
         1 => unsafe {
@@ -86,6 +99,13 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         },
     }
 
+    let mut instantaneous_frame_deque = VecDeque::from([instantaneous_frame]);
+
+    let frame_length = (stream.tps / 100) as u128; // length in ticks
+    let mut frame_count = 0_usize;
+    let mut current_t = 0;
+    let mut max_px_event_count = 0;
+
     loop {
         if event_count % divisor == 0 {
             write!(
@@ -94,59 +114,83 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 (event_count * 100) / num_events as u64
             )?;
             handle.flush().unwrap();
-
-            show_display_force("DVS", &instantaneous_frame, 1000 / 30);
-            // Clear the instantaneous frame
-            match instantaneous_frame.data_bytes_mut() {
-                Ok(bytes) => {
-                    for byte in bytes {
-                        *byte = 128;
-                    }
-                }
-                Err(_) => {
-                    panic!("Mat error")
+        }
+        if current_t > (frame_count as u128 * frame_length) + stream.delta_t_max as u128 {
+            match instantaneous_frame_deque.pop_front() {
+                None => {}
+                Some(frame) => {
+                    show_display_force("DVS", &frame, 1);
+                    write_frame_to_video(&frame, &mut video_writer);
                 }
             }
+            frame_count += 1;
         }
 
         match stream.decode_event() {
             Ok(event) => {
+                if event.coord.y > 130 {
+                    // dbg!(event);
+                }
                 event_count += 1;
                 let y = event.coord.y as usize;
                 let x = event.coord.x as usize;
                 let c = event.coord.c.unwrap_or(0) as usize;
+                event_counts[[y, x, c]] += 1;
+                max_px_event_count = max(max_px_event_count, event_counts[[y, x, c]]);
+
                 match &mut pixels[[y, x, c]] {
                     None => {
                         if event.d < 253 {
                             pixels[[y, x, c]] = Some(DvsPixel {
                                 d: event.d,
+                                frame_intensity_ln: event_to_frame_intensity(&event, frame_length),
                                 t: event.delta_t as u128,
-                            })
+                            });
+                        } else {
+                            panic!("Shouldn't happen")
                         }
                     }
                     Some(px) => {
+                        px.t += event.delta_t as u128;
+                        current_t = max(px.t, current_t);
+                        let frame_idx = (px.t / frame_length) as usize;
+
                         match event.d {
                             255 | 254 => {
                                 // ignore empty events
-                                px.t += event.delta_t as u128;
                                 continue; // Don't update d with this
                             }
-                            a if a < px.d.saturating_sub(0) => {
-                                // Fire a negative polarity event
-                                set_instant_dvs_pixel(event, &mut instantaneous_frame, -10);
-                            }
-                            a if a > px.d => {
-                                // Fire a positive polarity event
-                                set_instant_dvs_pixel(event, &mut instantaneous_frame, 20);
-                            }
                             _ => {
-                                // D is the same. Don't fire an event.
-                                set_instant_dvs_pixel(event, &mut instantaneous_frame, 128);
+                                let new_intensity_ln =
+                                    event_to_frame_intensity(&event, frame_length);
+                                let c = 0.15;
+                                match (new_intensity_ln, px.frame_intensity_ln) {
+                                    (a, b) if a >= b + c => {
+                                        // Fire a positive polarity event
+                                        set_instant_dvs_pixel(
+                                            event,
+                                            &mut instantaneous_frame_deque,
+                                            frame_idx,
+                                            frame_count,
+                                            255,
+                                        );
+                                    }
+                                    (a, b) if a <= b - c => {
+                                        // Fire a negative polarity event
+                                        set_instant_dvs_pixel(
+                                            event,
+                                            &mut instantaneous_frame_deque,
+                                            frame_idx,
+                                            frame_count,
+                                            0,
+                                        );
+                                    }
+                                    (_, _) => {}
+                                }
+                                px.frame_intensity_ln = new_intensity_ln;
                             }
                         }
-
                         px.d = event.d;
-                        px.t += event.delta_t as u128;
                     }
                 }
             }
@@ -156,23 +200,84 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         }
     }
 
+    let mut event_count_mat = instantaneous_frame_deque[0].clone();
+    unsafe {
+        for y in 0..stream.height as i32 {
+            for x in 0..stream.width as i32 {
+                for c in 0..stream.channels as i32 {
+                    *event_count_mat.at_3d_unchecked_mut(y, x, c).unwrap() =
+                        ((event_counts[[y as usize, x as usize, c as usize]] as f32
+                            / max_px_event_count as f32)
+                            * 255.0) as u8;
+                }
+            }
+        }
+    }
+
+    for frame in instantaneous_frame_deque {
+        show_display_force("DVS", &frame, 1);
+        write_frame_to_video(&frame, &mut video_writer);
+    }
+    show_display_force("Event counts", &event_count_mat, 0);
+
     handle.flush().unwrap();
     println!("\nFinished!");
     Ok(())
 }
 
-fn set_instant_dvs_pixel(event: Event, frame: &mut Mat, value: i16) {
+fn set_instant_dvs_pixel(
+    event: Event,
+    frames: &mut VecDeque<Mat>,
+    frame_idx: usize,
+    frame_count: usize,
+    value: u128,
+) {
+    // Grow the deque if necessary
+    let grow_len = frame_idx as i32 - frame_count as i32 - frames.len() as i32 + 1;
+    for _ in 0..grow_len {
+        frames.push_back(frames[0].clone());
+        // Clear the instantaneous frame
+        match frames.back_mut().unwrap().data_bytes_mut() {
+            Ok(bytes) => {
+                for byte in bytes {
+                    *byte = 128;
+                }
+            }
+            Err(_) => {
+                panic!("Mat error")
+            }
+        }
+    }
+
     unsafe {
-        let px: &mut u8 = frame
-            .at_3d_unchecked_mut(
-                event.coord.y.into(),
-                event.coord.x.into(),
-                event.coord.c.unwrap_or(0).into(),
-            )
-            .unwrap();
-        match value {
-            128 => *px = 128,
-            a => *px = (*px as i16 + a) as u8,
+        let px: &mut u8 = match event.coord.c {
+            None => frames[frame_idx - frame_count]
+                .at_2d_mut(event.coord.y.into(), event.coord.x.into())
+                .unwrap(),
+            Some(c) => frames[frame_idx - frame_count]
+                .at_3d_mut(event.coord.y.into(), event.coord.x.into(), c.into())
+                .unwrap(),
+        };
+        *px = value as u8;
+        // match value {
+        //     128 => *px = 128,
+        //     a => *px = (*px as i16 + a) as u8,
+        // }
+    }
+}
+
+fn event_to_frame_intensity(event: &Event, frame_length: u128) -> f64 {
+    (((D_SHIFT[event.d as usize] as f64 / event.delta_t as f64) * frame_length as f64) / 255.0)
+        .ln_1p()
+}
+
+fn write_frame_to_video(frame: &Mat, video_writer: &mut BufWriter<File>) {
+    unsafe {
+        for idx in 0..frame.size().unwrap().width * frame.size().unwrap().height {
+            let val: *const u8 = frame.at_unchecked(idx).unwrap() as *const u8;
+            video_writer
+                .write(std::slice::from_raw_parts(val, 1))
+                .unwrap();
         }
     }
 }
