@@ -31,13 +31,6 @@ pub struct SimulProcArgs {
     #[clap(long, default_value_t = 1)]
     pub color_input: u32,
 
-    /// Number of ticks per second (should equal ref_time * frame rate)
-    #[clap(short, long, default_value_t = 120000)]
-    pub tps: u32,
-
-    #[clap(long, default_value_t = 24)]
-    pub fps: u32,
-
     /// Number of ticks per input frame // TODO: modularize for different sources
     #[clap(short, long, default_value_t = 5000)]
     pub ref_time: u32,
@@ -100,8 +93,6 @@ impl SimulProcessor {
     pub fn new<T>(
         source: FramedSource,
         ref_time: DeltaT,
-        tps: DeltaT,
-        fps: u32,
         output_path: &str,
         frame_max: i32,
         num_threads: usize,
@@ -122,9 +113,9 @@ impl SimulProcessor {
             .num_threads(max(num_threads / 2, 1))
             .build()
             .unwrap();
-        let reconstructed_frame_rate = fps;
+        let reconstructed_frame_rate = source.source_fps;
         // For instantaneous reconstruction, make sure the frame rate matches the source video rate
-        assert_eq!(tps / ref_time, reconstructed_frame_rate);
+        assert_eq!(source.video.tps / ref_time, reconstructed_frame_rate as u32);
 
         let height = source.get_video().height as usize;
         let width = source.get_video().width as usize;
@@ -133,7 +124,7 @@ impl SimulProcessor {
         let mut framer = thread_pool_framer.install(|| {
             FramerBuilder::new(height, width, channels, source.video.chunk_rows)
                 .codec_version(1)
-                .time_parameters(tps, ref_time, reconstructed_frame_rate)
+                .time_parameters(source.video.tps, ref_time, reconstructed_frame_rate)
                 .mode(INSTANTANEOUS)
                 .source(U8, FramedU8)
                 .finish::<T>()

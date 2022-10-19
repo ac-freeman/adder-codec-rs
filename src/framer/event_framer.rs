@@ -40,7 +40,7 @@ pub struct FramerBuilder {
     num_cols: usize,
     num_channels: usize,
     tps: DeltaT,
-    output_fps: u32,
+    output_fps: f64,
     mode: FramerMode,
     source: SourceType,
     codec_version: u8,
@@ -62,7 +62,7 @@ impl FramerBuilder {
             num_channels,
             chunk_rows,
             tps: 150000,
-            output_fps: 30,
+            output_fps: 30.0,
             mode: FramerMode::INSTANTANEOUS,
             source: SourceType::U8,
             codec_version: 1,
@@ -74,7 +74,7 @@ impl FramerBuilder {
         mut self,
         tps: DeltaT,
         ref_interval: DeltaT,
-        output_fps: u32,
+        output_fps: f64,
     ) -> FramerBuilder {
         self.tps = tps;
         self.ref_interval = ref_interval;
@@ -232,7 +232,7 @@ impl<T: Clone + Default + FrameValue<Output = T> + Copy + Serialize + Send + Syn
             last_filled_tracker,
             chunk_filled_tracker: vec![false; num_chunks],
             mode: builder.mode,
-            tpf: builder.tps / builder.output_fps,
+            tpf: builder.tps / builder.output_fps as u32,
             source: builder.source,
             codec_version: builder.codec_version,
             source_camera: builder.source_camera,

@@ -62,11 +62,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .color(args.color_input != 0)
         .contrast_thresholds(args.c_thresh_pos, args.c_thresh_neg)
         .show_display(args.show_display != 0)
-        .time_parameters(args.tps, args.delta_t_max);
+        .time_parameters(args.delta_t_max);
     if !args.output_events_filename.is_empty() {
         source_builder = source_builder.output_events_filename(args.output_events_filename);
     }
     let source = source_builder.finish();
+    let source_fps = source.source_fps;
 
     let width = source.get_video().width;
     let height = source.get_video().height;
@@ -80,8 +81,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let mut simul_processor = SimulProcessor::new::<u8>(
         source,
         ref_time,
-        args.tps,
-        args.fps,
         args.output_raw_video_filename.as_str(),
         args.frame_count_max as i32,
         num_threads,
@@ -105,7 +104,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 + "x"
                 + height.to_string().as_str()
                 + " -r "
-                + args.fps.to_string().as_str()
+                + source_fps.to_string().as_str()
                 + " -i "
                 + &args.output_raw_video_filename
                 + " -crf 0 -c:v libx264 -y "
