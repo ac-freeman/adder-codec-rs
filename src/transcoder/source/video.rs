@@ -244,7 +244,7 @@ impl Video {
             let db = self.instantaneous_frame.data_bytes_mut().unwrap();
             db.par_iter_mut().enumerate().for_each(|(idx, val)| {
                 let y = idx / (self.width as usize * self.channels);
-                let x = idx % (self.width as usize * self.channels);
+                let x = (idx % (self.width as usize * self.channels)) / self.channels;
                 let c = idx % self.channels;
                 *val = match self.event_pixel_trees[[y, x, c]].arena[0].best_event {
                     Some(event) => {
