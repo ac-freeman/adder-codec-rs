@@ -35,7 +35,7 @@ pub(crate) struct Standard {
     unstable_bits: u8,
     delta_t_stable: DeltaT,
 }
-
+#[allow(dead_code)]
 impl Standard {
     pub fn new() -> Standard {
         Standard {
@@ -163,6 +163,7 @@ pub(crate) struct Aggressive {
     ref_time: DeltaT,
 }
 
+#[allow(dead_code)]
 impl Aggressive {
     pub fn new(ref_time: DeltaT, _delta_t_max: DeltaT) -> Aggressive {
         Aggressive {
@@ -236,6 +237,7 @@ impl DControl for Aggressive {
 #[derive(Default)]
 pub(crate) struct Manual {}
 
+#[allow(dead_code)]
 impl Manual {
     pub fn new() -> Manual {
         Manual {}

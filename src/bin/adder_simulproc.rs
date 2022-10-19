@@ -88,16 +88,18 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let now = std::time::Instant::now();
     simul_processor.run().unwrap();
+    println!("\n\n{} ms elapsed\n\n", now.elapsed().as_millis());
 
     // Use ffmpeg to encode the raw frame data as an mp4
     let color_str = match args.color_input != 0 {
         true => "bgr24",
         _ => "gray",
     };
+
     let mut ffmpeg = Command::new("sh")
         .arg("-c")
         .arg(
-            "ffmpeg -f rawvideo -pix_fmt ".to_owned()
+            "ffmpeg -hide_banner -loglevel error -f rawvideo -pix_fmt ".to_owned()
                 + color_str
                 + " -s:v "
                 + width.to_string().as_str()
@@ -114,7 +116,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .spawn()
         .unwrap();
     ffmpeg.wait().unwrap();
-    println!("{} ms elapsed", now.elapsed().as_millis());
 
     Ok(())
 }

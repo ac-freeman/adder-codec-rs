@@ -1,10 +1,10 @@
 args_filename = ""
 scale = 1.0
 input_filename= "/media/andrew/Scratch/ugc-dataset/original_videos_h264/Animation_360P-08c9_crf_10_ss_00_t_20.0.mp4"
-output_raw_video_filename = "/home/andrew/Downloads/anim_out"
+output_raw_video_filename = "/home/andrew/Downloads/anim_out_0"
 output_events_filename = ""
-c_thresh_pos = 15
-c_thresh_neg = 15
+c_thresh_pos = 0
+c_thresh_neg = 0
 color_input = 1
 show_display = 1
 frame_idx_start = 0

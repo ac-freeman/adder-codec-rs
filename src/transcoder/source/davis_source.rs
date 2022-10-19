@@ -11,7 +11,6 @@ use davis_edi_rs::util::reconstructor::{IterVal, Reconstructor};
 use rayon::iter::ParallelIterator;
 use rayon::iter::{IndexedParallelIterator, IntoParallelRefMutIterator};
 
-
 use opencv::core::{Mat, CV_8U};
 use opencv::{prelude::*, Result};
 
@@ -53,7 +52,7 @@ pub struct DavisSource {
     pub(crate) video: Video,
     image_8u: Mat,
     thread_pool_edi: ThreadPool,
-    thread_pool_integration: ThreadPool,
+    _thread_pool_integration: ThreadPool,
     dvs_c: f64,
     dvs_events: Option<Vec<DvsEvent>>,
     pub start_of_frame_timestamp: Option<i64>,
@@ -131,7 +130,7 @@ impl DavisSource {
             video,
             image_8u: Mat::default(),
             thread_pool_edi,
-            thread_pool_integration,
+            _thread_pool_integration: thread_pool_integration,
             dvs_c: 0.15,
             dvs_events: None,
             start_of_frame_timestamp: None,
@@ -158,7 +157,7 @@ impl DavisSource {
 
         let dvs_events = unwrap_or_return!(self.dvs_events.as_ref());
 
-        let mut chunk_idx = 0;
+        let mut chunk_idx;
         for dvs_event in dvs_events {
             chunk_idx = dvs_event.y() as usize / (self.video.height as usize / 4);
             dvs_chunks[chunk_idx].push(*dvs_event);
@@ -362,9 +361,7 @@ impl DavisSource {
             db.par_iter_mut().enumerate().for_each(|(idx, val)| {
                 let y = idx / self.video.width as usize;
                 let x = idx % self.video.width as usize;
-                *val = match self.video.event_pixel_trees[[y, x, 0]].arena[0]
-                    .best_event
-                {
+                *val = match self.video.event_pixel_trees[[y, x, 0]].arena[0].best_event {
                     Some(event) => {
                         u8::get_frame_value(&event, SourceType::U8, self.video.ref_time as DeltaT)
                     }
