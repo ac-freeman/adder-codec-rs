@@ -237,12 +237,18 @@ impl Source for FramedSource {
         thread_pool: &ThreadPool,
     ) -> Result<Vec<Vec<Event>>, SourceError> {
         match self.cap.read(&mut self.input_frame) {
-            Ok(_) => resize_frame(
-                &self.input_frame,
-                &mut self.input_frame_scaled,
-                self.color_input,
-                self.scale,
-            ),
+            Ok(_) => {
+                match resize_frame(
+                    &self.input_frame,
+                    &mut self.input_frame_scaled,
+                    self.color_input,
+                    self.scale,
+                ) {
+                    Ok(_) => {}
+                    Err(_) => return Err(SourceError::NoData),
+                }
+            }
+
             Err(e) => {
                 panic!("{}", e);
             }
@@ -298,16 +304,22 @@ fn resize_input(
     Ok(())
 }
 
-fn resize_frame(input: &Mat, output: &mut Mat, color: bool, scale: f64) {
+fn resize_frame(
+    input: &Mat,
+    output: &mut Mat,
+    color: bool,
+    scale: f64,
+) -> Result<(), opencv::Error> {
     let mut holder = Mat::default();
     if !color {
         // Yields an 8-bit grayscale mat
-        imgproc::cvt_color(&input, &mut holder, imgproc::COLOR_BGR2GRAY, 1).unwrap();
+        imgproc::cvt_color(&input, &mut holder, imgproc::COLOR_BGR2GRAY, 1)?;
         // don't do anything with the error. This happens when we reach the end of
         // the video, so there's nothing to convert.
     } else {
         holder = input.clone();
     }
 
-    resize_input(&mut holder, output, scale).unwrap();
+    resize_input(&mut holder, output, scale)?;
+    Ok(())
 }
