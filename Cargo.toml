@@ -68,6 +68,10 @@ perfcnt = "0.8.0"
 name = "framed_to_adder_hd"
 harness = false
 
+#[[bin]]
+#name = "download_framed_to_adder_daset"
+#path = "evaluation/mmsys23/framed_to_adder/dataset/download_dataset.rs"
+
 [package.metadata.docs.rs]
 no-default-features = true
 default-target = "x86_64-unknown-linux-gnu"

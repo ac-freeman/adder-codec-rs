@@ -19,3 +19,4 @@ Cargo.lock
 
 /tests/samples/videos/*
 /benches/run/*.mp4
+/evaluation/mmsys23/framed_to_adder/dataset/*.mp4

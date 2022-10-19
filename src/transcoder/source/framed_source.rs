@@ -180,6 +180,10 @@ impl FramedSource {
             }
         };
 
+        // Move start frame back
+        cap.set(CAP_PROP_POS_FRAMES, builder.frame_idx_start as f64)
+            .unwrap();
+
         let mut init_frame_scaled = Mat::default();
         println!("Original width is {}", init_frame.size()?.width);
         resize_input(&mut init_frame, &mut init_frame_scaled, builder.scale).unwrap();
