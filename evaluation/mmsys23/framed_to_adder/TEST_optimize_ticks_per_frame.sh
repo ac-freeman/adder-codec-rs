@@ -10,5 +10,6 @@ do
      ./dataset/tpf_optimization_filelist.txt \
      /media/andrew/ExternalM2/ugc-dataset/optimize_evals \
      "${ticks}" \
-     0
+     0 \
+     .
 done
