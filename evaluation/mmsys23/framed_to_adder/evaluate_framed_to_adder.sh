@@ -30,10 +30,10 @@ for i in "${!filenames[@]}"; do
         cargo run --release --bin adderinfo -- -i "${TEMP_DIR}/tmp_events.adder" -d >> "${DATA_LOG_PATH}/${FILENAME}/${i}_${REF_TIME}.txt"
         rm -rf "${TEMP_DIR}/tmp"    # Delete the raw video data
         rm -rf "${TEMP_DIR}/tmp_events.adder"   # Delete the events file
-        docker run -v ${DATASET_PATH}:/gt_vids -v "$(pwd)":/gen_vids gfdavila/easyvmaf -r "/gt_vids/${FILENAME}" -d /gen_vids/tmp.mp4 -sw 0.0 -ss 0 -endsync
+        docker run -v ${DATASET_PATH}:/gt_vids -v "${TEMP_DIR}":/gen_vids gfdavila/easyvmaf -r "/gt_vids/${FILENAME}" -d /gen_vids/tmp.mp4 -sw 0.0 -ss 0 -endsync
         rm -rf "${TEMP_DIR}/tmp.mp4"
         mv "${TEMP_DIR}/tmp_vmaf.json" "${DATA_LOG_PATH}/${FILENAME}/${i}_${REF_TIME}_vmaf.json"
     done
-    echo "${FILENAME}"
+    sleep 60s
 done
 
