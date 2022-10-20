@@ -22,18 +22,20 @@ mapfile -t filenames < "${FILELIST}"
 for i in "${!filenames[@]}"; do
     FILENAME="${filenames[i]}"
     echo "${FILENAME}"
-    for (( i = 0; i <= ${MAX_THRESH}; i += 10 ))
-    do
+    if [ ! -d "${DATA_LOG_PATH}/${FILENAME}" ]; then
         mkdir "${DATA_LOG_PATH}/${FILENAME}"
-        echo "${FILENAME}_${i}_${REF_TIME}"
-        cargo run --release --bin adder_simulproc -- --show-display 0 --scale 1.0 --input-filename "${DATASET_PATH}/${FILENAME}" --output-raw-video-filename "${TEMP_DIR}/tmp" --c-thresh-pos $i --c-thresh-neg $i --frame-count-max 0 --output-events-filename "${TEMP_DIR}/tmp_events.adder" --ref-time ${REF_TIME} --delta-t-max ${DTM} >> "${DATA_LOG_PATH}/${FILENAME}/${i}_${REF_TIME}.txt"
-        cargo run --release --bin adderinfo -- -i "${TEMP_DIR}/tmp_events.adder" -d >> "${DATA_LOG_PATH}/${FILENAME}/${i}_${REF_TIME}.txt"
-        rm -rf "${TEMP_DIR}/tmp"    # Delete the raw video data
-        rm -rf "${TEMP_DIR}/tmp_events.adder"   # Delete the events file
-        docker run -v ${DATASET_PATH}:/gt_vids -v "${TEMP_DIR}":/gen_vids gfdavila/easyvmaf -r "/gt_vids/${FILENAME}" -d /gen_vids/tmp.mp4 -sw 0.0 -ss 0 -endsync
-        rm -rf "${TEMP_DIR}/tmp.mp4"
-        mv "${TEMP_DIR}/tmp_vmaf.json" "${DATA_LOG_PATH}/${FILENAME}/${i}_${REF_TIME}_vmaf.json"
-    done
-    sleep 60s
+        for (( i = 0; i <= ${MAX_THRESH}; i += 10 ))
+        do
+            echo "${FILENAME}_${i}_${REF_TIME}"
+            cargo run --release --bin adder_simulproc -- --show-display 0 --scale 1.0 --input-filename "${DATASET_PATH}/${FILENAME}" --output-raw-video-filename "${TEMP_DIR}/tmp" --c-thresh-pos $i --c-thresh-neg $i --frame-count-max 0 --output-events-filename "${TEMP_DIR}/tmp_events.adder" --ref-time ${REF_TIME} --delta-t-max ${DTM} >> "${DATA_LOG_PATH}/${FILENAME}/${i}_${REF_TIME}.txt"
+            cargo run --release --bin adderinfo -- -i "${TEMP_DIR}/tmp_events.adder" -d >> "${DATA_LOG_PATH}/${FILENAME}/${i}_${REF_TIME}.txt"
+            rm -rf "${TEMP_DIR}/tmp"    # Delete the raw video data
+            rm -rf "${TEMP_DIR}/tmp_events.adder"   # Delete the events file
+            docker run -v ${DATASET_PATH}:/gt_vids -v "${TEMP_DIR}":/gen_vids gfdavila/easyvmaf -r "/gt_vids/${FILENAME}" -d /gen_vids/tmp.mp4 -sw 0.0 -ss 0 -endsync
+            rm -rf "${TEMP_DIR}/tmp.mp4"
+            mv "${TEMP_DIR}/tmp_vmaf.json" "${DATA_LOG_PATH}/${FILENAME}/${i}_${REF_TIME}_vmaf.json"
+        done
+        sleep 60s
+    fi
 done
 

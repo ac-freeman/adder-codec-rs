@@ -4,8 +4,8 @@
 ## Uses a ramdisk to avoid writing tons of temporary data to disk
 ## Ex create a ramdisk mounting point:
 # sudo mkdir /mnt/tmp
-## Ex mount the ram disk with 10 GB of RAM
-# sudo mount -t tmpfs -o size=10g tmpfs /mnt/tmp
+## Ex mount the ram disk with 40 GB of RAM
+# sudo mount -t tmpfs -o size=40g tmpfs /mnt/tmp
 
 
 
