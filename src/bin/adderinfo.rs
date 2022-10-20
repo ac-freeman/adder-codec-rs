@@ -111,15 +111,15 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         let theory_dr_bits = theory_dr_ratio.log2();
         writeln!(handle, "\rDynamic range                       ")?;
         writeln!(handle, "\tTheoretical range:")?;
-        writeln!(handle, "\t\t{} dB (power)", theory_dr_db as u32)?;
-        writeln!(handle, "\t\t{} bits", theory_dr_bits as u32)?;
+        writeln!(handle, "\t\t{:.4} dB (power)", theory_dr_db as u32)?;
+        writeln!(handle, "\t\t{:.4} bits", theory_dr_bits as u32)?;
 
         let real_dr_ratio = max_intensity / min_intensity;
         let real_dr_db = 10.0 * real_dr_ratio.log10();
         let real_dr_bits = real_dr_ratio.log2();
         writeln!(handle, "\tRealized range:")?;
-        writeln!(handle, "\t\t{} dB (power)", real_dr_db as u32)?;
-        writeln!(handle, "\t\t{} bits", real_dr_bits as u32)?;
+        writeln!(handle, "\t\t{:.4} dB (power)", real_dr_db as u32)?;
+        writeln!(handle, "\t\t{:.4} bits", real_dr_bits as u32)?;
     }
 
     handle.flush().unwrap();

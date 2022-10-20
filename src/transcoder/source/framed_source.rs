@@ -95,8 +95,9 @@ impl FramedSourceBuilder {
         self
     }
 
-    pub fn time_parameters(mut self, delta_t_max: DeltaT) -> FramedSourceBuilder {
+    pub fn time_parameters(mut self, ref_time: DeltaT, delta_t_max: DeltaT) -> FramedSourceBuilder {
         self.delta_t_max = delta_t_max;
+        self.ref_time = ref_time;
         assert_eq!(self.delta_t_max % self.ref_time, 0);
         self
     }

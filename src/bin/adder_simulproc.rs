@@ -62,7 +62,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .color(args.color_input != 0)
         .contrast_thresholds(args.c_thresh_pos, args.c_thresh_neg)
         .show_display(args.show_display != 0)
-        .time_parameters(args.delta_t_max);
+        .time_parameters(args.ref_time, args.delta_t_max);
     if !args.output_events_filename.is_empty() {
         source_builder = source_builder.output_events_filename(args.output_events_filename);
     }
