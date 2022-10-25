@@ -99,6 +99,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
     let rt = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(12)
+        .enable_time()
         .build()
         .unwrap();
     let reconstructor = rt.block_on(Reconstructor::new(
@@ -118,6 +119,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         edi_args.deblur_only != 0,
         events_only,
         edi_args.target_latency,
+        edi_args.simulate_packet_latency != 0,
     ));
 
     let mut davis_source = DavisSource::new(

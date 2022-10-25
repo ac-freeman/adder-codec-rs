@@ -19,7 +19,7 @@ fn main() {
     let output_path = "/home/andrew/Downloads/temppp_out";
     let mut output_stream = BufWriter::new(File::create(output_path).unwrap());
 
-    let reconstructed_frame_rate = 500.0;
+    let reconstructed_frame_rate = 1000000.0;
     // For instantaneous reconstruction, make sure the frame rate matches the source video rate
     assert_eq!(
         stream.tps / stream.ref_interval,

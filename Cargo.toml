@@ -54,8 +54,8 @@ clap = { version = "3.0.10", features = ["derive"] }
 generational-arena = "0.2"
 smallvec = "1.9.0"
 bumpalo = "3.11.0"
-#davis-edi-rs = { path = "../davis-EDI-rs" }
-davis-edi-rs = "0.1.2"
+davis-edi-rs = { path = "../davis-EDI-rs" }
+#davis-edi-rs = "0.1.2"
 toml = "0.5.8"
 aedat = "1.2.7"
 
