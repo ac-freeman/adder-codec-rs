@@ -2,7 +2,7 @@
 ## Transcode an aedat4 file to ADDER
 
 ## Example usage:
-# ./evaluation/mmsys23/davis_to_adder/evaluate_davis_to_adder.sh /media/andrew/ExternalM2/DynamicVision ./evaluation/mmsys23/davis_to_adder/dataset/test_filelist.txt /media/andrew/ExternalM2/10_26_22_davis_to_adder_evaluation 40
+# ./evaluation/mmsys23/davis_to_adder/evaluate_dvs_to_adder.sh /media/andrew/ExternalM2/DynamicVision ./evaluation/mmsys23/davis_to_adder/dataset/test_filelist.txt /media/andrew/ExternalM2/10_26_22_davis_to_adder_evaluation 40
 
 
 DATASET_PATH=$1   # e.g., /media/andrew/ExternalM2/DynamicVision
@@ -36,7 +36,7 @@ for i in "${!filenames[@]}"; do
                   optimize_c = true
                   optimize_controller = false
                   deblur_only = true
-                  events_only = false
+                  events_only = true
                   simulate_packet_latency = true
                   target_latency = 1000.0
                   show_display = false
@@ -48,7 +48,7 @@ for i in "${!filenames[@]}"; do
                 --adder-c-thresh-pos "${i}" \
                 --adder-c-thresh-neg "${i}" \
                 --delta-t-max-multiplier 4.0 \
-                --transcode-from "raw-davis" \
+                --transcode-from "raw-dvs" \
                 --write-out \
                 >> "${DATA_LOG_PATH}/${FILENAME}/${i}_${REF_TIME}.txt"
 #                --show-display

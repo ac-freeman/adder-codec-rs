@@ -1,5 +1,5 @@
 use adder_codec_rs::raw::raw_stream::RawStream;
-use adder_codec_rs::{Codec, Event, D_SHIFT};
+use adder_codec_rs::{Codec, Event, D, D_SHIFT};
 use std::cmp::max;
 use std::collections::VecDeque;
 use std::fs::File;
@@ -178,24 +178,26 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 max_px_event_count = max(max_px_event_count, event_counts[[y, x, c]]);
 
                 match &mut pixels[[y, x, c]] {
-                    None => {
-                        if event.d < 253 {
+                    None => match event.d {
+                        d if d <= 254 => {
                             pixels[[y, x, c]] = Some(DvsPixel {
                                 d: event.d,
                                 frame_intensity_ln: event_to_frame_intensity(&event, frame_length),
                                 t: event.delta_t as u128,
                             });
-                        } else {
+                        }
+                        _ => {
+                            dbg!(event);
                             panic!("Shouldn't happen")
                         }
-                    }
+                    },
                     Some(px) => {
                         px.t += event.delta_t as u128;
                         current_t = max(px.t, current_t);
                         let frame_idx = (px.t / frame_length) as usize;
 
                         match event.d {
-                            255 | 254 => {
+                            255 => {
                                 // ignore empty events
                                 continue; // Don't update d with this
                             }
@@ -225,6 +227,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                                         text_writer
                                             .write(dvs_string.as_ref())
                                             .expect("Could not write");
+                                        px.frame_intensity_ln = new_intensity_ln;
                                     }
                                     (a, b) if a <= b - c => {
                                         // Fire a negative polarity event
@@ -245,10 +248,10 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                                         text_writer
                                             .write(dvs_string.as_ref())
                                             .expect("Could not write");
+                                        px.frame_intensity_ln = new_intensity_ln;
                                     }
                                     (_, _) => {}
                                 }
-                                px.frame_intensity_ln = new_intensity_ln;
                             }
                         }
                         px.d = event.d;
@@ -333,6 +336,13 @@ fn set_instant_dvs_pixel(
 }
 
 fn event_to_frame_intensity(event: &Event, frame_length: u128) -> f64 {
-    (((D_SHIFT[event.d as usize] as f64 / event.delta_t as f64) * frame_length as f64) / 255.0)
-        .ln_1p()
+    if event.d == 254 {
+        return 0.0;
+    }
+    match event.delta_t {
+        0 => ((D_SHIFT[event.d as usize] as f64 * frame_length as f64) / 255.0).ln_1p(),
+        _ => (((D_SHIFT[event.d as usize] as f64 / event.delta_t as f64) * frame_length as f64)
+            / 255.0)
+            .ln_1p(),
+    }
 }
