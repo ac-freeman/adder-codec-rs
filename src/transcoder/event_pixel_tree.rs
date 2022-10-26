@@ -189,6 +189,10 @@ impl PixelArena {
                 let mut dt_acc = 0.0;
                 while push_d > 0 {
                     push_d = push_d.saturating_sub(1);
+                    let ratio = (D_SHIFT[push_d as usize] as f32 / head.state.integration);
+                    if ratio > 1.0 {
+                        continue;
+                    }
                     let push_dt = (D_SHIFT[push_d as usize] as f32 / head.state.integration)
                         * head.state.delta_t;
                     dt_acc += push_dt;
@@ -197,16 +201,21 @@ impl PixelArena {
                         d: push_d,
                         delta_t: push_dt as DeltaT,
                     });
+                    head.state.integration -= D_SHIFT[push_d as usize] as f32;
+                    head.state.delta_t -= push_dt;
                     dt_left -= push_dt;
                 }
-                assert_eq!((dt_acc as DeltaT + dt_left as DeltaT), head_dt as DeltaT);
+                assert!(
+                    (dt_acc as DeltaT + dt_left as DeltaT) <= (head_dt + 1.0) as DeltaT
+                        && (dt_acc as DeltaT + dt_left as DeltaT) >= (head_dt - 1.0) as DeltaT
+                );
 
                 ret_vec.push(Event {
                     coord: self.coord,
                     d: 0xFF,
                     delta_t: (dt_left) as DeltaT,
                 });
-                assert!((dt_left) < 2000.0); // TODO: don't hardcode
+                // assert!((dt_left) < 2000.0); // TODO: don't hardcode
 
                 head.state.delta_t = 0.0;
                 head.state.integration = 0.0;
