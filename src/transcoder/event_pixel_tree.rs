@@ -205,9 +205,11 @@ impl PixelArena {
                     head.state.delta_t -= push_dt;
                     dt_left -= push_dt;
                 }
+                let a = (dt_acc as DeltaT + dt_left as DeltaT);
+                let b = head_dt;
                 assert!(
-                    (dt_acc as DeltaT + dt_left as DeltaT) <= (head_dt + 1.0) as DeltaT
-                        && (dt_acc as DeltaT + dt_left as DeltaT) >= (head_dt - 1.0) as DeltaT
+                    (dt_acc as DeltaT + dt_left as DeltaT) <= (head_dt + 2.0) as DeltaT
+                        && (dt_acc as DeltaT + dt_left as DeltaT) >= (head_dt - 2.0) as DeltaT
                 );
 
                 ret_vec.push(Event {
