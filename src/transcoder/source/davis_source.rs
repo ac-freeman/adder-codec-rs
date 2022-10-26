@@ -505,6 +505,8 @@ impl Source for DavisSource {
                     as f32
             }
             DavisTranscoderMode::RawDvs => {
+                // TODO: Note how c is fixed here, since we don't have a mechanism for determining
+                // its value
                 self.dvs_c = 0.15;
                 match tmp.data_bytes_mut() {
                     Ok(bytes) => {

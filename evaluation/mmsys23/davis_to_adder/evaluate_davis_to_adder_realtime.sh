@@ -9,10 +9,8 @@ DATASET_PATH=$1   # e.g., /media/andrew/ExternalM2/DynamicVision
 FILELIST=$2   # e.g., ./evaluation/mmsys23/davis_to_adder/dataset/test_filelist.txt
 DATA_LOG_PATH=$3  # e.g., /media/andrew/ExternalM2/10_26_22_davis_to_adder_evaluation
 REF_TIME=1000000  # match the temporal granularity of the camera (microseconds)
-MAX_THRESH=$4
 DTM="$((1000000 * 4))"  # 4 seconds
-TEMP_DIR=$5
-EDI_ARGS=$6
+TEMP_DIR=$4
 echo "${DTM}"
 mapfile -t filenames < "${FILELIST}"
 
@@ -23,8 +21,7 @@ for i in "${!filenames[@]}"; do
 #    if [ ! -d "${DATA_LOG_PATH}/${FILENAME}" ]; then # TODO: re-enable
     if [ true ]; then
         mkdir "${DATA_LOG_PATH}/${FILENAME}"
-        for (( i = 0; i <= ${MAX_THRESH}; i += 10 ))
-        do
+
             echo "${FILENAME}_${i}_${REF_TIME}"
             cargo run --bin davis_to_adder --release -- \
               --edi-args "
@@ -35,7 +32,7 @@ for i in "${!filenames[@]}"; do
                                            events_filename_1 = \"\"
                                            start_c = 0.30344322344322345
                                            optimize_c = true
-                                           optimize_controller = false
+                                           optimize_controller = true
                                            deblur_only = true
                                            events_only = false
                                            simulate_packet_latency = true
@@ -50,10 +47,11 @@ for i in "${!filenames[@]}"; do
                 --adder-c-thresh-neg "${i}" \
                 --delta-t-max-multiplier 4.0 \
                 --transcode-from "raw-davis" \
+                --optimize-adder-controller \
                 --write-out \
                 >> "${DATA_LOG_PATH}/${FILENAME}/${i}_${REF_TIME}.txt"
 #                --show-display
-#                --optimize-adder-controller  # Disabled so that the adder contrast threshold remains constant
+
 
 
             cargo run --release --bin adderinfo -- -i "${TEMP_DIR}/tmp_events.adder" -d >> "${DATA_LOG_PATH}/${FILENAME}/${i}_${REF_TIME}.txt"
@@ -66,8 +64,7 @@ for i in "${!filenames[@]}"; do
 #            docker run -v ${DATASET_PATH}:/gt_vids -v "${TEMP_DIR}":/gen_vids gfdavila/easyvmaf -r "/gt_vids/${FILENAME}" -d /gen_vids/tmp.mp4 -sw 0.0 -ss 0 -endsync
 #            rm -rf "${TEMP_DIR}/tmp.mp4"
 #            mv "${TEMP_DIR}/tmp_vmaf.json" "${DATA_LOG_PATH}/${FILENAME}/${i}_${REF_TIME}_vmaf.json"
-        done
-        sleep 60s
+        sleep 15s
     fi
 done
 
