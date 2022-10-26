@@ -182,6 +182,10 @@ impl PixelArena {
         let next_d = get_d_from_intensity(next_intensity);
         let ret = match next_d < head.state.d && head.state.delta_t > 0.0 {
             true => {
+                // TODO: NOTE: Need to revert all this mess and simply change the way that the FRAMER behaves.
+                // If the framer encounters an empty event, we should repeat the LAST non-empty event's
+                // intensity to span that empty event's time, NOT the next non-empty event's intensity.
+
                 let mut ret_vec = Vec::new();
                 let mut push_d = head.state.d;
                 let mut dt_left = head.state.delta_t;
