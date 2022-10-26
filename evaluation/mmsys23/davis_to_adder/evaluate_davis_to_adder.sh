@@ -12,6 +12,7 @@ REF_TIME=1000000  # match the temporal granularity of the camera (microseconds)
 MAX_THRESH=$4
 DTM="$((1000000 * 4))"  # 4 seconds
 TEMP_DIR=$5
+EDI_ARGS=$6
 echo "${DTM}"
 mapfile -t filenames < "${FILELIST}"
 
@@ -26,23 +27,7 @@ for i in "${!filenames[@]}"; do
         do
             echo "${FILENAME}_${i}_${REF_TIME}"
             cargo run --bin davis_to_adder --release -- \
-              --edi-args "
-                  args_filename = \"\"
-                  base_path = \"${DATASET_PATH}\"
-                  mode = \"file\"
-                  events_filename_0 = \"${FILENAME}\"
-                  events_filename_1 = \"\"
-                  start_c = 0.30344322344322345
-                  optimize_c = true
-                  optimize_controller = false
-                  deblur_only = true
-                  events_only = false
-                  simulate_packet_latency = true
-                  target_latency = 1000.0
-                  show_display = false
-                  show_blurred_display = false
-                  output_fps = 500
-                  write_video = false" \
+              --edi-args "${EDI_ARGS}" \
                 --args-filename "" \
                 --output-events-filename "${TEMP_DIR}/tmp_events.adder" \
                 --adder-c-thresh-pos "${i}" \

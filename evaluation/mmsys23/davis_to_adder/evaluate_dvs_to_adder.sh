@@ -51,7 +51,8 @@ for i in "${!filenames[@]}"; do
                 --transcode-from "raw-dvs" \
                 --write-out \
                 >> "${DATA_LOG_PATH}/${FILENAME}/${i}_${REF_TIME}.txt"
-#                --show-display
+                #                                --show-display \
+
 #                --optimize-adder-controller  # Disabled so that the adder contrast threshold remains constant
 
 
