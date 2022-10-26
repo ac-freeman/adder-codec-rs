@@ -1,11 +1,12 @@
 args_filename = ""
-edi_args_filename = "./src/bin/args/edi_args.toml"
+#edi_args_filename = "./src/bin/args/edi_args.toml"
+edi_args = "base_path = \"/media/andrew/ExternalM2/DynamicVision\""
 output_events_filename = "/home/andrew/Downloads/davis.adder"
 adder_c_thresh_pos = 10
 adder_c_thresh_neg = 10
 delta_t_max_multiplier = 10.0
 transcode_from = "raw-davis"
 #transcode_from = "framed"
-show_display = 1
-write_out = 1
-optimize_adder_controller = 1
+show_display = true
+write_out = true
+optimize_adder_controller = true

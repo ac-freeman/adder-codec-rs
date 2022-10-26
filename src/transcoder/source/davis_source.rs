@@ -429,6 +429,7 @@ impl Source for DavisSource {
         match mat_opt {
             None => {
                 // We've reached the end of the input. Forcibly pop the last event from each pixel.
+                println!("Popping remaining events");
                 let px_per_chunk: usize = self.video.chunk_rows
                     * self.video.width as usize
                     * self.video.channels as usize;

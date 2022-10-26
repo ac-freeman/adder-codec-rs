@@ -34,6 +34,7 @@ pub struct MyArgs {
 /// out as an mp4 file. For simplicity, I piggyback off my EDI implementation, although this
 /// adds some overhead.
 ///
+#[allow(dead_code)]
 fn main() -> Result<(), Box<dyn error::Error>> {
     let args: MyArgs = MyArgs::parse();
     let file_path = args.input.as_str();
@@ -68,6 +69,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         true,
         true,
         1.0,
+        false,
     ));
 
     let mut instantaneous_frame_deque = unsafe {
