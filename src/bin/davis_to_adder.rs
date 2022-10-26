@@ -17,8 +17,9 @@ use std::{error, io};
 #[derive(Parser, Debug, Deserialize, Default)]
 pub struct Args {
     /// Filename for EDI args (optional; must be in .toml format)
+    /// OR can provide toml-style data as a raw string here
     #[clap(short, long, default_value = "")]
-    pub edi_args_filename: String,
+    pub edi_args: String,
 
     /// Filename for args (optional; must be in .toml format)
     #[clap(short, long, default_value = "")]
@@ -72,10 +73,18 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         args = toml::from_str(&content).unwrap();
     }
 
-    let mut edi_args: EdiArgs = EdiArgs::parse();
-    if !args.edi_args_filename.is_empty() {
-        let content = std::fs::read_to_string(args.edi_args_filename)?;
-        edi_args = toml::from_str(&content).unwrap();
+    println!("in prog");
+    let mut edi_args: EdiArgs = EdiArgs::default();
+    println!("in prog2");
+    if !args.edi_args.is_empty() {
+        match std::fs::read_to_string(&args.edi_args) {
+            Ok(content) => {
+                edi_args = toml::from_str(&content)?;
+            }
+            Err(_) => {
+                edi_args = toml::from_str(&args.edi_args)?;
+            }
+        };
     }
 
     if args.optimize_adder_controller {
@@ -139,6 +148,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     .unwrap();
 
     let mut now = Instant::now();
+    let start_time = std::time::Instant::now();
     let thread_pool_integration = rayon::ThreadPoolBuilder::new()
         .num_threads(4)
         .build()
@@ -163,6 +173,8 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             now = Instant::now();
         }
     }
+
+    println!("\n\n{} ms elapsed\n\n", start_time.elapsed().as_millis());
 
     Ok(())
 }
