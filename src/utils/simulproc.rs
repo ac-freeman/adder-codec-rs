@@ -27,9 +27,9 @@ pub struct SimulProcArgs {
     #[clap(short, long, default_value = "")]
     pub args_filename: String,
 
-    /// Use color? (For framed input, most likely) (1=yes,0=no)
-    #[clap(long, default_value_t = 1)]
-    pub color_input: u32,
+    /// Use color? (For framed input, most likely)
+    #[clap(long, action)]
+    pub color_input: bool,
 
     /// Number of ticks per input frame // TODO: modularize for different sources
     #[clap(short, long, default_value_t = 5000)]
@@ -47,9 +47,9 @@ pub struct SimulProcArgs {
     #[clap(long, default_value_t = 0)]
     pub frame_idx_start: u32,
 
-    /// Show live view displays? (1=yes,0=no)
-    #[clap(short, long, default_value_t = 0)]
-    pub show_display: u32,
+    /// Show live view displays?
+    #[clap(short, long, action)]
+    pub show_display: bool,
 
     /// Path to input file
     #[clap(short, long, default_value = "./in.mp4")]

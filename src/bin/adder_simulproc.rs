@@ -59,9 +59,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .frame_start(args.frame_idx_start)
         .scale(args.scale)
         .communicate_events(true)
-        .color(args.color_input != 0)
+        .color(args.color_input)
         .contrast_thresholds(args.c_thresh_pos, args.c_thresh_neg)
-        .show_display(args.show_display != 0)
+        .show_display(args.show_display)
         .time_parameters(args.ref_time, args.delta_t_max);
     if !args.output_events_filename.is_empty() {
         source_builder = source_builder.output_events_filename(args.output_events_filename);
@@ -91,7 +91,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     println!("\n\n{} ms elapsed\n\n", now.elapsed().as_millis());
 
     // Use ffmpeg to encode the raw frame data as an mp4
-    let color_str = match args.color_input != 0 {
+    let color_str = match args.color_input {
         true => "bgr24",
         _ => "gray",
     };

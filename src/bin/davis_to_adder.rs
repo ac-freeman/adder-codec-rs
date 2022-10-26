@@ -28,9 +28,9 @@ pub struct Args {
     #[clap(long, default_value = "")]
     pub output_events_filename: String,
 
-    /// Show live view displays? (1=yes,0=no)
-    #[clap(short, long, default_value_t = 0)]
-    pub show_display: u32,
+    /// Show live view displays?
+    #[clap(short, long, action)]
+    pub show_display: bool,
 
     /// Positive contrast threshold, in intensity units. How much an intensity must increase
     /// to launch a D-value reset.
@@ -52,18 +52,19 @@ pub struct Args {
     #[clap(short, long, default_value = "")]
     pub transcode_from: String,
 
-    /// Optimize the ADDER controller for latency? (1=yes,0=no)
-    /// If yes, then the ADDER transcoder will attempt to maintain the maximum latency as defined
+    /// Optimize the ADDER controller for latency?
+    /// If true, then the ADDER transcoder will attempt to maintain the maximum latency as defined
     /// for the EDI reconstructor, by adjusting the ADDER contrast threshold (and thus the ADDER
     /// event rate).
-    #[clap(long, default_value_t = 0)]
-    pub optimize_adder_controller: u32,
+    #[clap(long, action)]
+    pub optimize_adder_controller: bool,
 
-    /// Write out ADDER file? (1=yes,0=no)
-    #[clap(short, long, default_value_t = 0)]
-    pub write_out: u32,
+    /// Write out ADDER file?
+    #[clap(short, long, action)]
+    pub write_out: bool,
 }
 
+#[allow(dead_code)]
 fn main() -> Result<(), Box<dyn error::Error>> {
     let mut args: Args = Args::parse();
     if !args.args_filename.is_empty() {
@@ -77,7 +78,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         edi_args = toml::from_str(&content).unwrap();
     }
 
-    if args.optimize_adder_controller != 0 {
+    if args.optimize_adder_controller {
         assert_ne!(edi_args.optimize_controller, 0);
     }
 
@@ -127,13 +128,13 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         Some(args.output_events_filename),
         (1000000) as u32,                                 // TODO
         (1000000.0 * args.delta_t_max_multiplier) as u32, // TODO
-        args.show_display != 0,
+        args.show_display,
         args.adder_c_thresh_pos,
         args.adder_c_thresh_neg,
-        args.optimize_adder_controller != 0,
+        args.optimize_adder_controller,
         rt,
         mode,
-        args.write_out != 0,
+        args.write_out,
     )
     .unwrap();
 

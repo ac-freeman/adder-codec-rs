@@ -5,7 +5,6 @@ mod davis_to_adder;
 use adder_codec_rs::framer::scale_intensity::event_to_intensity;
 use adder_codec_rs::raw::raw_stream::RawStream;
 use adder_codec_rs::{Codec, Intensity, D_SHIFT};
-use clap::ArgAction::SetTrue;
 use clap::Parser;
 use std::io::Write;
 use std::path::Path;
@@ -20,7 +19,7 @@ pub struct MyArgs {
     pub(crate) input: String,
 
     /// Calculate dynamic range of the event stream? (Takes more time)
-    #[clap(short, long, default_value_t = false, action(SetTrue))]
+    #[clap(short, long, action)]
     pub(crate) dynamic_range: bool,
 }
 

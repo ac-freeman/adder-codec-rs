@@ -7,10 +7,10 @@ use std::io::{BufWriter, Write};
 use std::path::Path;
 use std::{error, io};
 
-use adder_codec_rs::transcoder::source::video::{show_display_force};
+use adder_codec_rs::transcoder::source::video::show_display_force;
 use adder_codec_rs::utils::viz::{encode_video_ffmpeg, write_frame_to_video};
 use clap::Parser;
-use ndarray::{Array3};
+use ndarray::Array3;
 use opencv::core::{Mat, MatTrait, MatTraitManual, CV_8U, CV_8UC3};
 use std::option::Option;
 
@@ -45,6 +45,7 @@ struct DvsPixel {
 /// Performance is fast. The resulting DVS stream is visualized during the transcode and written
 /// out as an mp4 file.
 ///
+#[allow(dead_code)]
 fn main() -> Result<(), Box<dyn error::Error>> {
     let args: MyArgs = MyArgs::parse();
     let file_path = args.input.as_str();
