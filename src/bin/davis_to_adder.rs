@@ -79,7 +79,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     }
 
     if args.optimize_adder_controller {
-        assert_ne!(edi_args.optimize_controller, 0);
+        assert!(edi_args.optimize_controller);
     }
 
     // let transcode_type = match args.transcode_from.as_str() {
@@ -109,18 +109,18 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         edi_args.events_filename_1,
         edi_args.mode,
         edi_args.start_c,
-        edi_args.optimize_c != 0,
-        edi_args.optimize_controller != 0,
-        edi_args.show_display != 0,
-        edi_args.show_blurred_display != 0,
+        edi_args.optimize_c,
+        edi_args.optimize_controller,
+        edi_args.show_display,
+        edi_args.show_blurred_display,
         edi_args.output_fps,
         Compression::None,
         346,
         260,
-        edi_args.deblur_only != 0,
+        edi_args.deblur_only,
         events_only,
         edi_args.target_latency,
-        edi_args.simulate_packet_latency != 0,
+        edi_args.simulate_packet_latency,
     ));
 
     let mut davis_source = DavisSource::new(
