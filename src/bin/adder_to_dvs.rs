@@ -32,6 +32,9 @@ pub struct MyArgs {
 
     #[clap(long, default_value_t = 100.0)]
     pub fps: f32,
+
+    #[clap(short, long, action)]
+    pub show_display: bool,
 }
 
 struct DvsPixel {
@@ -161,7 +164,9 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             match instantaneous_frame_deque.pop_front() {
                 None => {}
                 Some(frame) => {
-                    show_display_force("DVS", &frame, 1);
+                    if args.show_display {
+                        show_display_force("DVS", &frame, 1);
+                    }
                     write_frame_to_video(&frame, &mut video_writer);
                 }
             }
@@ -282,11 +287,15 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     }
 
     for frame in instantaneous_frame_deque {
-        show_display_force("DVS", &frame, 1);
+        if args.show_display {
+            show_display_force("DVS", &frame, 1);
+        }
         write_frame_to_video(&frame, &mut video_writer);
     }
     println!("\n");
-    show_display_force("Event counts", &event_count_mat, 1);
+    if args.show_display {
+        show_display_force("Event counts", &event_count_mat, 0);
+    }
     encode_video_ffmpeg(raw_path, output_video_path);
 
     handle.flush().unwrap();

@@ -1,1 +1,7 @@
-# TODO: list the filenames from the DAVIS dataset here
+building_exp1000.aedat4
+building_exp15000.aedat4
+dog.aedat4
+lamp_1000.aedat4
+lamp_15000.aedat4
+logo_bright.aedat4
+logo_dark.aedat4

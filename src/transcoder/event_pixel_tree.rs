@@ -177,19 +177,40 @@ impl PixelArena {
         self.need_to_pop_top = false;
     }
 
-    pub fn set_d_for_continuous(&mut self, next_intensity: Intensity32) -> Option<Event> {
+    pub fn set_d_for_continuous(&mut self, next_intensity: Intensity32) -> Option<Vec<Event>> {
         let head = &mut self.arena[0];
         let next_d = get_d_from_intensity(next_intensity);
         let ret = match next_d < head.state.d && head.state.delta_t > 0.0 {
             true => {
-                let ret = Some(Event {
+                let mut ret_vec = Vec::new();
+                let mut push_d = head.state.d;
+                let mut dt_left = head.state.delta_t;
+                let head_dt = head.state.delta_t;
+                let mut dt_acc = 0.0;
+                while push_d > 0 {
+                    push_d = push_d.saturating_sub(1);
+                    let push_dt = (D_SHIFT[push_d as usize] as f32 / head.state.integration)
+                        * head.state.delta_t;
+                    dt_acc += push_dt;
+                    ret_vec.push(Event {
+                        coord: self.coord,
+                        d: push_d,
+                        delta_t: push_dt as DeltaT,
+                    });
+                    dt_left -= push_dt;
+                }
+                assert_eq!((dt_acc as DeltaT + dt_left as DeltaT), head_dt as DeltaT);
+
+                ret_vec.push(Event {
                     coord: self.coord,
                     d: 0xFF,
-                    delta_t: (head.state.delta_t) as DeltaT,
+                    delta_t: (dt_left) as DeltaT,
                 });
+                assert!((dt_left) < 2000.0); // TODO: don't hardcode
+
                 head.state.delta_t = 0.0;
                 head.state.integration = 0.0;
-                ret
+                Some(ret_vec)
             }
             false => None,
         };
@@ -595,6 +616,34 @@ mod tests {
         let integ = head.state.integration;
         let dt = head.state.delta_t;
         let d = head.state.d;
+        assert_eq!(integ, 2_790.863 + 146.0);
+        assert_eq!(dt, 38231.0 + 2000.0);
+        assert_eq!(head.best_event.unwrap().d, d - 1);
+    }
+
+    #[test]
+    fn test_big_integration2() {
+        let dtm = 10000000;
+        let mut tree = PixelArena::new(
+            255.0,
+            Coord {
+                x: 0,
+                y: 0,
+                c: None,
+            },
+        );
+        loop {
+            tree.integrate(255.0, 2000.0, &Continuous, &dtm);
+            if tree.need_to_pop_top {
+                break;
+            }
+        }
+
+        let head = tree.arena[0];
+        let d = head.state.d;
+        let integ = head.state.integration;
+        let dt = head.state.delta_t;
+
         assert_eq!(integ, 2_790.863 + 146.0);
         assert_eq!(dt, 38231.0 + 2000.0);
         assert_eq!(head.best_event.unwrap().d, d - 1);

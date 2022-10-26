@@ -315,12 +315,21 @@ pub fn integrate_for_px(
         if let Continuous = pixel_tree_mode {
             match px.set_d_for_continuous(intensity) {
                 None => {}
-                Some(event) => buffer.push(event),
+                Some(events) => {
+                    for event in events {
+                        buffer.push(event)
+                    }
+                }
             };
         }
     }
 
     px.integrate(intensity, ref_time, &pixel_tree_mode, delta_t_max);
+
+    if px.need_to_pop_top {
+        // TODO: Something weird is happening here?
+        buffer.push(px.pop_top_event(Some(intensity)));
+    }
 }
 
 /// If [`MyArgs`]`.show_display`, shows the given [`Mat`] in an OpenCV window

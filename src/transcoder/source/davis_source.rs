@@ -218,6 +218,7 @@ impl DavisSource {
                                 * delta_t_ticks)
                                 .max(0.0);
                             if px.need_to_pop_top {
+                                // TODO: Something weird is happening here?
                                 buffer.push(px.pop_top_event(Some(first_integration)));
                             }
 
@@ -227,6 +228,10 @@ impl DavisSource {
                                 &Continuous,
                                 &self.video.delta_t_max,
                             );
+                            if px.need_to_pop_top {
+                                // TODO: Something weird is happening here?
+                                buffer.push(px.pop_top_event(Some(first_integration)));
+                            }
 
                             ///////////////////////////////////////////////////////
                             // Then, integrate a tiny amount of the next intensity
@@ -251,7 +256,11 @@ impl DavisSource {
                                 // If continuous mode and the D value needs to be different now
                                 match px.set_d_for_continuous(frame_val as Intensity32) {
                                     None => {}
-                                    Some(event) => buffer.push(event),
+                                    Some(events) => {
+                                        for event in events {
+                                            buffer.push(event)
+                                        }
+                                    }
                                 };
                             }
 
@@ -333,20 +342,25 @@ impl DavisSource {
 
                     let integration =
                         ((last_val / self.video.ref_time as f64) * delta_t_ticks as f64).max(0.0);
+                    // TODO: don't use video ref time??
                     assert!(integration >= 0.0);
 
                     integrate_for_px(
                         px,
                         base_val,
                         frame_val,
-                        integration as f32, // In this case, frame val is the same as intensity to integrate
+                        integration as f32,
                         delta_t_ticks,
                         Continuous,
                         &mut buffer,
                         &self.video.c_thresh_pos,
                         &self.video.c_thresh_neg,
                         &self.video.delta_t_max,
-                    )
+                    );
+                    if px.need_to_pop_top {
+                        // TODO: Something weird is happening here?
+                        buffer.push(px.pop_top_event(Some(integration as f32)));
+                    }
                 }
                 buffer
             })
