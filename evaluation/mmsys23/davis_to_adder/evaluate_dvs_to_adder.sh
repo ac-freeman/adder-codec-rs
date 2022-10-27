@@ -41,7 +41,7 @@ for i in "${!filenames[@]}"; do
                   target_latency = 1000.0
                   show_display = false
                   show_blurred_display = false
-                  output_fps = 500
+                  output_fps = 1000
                   write_video = false" \
                 --args-filename "" \
                 --output-events-filename "${TEMP_DIR}/tmp_events.adder" \
@@ -60,14 +60,14 @@ for i in "${!filenames[@]}"; do
             cargo run --release --bin adder_to_dvs -- -i "${TEMP_DIR}/tmp_events.adder" \
                 --output-text "${DATA_LOG_PATH}/${FILENAME}/${i}_${REF_TIME}_dvs.txt" \
                 --output-video "${DATA_LOG_PATH}/${FILENAME}/${i}_${REF_TIME}_dvs.mp4" \
-                --fps 500.0
+                --fps 1000.0
 
 #            rm -rf "${TEMP_DIR}/tmp_events.adder"   # Delete the events file
 #            docker run -v ${DATASET_PATH}:/gt_vids -v "${TEMP_DIR}":/gen_vids gfdavila/easyvmaf -r "/gt_vids/${FILENAME}" -d /gen_vids/tmp.mp4 -sw 0.0 -ss 0 -endsync
 #            rm -rf "${TEMP_DIR}/tmp.mp4"
 #            mv "${TEMP_DIR}/tmp_vmaf.json" "${DATA_LOG_PATH}/${FILENAME}/${i}_${REF_TIME}_vmaf.json"
         done
-        sleep 60s
+        sleep 5s
     fi
 done
 

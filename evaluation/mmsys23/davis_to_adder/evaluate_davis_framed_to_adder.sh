@@ -42,7 +42,7 @@ for i in "${!filenames[@]}"; do
                                            target_latency = 1000.0
                                            show_display = false
                                            show_blurred_display = false
-                                           output_fps = 500
+                                           output_fps = 1000
                                            write_video = false" \
                 --args-filename "" \
                 --output-events-filename "${TEMP_DIR}/tmp_events.adder" \
@@ -60,7 +60,7 @@ for i in "${!filenames[@]}"; do
             cargo run --release --bin adder_to_dvs -- -i "${TEMP_DIR}/tmp_events.adder" \
                 --output-text "${DATA_LOG_PATH}/${FILENAME}/${i}_${REF_TIME}_dvs.txt" \
                 --output-video "${DATA_LOG_PATH}/${FILENAME}/${i}_${REF_TIME}_dvs.mp4" \
-                --fps 500.0
+                --fps 1000.0
             cargo run --release --example events_to_instantaneous_frames
 
             ffmpeg -f rawvideo -pix_fmt gray -s:v 346x260 -r 30 -i "/mnt/tmp/temppp_out" \
@@ -72,7 +72,7 @@ for i in "${!filenames[@]}"; do
 #            rm -rf "${TEMP_DIR}/tmp.mp4"
 #            mv "${TEMP_DIR}/tmp_vmaf.json" "${DATA_LOG_PATH}/${FILENAME}/${i}_${REF_TIME}_vmaf.json"
         done
-        sleep 15s
+        sleep 5s
     fi
 done
 

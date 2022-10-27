@@ -1,5 +1,5 @@
 use adder_codec_rs::raw::raw_stream::RawStream;
-use adder_codec_rs::{Codec, Event, D, D_SHIFT};
+use adder_codec_rs::{Codec, Event, D_SHIFT};
 use std::cmp::max;
 use std::collections::VecDeque;
 use std::fs::File;

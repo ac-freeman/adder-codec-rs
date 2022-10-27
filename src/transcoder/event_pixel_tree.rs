@@ -1,5 +1,5 @@
 use crate::transcoder::event_pixel_tree::Mode::{Continuous, FramePerfect};
-use crate::{Coord, Event, D_MAX, D_SHIFT};
+use crate::{Coord, Event, UDshift, D_MAX, D_SHIFT};
 use smallvec::{smallvec, SmallVec};
 use std::cmp::min;
 
@@ -293,7 +293,7 @@ impl PixelArena {
                 // TODO: this is slow and dumb
                 loop {
                     node.state.d += 1;
-                    if D_SHIFT[node.state.d as usize] > node.state.integration as u32 {
+                    if D_SHIFT[node.state.d as usize] > node.state.integration as UDshift {
                         break;
                     }
                 }

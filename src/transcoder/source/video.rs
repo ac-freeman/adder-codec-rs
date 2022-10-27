@@ -5,7 +5,7 @@ use std::path::Path;
 use std::sync::mpsc::{channel, Receiver, Sender};
 
 use crate::raw::raw_stream::RawStream;
-use crate::{Codec, Coord, Event, Intensity, SourceType, D, D_MAX, D_SHIFT};
+use crate::{Codec, Coord, Event, SourceType, D, D_MAX, D_SHIFT};
 use opencv::highgui;
 use opencv::imgproc::resize;
 use opencv::prelude::*;
