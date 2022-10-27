@@ -11,15 +11,16 @@ use std::io::{BufWriter, Write};
 use std::time::Instant;
 
 fn main() {
-    let input_path = "/home/andrew/Downloads/davis.adder";
+    let input_path = "/mnt/tmp/tmp_events.adder";
     let mut stream: RawStream = Codec::new();
     stream.open_reader(input_path).expect("Invalid path");
     stream.decode_header().expect("Invalid header");
 
-    let output_path = "/home/andrew/Downloads/temppp_out";
+    let output_path = "/mnt/tmp/temppp_out";
     let mut output_stream = BufWriter::new(File::create(output_path).unwrap());
 
-    let reconstructed_frame_rate = 1000000.0;
+    let reconstructed_frame_rate = (stream.tps / stream.ref_interval) as f64;
+    println!("reconstructed_frame_rate: {}", reconstructed_frame_rate);
     // For instantaneous reconstruction, make sure the frame rate matches the source video rate
     assert_eq!(
         stream.tps / stream.ref_interval,

@@ -104,6 +104,7 @@ impl SimulProcessor {
         T: std::marker::Copy,
         T: FrameValue<Output = T>,
         T: Serialize,
+        T: num_traits::Zero,
     {
         let thread_pool_framer = rayon::ThreadPoolBuilder::new()
             .num_threads(max(num_threads / 2, 1))

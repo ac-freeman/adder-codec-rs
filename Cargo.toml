@@ -58,6 +58,7 @@ davis-edi-rs = { path = "../davis-EDI-rs" }
 #davis-edi-rs = "0.1.2"
 toml = "0.5.8"
 aedat = "1.2.7"
+num-traits = "0.2.15"
 
 [dev-dependencies]
 criterion = "0.3.6"

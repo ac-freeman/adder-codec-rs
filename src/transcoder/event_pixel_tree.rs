@@ -187,6 +187,7 @@ impl PixelArena {
                     d: 0xFF,
                     delta_t: (head.state.delta_t) as DeltaT,
                 });
+
                 head.state.delta_t = 0.0;
                 head.state.integration = 0.0;
                 ret
@@ -206,6 +207,7 @@ impl PixelArena {
         mut time: f32,
         mode: &Mode,
         dtm: &DeltaT,
+        ref_time: &DeltaT,
     ) {
         let tail = &mut self.arena[self.length - 1];
         if tail.state.delta_t == 0.0 && tail.state.integration == 0.0 {
@@ -235,15 +237,13 @@ impl PixelArena {
             idx += 1;
 
             if filled {
-                // TODO: Fix for continuous mode
                 match mode {
                     FramePerfect => break,
 
                     // If continuous, we need to integrate the remaining intensity for the current
                     // node and the branching nodes
                     Continuous => {
-                        // TODO: temporary hack. Get number from caller.
-                        if time > 2000.0 {
+                        if time > *ref_time as f32 {
                             self.arena[idx].state.d = get_d_from_intensity(intensity);
                         }
                     }
@@ -595,6 +595,34 @@ mod tests {
         let integ = head.state.integration;
         let dt = head.state.delta_t;
         let d = head.state.d;
+        assert_eq!(integ, 2_790.863 + 146.0);
+        assert_eq!(dt, 38231.0 + 2000.0);
+        assert_eq!(head.best_event.unwrap().d, d - 1);
+    }
+
+    #[test]
+    fn test_big_integration2() {
+        let dtm = 10000000;
+        let mut tree = PixelArena::new(
+            255.0,
+            Coord {
+                x: 0,
+                y: 0,
+                c: None,
+            },
+        );
+        loop {
+            tree.integrate(255.0, 2000.0, &Continuous, &dtm);
+            if tree.need_to_pop_top {
+                break;
+            }
+        }
+
+        let head = tree.arena[0];
+        let d = head.state.d;
+        let integ = head.state.integration;
+        let dt = head.state.delta_t;
+
         assert_eq!(integ, 2_790.863 + 146.0);
         assert_eq!(dt, 38231.0 + 2000.0);
         assert_eq!(head.best_event.unwrap().d, d - 1);

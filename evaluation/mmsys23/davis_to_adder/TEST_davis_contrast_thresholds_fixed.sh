@@ -14,8 +14,8 @@
 
 
  ./evaluate_davis_to_adder.sh \
-    /media/andrew/ExternalM2/DynamicVision \
-    ./dataset/test_filelist.txt \
+    /media/andrew/ExternalM2/mmsys23_davis_dataset \
+    ./dataset/dataset_filelist.txt \
     /media/andrew/ExternalM2/10_26_22_davis_to_adder_evaluation \
     40 \
     /mnt/tmp
