@@ -19,7 +19,8 @@ fn main() {
     let output_path = "/mnt/tmp/temppp_out";
     let mut output_stream = BufWriter::new(File::create(output_path).unwrap());
 
-    let reconstructed_frame_rate = 500.0;
+    let reconstructed_frame_rate = (stream.tps / stream.ref_interval) as f64;
+    println!("reconstructed_frame_rate: {}", reconstructed_frame_rate);
     // For instantaneous reconstruction, make sure the frame rate matches the source video rate
     assert_eq!(
         stream.tps / stream.ref_interval,

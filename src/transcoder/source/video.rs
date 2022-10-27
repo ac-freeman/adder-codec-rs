@@ -5,7 +5,7 @@ use std::path::Path;
 use std::sync::mpsc::{channel, Receiver, Sender};
 
 use crate::raw::raw_stream::RawStream;
-use crate::{Codec, Coord, Event, SourceType, D, D_MAX, D_SHIFT};
+use crate::{Codec, Coord, Event, Intensity, SourceType, D, D_MAX, D_SHIFT};
 use opencv::highgui;
 use opencv::imgproc::resize;
 use opencv::prelude::*;
@@ -43,6 +43,7 @@ pub struct Video {
     pub chunk_rows: usize,
     pub(crate) event_pixel_trees: Array3<PixelArena>,
     pub(crate) ref_time: u32,
+    pub(crate) ref_time_divisor: f64,
     pub(crate) delta_t_max: u32,
     pub(crate) show_display: bool,
     pub(crate) show_live: bool,
@@ -156,6 +157,7 @@ impl Video {
             chunk_rows,
             event_pixel_trees,
             ref_time,
+            ref_time_divisor: 1.0,
             delta_t_max,
             show_display,
             show_live: false,
@@ -211,17 +213,20 @@ impl Video {
                 let base_val = bump.alloc(0);
                 let px_idx = bump.alloc(0);
                 let frame_val = bump.alloc(0);
+                let frame_val_intensity32 = bump.alloc(0.0);
 
                 for (chunk_px_idx, px) in chunk.iter_mut().enumerate() {
                     *px_idx = chunk_px_idx + px_per_chunk * chunk_idx;
 
-                    *frame_val = frame_arr[*px_idx];
+                    *frame_val_intensity32 =
+                        (frame_arr[*px_idx] as f64 * self.ref_time_divisor) as Intensity32;
+                    *frame_val = *frame_val_intensity32 as u8;
 
                     integrate_for_px(
                         px,
                         base_val,
                         frame_val,
-                        *frame_val as Intensity32, // In this case, frame val is the same as intensity to integrate
+                        *frame_val_intensity32, // In this case, frame val is the same as intensity to integrate
                         ref_time,
                         pixel_tree_mode,
                         &mut buffer,
@@ -311,7 +316,6 @@ pub fn integrate_for_px(
         px.base_val = *frame_val;
 
         // If continuous mode and the D value needs to be different now
-        // TODO: make it modular
         if let Continuous = pixel_tree_mode {
             match px.set_d_for_continuous(intensity) {
                 None => {}

@@ -330,11 +330,11 @@ impl DavisSource {
                         continue; // TODO: a hacky way around the problem. Need to also get the frame start timestamp
                     }
                     assert!(delta_t_ticks > 0.0);
-                    assert_eq!(
-                        self.end_of_frame_timestamp.unwrap()
-                            - self.start_of_frame_timestamp.unwrap(),
-                        (self.video.ref_time as f32 / ticks_per_micro as f32) as i64
-                    );
+                    // assert_eq!(
+                    //     self.end_of_frame_timestamp.unwrap()
+                    //         - self.start_of_frame_timestamp.unwrap(),
+                    //     (self.video.ref_time as f32 / ticks_per_micro as f32) as i64
+                    // );
 
                     let integration =
                         ((last_val / self.video.ref_time as f64) * delta_t_ticks as f64).max(0.0);
@@ -464,18 +464,26 @@ impl Source for DavisSource {
 
                 return Err(SourceError::NoData);
             }
-            Some((mat, opt_timestamp, Some((c, events, img_start_ts, timestamp)))) => {
+            Some((mat, opt_timestamp, Some((c, events, img_start_ts, img_end_ts)))) => {
                 self.control_latency(opt_timestamp);
 
                 self.input_frame_scaled = mat;
                 self.dvs_c = c;
                 self.dvs_events = Some(events);
                 self.start_of_frame_timestamp = Some(img_start_ts);
-                self.end_of_frame_timestamp = Some(timestamp);
-                assert_eq!(
-                    self.end_of_frame_timestamp.unwrap(),
-                    self.start_of_frame_timestamp.unwrap() + self.video.ref_time as i64
-                )
+                self.end_of_frame_timestamp = Some(img_end_ts);
+                dbg!(img_end_ts - img_start_ts);
+                self.video.ref_time_divisor =
+                    (img_end_ts - img_start_ts) as f64 / self.video.ref_time as f64;
+                dbg!(self.video.ref_time_divisor);
+                // if img_end_ts - img_start_ts != self.video.ref_time as i64 {
+                //     // self.video.ref_time = (img_end_ts - img_start_ts) as u32;
+                // }
+                //
+                // assert_eq!(
+                //     self.end_of_frame_timestamp.unwrap(),
+                //     self.start_of_frame_timestamp.unwrap() + self.video.ref_time as i64
+                // )
                 // self.dvs_last_timestamps.par_map_inplace(|ts| {
                 //     *ts = timestamp;
                 // });
