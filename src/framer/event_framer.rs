@@ -554,26 +554,11 @@ fn ingest_event_for_chunk<
     *running_ts_ref += event.delta_t as BigT;
 
     if ((*running_ts_ref - 1) as i64 / tpf as i64) > *last_filled_frame_ref {
-        // match event.d {
-        //     d if d == 0xFF => {
-        //         // Don't do anything -- it's an empty event
-        //         // Except in special case where delta_t == tpf
-        //         if *running_ts_ref == tpf as BigT && event.delta_t == tpf {
-        //             frame_chunk[(*last_filled_frame_ref - *frame_idx_offset) as usize].array
-        //                 [[event.coord.y.into(), event.coord.x.into(), channel.into()]] =
-        //                 Some(T::default());
-        //             frame_chunk[(*last_filled_frame_ref - *frame_idx_offset) as usize]
-        //                 .filled_count += 1;
-        //             // if (*last_filled_frame_ref - self.frame_idx_offset) == 0 {
-        //             //     println!("{}, {}", event.coord.x, event.coord.y);
-        //             // }
-        //
-        //             *last_filled_frame_ref = ((*running_ts_ref - 1) as i64 / tpf as i64) + 1;
-        //         }
-        //     }
-        //     _ => {
         // Set the frame's value from the event
-        if event.d != 255 {
+
+        if event.d != 0xFF {
+            // If d == 0xFF, then the event was empty, and we simply repeat the last non-empty
+            // event's intensity. Else we reset the intensity here.
             *last_frame_intensity_ref = T::get_frame_value(event, source, tpf);
         }
         *last_filled_frame_ref = (*running_ts_ref - 1) as i64 / tpf as i64;
@@ -618,14 +603,9 @@ fn ingest_event_for_chunk<
                     None => {
                         *frame = Some(*last_frame_intensity_ref);
                         frame_chunk[(i - frames_written + 1) as usize].filled_count += 1;
-                        // if (i - self.frames_written + 1) == 0 {
-                        //     println!("{}, {}", event.coord.x, event.coord.y);
-                        // }
                     }
                 }
             }
-            //     }
-            // }
         }
     }
 

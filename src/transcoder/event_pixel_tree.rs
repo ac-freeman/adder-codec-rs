@@ -182,47 +182,6 @@ impl PixelArena {
         let next_d = get_d_from_intensity(next_intensity);
         let ret = match next_d < head.state.d && head.state.delta_t > 0.0 {
             true => {
-                // TODO: NOTE: Need to revert all this mess and simply change the way that the FRAMER behaves.
-                // If the framer encounters an empty event, we should repeat the LAST non-empty event's
-                // intensity to span that empty event's time, NOT the next non-empty event's intensity.
-
-                // let mut ret_vec = Vec::new();
-                // let mut push_d = head.state.d;
-                // let mut dt_left = head.state.delta_t;
-                // let head_dt = head.state.delta_t;
-                // let mut dt_acc = 0.0;
-                // while push_d > 0 {
-                //     push_d = push_d.saturating_sub(1);
-                //     let ratio = (D_SHIFT[push_d as usize] as f32 / head.state.integration);
-                //     if ratio > 1.0 {
-                //         continue;
-                //     }
-                //     let push_dt = (D_SHIFT[push_d as usize] as f32 / head.state.integration)
-                //         * head.state.delta_t;
-                //     dt_acc += push_dt;
-                //     ret_vec.push(Event {
-                //         coord: self.coord,
-                //         d: push_d,
-                //         delta_t: push_dt as DeltaT,
-                //     });
-                //     head.state.integration -= D_SHIFT[push_d as usize] as f32;
-                //     head.state.delta_t -= push_dt;
-                //     dt_left -= push_dt;
-                // }
-                // let a = (dt_acc as DeltaT + dt_left as DeltaT);
-                // let b = head_dt;
-                // assert!(
-                //     (dt_acc as DeltaT + dt_left as DeltaT) <= (head_dt + 2.0) as DeltaT
-                //         && (dt_acc as DeltaT + dt_left as DeltaT) >= (head_dt - 2.0) as DeltaT
-                // );
-                //
-                // ret_vec.push(Event {
-                //     coord: self.coord,
-                //     d: 0xFF,
-                //     delta_t: (dt_left) as DeltaT,
-                // });
-                // assert!((dt_left) < 2000.0); // TODO: don't hardcode
-
                 let ret = Some(Event {
                     coord: self.coord,
                     d: 0xFF,
