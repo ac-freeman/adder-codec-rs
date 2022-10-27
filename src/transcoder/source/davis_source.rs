@@ -256,11 +256,7 @@ impl DavisSource {
                                 // If continuous mode and the D value needs to be different now
                                 match px.set_d_for_continuous(frame_val as Intensity32) {
                                     None => {}
-                                    Some(events) => {
-                                        for event in events {
-                                            buffer.push(event)
-                                        }
-                                    }
+                                    Some(event) => buffer.push(event),
                                 };
                             }
 

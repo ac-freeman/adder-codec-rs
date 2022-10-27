@@ -315,11 +315,7 @@ pub fn integrate_for_px(
         if let Continuous = pixel_tree_mode {
             match px.set_d_for_continuous(intensity) {
                 None => {}
-                Some(events) => {
-                    for event in events {
-                        buffer.push(event)
-                    }
-                }
+                Some(event) => buffer.push(event),
             };
         }
     }
