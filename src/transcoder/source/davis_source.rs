@@ -472,21 +472,8 @@ impl Source for DavisSource {
                 self.dvs_events = Some(events);
                 self.start_of_frame_timestamp = Some(img_start_ts);
                 self.end_of_frame_timestamp = Some(img_end_ts);
-                dbg!(img_end_ts - img_start_ts);
                 self.video.ref_time_divisor =
                     (img_end_ts - img_start_ts) as f64 / self.video.ref_time as f64;
-                dbg!(self.video.ref_time_divisor);
-                // if img_end_ts - img_start_ts != self.video.ref_time as i64 {
-                //     // self.video.ref_time = (img_end_ts - img_start_ts) as u32;
-                // }
-                //
-                // assert_eq!(
-                //     self.end_of_frame_timestamp.unwrap(),
-                //     self.start_of_frame_timestamp.unwrap() + self.video.ref_time as i64
-                // )
-                // self.dvs_last_timestamps.par_map_inplace(|ts| {
-                //     *ts = timestamp;
-                // });
             }
             Some((mat, opt_timestamp, None)) => {
                 self.control_latency(opt_timestamp);
