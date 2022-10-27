@@ -13,9 +13,9 @@
  sudo mount -t tmpfs -o size=20g tmpfs /mnt/tmp
 
 
- ./evaluate_davis_to_adder.sh \
+ ./evaluate_davis_framed_to_adder.sh \
     /media/andrew/ExternalM2/mmsys23_davis_dataset \
     ./dataset/dataset_filelist.txt \
-    /media/andrew/ExternalM2/10_26_22_davis_to_adder_evaluation \
+    /media/andrew/ExternalM2/10_26_22_davis_framed_to_adder_evaluation \
     40 \
     /mnt/tmp

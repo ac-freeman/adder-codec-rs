@@ -2,7 +2,7 @@
 ## Transcode an aedat4 file to ADDER
 
 ## Example usage:
-# ./evaluation/mmsys23/davis_to_adder/evaluate_davis_to_adder.sh /media/andrew/ExternalM2/DynamicVision ./evaluation/mmsys23/davis_to_adder/dataset/test_filelist.txt /media/andrew/ExternalM2/10_26_22_davis_to_adder_evaluation 40
+# ./evaluation/mmsys23/davis_to_adder/evaluate_davis_raw_to_adder.sh /media/andrew/ExternalM2/DynamicVision ./evaluation/mmsys23/davis_to_adder/dataset/test_filelist.txt /media/andrew/ExternalM2/10_26_22_davis_to_adder_evaluation 40
 
 
 DATASET_PATH=$1   # e.g., /media/andrew/ExternalM2/DynamicVision
