@@ -87,11 +87,14 @@ impl DavisSource {
             output_events_filename,
             1,
             tps,
+            // ref_time is set based on the reconstructor's output_fps, which is the user-set
+            // rate OR might be higher if the first APS image in the video has a shorter exposure
+            // time than expected
             (tps as f64 / reconstructor.output_fps) as u32,
             delta_t_max,
             DecimationMode::Manual,
-            write_out, // TODO
-            true,      // TODO
+            write_out,
+            true,
             show_display_b,
             DavisU8,
             adder_c_thresh_pos,
@@ -218,7 +221,6 @@ impl DavisSource {
                                 * delta_t_ticks)
                                 .max(0.0);
                             if px.need_to_pop_top {
-                                // TODO: Something weird is happening here?
                                 buffer.push(px.pop_top_event(Some(first_integration)));
                             }
 
@@ -227,9 +229,9 @@ impl DavisSource {
                                 delta_t_ticks,
                                 &Continuous,
                                 &self.video.delta_t_max,
+                                &self.video.ref_time,
                             );
                             if px.need_to_pop_top {
-                                // TODO: Something weird is happening here?
                                 buffer.push(px.pop_top_event(Some(first_integration)));
                             }
 
@@ -319,7 +321,6 @@ impl DavisSource {
                     *base_val = px.base_val;
                     *frame_val = last_val as u8;
 
-                    // TODO: Also need start of video timestamp
                     let ticks_per_micro = self.video.tps as f32 / 1e6;
 
                     let delta_t_micro = self.start_of_frame_timestamp.unwrap()
@@ -327,7 +328,7 @@ impl DavisSource {
 
                     let delta_t_ticks = delta_t_micro as f32 * ticks_per_micro;
                     if delta_t_ticks <= 0.0 {
-                        continue; // TODO: a hacky way around the problem. Need to also get the frame start timestamp
+                        continue;
                     }
                     assert!(delta_t_ticks > 0.0);
                     // assert_eq!(
@@ -338,7 +339,6 @@ impl DavisSource {
 
                     let integration =
                         ((last_val / self.video.ref_time as f64) * delta_t_ticks as f64).max(0.0);
-                    // TODO: don't use video ref time??
                     assert!(integration >= 0.0);
 
                     integrate_for_px(
@@ -352,9 +352,9 @@ impl DavisSource {
                         &self.video.c_thresh_pos,
                         &self.video.c_thresh_neg,
                         &self.video.delta_t_max,
+                        &self.video.ref_time,
                     );
                     if px.need_to_pop_top {
-                        // TODO: Something weird is happening here?
                         buffer.push(px.pop_top_event(Some(integration as f32)));
                     }
                 }

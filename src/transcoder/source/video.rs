@@ -181,7 +181,7 @@ impl Video {
     pub(crate) fn integrate_matrix(
         &mut self,
         matrix: Mat,
-        ref_time: f32,
+        time_spanned: f32,
         pixel_tree_mode: Mode,
         view_interval: u32,
     ) -> std::result::Result<Vec<Vec<Event>>, SourceError> {
@@ -227,12 +227,13 @@ impl Video {
                         base_val,
                         frame_val,
                         *frame_val_intensity32, // In this case, frame val is the same as intensity to integrate
-                        ref_time,
+                        time_spanned,
                         pixel_tree_mode,
                         &mut buffer,
                         &self.c_thresh_pos,
                         &self.c_thresh_neg,
                         &self.delta_t_max,
+                        &self.ref_time,
                     )
                 }
                 buffer
@@ -265,19 +266,6 @@ impl Video {
         Ok(big_buffer)
     }
 
-    // pub(crate) fn integrate_single_intensity(
-    //     &mut self,
-    //     y: usize,
-    //     x: usize,
-    //     c: usize,
-    //     intensity: Intensity32,
-    //     ref_time: f32,
-    //     pixel_tree_mode: Mode,
-    // ) -> std::result::Result<Vec<Event>, SourceError> {
-    //     let px = &mut self.event_pixel_trees[[y, x, c]];
-    //     todo!()
-    // }
-
     fn set_initial_d(&mut self, frame_arr: &[u8]) {
         self.event_pixel_trees.par_map_inplace(|px| {
             let idx = px.coord.y as usize * self.width as usize * self.channels
@@ -296,12 +284,13 @@ pub fn integrate_for_px(
     base_val: &mut u8,
     frame_val: &u8,
     intensity: Intensity32,
-    ref_time: f32,
+    time_spanned: f32,
     pixel_tree_mode: Mode,
     buffer: &mut Vec<Event>,
     c_thresh_pos: &u8,
     c_thresh_neg: &u8,
     delta_t_max: &u32,
+    ref_time: &u32,
 ) {
     if px.need_to_pop_top {
         buffer.push(px.pop_top_event(Some(intensity)));
@@ -324,10 +313,15 @@ pub fn integrate_for_px(
         }
     }
 
-    px.integrate(intensity, ref_time, &pixel_tree_mode, delta_t_max);
+    px.integrate(
+        intensity,
+        time_spanned,
+        &pixel_tree_mode,
+        delta_t_max,
+        ref_time,
+    );
 
     if px.need_to_pop_top {
-        // TODO: Something weird is happening here?
         buffer.push(px.pop_top_event(Some(intensity)));
     }
 }

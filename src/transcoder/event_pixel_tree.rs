@@ -207,6 +207,7 @@ impl PixelArena {
         mut time: f32,
         mode: &Mode,
         dtm: &DeltaT,
+        ref_time: &DeltaT,
     ) {
         let tail = &mut self.arena[self.length - 1];
         if tail.state.delta_t == 0.0 && tail.state.integration == 0.0 {
@@ -236,15 +237,13 @@ impl PixelArena {
             idx += 1;
 
             if filled {
-                // TODO: Fix for continuous mode
                 match mode {
                     FramePerfect => break,
 
                     // If continuous, we need to integrate the remaining intensity for the current
                     // node and the branching nodes
                     Continuous => {
-                        // TODO: temporary hack. Get number from caller.
-                        if time > 2000.0 {
+                        if time > *ref_time as f32 {
                             self.arena[idx].state.d = get_d_from_intensity(intensity);
                         }
                     }
