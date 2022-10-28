@@ -184,7 +184,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
                 match &mut pixels[[y, x, c]] {
                     None => match event.d {
-                        d if d <= 254 => {
+                        d if d <= 0xFE => {
                             pixels[[y, x, c]] = Some(DvsPixel {
                                 d: event.d,
                                 frame_intensity_ln: event_to_frame_intensity(&event, frame_length),
@@ -345,7 +345,7 @@ fn set_instant_dvs_pixel(
 }
 
 fn event_to_frame_intensity(event: &Event, frame_length: u128) -> f64 {
-    if event.d == 254 {
+    if event.d == 0xFE {
         return 0.0;
     }
     match event.delta_t {

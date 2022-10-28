@@ -63,11 +63,12 @@ impl PixelArena {
         }
     }
 
+    /// If the integration is 0, we need to forcefully fire an event where d=254
     fn get_zero_event(&mut self, idx: usize, next_intensity: Option<Intensity32>) -> Event {
         let mut node = &mut self.arena[idx];
         let ret_event = Event {
             coord: self.coord,
-            d: 254,
+            d: 0xFE, // 254_u8
             delta_t: node.state.delta_t as DeltaT,
         };
         node.state.delta_t = 0.0;
@@ -86,19 +87,7 @@ impl PixelArena {
         match root.best_event {
             None => {
                 if root.state.integration == 0.0 && root.state.delta_t > 0.0 {
-                    // If the integration is 0, we need to forcefully fire an event where d=254
-                    let ret_event = Event {
-                        coord: self.coord,
-                        d: 254,
-                        delta_t: root.state.delta_t as DeltaT,
-                    };
-                    root.state.delta_t = 0.0;
-                    match next_intensity {
-                        None => {}
-                        Some(intensity) => root.state.d = get_d_from_intensity(intensity),
-                    }
-                    debug_assert!(root.alt.is_none());
-                    ret_event
+                    self.get_zero_event(0, next_intensity)
                 } else {
                     // We can reach here under frame-perfect integration when approaching dtm. The new
                     // node might not have the right D set.

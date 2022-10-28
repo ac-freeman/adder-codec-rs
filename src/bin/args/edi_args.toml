@@ -15,5 +15,5 @@ simulate_packet_latency = true
 target_latency = 1000.0
 show_display = true
 show_blurred_display = false
-output_fps = 500
+output_fps = 1000
 write_video = false

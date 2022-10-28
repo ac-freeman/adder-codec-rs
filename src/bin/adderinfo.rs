@@ -1,7 +1,3 @@
-mod adder_to_dvs;
-mod aedat4_dvs_visualize;
-mod davis_to_adder;
-
 use adder_codec_rs::framer::scale_intensity::event_to_intensity;
 use adder_codec_rs::raw::raw_stream::RawStream;
 use adder_codec_rs::{Codec, Intensity, D_SHIFT};
@@ -9,6 +5,10 @@ use clap::Parser;
 use std::io::Write;
 use std::path::Path;
 use std::{error, io};
+mod adder_to_dvs;
+mod adder_video_player;
+mod aedat4_dvs_visualize;
+mod davis_to_adder;
 
 /// Command line argument parser
 #[derive(Parser, Debug, Default)]
@@ -74,7 +74,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             match stream.decode_event() {
                 Ok(event) => {
                     match event_to_intensity(&event) {
-                        _ if event.d == 255 => {
+                        _ if event.d == 0xFF => {
                             // ignore empty events
                         }
                         a if a.is_infinite() => {
@@ -82,7 +82,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                             dbg!(event);
                         }
                         a if a < min_intensity => {
-                            if event.d == 254 {
+                            if event.d == 0xFE {
                                 min_intensity = 1.0 / event.delta_t as f64;
                             } else {
                                 min_intensity = a;
