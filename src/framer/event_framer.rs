@@ -118,7 +118,7 @@ pub trait Framer {
     type Output;
     fn new(builder: FramerBuilder) -> Self;
 
-    /// Ingest an ADDER event. Will process differently depending on choice of [`FramerMode`].
+    /// Ingest an ADΔER event. Will process differently depending on choice of [`FramerMode`].
     ///
     /// If [`INSTANTANEOUS`], this function will set the corresponding output frame's pixel value to
     /// the value derived from this [`Event`], only if this is the first value ingested for that

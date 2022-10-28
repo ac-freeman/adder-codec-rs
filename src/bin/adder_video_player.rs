@@ -19,7 +19,7 @@ pub struct MyArgs {
     pub(crate) input: String,
 
     /// Target playback frame rate. Might not actually meet this rate, or keep it consistently,
-    /// depending on the rate of decoding ADDER events.
+    /// depending on the rate of decoding ADΔER events.
     #[clap(short = 'f', long, default_value_t = 60.0)]
     pub playback_fps: f64,
 }
@@ -36,11 +36,11 @@ impl fmt::Display for PlayerError {
 impl Error for PlayerError {}
 
 ///
-/// This program visualizes the adder events, akin to a traditional video player. It simply
+/// This program visualizes the ADΔER events, akin to a traditional video player. It simply
 /// displays the intensity of the most recently fired event for each pixel.
 /// There will likely be artifacts present where the events aren't perfectly temporally interleaved,
 /// but these artifacts are not present when performing a full framed reconstruction with
-/// `events_to_instantaneous_frames.rs`. Future work will involve re-ordering the ADDER events
+/// `events_to_instantaneous_frames.rs`. Future work will involve re-ordering the ADΔER events
 /// to be temporally interleaved, to mitigate these real-time playback artifacts.
 ///
 #[allow(dead_code)]
@@ -97,7 +97,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         if event_count % divisor == 0 {
             write!(
                 handle,
-                "\rPlaying back ADDER file...{}%",
+                "\rPlaying back ADΔER file...{}%",
                 (event_count * 100) / num_events as u64
             )?;
             handle.flush().unwrap();
@@ -108,7 +108,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                     .saturating_sub((Instant::now() - last_frame_displayed_ts).as_millis()),
                 1,
             ) as i32;
-            show_display_force("ADDER", &display_mat, wait_time);
+            show_display_force("ADΔER", &display_mat, wait_time);
             last_frame_displayed_ts = Instant::now();
             frame_count += 1;
         }

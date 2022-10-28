@@ -53,14 +53,14 @@ pub struct Args {
     #[clap(short, long, default_value = "")]
     pub transcode_from: String,
 
-    /// Optimize the ADDER controller for latency?
-    /// If true, then the ADDER transcoder will attempt to maintain the maximum latency as defined
-    /// for the EDI reconstructor, by adjusting the ADDER contrast threshold (and thus the ADDER
+    /// Optimize the ADΔER controller for latency?
+    /// If true, then the ADΔER transcoder will attempt to maintain the maximum latency as defined
+    /// for the EDI reconstructor, by adjusting the ADΔER contrast threshold (and thus the ADΔER
     /// event rate).
     #[clap(long, action)]
     pub optimize_adder_controller: bool,
 
-    /// Write out ADDER file?
+    /// Write out ADΔER file?
     #[clap(short, long, action)]
     pub write_out: bool,
 }
@@ -165,7 +165,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
         if davis_source.get_video().in_interval_count % 30 == 0 {
             println!(
-                "\rDavis recon frame to ADDER {} in  {}ms",
+                "\rDavis recon frame to ADΔER {} in  {}ms",
                 davis_source.get_video().in_interval_count,
                 now.elapsed().as_millis()
             );

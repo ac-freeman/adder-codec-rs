@@ -1,6 +1,6 @@
 #!/usr/bin/bash
-## This script transcodes framed videos from selected videos of the UGC dataset to ADDER at 255 ticks (since sources
-##  have 8-bit color), and a maximum ADDER contrast threshold of 40. Results are output in the form of a text log
+## This script transcodes framed videos from selected videos of the UGC dataset to ADΔER at 255 ticks (since sources
+##  have 8-bit color), and a maximum ADΔER contrast threshold of 40. Results are output in the form of a text log
 ## containing the execution time and results of `adderinfo`, and a json file containing the results of VMAF perceptual
 ## quality analysis of the framed reconstructions.
 ##

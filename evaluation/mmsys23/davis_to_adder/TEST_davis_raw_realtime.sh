@@ -1,5 +1,5 @@
 #!/usr/bin/bash
-## This script transcodes the DAVIS dataset to ADDER at various ADDER contrast thresholds, which remain fixed during
+## This script transcodes the DAVIS dataset to ADΔER at various ADΔER contrast thresholds, which remain fixed during
 ## the course of the transcode.
 
 ## Results are output in the form of a text log

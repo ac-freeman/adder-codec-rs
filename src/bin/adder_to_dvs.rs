@@ -18,7 +18,7 @@ use std::option::Option;
 #[derive(Parser, Debug, Default)]
 #[clap(author, version, about, long_about = None)]
 pub struct MyArgs {
-    /// Input ADDER video path
+    /// Input ADΔER video path
     #[clap(short, long)]
     pub(crate) input: String,
 
@@ -44,7 +44,7 @@ struct DvsPixel {
 }
 
 ///
-/// This program transcodes an ADDER file to DVS events in a human-readable text representation.
+/// This program transcodes an ADΔER file to DVS events in a human-readable text representation.
 /// Performance is fast. The resulting DVS stream is visualized during the transcode and written
 /// out as an mp4 file.
 ///
@@ -155,7 +155,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         if event_count % divisor == 0 {
             write!(
                 handle,
-                "\rTranscoding ADDER to DVS...{}%",
+                "\rTranscoding ADΔER to DVS...{}%",
                 (event_count * 100) / num_events as u64
             )?;
             handle.flush().unwrap();

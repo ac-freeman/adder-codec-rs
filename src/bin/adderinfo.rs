@@ -14,7 +14,7 @@ mod davis_to_adder;
 #[derive(Parser, Debug, Default)]
 #[clap(author, version, about, long_about = None)]
 pub struct MyArgs {
-    /// Input ADDER video path
+    /// Input ADΔER video path
     #[clap(short, long)]
     pub(crate) input: String,
 
