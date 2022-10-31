@@ -54,7 +54,8 @@ pub struct DavisSource {
     thread_pool_edi: ThreadPool,
     _thread_pool_integration: ThreadPool,
     dvs_c: f64,
-    dvs_events: Option<Vec<DvsEvent>>,
+    dvs_events_before: Option<Vec<DvsEvent>>,
+    dvs_events_after: Option<Vec<DvsEvent>>,
     pub start_of_frame_timestamp: Option<i64>,
     pub end_of_frame_timestamp: Option<i64>,
     pub rt: Runtime,
@@ -135,7 +136,8 @@ impl DavisSource {
             thread_pool_edi,
             _thread_pool_integration: thread_pool_integration,
             dvs_c: 0.15,
-            dvs_events: None,
+            dvs_events_before: None,
+            dvs_events_after: None,
             start_of_frame_timestamp: None,
             end_of_frame_timestamp: None,
             rt,
@@ -147,18 +149,18 @@ impl DavisSource {
         Ok(davis_source)
     }
 
-    // TODO: need to return the events for simultaneously reframing?
-    pub fn integrate_dvs_events(&mut self) {
+    pub fn integrate_dvs_events<F: Fn(i64, i64) -> bool + Send + 'static + std::marker::Sync>(
+        &mut self,
+        dvs_events: &Vec<DvsEvent>,
+        frame_timestamp: &i64,
+        event_check: F,
+    ) {
         let mut dvs_chunks: [Vec<DvsEvent>; 4] = [
             Vec::with_capacity(100000),
             Vec::with_capacity(100000),
             Vec::with_capacity(100000),
             Vec::with_capacity(100000),
         ];
-
-        let end_of_frame_timestamp = unwrap_or_return!(self.end_of_frame_timestamp.as_ref());
-
-        let dvs_events = unwrap_or_return!(self.dvs_events.as_ref());
 
         let mut chunk_idx;
         for dvs_event in dvs_events {
@@ -193,7 +195,9 @@ impl DavisSource {
                     let mut buffer: Vec<Event> = Vec::with_capacity(100000);
 
                     for event in &dvs_chunks[chunk_idx] {
-                        if event.t() > *end_of_frame_timestamp {
+                        // Ignore events occuring during the deblurred frame's
+                        // effective exposure time
+                        if event_check(event.t(), *frame_timestamp) {
                             let px = &mut px_chunk
                                 [[(event.y() as usize) % chunk_rows, event.x() as usize, 0]];
                             let base_val = px.base_val;
@@ -464,12 +468,17 @@ impl Source for DavisSource {
 
                 return Err(SourceError::NoData);
             }
-            Some((mat, opt_timestamp, Some((c, events, img_start_ts, img_end_ts)))) => {
+            Some((
+                mat,
+                opt_timestamp,
+                Some((c, events_before, events_after, img_start_ts, img_end_ts)),
+            )) => {
                 self.control_latency(opt_timestamp);
 
                 self.input_frame_scaled = mat;
                 self.dvs_c = c;
-                self.dvs_events = Some(events);
+                self.dvs_events_before = Some(events_before);
+                self.dvs_events_after = Some(events_after);
                 self.start_of_frame_timestamp = Some(img_start_ts);
                 self.end_of_frame_timestamp = Some(img_end_ts);
                 self.video.ref_time_divisor =
@@ -486,6 +495,11 @@ impl Source for DavisSource {
                     *ts = self.start_of_frame_timestamp.unwrap();
                 });
             } else {
+                self.integrate_dvs_events(
+                    &self.dvs_events_before.as_ref().unwrap().clone(),
+                    &self.start_of_frame_timestamp.unwrap(),
+                    &check_dvs_before,
+                );
                 self.integrate_frame_gaps();
             }
         }
@@ -557,7 +571,11 @@ impl Source for DavisSource {
                 *ts = self.end_of_frame_timestamp.unwrap();
             });
 
-            self.integrate_dvs_events();
+            self.integrate_dvs_events(
+                &self.dvs_events_after.as_ref().unwrap().clone(),
+                &self.end_of_frame_timestamp.unwrap(),
+                &check_dvs_after,
+            );
         }
 
         ret
@@ -570,6 +588,14 @@ impl Source for DavisSource {
     fn get_video(&self) -> &Video {
         &self.video
     }
+}
+
+fn check_dvs_before(dvs_event_t: i64, timestamp_before: i64) -> bool {
+    dvs_event_t < timestamp_before
+}
+
+fn check_dvs_after(dvs_event_t: i64, timestamp_after: i64) -> bool {
+    dvs_event_t > timestamp_after
 }
 
 fn clamp_u8(frame_val: &mut f64, last_val_ln: &mut f64) {

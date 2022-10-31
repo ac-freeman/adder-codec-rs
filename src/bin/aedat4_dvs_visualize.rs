@@ -109,7 +109,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             None => {
                 break;
             }
-            Some((_, _, Some((_, events, _, _)))) => {
+            Some((_, _, Some((_, _, events, _, _)))) => {
                 for event in events {
                     if current_t > (frame_count as u128 * frame_length) + 1000000 {
                         match instantaneous_frame_deque.pop_front() {
