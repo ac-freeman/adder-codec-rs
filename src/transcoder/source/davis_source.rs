@@ -149,17 +149,18 @@ impl DavisSource {
         Ok(davis_source)
     }
 
-    pub fn integrate_dvs_events_before(&mut self) {
+    pub fn integrate_dvs_events<F: Fn(i64, i64) -> bool + Send + 'static + std::marker::Sync>(
+        &mut self,
+        dvs_events: &Vec<DvsEvent>,
+        frame_timestamp: &i64,
+        event_check: F,
+    ) {
         let mut dvs_chunks: [Vec<DvsEvent>; 4] = [
             Vec::with_capacity(100000),
             Vec::with_capacity(100000),
             Vec::with_capacity(100000),
             Vec::with_capacity(100000),
         ];
-
-        let start_of_frame_timestamp = unwrap_or_return!(self.start_of_frame_timestamp.as_ref());
-
-        let dvs_events = unwrap_or_return!(self.dvs_events_before.as_ref());
 
         let mut chunk_idx;
         for dvs_event in dvs_events {
@@ -196,149 +197,7 @@ impl DavisSource {
                     for event in &dvs_chunks[chunk_idx] {
                         // Ignore events occuring during the deblurred frame's
                         // effective exposure time
-                        if event.t() < *start_of_frame_timestamp {
-                            let px = &mut px_chunk
-                                [[(event.y() as usize) % chunk_rows, event.x() as usize, 0]];
-                            let base_val = px.base_val;
-                            let last_val_ln = &mut dvs_last_ln_val_chunk
-                                [[(event.y() as usize) % chunk_rows, event.x() as usize, 0]];
-                            let last_val = (last_val_ln.exp() - 1.0) * 255.0;
-
-                            // in microseconds (1 million per second)
-
-                            let delta_t_micro = event.t()
-                                - dvs_last_timestamps_chunk
-                                    [[event.y() as usize % chunk_rows, event.x() as usize, 0]];
-                            let ticks_per_micro = self.video.tps as f32 / 1e6;
-                            let delta_t_ticks = delta_t_micro as f32 * ticks_per_micro;
-                            if delta_t_ticks <= 0.0 {
-                                continue; // TODO: do better
-                            }
-                            assert!(delta_t_ticks > 0.0);
-                            let _frame_delta_t = self.video.ref_time;
-                            // integrate_for_px(px, base_val, &frame_val, 0.0, 0.0, Mode::FramePerfect, &mut vec![], &0, &0, &0)
-
-                            // First, integrate the previous value enough to fill the time since then
-                            let first_integration = ((last_val as Intensity32)
-                                / self.video.ref_time as f32
-                                * delta_t_ticks)
-                                .max(0.0);
-                            if px.need_to_pop_top {
-                                buffer.push(px.pop_top_event(Some(first_integration)));
-                            }
-
-                            px.integrate(
-                                first_integration,
-                                delta_t_ticks,
-                                &Continuous,
-                                &self.video.delta_t_max,
-                                &self.video.ref_time,
-                            );
-                            if px.need_to_pop_top {
-                                buffer.push(px.pop_top_event(Some(first_integration)));
-                            }
-
-                            ///////////////////////////////////////////////////////
-                            // Then, integrate a tiny amount of the next intensity
-                            // let mut frame_val = (base_val as f64);
-                            // let mut lat_frame_val = (frame_val / 255.0).ln();
-
-                            *last_val_ln += match event.on() {
-                                true => self.dvs_c,
-                                false => -self.dvs_c,
-                            };
-                            let mut frame_val = (last_val_ln.exp() - 1.0) * 255.0;
-                            clamp_u8(&mut frame_val, last_val_ln);
-
-                            let frame_val_u8 = frame_val as u8; // TODO: don't let this be lossy here
-
-                            if frame_val_u8 < base_val.saturating_sub(self.video.c_thresh_neg)
-                                || frame_val_u8 > base_val.saturating_add(self.video.c_thresh_pos)
-                            {
-                                px.pop_best_events(None, &mut buffer);
-                                px.base_val = frame_val_u8;
-
-                                // If continuous mode and the D value needs to be different now
-                                match px.set_d_for_continuous(frame_val as Intensity32) {
-                                    None => {}
-                                    Some(event) => buffer.push(event),
-                                };
-                            }
-
-                            dvs_last_timestamps_chunk
-                                [[event.y() as usize % chunk_rows, event.x() as usize, 0]] =
-                                event.t();
-                        }
-                    }
-
-                    buffer
-                },
-            )
-            .collect();
-        // exact_chunks_iter_mut(Dim([
-        //     self.video.width as usize,
-        //     self.video.height as usize / 4,
-        //     1,
-        // ]));
-
-        // slices.
-
-        // Using a macro so that CLion still pretty prints correctly
-
-        if self.video.write_out {
-            self.video.stream.encode_events_events(&big_buffer);
-        }
-    }
-
-    // TODO: need to return the events for simultaneously reframing?
-    pub fn integrate_dvs_events_after(&mut self) {
-        let mut dvs_chunks: [Vec<DvsEvent>; 4] = [
-            Vec::with_capacity(100000),
-            Vec::with_capacity(100000),
-            Vec::with_capacity(100000),
-            Vec::with_capacity(100000),
-        ];
-
-        let end_of_frame_timestamp = unwrap_or_return!(self.end_of_frame_timestamp.as_ref());
-
-        let dvs_events = unwrap_or_return!(self.dvs_events_after.as_ref());
-
-        let mut chunk_idx;
-        for dvs_event in dvs_events {
-            chunk_idx = dvs_event.y() as usize / (self.video.height as usize / 4);
-            dvs_chunks[chunk_idx].push(*dvs_event);
-        }
-
-        let chunk_rows = self.video.height as usize / 4;
-        // let px_per_chunk: usize =
-        //     self.video.chunk_rows * self.video.width as usize * self.video.channels as usize;
-        let big_buffer: Vec<Vec<Event>> = self
-            .video
-            .event_pixel_trees
-            .axis_chunks_iter_mut(Axis(0), chunk_rows)
-            .into_par_iter()
-            .zip(
-                self.dvs_last_ln_val
-                    .axis_chunks_iter_mut(Axis(0), chunk_rows)
-                    .into_par_iter()
-                    .zip(
-                        self.dvs_last_timestamps
-                            .axis_chunks_iter_mut(Axis(0), chunk_rows)
-                            .into_par_iter(),
-                    ),
-            )
-            .enumerate()
-            .map(
-                |(
-                    chunk_idx,
-                    (mut px_chunk, (mut dvs_last_ln_val_chunk, mut dvs_last_timestamps_chunk)),
-                )| {
-                    let mut buffer: Vec<Event> = Vec::with_capacity(100000);
-
-                    for event in &dvs_chunks[chunk_idx] {
-                        // Ignore events occuring during the deblurred frame's
-                        // effective exposure time
-                        if event.t() > *end_of_frame_timestamp {
+                        if event_check(event.t(), *frame_timestamp) {
                             let px = &mut px_chunk
                                 [[(event.y() as usize) % chunk_rows, event.x() as usize, 0]];
                             let base_val = px.base_val;
@@ -636,7 +495,11 @@ impl Source for DavisSource {
                     *ts = self.start_of_frame_timestamp.unwrap();
                 });
             } else {
-                self.integrate_dvs_events_before();
+                self.integrate_dvs_events(
+                    &self.dvs_events_before.as_ref().unwrap().clone(),
+                    &self.start_of_frame_timestamp.unwrap(),
+                    &check_dvs_before,
+                );
                 self.integrate_frame_gaps();
             }
         }
@@ -708,7 +571,11 @@ impl Source for DavisSource {
                 *ts = self.end_of_frame_timestamp.unwrap();
             });
 
-            self.integrate_dvs_events_after();
+            self.integrate_dvs_events(
+                &self.dvs_events_after.as_ref().unwrap().clone(),
+                &self.end_of_frame_timestamp.unwrap(),
+                &check_dvs_after,
+            );
         }
 
         ret
@@ -721,6 +588,14 @@ impl Source for DavisSource {
     fn get_video(&self) -> &Video {
         &self.video
     }
+}
+
+fn check_dvs_before(dvs_event_t: i64, timestamp_before: i64) -> bool {
+    dvs_event_t < timestamp_before
+}
+
+fn check_dvs_after(dvs_event_t: i64, timestamp_after: i64) -> bool {
+    dvs_event_t > timestamp_after
 }
 
 fn clamp_u8(frame_val: &mut f64, last_val_ln: &mut f64) {

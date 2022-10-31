@@ -1,13 +1,13 @@
 use adder_codec_rs::framer::scale_intensity::event_to_intensity;
-use adder_codec_rs::raw::raw_stream::{RawStream, StreamError};
+use adder_codec_rs::raw::raw_stream::RawStream;
 use adder_codec_rs::transcoder::source::video::show_display_force;
-use adder_codec_rs::{Codec, Event, SourceCamera};
+use adder_codec_rs::{Codec, SourceCamera};
 use clap::Parser;
 use opencv::core::{create_continuous, Mat, MatTraitManual, CV_64F, CV_64FC3};
 use std::cmp::max;
 use std::error::Error;
 use std::io::Write;
-use std::{error, fmt, io};
+use std::{fmt, io};
 use tokio::time::Instant;
 
 /// Command line argument parser
