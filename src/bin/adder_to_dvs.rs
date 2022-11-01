@@ -160,7 +160,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             )?;
             handle.flush().unwrap();
         }
-        if current_t > (frame_count as u128 * frame_length) + stream.delta_t_max as u128 {
+        if current_t > (frame_count as u128 * frame_length) + stream.delta_t_max as u128 * 4 {
             match instantaneous_frame_deque.pop_front() {
                 None => {}
                 Some(frame) => {
@@ -310,8 +310,11 @@ fn set_instant_dvs_pixel(
     frame_count: usize,
     value: u128,
 ) {
+    assert!(frame_idx - frame_count >= 0);
+
     // Grow the deque if necessary
     let grow_len = frame_idx as i32 - frame_count as i32 - frames.len() as i32 + 1;
+
     for _ in 0..grow_len {
         frames.push_back(frames[0].clone());
         // Clear the instantaneous frame
