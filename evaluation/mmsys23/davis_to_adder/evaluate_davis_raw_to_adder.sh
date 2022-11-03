@@ -18,12 +18,12 @@ echo "${DTM}"
 mapfile -t filenames < "${FILELIST}"
 
 #while IFS="\n" read FILENAME; do
-for i in "${!filenames[@]}"; do
-    FILENAME="${filenames[i]}"
+for f in "${!filenames[@]}"; do
+    FILENAME="${filenames[f]}"
     echo "${FILENAME}"
-#    if [ ! -d "${DATA_LOG_PATH}/${FILENAME}" ]; then # TODO: re-enable
-    if [ true ]; then
-        mkdir "${DATA_LOG_PATH}/${FILENAME}"
+   if [ ! -d "${DATA_LOG_PATH}/${FILENAME}_${FPS}fps" ]; then # TODO: re-enable
+    # if [ true ]; then
+        mkdir "${DATA_LOG_PATH}/${FILENAME}_${FPS}fps"
         for (( i = 0; i <= ${MAX_THRESH}; i += 10 ))
         do
             echo "${FILENAME}_${i}_${FPS}fps"
@@ -52,26 +52,50 @@ for i in "${!filenames[@]}"; do
                 --delta-t-max-multiplier 4.0 \
                 --transcode-from "raw-davis" \
                 --write-out \
-                >> "${DATA_LOG_PATH}/${FILENAME}/${i}_${FPS}fps.txt"
+                >> "${DATA_LOG_PATH}/${FILENAME}_${FPS}fps/${i}_${FPS}fps.txt"
 #                --show-display
 #                --optimize-adder-controller  # Disabled so that the adder contrast threshold remains constant
 
 
-            cargo run --release --bin adderinfo -- -i "${TEMP_DIR}/tmp_events.adder" -d >> "${DATA_LOG_PATH}/${FILENAME}/${i}_${FPS}fps.txt"
-            cargo run --release --bin adder_to_dvs -- -i "${TEMP_DIR}/tmp_events.adder" \
-                --output-text "${TEMP_DIR}/dvs.txt" \
-                --output-video "${DATA_LOG_PATH}/${FILENAME}/${i}_${FPS}fps_dvs.mp4" \
-                --fps 1000.0 >> "${DATA_LOG_PATH}/${FILENAME}/${i}_${FPS}fps.txt"
-            echo -e "\n" >> "${DATA_LOG_PATH}/${FILENAME}/${i}_${FPS}fps.txt"
-            wc -l "${TEMP_DIR}/dvs.txt" >> "${DATA_LOG_PATH}/${FILENAME}/${i}_${FPS}fps.txt" # Print number of DVS events
-            cargo run --release --example events_to_instantaneous_frames >> "${DATA_LOG_PATH}/${FILENAME}/${i}_${FPS}fps.txt"
-            ffmpeg -f rawvideo -pix_fmt gray -s:v 346x260 -r 60 -i "/mnt/tmp/temppp_out" \
-                                    -crf 0 -c:v libx264 -y "${DATA_LOG_PATH}/${FILENAME}/${i}_${FPS}fps_adder.mp4"
+            cargo run --release --bin adderinfo -- -i "${TEMP_DIR}/tmp_events.adder" -d >> "${DATA_LOG_PATH}/${FILENAME}_${FPS}fps/${i}_${FPS}fps.txt"
+            if [[ "${FPS}" == 1000.0 ]]; then 
+                cargo run --release --bin adder_to_dvs -- -i "${TEMP_DIR}/tmp_events.adder" \
+                    --output-text "${TEMP_DIR}/dvs.txt" \
+                    --output-video "${DATA_LOG_PATH}/${FILENAME}_${FPS}fps/${i}_${FPS}fps_dvs.mp4" \
+                    --fps 1000.0 >> "${DATA_LOG_PATH}/${FILENAME}_${FPS}fps/${i}_${FPS}fps.txt"
+                echo -e "\n" >> "${DATA_LOG_PATH}/${FILENAME}_${FPS}fps/${i}_${FPS}fps.txt"
+                wc -l "${TEMP_DIR}/dvs.txt" >> "${DATA_LOG_PATH}/${FILENAME}_${FPS}fps/${i}_${FPS}fps.txt" # Print number of DVS events
+                cargo run --release --example events_to_instantaneous_frames >> "${DATA_LOG_PATH}/${FILENAME}_${FPS}fps/${i}_${FPS}fps.txt"
+                ffmpeg -f rawvideo -pix_fmt gray -s:v 346x260 -r 60 -i "/mnt/tmp/temppp_out" \
+                                    -crf 0 -c:v libx264 -y "${DATA_LOG_PATH}/${FILENAME}_${FPS}fps/${i}_${FPS}fps_adder.mp4"
+                gzip -kf9 "${TEMP_DIR}/tmp_events.adder"
+                echo -e "\n" >> "${DATA_LOG_PATH}/${FILENAME}_${FPS}fps/${i}_${FPS}fps.txt"
+                wc -c "${TEMP_DIR}/tmp_events.adder" >> "${DATA_LOG_PATH}/${FILENAME}_${FPS}fps/${i}_${FPS}fps.txt" # Print size in bytes of ADDER file
+                wc -c "${TEMP_DIR}/tmp_events.adder.gz" >> "${DATA_LOG_PATH}/${FILENAME}_${FPS}fps/${i}_${FPS}fps.txt" # Print size in bytes of compressed ADDER file
+            else
+                cargo run --release --bin adder_to_dvs -- -i "${TEMP_DIR}/tmp_events.adder" \
+                    --output-text "${TEMP_DIR}/dvs.txt" \
+                    --output-video "${DATA_LOG_PATH}/${FILENAME}_${FPS}fps/${i}_${FPS}fps_dvs.mp4" \
+                    --fps 1000.0 >> "${DATA_LOG_PATH}/${FILENAME}_${FPS}fps/${i}_${FPS}fps.txt"
+                echo -e "\n" >> "${DATA_LOG_PATH}/${FILENAME}_${FPS}fps/${i}_${FPS}fps.txt"
+                wc -l "${TEMP_DIR}/dvs.txt" >> "${DATA_LOG_PATH}/${FILENAME}_${FPS}fps/${i}_${FPS}fps.txt" # Print number of DVS events
 
-            echo -e "\n" >> "${DATA_LOG_PATH}/${FILENAME}/${i}_${FPS}fps.txt"
 
-            gzip -kf9 "${TEMP_DIR}/tmp_events.adder"
-            wc -c "${TEMP_DIR}/tmp_events.adder.gz" >> "${DATA_LOG_PATH}/${FILENAME}/${i}_${FPS}fps.txt" # Print size in bytes of compressed ADDER file
+                # cargo run --release --bin adder_to_dvs -- -i "${TEMP_DIR}/tmp_events.adder" \
+                #     --output-text "${TEMP_DIR}/dvs.txt" \
+                #     --output-video "" \
+                #     --fps 1000.0 >> "${DATA_LOG_PATH}/${FILENAME}_${FPS}fps/${i}_${FPS}fps.txt"
+                # echo -e "\n" >> "${DATA_LOG_PATH}/${FILENAME}_${FPS}fps/${i}_${FPS}fps.txt"
+                # wc -l "${TEMP_DIR}/dvs.txt" >> "${DATA_LOG_PATH}/${FILENAME}_${FPS}fps/${i}_${FPS}fps.txt" # Print number of DVS events
+
+
+
+                echo -e "\n" >> "${DATA_LOG_PATH}/${FILENAME}_${FPS}fps/${i}_${FPS}fps.txt"
+                wc -c "${TEMP_DIR}/tmp_events.adder" >> "${DATA_LOG_PATH}/${FILENAME}_${FPS}fps/${i}_${FPS}fps.txt" # Print size in bytes of ADDER file
+            fi
+            
+
+            
 
 
 
@@ -81,7 +105,7 @@ for i in "${!filenames[@]}"; do
 #            rm -rf "${TEMP_DIR}/tmp.mp4"
 #            mv "${TEMP_DIR}/tmp_vmaf.json" "${DATA_LOG_PATH}/${FILENAME}/${i}_${REF_TIME}_vmaf.json"
         done
-        sleep 5s
+        sleep 10s
     fi
 done
 

@@ -88,7 +88,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     }
 
     if args.optimize_adder_controller {
-        assert!(edi_args.optimize_controller);
+        // assert!(edi_args.optimize_controller);
     }
 
     // let transcode_type = match args.transcode_from.as_str() {
@@ -135,7 +135,8 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let mut davis_source = DavisSource::new(
         reconstructor,
         Some(args.output_events_filename),
-        (1000000) as u32,                                 // TODO
+        (1000000) as u32, // TODO
+        1000000.0 / edi_args.output_fps,
         (1000000.0 * args.delta_t_max_multiplier) as u32, // TODO
         args.show_display,
         args.adder_c_thresh_pos,

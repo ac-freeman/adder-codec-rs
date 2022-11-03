@@ -10,17 +10,11 @@
 ## Ex create a ramdisk mounting point:
  sudo mkdir /mnt/tmp
 ## Ex mount the ram disk with 20 GB of RAM
- sudo mkdir /mnt/tmp
-## Ex mount the ram disk with 30 GB of RAM
- sudo mount -t tmpfs -o size=30g tmpfs /mnt/tmp
+ sudo mount -t tmpfs -o size=20g tmpfs /mnt/tmp
 
-for fps in {50.0,75.0,100.0,250.0,500.0,1000.0}
-do
- ./evaluate_davis_framed_to_adder.sh \
+ ./evaluate_dvs_to_adder.sh \
     /media/andrew/ExternalM2/mmsys23_davis_dataset \
     ./dataset/dataset_filelist.txt \
-    /home/andrew/Documents/ADDER_10_31_FRAMED_DAVIS_TO_ADDER_RESULTS \
-    40 \
-    "${fps}" \
+    /home/andrew/Documents/11_1_22_dvs_to_adder_evaluation_500_thresh0 \
+    0 \
     /mnt/tmp
-done

@@ -73,7 +73,10 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
     stream.set_input_stream_position(first_event_position)?;
 
-    let mut video_writer: BufWriter<File> = BufWriter::new(File::create(raw_path).unwrap());
+    let mut video_writer: Option<BufWriter<File>> = match File::create(raw_path) {
+        Ok(file) => Some(BufWriter::new(file)),
+        Err(_) => None,
+    };
     let mut text_writer: BufWriter<File> = BufWriter::new(File::create(output_text_path).unwrap());
     {
         // Write the width and height as first line header
@@ -167,7 +170,12 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                     if args.show_display {
                         show_display_force("DVS", &frame, 1);
                     }
-                    write_frame_to_video(&frame, &mut video_writer);
+                    match video_writer {
+                        None => {}
+                        Some(ref mut writer) => {
+                            write_frame_to_video(&frame, writer);
+                        }
+                    }
                 }
             }
             frame_count += 1;
@@ -290,7 +298,12 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         if args.show_display {
             show_display_force("DVS", &frame, 1);
         }
-        write_frame_to_video(&frame, &mut video_writer);
+        match video_writer {
+            None => {}
+            Some(ref mut writer) => {
+                write_frame_to_video(&frame, writer);
+            }
+        }
     }
     println!("\n");
     if args.show_display {

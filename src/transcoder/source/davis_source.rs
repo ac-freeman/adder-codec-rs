@@ -72,6 +72,7 @@ impl DavisSource {
         reconstructor: Reconstructor,
         output_events_filename: Option<String>,
         tps: DeltaT,
+        tpf: f64,
         delta_t_max: DeltaT,
         show_display_b: bool,
         adder_c_thresh_pos: u8,
@@ -91,7 +92,7 @@ impl DavisSource {
             // ref_time is set based on the reconstructor's output_fps, which is the user-set
             // rate OR might be higher if the first APS image in the video has a shorter exposure
             // time than expected
-            (tps as f64 / reconstructor.output_fps) as u32,
+            tpf as u32,
             delta_t_max,
             DecimationMode::Manual,
             write_out,

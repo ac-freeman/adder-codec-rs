@@ -9,13 +9,16 @@
 ## Uses a ramdisk to avoid writing tons of temporary data to disk
 ## Ex create a ramdisk mounting point:
  sudo mkdir /mnt/tmp
-## Ex mount the ram disk with 20 GB of RAM
- sudo mount -t tmpfs -o size=20g tmpfs /mnt/tmp
+## Ex mount the ram disk with 30 GB of RAM
+ sudo mount -t tmpfs -o size=30g tmpfs /mnt/tmp
 
-
- ./evaluate_dvs_to_adder.sh \
-    /media/andrew/ExternalM2/DynamicVision \
-    ./dataset/test_filelist.txt \
-    /media/andrew/ExternalM2/10_26_22_dvs_to_adder_evaluation \
+for fps in {50.0,75.0,100.0,250.0,500.0}
+do
+ ./evaluate_davis_raw_to_adder_40.sh \
+    /media/andrew/ExternalM2/mmsys23_davis_dataset \
+    ./dataset/dataset_filelist.txt \
+    /home/andrew/Documents/ADDER_11_2_RAW_DAVIS_40_RESULTS \
     40 \
+    "${fps}" \
     /mnt/tmp
+done

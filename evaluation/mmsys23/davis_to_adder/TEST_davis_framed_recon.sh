@@ -14,12 +14,12 @@
 ## Ex mount the ram disk with 30 GB of RAM
  sudo mount -t tmpfs -o size=30g tmpfs /mnt/tmp
 
-for fps in {50.0,75.0,100.0,250.0,500.0,1000.0}
+for fps in {50.0,75.0,100.0,250.0,500.0,1000.0,2500.0,5000.0,10000.0}
 do
- ./evaluate_davis_framed_to_adder.sh \
+ ./evaluate_davis_to_framed.sh \
     /media/andrew/ExternalM2/mmsys23_davis_dataset \
     ./dataset/dataset_filelist.txt \
-    /home/andrew/Documents/ADDER_10_31_FRAMED_DAVIS_TO_ADDER_RESULTS \
+    /home/andrew/Documents/ADDER_10_31_FRAMED_DAVIS_RESULTS_4 \
     40 \
     "${fps}" \
     /mnt/tmp

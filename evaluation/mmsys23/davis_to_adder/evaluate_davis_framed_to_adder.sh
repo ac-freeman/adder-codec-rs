@@ -1,5 +1,5 @@
 #!/usr/bin/bash
-## Transcode an aedat4 file to ADDER
+## Transcode an aedat4 file to ADΔER
 
 ## Example usage:
 # ./evaluation/mmsys23/davis_to_adder/evaluate_davis_raw_to_adder.sh /media/andrew/ExternalM2/DynamicVision ./evaluation/mmsys23/davis_to_adder/dataset/test_filelist.txt /media/andrew/ExternalM2/10_26_22_davis_to_adder_evaluation 40
@@ -10,22 +10,23 @@ FILELIST=$2   # e.g., ./evaluation/mmsys23/davis_to_adder/dataset/test_filelist.
 DATA_LOG_PATH=$3  # e.g., /media/andrew/ExternalM2/10_26_22_davis_to_adder_evaluation
 REF_TIME=1000000  # match the temporal granularity of the camera (microseconds)
 MAX_THRESH=$4
+FPS=$5
 DTM="$((1000000 * 4))"  # 4 seconds
-TEMP_DIR=$5
-EDI_ARGS=$6
+TEMP_DIR=$6
+
 echo "${DTM}"
 mapfile -t filenames < "${FILELIST}"
 
 #while IFS="\n" read FILENAME; do
-for i in "${!filenames[@]}"; do
-    FILENAME="${filenames[i]}"
+for f in "${!filenames[@]}"; do
+    FILENAME="${filenames[f]}"
     echo "${FILENAME}"
-#    if [ ! -d "${DATA_LOG_PATH}/${FILENAME}" ]; then # TODO: re-enable
-    if [ true ]; then
-        mkdir "${DATA_LOG_PATH}/${FILENAME}"
-        for (( i = 0; i <= ${MAX_THRESH}; i += 10 ))
+   if [ ! -d "${DATA_LOG_PATH}/${FILENAME}_${FPS}fps" ]; then # TODO: re-enable
+    # if [ true ]; then
+        mkdir "${DATA_LOG_PATH}/${FILENAME}_${FPS}fps"
+        for (( i = 40; i <= ${MAX_THRESH}; i += 10 ))
         do
-            echo "${FILENAME}_${i}_${REF_TIME}"
+            echo "${FILENAME}_${i}_${FPS}fps"
             cargo run --bin davis_to_adder --release -- \
               --edi-args "
                                            args_filename = \"\"
@@ -42,7 +43,7 @@ for i in "${!filenames[@]}"; do
                                            target_latency = 1000.0
                                            show_display = false
                                            show_blurred_display = false
-                                           output_fps = 1000
+                                           output_fps = ${FPS}
                                            write_video = false" \
                 --args-filename "" \
                 --output-events-filename "${TEMP_DIR}/tmp_events.adder" \
@@ -51,20 +52,28 @@ for i in "${!filenames[@]}"; do
                 --delta-t-max-multiplier 4.0 \
                 --transcode-from "Framed" \
                 --write-out \
-                >> "${DATA_LOG_PATH}/${FILENAME}/${i}_${REF_TIME}.txt"
+                >> "${DATA_LOG_PATH}/${FILENAME}_${FPS}fps/${i}_${FPS}fps.txt"
 #                --show-display
 #                --optimize-adder-controller  # Disabled so that the adder contrast threshold remains constant
 
 
-            cargo run --release --bin adderinfo -- -i "${TEMP_DIR}/tmp_events.adder" -d >> "${DATA_LOG_PATH}/${FILENAME}/${i}_${REF_TIME}.txt"
-            cargo run --release --bin adder_to_dvs -- -i "${TEMP_DIR}/tmp_events.adder" \
-                --output-text "${DATA_LOG_PATH}/${FILENAME}/${i}_${REF_TIME}_dvs.txt" \
-                --output-video "${DATA_LOG_PATH}/${FILENAME}/${i}_${REF_TIME}_dvs.mp4" \
-                --fps 1000.0
-            cargo run --release --example events_to_instantaneous_frames
+            cargo run --release --bin adderinfo -- -i "${TEMP_DIR}/tmp_events.adder" -d >> "${DATA_LOG_PATH}/${FILENAME}_${FPS}fps/${i}_${FPS}fps.txt"
 
-            ffmpeg -f rawvideo -pix_fmt gray -s:v 346x260 -r 30 -i "/mnt/tmp/temppp_out" \
-                        -crf 0 -c:v libx264 -y "${DATA_LOG_PATH}/${FILENAME}/${i}_${REF_TIME}_adder.mp4"
+            cargo run --release --bin adder_to_dvs -- -i "${TEMP_DIR}/tmp_events.adder" \
+                                            --output-text "${TEMP_DIR}/dvs.txt" \
+                                            --output-video "${DATA_LOG_PATH}/${FILENAME}_${FPS}fps/${i}_${FPS}fps_dvs.mp4" \
+                                            --fps 500.0 >> "${DATA_LOG_PATH}/${FILENAME}_${FPS}fps/${i}_${FPS}fps.txt"
+            echo -e "\n" >> "${DATA_LOG_PATH}/${FILENAME}_${FPS}fps/${i}_${FPS}fps.txt"
+            wc -l "${TEMP_DIR}/dvs.txt" >> "${DATA_LOG_PATH}/${FILENAME}_${FPS}fps/${i}_${FPS}fps.txt" # Print number of DVS events
+            echo -e "\n" >> "${DATA_LOG_PATH}/${FILENAME}_${FPS}fps/${i}_${FPS}fps.txt"
+            wc -c "${TEMP_DIR}/tmp_events.adder" >> "${DATA_LOG_PATH}/${FILENAME}_${FPS}fps/${i}_${FPS}fps.txt" # Print size in bytes of ADDER file
+
+            # fi
+            
+
+            
+
+
 
 
 #            rm -rf "${TEMP_DIR}/tmp_events.adder"   # Delete the events file
@@ -72,7 +81,7 @@ for i in "${!filenames[@]}"; do
 #            rm -rf "${TEMP_DIR}/tmp.mp4"
 #            mv "${TEMP_DIR}/tmp_vmaf.json" "${DATA_LOG_PATH}/${FILENAME}/${i}_${REF_TIME}_vmaf.json"
         done
-        sleep 5s
+        sleep 10s
     fi
 done
 
