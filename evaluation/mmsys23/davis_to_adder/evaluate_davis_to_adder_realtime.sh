@@ -36,7 +36,7 @@ for f in "${!filenames[@]}"; do
                                            deblur_only = false
                                            events_only = false
                                            simulate_packet_latency = true
-                                           target_latency = 5000.0
+                                           target_latency = 4000.0
                                            show_display = false
                                            show_blurred_display = false
                                            output_fps = 500
@@ -55,6 +55,10 @@ for f in "${!filenames[@]}"; do
 
 
             cargo run --release --bin adderinfo -- -i "${TEMP_DIR}/tmp_events.adder" -d >> "${DATA_LOG_PATH}/${FILENAME}/${REF_TIME}.txt"
+
+            cargo run --release --example events_to_instantaneous_frames >> "${DATA_LOG_PATH}/${FILENAME}/${REF_TIME}.txt"
+                            ffmpeg -f rawvideo -pix_fmt gray -s:v 346x260 -r 60 -i "/mnt/tmp/temppp_out" \
+                                                -crf 0 -c:v libx264 -y "${DATA_LOG_PATH}/${FILENAME}/${REF_TIME}_adder.mp4"
 #            cargo run --release --bin adder_to_dvs -- -i "${TEMP_DIR}/tmp_events.adder" \
 #                --output-text "${DATA_LOG_PATH}/${FILENAME}/${i}_${REF_TIME}_dvs.txt" \
 #                --output-video "${DATA_LOG_PATH}/${FILENAME}/${i}_${REF_TIME}_dvs.mp4" \

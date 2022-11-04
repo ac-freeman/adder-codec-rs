@@ -19,8 +19,8 @@ use ndarray::{Array3, Axis};
 
 use rayon::iter::IntoParallelIterator;
 use rayon::{current_num_threads, ThreadPool};
-use std::cmp::max;
-use std::time::Instant;
+use std::cmp::{max, min};
+use std::time::{Duration, Instant};
 
 use crate::framer::scale_intensity::FrameValue;
 use crate::transcoder::event_pixel_tree::Intensity32;
@@ -61,6 +61,12 @@ pub struct DavisSource {
     pub rt: Runtime,
     pub dvs_last_timestamps: Array3<i64>,
     pub dvs_last_ln_val: Array3<f64>,
+    last_latency_t: u128,
+    latency_cross_t: Option<Instant>,
+    interval_t_cross: i64,
+    adder_thresh_cross: u8,
+    lambda: f64,
+    max_latency: u128,
     optimize_adder_controller: bool,
     mode: DavisTranscoderMode, // phantom: PhantomData<T>,
 }
@@ -144,6 +150,12 @@ impl DavisSource {
             rt,
             dvs_last_timestamps,
             dvs_last_ln_val,
+            last_latency_t: 0,
+            latency_cross_t: None,
+            interval_t_cross: 0,
+            adder_thresh_cross: 0,
+            lambda: 20.0,
+            max_latency: 0,
             optimize_adder_controller,
             mode,
         };
@@ -394,34 +406,124 @@ impl DavisSource {
                 None => {}
                 Some(timestamp) => {
                     let latency = (Instant::now() - timestamp).as_millis();
-                    let interval = self.reconstructor.event_adder.interval_t;
-                    match latency as f64 >= self.reconstructor.target_latency {
-                        true => {
-                            self.reconstructor.event_adder.interval_t =
-                                interval.saturating_add(interval / 10);
-                            self.reconstructor.output_fps =
-                                1e6 / self.reconstructor.event_adder.interval_t as f64;
-                            self.video.c_thresh_pos = self.video.c_thresh_pos.saturating_add(1);
-                            self.video.c_thresh_neg = self.video.c_thresh_neg.saturating_add(1);
-                        }
-                        false => {
-                            self.reconstructor.event_adder.interval_t =
-                                max(self.video.ref_time as i64, interval - interval / 10);
-                            self.reconstructor.output_fps =
-                                1e6 / self.reconstructor.event_adder.interval_t as f64;
 
-                            self.video.c_thresh_pos = self.video.c_thresh_pos.saturating_sub(1);
-                            self.video.c_thresh_neg = self.video.c_thresh_neg.saturating_sub(1);
-                        }
-                    }
                     println!(
-                        "    adder latency = {}, adder c = {}, edi interval_t = {}",
-                        latency, self.video.c_thresh_pos, self.reconstructor.event_adder.interval_t
+                        "    adder latency = {}, adder c = {}, edi interval_t = {}, lambda = {}",
+                        latency,
+                        self.video.c_thresh_pos,
+                        self.reconstructor.event_adder.interval_t,
+                        self.lambda
                     );
                     eprintln!(
-                        "    adder latency = {}, adder c = {}, edi interval_t = {}",
-                        latency, self.video.c_thresh_pos, self.reconstructor.event_adder.interval_t
+                        "    adder latency = {}, adder c = {}, edi interval_t = {}, lambda = {}",
+                        latency,
+                        self.video.c_thresh_pos,
+                        self.reconstructor.event_adder.interval_t,
+                        self.lambda
                     );
+                    let interval = &mut self.reconstructor.event_adder.interval_t;
+                    // let interval_lambda = 0.0005;
+                    // let thresh_lambda = 0.00155;
+                    // let z_t = 5000.0;
+                    // let sign = match latency >= self.reconstructor.target_latency as u128 {
+                    //     true => {
+                    //         if self.last_latency_t < self.reconstructor.target_latency as u128 {
+                    //             // then need to reset
+                    //             self.latency_cross_t = Some(Instant::now());
+                    //             self.interval_t_cross = interval;
+                    //             self.adder_thresh_cross = self.video.c_thresh_pos;
+                    //         }
+                    //         true
+                    //         // self.video.c_thresh_pos = self.video.c_thresh_pos.saturating_add(1);
+                    //         // self.video.c_thresh_neg = self.video.c_thresh_neg.saturating_add(1);
+                    //     }
+                    //     false => {
+                    //         false
+                    //         // self.reconstructor.event_adder.interval_t =
+                    //         //     max(self.video.ref_time as i64, interval - interval / 10);
+                    //         // self.reconstructor.output_fps =
+                    //         //     1e6 / self.reconstructor.event_adder.interval_t as f64;
+                    //         //
+                    //         // self.video.c_thresh_pos = self.video.c_thresh_pos.saturating_sub(1);
+                    //         // self.video.c_thresh_neg = self.video.c_thresh_neg.saturating_sub(1);
+                    //     }
+                    // };
+                    // if self.latency_cross_t.is_none() {
+                    //     return;
+                    // }
+                    // let mut interval_t_change = self.interval_t_cross as f64
+                    //     * (interval_lambda
+                    //         * ((Instant::now() - self.latency_cross_t.unwrap()).as_millis()
+                    //             as f64))
+                    //         .exp();
+                    // let mut thresh_change = (self.video.c_thresh_pos as f64 + 0.1)
+                    //     * (thresh_lambda
+                    //         * ((Instant::now() - self.latency_cross_t.unwrap()).as_millis()
+                    //             as f64))
+                    //         .exp();
+                    // let mut thresh_change = (Instant::now() - self.latency_cross_t.unwrap())
+                    //     .as_millis() as f64
+                    //     / self.reconstructor.target_latency
+                    //     * 255.0;
+                    // if latency / 100 > self.last_latency_t / 100 {
+                    //     self.video.c_thresh_pos = self.video.c_thresh_pos.saturating_add(1);
+                    //     self.video.c_thresh_neg = self.video.c_thresh_pos;
+                    // } else {
+                    //     self.video.c_thresh_pos = self.video.c_thresh_pos.saturating_sub(1);
+                    //     self.video.c_thresh_neg = self.video.c_thresh_pos;
+                    // }
+                    // if !sign {
+                    //     interval_t_change = 20000.0 - interval_t_change;
+                    //     // thresh_change = 255.0 - thresh_change;
+                    // }
+                    // eprintln!(
+                    //     "thresh change: {},  interval_t_change: {}",
+                    //     self.video.c_thresh_pos, interval_t_change
+                    // );
+                    // // eprintln!("interval_t_change: {}", interval_t_change);
+                    // self.reconstructor.event_adder.interval_t = min(
+                    //     max(interval_t_change as i64, self.video.ref_time as i64),
+                    //     20000,
+                    // );
+                    if latency > self.max_latency {
+                        self.max_latency = latency;
+                    }
+                    if latency > self.reconstructor.target_latency as u128 {
+                        self.lambda += 1.0;
+                    } else {
+                        self.lambda -= 1.0;
+                        if self.lambda <= 10.0 {
+                            self.lambda = 10.0;
+                        }
+                        // *interval = max(self.video.ref_time as i64, *interval - (20.0) as i64);
+                    }
+
+                    if latency > self.last_latency_t {
+                        self.lambda += 0.1;
+                        *interval += (1.0 * self.lambda) as i64;
+                        if latency > self.reconstructor.target_latency as u128 {
+                            self.video.c_thresh_pos = self.video.c_thresh_pos.saturating_add(1);
+                            self.video.c_thresh_neg = self.video.c_thresh_pos;
+                        } else {
+                            self.video.c_thresh_pos = self.video.c_thresh_pos.saturating_sub(1);
+                            self.video.c_thresh_neg = self.video.c_thresh_pos;
+                        }
+                    } else {
+                        *interval = max(
+                            self.video.ref_time as i64,
+                            *interval - (1.0 * self.lambda) as i64,
+                        );
+                        self.video.c_thresh_pos = self.video.c_thresh_pos.saturating_sub(1);
+                        self.video.c_thresh_neg = self.video.c_thresh_pos;
+                    }
+
+                    self.reconstructor.output_fps =
+                        1e6 / self.reconstructor.event_adder.interval_t as f64;
+                    // self.video.c_thresh_pos = thresh_change as u8;
+                    // self.video.c_thresh_neg = thresh_change as u8;
+
+                    self.last_latency_t = latency;
+
                     // println!(
                     //     "    adder latency = {}, adder c = {}",
                     //     latency, self.video.c_thresh_pos
