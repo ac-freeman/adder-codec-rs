@@ -32,11 +32,11 @@ for f in "${!filenames[@]}"; do
                                            events_filename_1 = \"\"
                                            start_c = 0.30344322344322345
                                            optimize_c = true
-                                           optimize_controller = true
+                                           optimize_controller = false
                                            deblur_only = false
                                            events_only = false
                                            simulate_packet_latency = true
-                                           target_latency = 2000.0
+                                           target_latency = 5000.0
                                            show_display = false
                                            show_blurred_display = false
                                            output_fps = 500
@@ -49,7 +49,6 @@ for f in "${!filenames[@]}"; do
                 --transcode-from "framed-davis" \
                 --optimize-adder-controller \
                 --write-out \
-                --show-display \
                 >> "${DATA_LOG_PATH}/${FILENAME}/${REF_TIME}.txt"
 #                --show-display
 

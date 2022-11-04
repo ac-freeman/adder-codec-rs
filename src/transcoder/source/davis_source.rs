@@ -394,20 +394,42 @@ impl DavisSource {
                 None => {}
                 Some(timestamp) => {
                     let latency = (Instant::now() - timestamp).as_millis();
-                    match latency as f64 >= self.reconstructor.target_latency * 3.0 {
+                    let interval = self.reconstructor.event_adder.interval_t;
+                    match latency as f64 >= self.reconstructor.target_latency {
                         true => {
+                            self.reconstructor.event_adder.interval_t =
+                                interval.saturating_add(interval / 10);
+                            self.reconstructor.output_fps =
+                                1e6 / self.reconstructor.event_adder.interval_t as f64;
                             self.video.c_thresh_pos = self.video.c_thresh_pos.saturating_add(1);
                             self.video.c_thresh_neg = self.video.c_thresh_neg.saturating_add(1);
                         }
                         false => {
+                            self.reconstructor.event_adder.interval_t =
+                                max(self.video.ref_time as i64, interval - interval / 10);
+                            self.reconstructor.output_fps =
+                                1e6 / self.reconstructor.event_adder.interval_t as f64;
+
                             self.video.c_thresh_pos = self.video.c_thresh_pos.saturating_sub(1);
                             self.video.c_thresh_neg = self.video.c_thresh_neg.saturating_sub(1);
                         }
                     }
-                    eprintln!(
-                        "    adder latency = {}, adder c = {}",
-                        latency, self.video.c_thresh_pos
+                    println!(
+                        "    adder latency = {}, adder c = {}, edi interval_t = {}",
+                        latency, self.video.c_thresh_pos, self.reconstructor.event_adder.interval_t
                     );
+                    eprintln!(
+                        "    adder latency = {}, adder c = {}, edi interval_t = {}",
+                        latency, self.video.c_thresh_pos, self.reconstructor.event_adder.interval_t
+                    );
+                    // println!(
+                    //     "    adder latency = {}, adder c = {}",
+                    //     latency, self.video.c_thresh_pos
+                    // );
+                    // eprintln!(
+                    //     "    adder latency = {}, adder c = {}",
+                    //     latency, self.video.c_thresh_pos
+                    // );
                 }
             }
         }
