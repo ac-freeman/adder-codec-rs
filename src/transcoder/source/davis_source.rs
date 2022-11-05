@@ -154,7 +154,7 @@ impl DavisSource {
             latency_cross_t: None,
             interval_t_cross: 0,
             adder_thresh_cross: 0,
-            lambda: 20.0,
+            lambda: 100.0,
             max_latency: 0,
             optimize_adder_controller,
             mode,
@@ -488,30 +488,17 @@ impl DavisSource {
                     if latency > self.max_latency {
                         self.max_latency = latency;
                     }
-                    if latency > self.reconstructor.target_latency as u128 {
-                        self.lambda += 1.0;
-                    } else {
-                        self.lambda -= 1.0;
-                        if self.lambda <= 10.0 {
-                            self.lambda = 10.0;
-                        }
-                        // *interval = max(self.video.ref_time as i64, *interval - (20.0) as i64);
-                    }
 
-                    if latency > self.last_latency_t {
-                        self.lambda += 0.1;
+                    if latency > self.reconstructor.target_latency as u128 {
                         *interval += (1.0 * self.lambda) as i64;
-                        if latency > self.reconstructor.target_latency as u128 {
-                            self.video.c_thresh_pos = self.video.c_thresh_pos.saturating_add(1);
-                            self.video.c_thresh_neg = self.video.c_thresh_pos;
-                        } else {
-                            self.video.c_thresh_pos = self.video.c_thresh_pos.saturating_sub(1);
-                            self.video.c_thresh_neg = self.video.c_thresh_pos;
-                        }
+                        self.video.c_thresh_pos = self.video.c_thresh_pos.saturating_add(10);
+                        self.video.c_thresh_neg = self.video.c_thresh_pos;
                     } else {
                         *interval = max(
                             self.video.ref_time as i64,
-                            *interval - (1.0 * self.lambda) as i64,
+                            *interval
+                                - ((self.reconstructor.target_latency as u128 - latency) as i64
+                                    / self.lambda as i64),
                         );
                         self.video.c_thresh_pos = self.video.c_thresh_pos.saturating_sub(1);
                         self.video.c_thresh_neg = self.video.c_thresh_pos;

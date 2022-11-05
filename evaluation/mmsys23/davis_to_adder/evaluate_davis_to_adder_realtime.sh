@@ -36,7 +36,7 @@ for f in "${!filenames[@]}"; do
                                            deblur_only = false
                                            events_only = false
                                            simulate_packet_latency = true
-                                           target_latency = 4000.0
+                                           target_latency = 3000.0
                                            show_display = false
                                            show_blurred_display = false
                                            output_fps = 500

@@ -16,5 +16,5 @@
  ./evaluate_davis_to_adder_realtime.sh \
     /media/andrew/ExternalM2/mmsys23_davis_dataset \
     ./dataset/dataset_filelist.txt \
-    /home/andrew/Documents/11_4_davis_framed_adder_realtime_results_basefps_500_latency_5000_new \
+    /home/andrew/Documents/11_4_davis_framed_adder_realtime_results_basefps_500_latency_5000_new2 \
     /mnt/tmp
