@@ -139,12 +139,12 @@ mod tests {
 
         let args: SimulProcArgs = SimulProcArgs {
             args_filename: "".to_string(),
-            color_input: 0,
+            color_input: false,
             ref_time: 5000,
             delta_t_max: 120000,
             frame_count_max: 0,
             frame_idx_start: 1,
-            show_display: 0,
+            show_display: false,
             input_filename: manifest_path_str.clone() + "/tests/samples/lake_scaled_hd_crop.mp4",
             output_events_filename: manifest_path_str.clone()
                 + "/tests/samples/TEST_lake_scaled_hd_crop.adder",
@@ -160,10 +160,10 @@ mod tests {
             .frame_start(args.frame_idx_start)
             .scale(args.scale)
             .communicate_events(true)
-            .color(args.color_input != 0)
+            .color(args.color_input)
             .contrast_thresholds(args.c_thresh_pos, args.c_thresh_neg)
-            .show_display(args.show_display != 0)
-            .time_parameters(args.delta_t_max);
+            .show_display(args.show_display)
+            .time_parameters(args.ref_time, args.delta_t_max);
         if !args.output_events_filename.is_empty() {
             source_builder = source_builder.output_events_filename(args.output_events_filename);
         }

@@ -7,6 +7,8 @@ use rayon::iter::ParallelIterator;
 use std::collections::VecDeque;
 use std::fs::File;
 use std::io::BufWriter;
+use std::ops::Add;
+use std::process::Output;
 
 // Want one main framer with the same functions
 // Want additional functions
@@ -19,6 +21,42 @@ pub struct EventCoordless {
     pub d: D,
     pub delta_t: DeltaT,
 }
+
+impl Add<EventCoordless> for EventCoordless {
+    type Output = EventCoordless;
+
+    fn add(self, rhs: EventCoordless) -> EventCoordless {
+        todo!()
+    }
+}
+
+impl num_traits::Zero for EventCoordless {
+    fn zero() -> Self {
+        EventCoordless { d: 0, delta_t: 0 }
+    }
+
+    fn is_zero(&self) -> bool {
+        self.d.is_zero() && self.delta_t.is_zero()
+    }
+}
+
+// impl Add<Self, Output = Self> for EventCoordless {
+//     type Output = ();
+//
+//     fn add(self, rhs: Self) -> Self::Output {
+//         todo!()
+//     }
+// }
+//
+// impl num::traits::Zero for EventCoordless {
+//     fn zero() -> Self {
+//         EventCoordless { d: 0, delta_t: 0 }
+//     }
+//
+//     fn is_zero(&self) -> bool {
+//         self.d.is_zero() && self.delta_t.is_zero()
+//     }
+// }
 
 pub enum FramerMode {
     INSTANTANEOUS,

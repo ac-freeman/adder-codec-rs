@@ -868,7 +868,7 @@ fn test_framed_to_adder_bunny4() {
     .color(false)
     .contrast_thresholds(5, 5)
     .show_display(false)
-    .time_parameters(240000)
+    .time_parameters(5000, 240000)
     .finish();
 
     let frame_max = 250;
