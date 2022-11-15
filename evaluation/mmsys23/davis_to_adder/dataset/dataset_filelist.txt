@@ -3,7 +3,6 @@ bike-2019_10_10_13_14_03.aedat4
 bricks-2019_10_10_13_31_23.aedat4
 building_exp1000.aedat4
 building_exp15000.aedat4
-car_dash_7.aedat4
 Checkerboard_sequence.aedat4
 checkerFast-2019_10_23_12_19_56.aedat4
 checkerSlow-2019_10_10_13_59_26.aedat4

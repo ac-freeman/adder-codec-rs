@@ -32,15 +32,15 @@ pub struct SimulProcArgs {
     pub color_input: bool,
 
     /// Number of ticks per input frame // TODO: modularize for different sources
-    #[clap(short, long, default_value_t = 5000)]
+    #[clap(short, long, default_value_t = 255)]
     pub ref_time: u32,
 
     /// Max number of ticks for any event
-    #[clap(short, long, default_value_t = 240000)]
+    #[clap(short, long, default_value_t = 15300)]
     pub delta_t_max: u32,
 
     /// Max number of input frames to transcode (0 = no limit)
-    #[clap(short, long, default_value_t = 500)]
+    #[clap(short, long, default_value_t = 0)]
     pub frame_count_max: u32,
 
     /// Index of first input frame to transcode
@@ -64,7 +64,7 @@ pub struct SimulProcArgs {
     pub output_raw_video_filename: String,
 
     /// Resize scale
-    #[clap(short('z'), long, default_value_t = 0.5)]
+    #[clap(short('z'), long, default_value_t = 1.0)]
     pub scale: f64,
 
     /// Positive contrast threshold, in intensity units. How much an intensity must increase
@@ -79,7 +79,7 @@ pub struct SimulProcArgs {
 
     /// Number of threads to use. If not provided, will default to the number of cores on the
     /// system.
-    #[clap(long, default_value_t = 0)]
+    #[clap(long, default_value_t = 4)]
     pub thread_count: u8,
 }
 

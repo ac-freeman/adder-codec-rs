@@ -1,26 +1,16 @@
-#!/usr/bin/bash
-## Example usage:
-# ./evaluate_framed_to_adder.sh \
-# /media/andrew/Scratch/ugc-dataset/original_videos_h264 \
-# ./dataset/test_filelist.txt \
-# /media/andrew/Scratch/ugc-dataset/evaluations \
-# 5000 \
-# 50
-
-
 DATASET_PATH=$1   # e.g., /media/andrew/Scratch/ugc-dataset/original_videos_h264
-FILELIST=$2   # e.g., ./evaluation/mmsys23/framed_to_adder/dataset/test_filelist.txt
-DATA_LOG_PATH=$3  # e.g., /media/andrew/Scratch1/ugc-dataset/evaluations
-REF_TIME=$4
-MAX_THRESH=$5
+FILELIST="./dataset/paper_figure_filelist.txt"   # e.g., ./evaluation/mmsys23/framed_to_adder/dataset/test_filelist.txt
+DATA_LOG_PATH=$2  # e.g., /media/andrew/Scratch1/ugc-dataset/evaluations
+REF_TIME=255
+MAX_THRESH=$3
 DTM="$((${REF_TIME} * 120))"  # equivalent to 120 input frames of time, when ref_time is 5000
-TEMP_DIR=$6
+TEMP_DIR=$4
 echo "${DTM}"
 mapfile -t filenames < "${FILELIST}"
 
 #while IFS="\n" read FILENAME; do
-for i in "${!filenames[@]}"; do
-    FILENAME="${filenames[i]}"
+for f in "${!filenames[@]}"; do
+    FILENAME="${filenames[f]}"
     echo "${FILENAME}"
     if [ ! -d "${DATA_LOG_PATH}/${FILENAME}" ]; then
         mkdir "${DATA_LOG_PATH}/${FILENAME}"
@@ -31,11 +21,8 @@ for i in "${!filenames[@]}"; do
             cargo run --release --bin adderinfo -- -i "${TEMP_DIR}/tmp_events.adder" -d >> "${DATA_LOG_PATH}/${FILENAME}/${i}_${REF_TIME}.txt"
             rm -rf "${TEMP_DIR}/tmp"    # Delete the raw video data
             rm -rf "${TEMP_DIR}/tmp_events.adder"   # Delete the events file
-            docker run -v ${DATASET_PATH}:/gt_vids -v "${TEMP_DIR}":/gen_vids gfdavila/easyvmaf -r "/gt_vids/${FILENAME}" -d /gen_vids/tmp.mp4 -sw 0.0 -ss 0 -endsync
-            rm -rf "${TEMP_DIR}/tmp.mp4"
-            mv "${TEMP_DIR}/tmp_vmaf.json" "${DATA_LOG_PATH}/${FILENAME}/${i}_${REF_TIME}_vmaf.json"
+            mv "${TEMP_DIR}/tmp.mp4" "${DATA_LOG_PATH}/${FILENAME}/${i}_${REF_TIME}.mp4"
         done
-        sleep 60s
+        sleep 5s
     fi
 done
-
