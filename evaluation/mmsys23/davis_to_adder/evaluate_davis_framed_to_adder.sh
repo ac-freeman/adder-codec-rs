@@ -24,7 +24,7 @@ for f in "${!filenames[@]}"; do
    if [ ! -d "${DATA_LOG_PATH}/${FILENAME}_${FPS}fps" ]; then # TODO: re-enable
     # if [ true ]; then
         mkdir "${DATA_LOG_PATH}/${FILENAME}_${FPS}fps"
-        for (( i = 40; i <= ${MAX_THRESH}; i += 10 ))
+        for (( i = 0; i <= ${MAX_THRESH}; i += 10 ))
         do
             echo "${FILENAME}_${i}_${FPS}fps"
             cargo run --bin davis_to_adder --release -- \
