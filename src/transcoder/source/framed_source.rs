@@ -249,7 +249,6 @@ impl Source for FramedSource {
                     Err(_) => return Err(SourceError::NoData),
                 }
             }
-
             Err(e) => {
                 panic!("{}", e);
             }
