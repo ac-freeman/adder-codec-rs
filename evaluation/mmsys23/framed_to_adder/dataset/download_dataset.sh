@@ -3,10 +3,10 @@
 ## (https://media.withyoutube.com/)
 
 ## Usage:
-# download_dataset.sh /path/to/store/dataset
+# download_dataset.txt /path/to/store/dataset
 
 ## Example usage:
-# ./download_dataset.sh /media/andrew/Scratch/ugc-dataset
+# ./download_dataset.txt /media/andrew/Scratch/ugc-dataset
 
 # Need to first install gsutil
 # Ubuntu 20.04: sudo snap install google-cloud-cli --classic
