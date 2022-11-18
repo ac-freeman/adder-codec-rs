@@ -25,6 +25,10 @@ pub struct MyArgs {
     #[clap(long)]
     pub(crate) output_video: String,
 
+    /// Show display?
+    #[clap(long, action)]
+    pub show_display: bool,
+
     #[clap(long, default_value_t = 100.0)]
     pub fps: f32,
 }
@@ -34,6 +38,7 @@ pub struct MyArgs {
 /// out as an mp4 file. For simplicity, I piggyback off my EDI implementation, although this
 /// adds some overhead.
 ///
+#[allow(dead_code)]
 fn main() -> Result<(), Box<dyn error::Error>> {
     let args: MyArgs = MyArgs::parse();
     let file_path = args.input.as_str();
@@ -68,6 +73,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         true,
         true,
         1.0,
+        false,
     ));
 
     let mut instantaneous_frame_deque = unsafe {
@@ -99,6 +105,8 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let mut frame_count = 0_usize;
     let mut base_t = 0;
     let mut current_t = 0;
+    let mut event_count: u128 = 0;
+    let mut init = None;
 
     loop {
         let mat_opt = rt.block_on(get_next_image(&mut reconstructor, &thread_pool_edi, true));
@@ -107,33 +115,39 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             None => {
                 break;
             }
-            Some((_, _, Some((_, events, _, _)))) => {
-                for event in events {
-                    if current_t > (frame_count as u128 * frame_length) + 1000000 {
-                        match instantaneous_frame_deque.pop_front() {
-                            None => {}
-                            Some(frame) => {
-                                show_display_force("DVS", &frame, 1);
-                                write_frame_to_video(&frame, &mut video_writer);
+            Some((_, _, Some((_, _, events, _, _)))) => match init {
+                None => init = Some(()),
+                Some(()) => {
+                    for event in events {
+                        event_count += 1;
+                        if current_t > (frame_count as u128 * frame_length) + 1000000 {
+                            match instantaneous_frame_deque.pop_front() {
+                                None => {}
+                                Some(frame) => {
+                                    if args.show_display {
+                                        show_display_force("DVS", &frame, 1);
+                                    }
+                                    write_frame_to_video(&frame, &mut video_writer);
+                                }
                             }
+                            frame_count += 1;
                         }
-                        frame_count += 1;
-                    }
-                    if base_t == 0 {
-                        base_t = event.t() as u128;
-                    }
+                        if base_t == 0 {
+                            base_t = event.t() as u128;
+                        }
 
-                    current_t = max(event.t() as u128 - base_t, current_t);
-                    let frame_idx = ((event.t() as u128 - base_t) / frame_length) as usize;
+                        current_t = max(event.t() as u128 - base_t, current_t);
+                        let frame_idx = ((event.t() as u128 - base_t) / frame_length) as usize;
 
-                    set_instant_dvs_pixel(
-                        event,
-                        &mut instantaneous_frame_deque,
-                        frame_idx,
-                        frame_count,
-                    );
+                        set_instant_dvs_pixel(
+                            event,
+                            &mut instantaneous_frame_deque,
+                            frame_idx,
+                            frame_count,
+                        );
+                    }
                 }
-            }
+            },
             Some((_, _, None)) => {
                 break;
             }
@@ -141,9 +155,12 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     }
 
     for frame in instantaneous_frame_deque {
-        show_display_force("DVS", &frame, 1);
+        if args.show_display {
+            show_display_force("DVS", &frame, 1);
+        }
         write_frame_to_video(&frame, &mut video_writer);
     }
+    println!("\nDVS event count: {}", event_count);
     println!("\n");
     encode_video_ffmpeg(raw_path, output_video_path);
     println!("Finished!");

@@ -11,7 +11,8 @@ pub fn write_frame_to_video(frame: &Mat, video_writer: &mut BufWriter<File>) {
 
 use opencv::core::{Mat, MatTraitConstManual};
 use std::fs::File;
-use std::io::{BufWriter, Write};
+use std::io::{BufWriter, Cursor, Write};
+use std::path::Path;
 use std::process::Command;
 
 pub fn encode_video_ffmpeg(raw_path: &str, video_path: &str) {
@@ -24,4 +25,20 @@ pub fn encode_video_ffmpeg(raw_path: &str, video_path: &str) {
         ])
         .output()
         .expect("failed to execute process");
+}
+
+#[allow(dead_code)]
+pub async fn download_file(
+    store_path: &str,
+    video_url: &str,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    // Download the video example, if you don't already have it
+    let path_str = store_path;
+    if !Path::new(path_str).exists() {
+        let resp = reqwest::get(video_url).await?;
+        let mut file_out = File::create(path_str).expect("Could not create file on disk");
+        let mut data_in = Cursor::new(resp.bytes().await?);
+        std::io::copy(&mut data_in, &mut file_out)?;
+    }
+    Ok(())
 }

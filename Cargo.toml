@@ -1,6 +1,6 @@
 [package]
 name = "adder-codec-rs"
-version = "0.1.17"
+version = "0.2.0"
 edition = "2021"
 authors = ["Andrew C. Freeman"]
 description = """Encoder/transcoder/decoder for ADΔER (Address, Decimation, Δt Event Representation) streams.
@@ -50,14 +50,14 @@ ndarray = {version = "0.15.6", features = ["rayon", "serde"]}
 fast-math = {version = "0.1", optional = true}
 reqwest = "0.11.11"
 tokio = {version = "1.20.1", features = ["full"]}
-clap = { version = "3.0.10", features = ["derive"] }
+clap = { version = "4.0.17", features = ["derive"] }
 generational-arena = "0.2"
 smallvec = "1.9.0"
 bumpalo = "3.11.0"
-#davis-edi-rs = { path = "../davis-EDI-rs" }
-davis-edi-rs = "0.1.2"
+davis-edi-rs = "0.1.4"
 toml = "0.5.8"
 aedat = "1.2.7"
+num-traits = "0.2.15"
 
 [dev-dependencies]
 criterion = "0.3.6"
@@ -67,6 +67,10 @@ perfcnt = "0.8.0"
 [[bench]]
 name = "framed_to_adder_hd"
 harness = false
+
+#[[bin]]
+#name = "download_framed_to_adder_daset"
+#path = "evaluation/mmsys23/framed_to_adder/dataset/download_dataset.rs"
 
 [package.metadata.docs.rs]
 no-default-features = true

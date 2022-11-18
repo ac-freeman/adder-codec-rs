@@ -7,10 +7,10 @@ use std::io::{BufWriter, Write};
 use std::path::Path;
 use std::{error, io};
 
-use adder_codec_rs::transcoder::source::video::{show_display_force};
+use adder_codec_rs::transcoder::source::video::show_display_force;
 use adder_codec_rs::utils::viz::{encode_video_ffmpeg, write_frame_to_video};
 use clap::Parser;
-use ndarray::{Array3};
+use ndarray::Array3;
 use opencv::core::{Mat, MatTrait, MatTraitManual, CV_8U, CV_8UC3};
 use std::option::Option;
 
@@ -18,7 +18,7 @@ use std::option::Option;
 #[derive(Parser, Debug, Default)]
 #[clap(author, version, about, long_about = None)]
 pub struct MyArgs {
-    /// Input ADDER video path
+    /// Input ADΔER video path
     #[clap(short, long)]
     pub(crate) input: String,
 
@@ -32,6 +32,9 @@ pub struct MyArgs {
 
     #[clap(long, default_value_t = 100.0)]
     pub fps: f32,
+
+    #[clap(short, long, action)]
+    pub show_display: bool,
 }
 
 struct DvsPixel {
@@ -41,10 +44,11 @@ struct DvsPixel {
 }
 
 ///
-/// This program transcodes an ADDER file to DVS events in a human-readable text representation.
+/// This program transcodes an ADΔER file to DVS events in a human-readable text representation.
 /// Performance is fast. The resulting DVS stream is visualized during the transcode and written
 /// out as an mp4 file.
 ///
+#[allow(dead_code)]
 fn main() -> Result<(), Box<dyn error::Error>> {
     let args: MyArgs = MyArgs::parse();
     let file_path = args.input.as_str();
@@ -69,7 +73,10 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
     stream.set_input_stream_position(first_event_position)?;
 
-    let mut video_writer: BufWriter<File> = BufWriter::new(File::create(raw_path).unwrap());
+    let mut video_writer: Option<BufWriter<File>> = match File::create(raw_path) {
+        Ok(file) => Some(BufWriter::new(file)),
+        Err(_) => None,
+    };
     let mut text_writer: BufWriter<File> = BufWriter::new(File::create(output_text_path).unwrap());
     {
         // Write the width and height as first line header
@@ -151,17 +158,24 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         if event_count % divisor == 0 {
             write!(
                 handle,
-                "\rTranscoding ADDER to DVS...{}%",
+                "\rTranscoding ADΔER to DVS...{}%",
                 (event_count * 100) / num_events as u64
             )?;
             handle.flush().unwrap();
         }
-        if current_t > (frame_count as u128 * frame_length) + stream.delta_t_max as u128 {
+        if current_t > (frame_count as u128 * frame_length) + stream.delta_t_max as u128 * 4 {
             match instantaneous_frame_deque.pop_front() {
                 None => {}
                 Some(frame) => {
-                    show_display_force("DVS", &frame, 1);
-                    write_frame_to_video(&frame, &mut video_writer);
+                    if args.show_display {
+                        show_display_force("DVS", &frame, 1);
+                    }
+                    match video_writer {
+                        None => {}
+                        Some(ref mut writer) => {
+                            write_frame_to_video(&frame, writer);
+                        }
+                    }
                 }
             }
             frame_count += 1;
@@ -177,24 +191,26 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 max_px_event_count = max(max_px_event_count, event_counts[[y, x, c]]);
 
                 match &mut pixels[[y, x, c]] {
-                    None => {
-                        if event.d < 253 {
+                    None => match event.d {
+                        d if d <= 0xFE => {
                             pixels[[y, x, c]] = Some(DvsPixel {
                                 d: event.d,
                                 frame_intensity_ln: event_to_frame_intensity(&event, frame_length),
                                 t: event.delta_t as u128,
                             });
-                        } else {
+                        }
+                        _ => {
+                            dbg!(event);
                             panic!("Shouldn't happen")
                         }
-                    }
+                    },
                     Some(px) => {
                         px.t += event.delta_t as u128;
                         current_t = max(px.t, current_t);
                         let frame_idx = (px.t / frame_length) as usize;
 
                         match event.d {
-                            255 | 254 => {
+                            255 => {
                                 // ignore empty events
                                 continue; // Don't update d with this
                             }
@@ -224,6 +240,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                                         text_writer
                                             .write(dvs_string.as_ref())
                                             .expect("Could not write");
+                                        px.frame_intensity_ln = new_intensity_ln;
                                     }
                                     (a, b) if a <= b - c => {
                                         // Fire a negative polarity event
@@ -244,10 +261,10 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                                         text_writer
                                             .write(dvs_string.as_ref())
                                             .expect("Could not write");
+                                        px.frame_intensity_ln = new_intensity_ln;
                                     }
                                     (_, _) => {}
                                 }
-                                px.frame_intensity_ln = new_intensity_ln;
                             }
                         }
                         px.d = event.d;
@@ -278,11 +295,20 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     }
 
     for frame in instantaneous_frame_deque {
-        show_display_force("DVS", &frame, 1);
-        write_frame_to_video(&frame, &mut video_writer);
+        if args.show_display {
+            show_display_force("DVS", &frame, 1);
+        }
+        match video_writer {
+            None => {}
+            Some(ref mut writer) => {
+                write_frame_to_video(&frame, writer);
+            }
+        }
     }
     println!("\n");
-    show_display_force("Event counts", &event_count_mat, 1);
+    if args.show_display {
+        show_display_force("Event counts", &event_count_mat, 0);
+    }
     encode_video_ffmpeg(raw_path, output_video_path);
 
     handle.flush().unwrap();
@@ -297,8 +323,11 @@ fn set_instant_dvs_pixel(
     frame_count: usize,
     value: u128,
 ) {
+    assert!(frame_idx - frame_count >= 0);
+
     // Grow the deque if necessary
     let grow_len = frame_idx as i32 - frame_count as i32 - frames.len() as i32 + 1;
+
     for _ in 0..grow_len {
         frames.push_back(frames[0].clone());
         // Clear the instantaneous frame
@@ -332,6 +361,13 @@ fn set_instant_dvs_pixel(
 }
 
 fn event_to_frame_intensity(event: &Event, frame_length: u128) -> f64 {
-    (((D_SHIFT[event.d as usize] as f64 / event.delta_t as f64) * frame_length as f64) / 255.0)
-        .ln_1p()
+    if event.d == 0xFE {
+        return 0.0;
+    }
+    match event.delta_t {
+        0 => ((D_SHIFT[event.d as usize] as f64 * frame_length as f64) / 255.0).ln_1p(),
+        _ => (((D_SHIFT[event.d as usize] as f64 / event.delta_t as f64) * frame_length as f64)
+            / 255.0)
+            .ln_1p(),
+    }
 }

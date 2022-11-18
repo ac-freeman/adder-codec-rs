@@ -59,14 +59,15 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .frame_start(args.frame_idx_start)
         .scale(args.scale)
         .communicate_events(true)
-        .color(args.color_input != 0)
+        .color(args.color_input)
         .contrast_thresholds(args.c_thresh_pos, args.c_thresh_neg)
-        .show_display(args.show_display != 0)
-        .time_parameters(args.tps, args.delta_t_max);
+        .show_display(args.show_display)
+        .time_parameters(args.ref_time, args.delta_t_max);
     if !args.output_events_filename.is_empty() {
         source_builder = source_builder.output_events_filename(args.output_events_filename);
     }
     let source = source_builder.finish();
+    let source_fps = source.source_fps;
 
     let width = source.get_video().width;
     let height = source.get_video().height;
@@ -80,8 +81,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let mut simul_processor = SimulProcessor::new::<u8>(
         source,
         ref_time,
-        args.tps,
-        args.fps,
         args.output_raw_video_filename.as_str(),
         args.frame_count_max as i32,
         num_threads,
@@ -89,23 +88,25 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let now = std::time::Instant::now();
     simul_processor.run().unwrap();
+    println!("\n\n{} ms elapsed\n\n", now.elapsed().as_millis());
 
     // Use ffmpeg to encode the raw frame data as an mp4
-    let color_str = match args.color_input != 0 {
+    let color_str = match args.color_input {
         true => "bgr24",
         _ => "gray",
     };
+
     let mut ffmpeg = Command::new("sh")
         .arg("-c")
         .arg(
-            "ffmpeg -f rawvideo -pix_fmt ".to_owned()
+            "ffmpeg -hide_banner -loglevel error -f rawvideo -pix_fmt ".to_owned()
                 + color_str
                 + " -s:v "
                 + width.to_string().as_str()
                 + "x"
                 + height.to_string().as_str()
                 + " -r "
-                + args.fps.to_string().as_str()
+                + source_fps.to_string().as_str()
                 + " -i "
                 + &args.output_raw_video_filename
                 + " -crf 0 -c:v libx264 -y "
@@ -115,7 +116,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .spawn()
         .unwrap();
     ffmpeg.wait().unwrap();
-    println!("{} ms elapsed", now.elapsed().as_millis());
 
     Ok(())
 }
@@ -139,14 +139,12 @@ mod tests {
 
         let args: SimulProcArgs = SimulProcArgs {
             args_filename: "".to_string(),
-            color_input: 0,
-            tps: 120000,
-            fps: 24,
+            color_input: false,
             ref_time: 5000,
             delta_t_max: 120000,
             frame_count_max: 0,
-            frame_idx_start: 0,
-            show_display: 0,
+            frame_idx_start: 1,
+            show_display: false,
             input_filename: manifest_path_str.clone() + "/tests/samples/lake_scaled_hd_crop.mp4",
             output_events_filename: manifest_path_str.clone()
                 + "/tests/samples/TEST_lake_scaled_hd_crop.adder",
@@ -162,10 +160,10 @@ mod tests {
             .frame_start(args.frame_idx_start)
             .scale(args.scale)
             .communicate_events(true)
-            .color(args.color_input != 0)
+            .color(args.color_input)
             .contrast_thresholds(args.c_thresh_pos, args.c_thresh_neg)
-            .show_display(args.show_display != 0)
-            .time_parameters(args.tps, args.delta_t_max);
+            .show_display(args.show_display)
+            .time_parameters(args.ref_time, args.delta_t_max);
         if !args.output_events_filename.is_empty() {
             source_builder = source_builder.output_events_filename(args.output_events_filename);
         }
@@ -175,8 +173,6 @@ mod tests {
         let mut simul_processor = SimulProcessor::new::<u8>(
             source,
             ref_time,
-            args.tps,
-            args.fps,
             args.output_raw_video_filename.as_str(),
             args.frame_count_max as i32,
             1,

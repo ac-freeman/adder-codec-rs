@@ -1,5 +1,5 @@
 use crate::transcoder::event_pixel_tree::Mode::{Continuous, FramePerfect};
-use crate::{Coord, Event, D_MAX, D_SHIFT};
+use crate::{Coord, Event, UDshift, D_MAX, D_SHIFT};
 use smallvec::{smallvec, SmallVec};
 use std::cmp::min;
 
@@ -63,11 +63,12 @@ impl PixelArena {
         }
     }
 
+    /// If the integration is 0, we need to forcefully fire an event where d=254
     fn get_zero_event(&mut self, idx: usize, next_intensity: Option<Intensity32>) -> Event {
         let mut node = &mut self.arena[idx];
         let ret_event = Event {
             coord: self.coord,
-            d: 254,
+            d: 0xFE, // 254_u8
             delta_t: node.state.delta_t as DeltaT,
         };
         node.state.delta_t = 0.0;
@@ -86,19 +87,7 @@ impl PixelArena {
         match root.best_event {
             None => {
                 if root.state.integration == 0.0 && root.state.delta_t > 0.0 {
-                    // If the integration is 0, we need to forcefully fire an event where d=254
-                    let ret_event = Event {
-                        coord: self.coord,
-                        d: 254,
-                        delta_t: root.state.delta_t as DeltaT,
-                    };
-                    root.state.delta_t = 0.0;
-                    match next_intensity {
-                        None => {}
-                        Some(intensity) => root.state.d = get_d_from_intensity(intensity),
-                    }
-                    debug_assert!(root.alt.is_none());
-                    ret_event
+                    self.get_zero_event(0, next_intensity)
                 } else {
                     // We can reach here under frame-perfect integration when approaching dtm. The new
                     // node might not have the right D set.
@@ -187,6 +176,7 @@ impl PixelArena {
                     d: 0xFF,
                     delta_t: (head.state.delta_t) as DeltaT,
                 });
+
                 head.state.delta_t = 0.0;
                 head.state.integration = 0.0;
                 ret
@@ -206,6 +196,7 @@ impl PixelArena {
         mut time: f32,
         mode: &Mode,
         dtm: &DeltaT,
+        ref_time: &DeltaT,
     ) {
         let tail = &mut self.arena[self.length - 1];
         if tail.state.delta_t == 0.0 && tail.state.integration == 0.0 {
@@ -219,7 +210,7 @@ impl PixelArena {
                 Some((next_intensity, next_time)) => {
                     // self.arena.drain(idx + 1..);
                     match self.arena.len() > idx + 1 {
-                        true => self.arena[idx + 1] = PixelNode::new(intensity),
+                        true => self.arena[idx + 1] = PixelNode::new(intensity), // TODO: Do new2 with next_intensity?
                         false => {
                             self.arena.push(PixelNode::new(intensity));
                         }
@@ -235,15 +226,13 @@ impl PixelArena {
             idx += 1;
 
             if filled {
-                // TODO: Fix for continuous mode
                 match mode {
                     FramePerfect => break,
 
                     // If continuous, we need to integrate the remaining intensity for the current
                     // node and the branching nodes
                     Continuous => {
-                        // TODO: temporary hack. Get number from caller.
-                        if time > 2000.0 {
+                        if time > *ref_time as f32 {
                             self.arena[idx].state.d = get_d_from_intensity(intensity);
                         }
                     }
@@ -293,7 +282,7 @@ impl PixelArena {
                 // TODO: this is slow and dumb
                 loop {
                     node.state.d += 1;
-                    if D_SHIFT[node.state.d as usize] > node.state.integration as u32 {
+                    if D_SHIFT[node.state.d as usize] > node.state.integration as UDshift {
                         break;
                     }
                 }
@@ -346,6 +335,19 @@ impl PixelNode {
             best_event: None,
         }
     }
+    // pub fn new2(start_intensity: Intensity32) -> PixelNode {
+    //     let start_d = min(get_d_from_intensity(start_intensity) + 1, D_MAX);
+    //     assert!(start_d <= D_MAX);
+    //     PixelNode {
+    //         alt: None,
+    //         state: PixelState {
+    //             d: start_d,
+    //             integration: 0.0,
+    //             delta_t: 0.0,
+    //         },
+    //         best_event: None,
+    //     }
+    // }
 
     pub fn set_d(&mut self, d: D) {
         self.state.d = d;
@@ -369,7 +371,7 @@ mod tests {
         );
 
         assert_eq!(tree.arena[0].state.d, 6);
-        tree.integrate(100.0, 20.0, &Continuous, &dtm);
+        tree.integrate(100.0, 20.0, &Continuous, &dtm, &20);
         assert!(tree.arena[0].best_event.is_some());
         let node = &tree.arena[0];
         match node.best_event {
@@ -396,7 +398,7 @@ mod tests {
         assert_eq!(tmp, 36.0);
         assert!(f32_slack(tree.arena[1].state.delta_t, 7.2));
 
-        tree.integrate(100.0, 20.0, &Continuous, &dtm);
+        tree.integrate(100.0, 20.0, &Continuous, &dtm, &20);
         assert_eq!(tree.arena[0].best_event.unwrap().d, 7);
         // Since we're casting, the delta t gets rounded down
         let tmp = tree.arena[0].best_event.unwrap().delta_t;
@@ -433,7 +435,7 @@ mod tests {
     fn make_tree2() -> PixelArena {
         let dtm = 10000;
         let mut tree = make_tree();
-        tree.integrate(30.0, 34.0, &Continuous, &dtm);
+        tree.integrate(30.0, 34.0, &Continuous, &dtm, &34);
 
         {
             let root = &tree.arena[0];
@@ -459,7 +461,7 @@ mod tests {
         //                                         \
         //                                    (6,12)--------------------6, 38, 35.6
 
-        tree.integrate(26.0, 34.0, &Continuous, &dtm);
+        tree.integrate(26.0, 34.0, &Continuous, &dtm, &34);
         // Main node just filled
         assert_eq!(tree.arena[0].state.d, 9);
         assert!(f32_slack(tree.arena[0].state.integration, 256.0));
@@ -526,33 +528,31 @@ mod tests {
     #[test]
     fn test_d_max() {
         // 1048576
-        let dtm = 10000;
+        let dtm = 100000000;
         let mut tree = PixelArena::new(
-            1048500.0,
+            (1u128 << 126u128) as f32,
             Coord {
                 x: 0,
                 y: 0,
                 c: None,
             },
         );
-        tree.integrate(1048500.0, 1000.0, &Continuous, &dtm);
+        tree.integrate(
+            (1u128 << 126u128) as f32,
+            100000.0,
+            &Continuous,
+            &dtm,
+            &100000,
+        );
         assert!(tree.need_to_pop_top);
         let mut events = Vec::new();
         tree.pop_best_events(None, &mut events);
         assert!(!tree.need_to_pop_top);
         assert_eq!(events.len(), 1);
-        assert_eq!(events[0].d, 19);
+        assert_eq!(events[0].d, 126);
         let tmp = events[0].delta_t;
-        assert_eq!(tmp, 500);
-        assert!(f32_slack(tree.arena[0].state.integration, 524212.0));
-        // let need_to_pop = tree.integrate(1048500.0, 1000.0);
-        // assert!(need_to_pop);
-        // let events = tree.pop_best_events();
-        // assert_eq!(events.len(), 2);
-        // assert_eq!(events[0].d, 20);
-        // assert_eq!(events[1].d, 19);
-        // assert_eq!(tree.state.d, 19);
-        // assert!(f32_slack(tree.state.integration, 524136.0));
+        assert_eq!(tmp, 100000);
+        assert!(f32_slack(tree.arena[0].state.integration, 0.0));
     }
 
     #[test]
@@ -567,9 +567,9 @@ mod tests {
             },
         );
         for _ in 0..47 {
-            tree.integrate(245.0, 5000.0, &FramePerfect, &dtm);
+            tree.integrate(245.0, 5000.0, &FramePerfect, &dtm, &5000);
         }
-        tree.integrate(245.0, 5000.0, &FramePerfect, &dtm);
+        tree.integrate(245.0, 5000.0, &FramePerfect, &dtm, &5000);
         assert!(tree.need_to_pop_top);
         let _ = tree.pop_top_event(Some(245.0));
         assert!(!tree.need_to_pop_top);
@@ -588,8 +588,8 @@ mod tests {
                 c: None,
             },
         );
-        tree.integrate(146.0, 2000.0, &Continuous, &dtm);
-        tree.integrate(2_790.863, 38231.0, &Continuous, &dtm);
+        tree.integrate(146.0, 2000.0, &Continuous, &dtm, &2000);
+        tree.integrate(2_790.863, 38231.0, &Continuous, &dtm, &38231);
 
         let head = tree.arena[0];
         let integ = head.state.integration;
@@ -600,11 +600,63 @@ mod tests {
         assert_eq!(head.best_event.unwrap().d, d - 1);
     }
 
+    #[test]
+    fn test_big_integration2() {
+        let dtm = 10000000;
+        let mut tree = PixelArena::new(
+            255.0,
+            Coord {
+                x: 0,
+                y: 0,
+                c: None,
+            },
+        );
+        loop {
+            tree.integrate(255.0, 2000.0, &Continuous, &dtm, &2000);
+            if tree.need_to_pop_top {
+                break;
+            }
+        }
+
+        let head = tree.arena[0];
+        let d = head.state.d;
+        let integ = head.state.integration;
+        let dt = head.state.delta_t;
+
+        assert_eq!(integ, 1.275e6);
+        assert_eq!(dt, dtm as f32);
+        assert_eq!(head.best_event.unwrap().d, d - 1);
+    }
+
     fn f32_slack(num0: f32, num1: f32) -> bool {
         let slack = 0.1e-3;
         if num1 - slack <= num0 && num1 + slack >= num0 {
             return true;
         }
         false
+    }
+
+    #[test]
+    fn test_paper_example() {
+        let dtm = 10000;
+        let mut tree = PixelArena::new(
+            101.0,
+            Coord {
+                x: 0,
+                y: 0,
+                c: None,
+            },
+        );
+
+        assert_eq!(tree.arena[0].state.d, 6);
+        tree.integrate(101.0, 20.0, &Continuous, &dtm, &20);
+        assert!(tree.arena[0].best_event.is_some());
+        let node = &tree.arena[0];
+
+        tree.integrate(40.0, 30.0, &Continuous, &dtm, &30);
+        let event = tree.arena[0].best_event.unwrap();
+        assert_eq!(event.d, 7);
+        let child = tree.arena[1].clone();
+        assert!(f32_slack(child.state.delta_t, 9.75));
     }
 }

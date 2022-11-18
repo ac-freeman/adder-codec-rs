@@ -5,7 +5,7 @@ pub(crate) type Magic = [u8; 5];
 pub(crate) const MAGIC_RAW: Magic = [97, 100, 100, 101, 114]; // 'adder' in ASCII
 pub(crate) const MAGIC_COMPRESSED: Magic = [97, 100, 100, 101, 99]; // 'addec' in ASCII
 
-/// Both the raw (uncompressed) and compressed ADDER streams have the same header structure. All
+/// Both the raw (uncompressed) and compressed ADΔER streams have the same header structure. All
 /// that changes is [magic]. A new [version] of the raw stream format necessitates a new [version]
 /// of the compressed format.
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]

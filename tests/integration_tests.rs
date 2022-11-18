@@ -48,9 +48,12 @@ fn test_sample_perfect_dt() {
     let output_path = Path::new("./tests/samples/temp_sample_1");
     let mut output_stream = BufWriter::new(File::create(output_path).unwrap());
 
-    let reconstructed_frame_rate = 24;
+    let reconstructed_frame_rate = 24.0;
     // For instantaneous reconstruction, make sure the frame rate matches the source video rate
-    assert_eq!(stream.tps / stream.ref_interval, reconstructed_frame_rate);
+    assert_eq!(
+        stream.tps / stream.ref_interval,
+        reconstructed_frame_rate as u32
+    );
 
     let mut frame_sequence: FrameSequence<u8> = FramerBuilder::new(
         stream.height.into(),
@@ -113,9 +116,12 @@ fn test_sample_perfect_dt_color() {
     let output_path = Path::new("./tests/samples/temp_sample_2");
     let mut output_stream = BufWriter::new(File::create(output_path).unwrap());
 
-    let reconstructed_frame_rate = 24;
+    let reconstructed_frame_rate = 24.0;
     // For instantaneous reconstruction, make sure the frame rate matches the source video rate
-    assert_eq!(stream.tps / stream.ref_interval, reconstructed_frame_rate);
+    assert_eq!(
+        stream.tps / stream.ref_interval,
+        reconstructed_frame_rate as u32
+    );
 
     let mut frame_sequence: FrameSequence<u8> = FramerBuilder::new(
         stream.height.into(),
@@ -322,7 +328,7 @@ fn test_event_framer_ingest() {
 
     let mut frame_sequence: FrameSequence<EventCoordless> = FramerBuilder::new(10, 10, 3, 64)
         .codec_version(1)
-        .time_parameters(50000, 1000, 50)
+        .time_parameters(50000, 1000, 50.0)
         .mode(INSTANTANEOUS)
         .source(U8, FramedU8)
         .finish();
@@ -357,7 +363,7 @@ fn test_event_framer_ingest_get_filled() {
     use adder_codec_rs::{Coord, Event};
     let mut frame_sequence: FrameSequence<EventCoordless> = FramerBuilder::new(5, 5, 1, 64)
         .codec_version(1)
-        .time_parameters(50000, 1000, 50)
+        .time_parameters(50000, 1000, 50.0)
         .mode(INSTANTANEOUS)
         .source(U8, FramedU8)
         .finish();
@@ -396,7 +402,7 @@ fn get_frame_bytes_eventcoordless() {
     use adder_codec_rs::{Coord, Event};
     let mut frame_sequence: FrameSequence<EventCoordless> = FramerBuilder::new(5, 5, 1, 64)
         .codec_version(1)
-        .time_parameters(50000, 1000, 50)
+        .time_parameters(50000, 1000, 50.0)
         .mode(INSTANTANEOUS)
         .source(U8, FramedU8)
         .finish();
@@ -455,7 +461,7 @@ fn get_frame_bytes_u8() {
     use adder_codec_rs::{Coord, Event};
     let mut frame_sequence: FrameSequence<u8> = FramerBuilder::new(5, 5, 1, 64)
         .codec_version(1)
-        .time_parameters(50000, 1000, 50)
+        .time_parameters(50000, 1000, 50.0)
         .mode(INSTANTANEOUS)
         .source(U8, FramedU8)
         .finish();
@@ -513,7 +519,7 @@ fn get_frame_bytes_u16() {
     use adder_codec_rs::{Coord, Event};
     let mut frame_sequence: FrameSequence<u16> = FramerBuilder::new(5, 5, 1, 64)
         .codec_version(1)
-        .time_parameters(50000, 1000, 50)
+        .time_parameters(50000, 1000, 50.0)
         .mode(INSTANTANEOUS)
         .source(U8, FramedU8)
         .finish();
@@ -570,7 +576,7 @@ fn get_frame_bytes_u32() {
     use adder_codec_rs::{Coord, Event};
     let mut frame_sequence: FrameSequence<u32> = FramerBuilder::new(5, 5, 1, 46)
         .codec_version(1)
-        .time_parameters(50000, 1000, 50)
+        .time_parameters(50000, 1000, 50.0)
         .mode(INSTANTANEOUS)
         .source(U8, FramedU8)
         .finish();
@@ -627,7 +633,7 @@ fn get_frame_bytes_u64() {
     use adder_codec_rs::{Coord, Event};
     let mut frame_sequence: FrameSequence<u64> = FramerBuilder::new(5, 5, 1, 64)
         .codec_version(1)
-        .time_parameters(50000, 1000, 50)
+        .time_parameters(50000, 1000, 50.0)
         .mode(INSTANTANEOUS)
         .source(U8, FramedU8)
         .finish();
@@ -684,7 +690,7 @@ fn test_get_empty_frame() {
     use adder_codec_rs::{Coord, Event};
     let mut frame_sequence: FrameSequence<u8> = FramerBuilder::new(5, 5, 1, 64)
         .codec_version(1)
-        .time_parameters(50000, 1000, 50)
+        .time_parameters(50000, 1000, 50.0)
         .mode(INSTANTANEOUS)
         .source(U8, FramedU8)
         .finish();
@@ -723,9 +729,12 @@ fn test_sample_unordered() {
     let output_path = Path::new("./tests/samples/temp_sample_3_unordered");
     let mut output_stream = BufWriter::new(File::create(output_path).unwrap());
 
-    let reconstructed_frame_rate = 60;
+    let reconstructed_frame_rate = 60.0;
     // For instantaneous reconstruction, make sure the frame rate matches the source video rate
-    assert_eq!(stream.tps / stream.ref_interval, reconstructed_frame_rate);
+    assert_eq!(
+        stream.tps / stream.ref_interval,
+        reconstructed_frame_rate as u32
+    );
 
     let mut frame_sequence: FrameSequence<u8> = FramerBuilder::new(
         stream.height.into(),
@@ -787,9 +796,12 @@ fn test_sample_ordered() {
     let output_path = Path::new("./tests/samples/temp_sample_3_ordered");
     let mut output_stream = BufWriter::new(File::create(output_path).unwrap());
 
-    let reconstructed_frame_rate = 60;
+    let reconstructed_frame_rate = 60.0;
     // For instantaneous reconstruction, make sure the frame rate matches the source video rate
-    assert_eq!(stream.tps / stream.ref_interval, reconstructed_frame_rate);
+    assert_eq!(
+        stream.tps / stream.ref_interval,
+        reconstructed_frame_rate as u32
+    );
 
     let mut frame_sequence: FrameSequence<u8> = FramerBuilder::new(
         stream.height.into(),
@@ -850,13 +862,13 @@ fn test_framed_to_adder_bunny4() {
         SourceCamera::FramedU8,
     )
     .chunk_rows(64)
-    .frame_start(360)
+    .frame_start(361)
     .scale(1.0)
     .communicate_events(true)
     .color(false)
     .contrast_thresholds(5, 5)
     .show_display(false)
-    .time_parameters(120000, 240000)
+    .time_parameters(5000, 240000)
     .finish();
 
     let frame_max = 250;

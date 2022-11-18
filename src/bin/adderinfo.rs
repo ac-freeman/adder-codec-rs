@@ -1,26 +1,25 @@
-mod adder_to_dvs;
-mod aedat4_dvs_visualize;
-mod davis_to_adder;
-
 use adder_codec_rs::framer::scale_intensity::event_to_intensity;
 use adder_codec_rs::raw::raw_stream::RawStream;
 use adder_codec_rs::{Codec, Intensity, D_SHIFT};
-use clap::ArgAction::SetTrue;
 use clap::Parser;
 use std::io::Write;
 use std::path::Path;
 use std::{error, io};
+mod adder_to_dvs;
+mod adder_video_player;
+mod aedat4_dvs_visualize;
+mod davis_to_adder;
 
 /// Command line argument parser
 #[derive(Parser, Debug, Default)]
 #[clap(author, version, about, long_about = None)]
 pub struct MyArgs {
-    /// Input ADDER video path
+    /// Input ADΔER video path
     #[clap(short, long)]
     pub(crate) input: String,
 
     /// Calculate dynamic range of the event stream? (Takes more time)
-    #[clap(short, long, default_value_t = false, action(SetTrue))]
+    #[clap(short, long, action)]
     pub(crate) dynamic_range: bool,
 }
 
@@ -75,11 +74,15 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             match stream.decode_event() {
                 Ok(event) => {
                     match event_to_intensity(&event) {
-                        _ if event.d == 255 => {
+                        _ if event.d == 0xFF => {
                             // ignore empty events
                         }
+                        a if a.is_infinite() => {
+                            println!("INFINITE");
+                            dbg!(event);
+                        }
                         a if a < min_intensity => {
-                            if event.d == 254 {
+                            if event.d == 0xFE {
                                 min_intensity = 1.0 / event.delta_t as f64;
                             } else {
                                 min_intensity = a;
@@ -111,15 +114,15 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         let theory_dr_bits = theory_dr_ratio.log2();
         writeln!(handle, "\rDynamic range                       ")?;
         writeln!(handle, "\tTheoretical range:")?;
-        writeln!(handle, "\t\t{} dB (power)", theory_dr_db as u32)?;
-        writeln!(handle, "\t\t{} bits", theory_dr_bits as u32)?;
+        writeln!(handle, "\t\t{:.4} dB (power)", theory_dr_db)?;
+        writeln!(handle, "\t\t{:.4} bits", theory_dr_bits)?;
 
         let real_dr_ratio = max_intensity / min_intensity;
         let real_dr_db = 10.0 * real_dr_ratio.log10();
         let real_dr_bits = real_dr_ratio.log2();
         writeln!(handle, "\tRealized range:")?;
-        writeln!(handle, "\t\t{} dB (power)", real_dr_db as u32)?;
-        writeln!(handle, "\t\t{} bits", real_dr_bits as u32)?;
+        writeln!(handle, "\t\t{:.4} dB (power)", real_dr_db)?;
+        writeln!(handle, "\t\t{:.4} bits", real_dr_bits)?;
     }
 
     handle.flush().unwrap();

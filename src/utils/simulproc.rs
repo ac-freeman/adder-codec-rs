@@ -27,36 +27,29 @@ pub struct SimulProcArgs {
     #[clap(short, long, default_value = "")]
     pub args_filename: String,
 
-    /// Use color? (For framed input, most likely) (1=yes,0=no)
-    #[clap(long, default_value_t = 1)]
-    pub color_input: u32,
-
-    /// Number of ticks per second (should equal ref_time * frame rate)
-    #[clap(short, long, default_value_t = 120000)]
-    pub tps: u32,
-
-    #[clap(long, default_value_t = 24)]
-    pub fps: u32,
+    /// Use color? (For framed input, most likely)
+    #[clap(long, action)]
+    pub color_input: bool,
 
     /// Number of ticks per input frame // TODO: modularize for different sources
-    #[clap(short, long, default_value_t = 5000)]
+    #[clap(short, long, default_value_t = 255)]
     pub ref_time: u32,
 
     /// Max number of ticks for any event
-    #[clap(short, long, default_value_t = 240000)]
+    #[clap(short, long, default_value_t = 15300)]
     pub delta_t_max: u32,
 
     /// Max number of input frames to transcode (0 = no limit)
-    #[clap(short, long, default_value_t = 500)]
+    #[clap(short, long, default_value_t = 0)]
     pub frame_count_max: u32,
 
     /// Index of first input frame to transcode
     #[clap(long, default_value_t = 0)]
     pub frame_idx_start: u32,
 
-    /// Show live view displays? (1=yes,0=no)
-    #[clap(short, long, default_value_t = 0)]
-    pub show_display: u32,
+    /// Show live view displays?
+    #[clap(short, long, action)]
+    pub show_display: bool,
 
     /// Path to input file
     #[clap(short, long, default_value = "./in.mp4")]
@@ -71,7 +64,7 @@ pub struct SimulProcArgs {
     pub output_raw_video_filename: String,
 
     /// Resize scale
-    #[clap(short('z'), long, default_value_t = 0.5)]
+    #[clap(short('z'), long, default_value_t = 1.0)]
     pub scale: f64,
 
     /// Positive contrast threshold, in intensity units. How much an intensity must increase
@@ -86,7 +79,7 @@ pub struct SimulProcArgs {
 
     /// Number of threads to use. If not provided, will default to the number of cores on the
     /// system.
-    #[clap(long, default_value_t = 0)]
+    #[clap(long, default_value_t = 4)]
     pub thread_count: u8,
 }
 
@@ -100,8 +93,6 @@ impl SimulProcessor {
     pub fn new<T>(
         source: FramedSource,
         ref_time: DeltaT,
-        tps: DeltaT,
-        fps: u32,
         output_path: &str,
         frame_max: i32,
         num_threads: usize,
@@ -113,6 +104,7 @@ impl SimulProcessor {
         T: std::marker::Copy,
         T: FrameValue<Output = T>,
         T: Serialize,
+        T: num_traits::Zero,
     {
         let thread_pool_framer = rayon::ThreadPoolBuilder::new()
             .num_threads(max(num_threads / 2, 1))
@@ -122,9 +114,9 @@ impl SimulProcessor {
             .num_threads(max(num_threads / 2, 1))
             .build()
             .unwrap();
-        let reconstructed_frame_rate = fps;
+        let reconstructed_frame_rate = source.source_fps;
         // For instantaneous reconstruction, make sure the frame rate matches the source video rate
-        assert_eq!(tps / ref_time, reconstructed_frame_rate);
+        assert_eq!(source.video.tps / ref_time, reconstructed_frame_rate as u32);
 
         let height = source.get_video().height as usize;
         let width = source.get_video().width as usize;
@@ -133,7 +125,7 @@ impl SimulProcessor {
         let mut framer = thread_pool_framer.install(|| {
             FramerBuilder::new(height, width, channels, source.video.chunk_rows)
                 .codec_version(1)
-                .time_parameters(tps, ref_time, reconstructed_frame_rate)
+                .time_parameters(source.video.tps, ref_time, reconstructed_frame_rate)
                 .mode(INSTANTANEOUS)
                 .source(U8, FramedU8)
                 .finish::<T>()

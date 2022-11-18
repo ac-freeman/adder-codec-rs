@@ -43,11 +43,12 @@ pub struct Video {
     pub chunk_rows: usize,
     pub(crate) event_pixel_trees: Array3<PixelArena>,
     pub(crate) ref_time: u32,
+    pub(crate) ref_time_divisor: f64,
     pub(crate) delta_t_max: u32,
     pub(crate) show_display: bool,
     pub(crate) show_live: bool,
     pub in_interval_count: u32,
-    pub(crate) instantaneous_display_frame: Mat,
+    pub(crate) _instantaneous_display_frame: Mat,
     pub(crate) instantaneous_frame: Mat,
     pub event_sender: Sender<Vec<Event>>,
     pub(crate) write_out: bool,
@@ -156,11 +157,12 @@ impl Video {
             chunk_rows,
             event_pixel_trees,
             ref_time,
+            ref_time_divisor: 1.0,
             delta_t_max,
             show_display,
             show_live: false,
             in_interval_count: 0,
-            instantaneous_display_frame: Mat::default(),
+            _instantaneous_display_frame: Mat::default(),
             instantaneous_frame,
             event_sender,
             write_out,
@@ -179,7 +181,7 @@ impl Video {
     pub(crate) fn integrate_matrix(
         &mut self,
         matrix: Mat,
-        ref_time: f32,
+        time_spanned: f32,
         pixel_tree_mode: Mode,
         view_interval: u32,
     ) -> std::result::Result<Vec<Vec<Event>>, SourceError> {
@@ -211,23 +213,27 @@ impl Video {
                 let base_val = bump.alloc(0);
                 let px_idx = bump.alloc(0);
                 let frame_val = bump.alloc(0);
+                let frame_val_intensity32 = bump.alloc(0.0);
 
                 for (chunk_px_idx, px) in chunk.iter_mut().enumerate() {
                     *px_idx = chunk_px_idx + px_per_chunk * chunk_idx;
 
-                    *frame_val = frame_arr[*px_idx];
+                    *frame_val_intensity32 =
+                        (frame_arr[*px_idx] as f64 * self.ref_time_divisor) as Intensity32;
+                    *frame_val = *frame_val_intensity32 as u8;
 
                     integrate_for_px(
                         px,
                         base_val,
                         frame_val,
-                        *frame_val as Intensity32, // In this case, frame val is the same as intensity to integrate
-                        ref_time,
+                        *frame_val_intensity32, // In this case, frame val is the same as intensity to integrate
+                        time_spanned,
                         pixel_tree_mode,
                         &mut buffer,
                         &self.c_thresh_pos,
                         &self.c_thresh_neg,
                         &self.delta_t_max,
+                        &self.ref_time,
                     )
                 }
                 buffer
@@ -244,7 +250,7 @@ impl Video {
             let db = self.instantaneous_frame.data_bytes_mut().unwrap();
             db.par_iter_mut().enumerate().for_each(|(idx, val)| {
                 let y = idx / (self.width as usize * self.channels);
-                let x = idx % (self.width as usize * self.channels);
+                let x = (idx % (self.width as usize * self.channels)) / self.channels;
                 let c = idx % self.channels;
                 *val = match self.event_pixel_trees[[y, x, c]].arena[0].best_event {
                     Some(event) => {
@@ -259,19 +265,6 @@ impl Video {
 
         Ok(big_buffer)
     }
-
-    // pub(crate) fn integrate_single_intensity(
-    //     &mut self,
-    //     y: usize,
-    //     x: usize,
-    //     c: usize,
-    //     intensity: Intensity32,
-    //     ref_time: f32,
-    //     pixel_tree_mode: Mode,
-    // ) -> std::result::Result<Vec<Event>, SourceError> {
-    //     let px = &mut self.event_pixel_trees[[y, x, c]];
-    //     todo!()
-    // }
 
     fn set_initial_d(&mut self, frame_arr: &[u8]) {
         self.event_pixel_trees.par_map_inplace(|px| {
@@ -291,12 +284,13 @@ pub fn integrate_for_px(
     base_val: &mut u8,
     frame_val: &u8,
     intensity: Intensity32,
-    ref_time: f32,
+    time_spanned: f32,
     pixel_tree_mode: Mode,
     buffer: &mut Vec<Event>,
     c_thresh_pos: &u8,
     c_thresh_neg: &u8,
     delta_t_max: &u32,
+    ref_time: &u32,
 ) {
     if px.need_to_pop_top {
         buffer.push(px.pop_top_event(Some(intensity)));
@@ -311,7 +305,6 @@ pub fn integrate_for_px(
         px.base_val = *frame_val;
 
         // If continuous mode and the D value needs to be different now
-        // TODO: make it modular
         if let Continuous = pixel_tree_mode {
             match px.set_d_for_continuous(intensity) {
                 None => {}
@@ -320,7 +313,17 @@ pub fn integrate_for_px(
         }
     }
 
-    px.integrate(intensity, ref_time, &pixel_tree_mode, delta_t_max);
+    px.integrate(
+        intensity,
+        time_spanned,
+        &pixel_tree_mode,
+        delta_t_max,
+        ref_time,
+    );
+
+    if px.need_to_pop_top {
+        buffer.push(px.pop_top_event(Some(intensity)));
+    }
 }
 
 /// If [`MyArgs`]`.show_display`, shows the given [`Mat`] in an OpenCV window

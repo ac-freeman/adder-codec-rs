@@ -32,6 +32,7 @@ pub struct FramedSource {
     pub(crate) input_frame_scaled: Mat,
     pub(crate) input_frame: Mat,
     pub frame_idx_start: u32,
+    pub source_fps: f64,
     scale: f64,
     color_input: bool,
     pub(crate) video: Video,
@@ -94,9 +95,9 @@ impl FramedSourceBuilder {
         self
     }
 
-    pub fn time_parameters(mut self, tps: DeltaT, delta_t_max: DeltaT) -> FramedSourceBuilder {
-        self.tps = tps;
+    pub fn time_parameters(mut self, ref_time: DeltaT, delta_t_max: DeltaT) -> FramedSourceBuilder {
         self.delta_t_max = delta_t_max;
+        self.ref_time = ref_time;
         assert_eq!(self.delta_t_max % self.ref_time, 0);
         self
     }
@@ -155,14 +156,11 @@ impl FramedSource {
         let video_frame_count = cap.get(CAP_PROP_FRAME_COUNT).unwrap();
         assert!(builder.frame_idx_start < video_frame_count as u32);
 
-        // Calculate ref time based on TPS and source FPS
+        // Calculate TPS based on ticks per frame and source FPS
         cap.set(CAP_PROP_POS_FRAMES, builder.frame_idx_start as f64)
             .unwrap();
         let source_fps = cap.get(CAP_PROP_FPS).unwrap().round();
-        builder.ref_time = (builder.tps as f64 / source_fps) as u32;
-
-        // Handle the edge cases forcefully
-        builder.tps = builder.ref_time * cap.get(CAP_PROP_FPS).unwrap().round() as u32;
+        builder.tps = builder.ref_time * source_fps as u32;
         assert_eq!(
             builder.ref_time * cap.get(CAP_PROP_FPS).unwrap().round() as u32,
             builder.tps
@@ -179,6 +177,10 @@ impl FramedSource {
                 panic!("{}", e);
             }
         };
+
+        // Move start frame back
+        cap.set(CAP_PROP_POS_FRAMES, builder.frame_idx_start as f64)
+            .unwrap();
 
         let mut init_frame_scaled = Mat::default();
         println!("Original width is {}", init_frame.size()?.width);
@@ -215,6 +217,7 @@ impl FramedSource {
             input_frame_scaled: Default::default(),
             input_frame: Default::default(),
             frame_idx_start: builder.frame_idx_start,
+            source_fps,
             scale: builder.scale,
             color_input: builder.color_input,
             video,
@@ -235,15 +238,17 @@ impl Source for FramedSource {
         thread_pool: &ThreadPool,
     ) -> Result<Vec<Vec<Event>>, SourceError> {
         match self.cap.read(&mut self.input_frame) {
-            Ok(_) => match resize_frame(
-                &self.input_frame,
-                &mut self.input_frame_scaled,
-                self.color_input,
-                self.scale,
-            ) {
-                Ok(_) => {}
-                Err(_) => return Err(SourceError::NoData),
-            },
+            Ok(_) => {
+                match resize_frame(
+                    &self.input_frame,
+                    &mut self.input_frame_scaled,
+                    self.color_input,
+                    self.scale,
+                ) {
+                    Ok(_) => {}
+                    Err(_) => return Err(SourceError::NoData),
+                }
+            }
             Err(e) => {
                 panic!("{}", e);
             }

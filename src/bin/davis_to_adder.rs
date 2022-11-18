@@ -17,8 +17,9 @@ use std::{error, io};
 #[derive(Parser, Debug, Deserialize, Default)]
 pub struct Args {
     /// Filename for EDI args (optional; must be in .toml format)
+    /// OR can provide toml-style data as a raw string here
     #[clap(short, long, default_value = "")]
-    pub edi_args_filename: String,
+    pub edi_args: String,
 
     /// Filename for args (optional; must be in .toml format)
     #[clap(short, long, default_value = "")]
@@ -28,9 +29,9 @@ pub struct Args {
     #[clap(long, default_value = "")]
     pub output_events_filename: String,
 
-    /// Show live view displays? (1=yes,0=no)
-    #[clap(short, long, default_value_t = 0)]
-    pub show_display: u32,
+    /// Show live view displays?
+    #[clap(short, long, action)]
+    pub show_display: bool,
 
     /// Positive contrast threshold, in intensity units. How much an intensity must increase
     /// to launch a D-value reset.
@@ -52,18 +53,19 @@ pub struct Args {
     #[clap(short, long, default_value = "")]
     pub transcode_from: String,
 
-    /// Optimize the ADDER controller for latency? (1=yes,0=no)
-    /// If yes, then the ADDER transcoder will attempt to maintain the maximum latency as defined
-    /// for the EDI reconstructor, by adjusting the ADDER contrast threshold (and thus the ADDER
+    /// Optimize the ADΔER controller for latency?
+    /// If true, then the ADΔER transcoder will attempt to maintain the maximum latency as defined
+    /// for the EDI reconstructor, by adjusting the ADΔER contrast threshold (and thus the ADΔER
     /// event rate).
-    #[clap(long, default_value_t = 0)]
-    pub optimize_adder_controller: u32,
+    #[clap(long, action)]
+    pub optimize_adder_controller: bool,
 
-    /// Write out ADDER file? (1=yes,0=no)
-    #[clap(short, long, default_value_t = 0)]
-    pub write_out: u32,
+    /// Write out ADΔER file?
+    #[clap(short, long, action)]
+    pub write_out: bool,
 }
 
+#[allow(dead_code)]
 fn main() -> Result<(), Box<dyn error::Error>> {
     let mut args: Args = Args::parse();
     if !args.args_filename.is_empty() {
@@ -71,14 +73,22 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         args = toml::from_str(&content).unwrap();
     }
 
-    let mut edi_args: EdiArgs = EdiArgs::parse();
-    if !args.edi_args_filename.is_empty() {
-        let content = std::fs::read_to_string(args.edi_args_filename)?;
-        edi_args = toml::from_str(&content).unwrap();
+    println!("in prog");
+    let mut edi_args: EdiArgs = EdiArgs::default();
+    println!("in prog2");
+    if !args.edi_args.is_empty() {
+        match std::fs::read_to_string(&args.edi_args) {
+            Ok(content) => {
+                edi_args = toml::from_str(&content)?;
+            }
+            Err(_) => {
+                edi_args = toml::from_str(&args.edi_args)?;
+            }
+        };
     }
 
-    if args.optimize_adder_controller != 0 {
-        assert_ne!(edi_args.optimize_controller, 0);
+    if args.optimize_adder_controller {
+        // assert!(edi_args.optimize_controller);
     }
 
     // let transcode_type = match args.transcode_from.as_str() {
@@ -99,6 +109,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
     let rt = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(12)
+        .enable_time()
         .build()
         .unwrap();
     let reconstructor = rt.block_on(Reconstructor::new(
@@ -107,35 +118,38 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         edi_args.events_filename_1,
         edi_args.mode,
         edi_args.start_c,
-        edi_args.optimize_c != 0,
-        edi_args.optimize_controller != 0,
-        edi_args.show_display != 0,
-        edi_args.show_blurred_display != 0,
+        edi_args.optimize_c,
+        edi_args.optimize_controller,
+        edi_args.show_display,
+        edi_args.show_blurred_display,
         edi_args.output_fps,
         Compression::None,
         346,
         260,
-        edi_args.deblur_only != 0,
+        edi_args.deblur_only,
         events_only,
         edi_args.target_latency,
+        edi_args.simulate_packet_latency,
     ));
 
     let mut davis_source = DavisSource::new(
         reconstructor,
         Some(args.output_events_filename),
-        (1000000) as u32,                                 // TODO
+        (1000000) as u32, // TODO
+        1000000.0 / edi_args.output_fps,
         (1000000.0 * args.delta_t_max_multiplier) as u32, // TODO
-        args.show_display != 0,
+        args.show_display,
         args.adder_c_thresh_pos,
         args.adder_c_thresh_neg,
-        args.optimize_adder_controller != 0,
+        args.optimize_adder_controller,
         rt,
         mode,
-        args.write_out != 0,
+        args.write_out,
     )
     .unwrap();
 
     let mut now = Instant::now();
+    let start_time = std::time::Instant::now();
     let thread_pool_integration = rayon::ThreadPoolBuilder::new()
         .num_threads(4)
         .build()
@@ -152,7 +166,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
         if davis_source.get_video().in_interval_count % 30 == 0 {
             println!(
-                "\rDavis recon frame to ADDER {} in  {}ms",
+                "\rDavis recon frame to ADΔER {} in  {}ms",
                 davis_source.get_video().in_interval_count,
                 now.elapsed().as_millis()
             );
@@ -160,6 +174,8 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             now = Instant::now();
         }
     }
+
+    println!("\n\n{} ms elapsed\n\n", start_time.elapsed().as_millis());
 
     Ok(())
 }
