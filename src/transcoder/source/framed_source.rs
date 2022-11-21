@@ -33,7 +33,7 @@ pub struct FramedSource {
     pub(crate) input_frame: Mat,
     pub frame_idx_start: u32,
     pub source_fps: f64,
-    scale: f64,
+    pub scale: f64,
     color_input: bool,
     pub(crate) video: Video,
 }
