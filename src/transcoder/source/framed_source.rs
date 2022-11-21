@@ -37,6 +37,7 @@ pub struct FramedSource {
     color_input: bool,
     pub(crate) video: Video,
 }
+unsafe impl Sync for FramedSource {}
 
 pub struct FramedSourceBuilder {
     input_filename: String,
