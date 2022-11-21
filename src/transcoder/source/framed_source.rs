@@ -138,8 +138,8 @@ impl FramedSourceBuilder {
         self
     }
 
-    pub fn finish(self) -> FramedSource {
-        FramedSource::new(self).unwrap()
+    pub fn finish(self) -> Result<FramedSource> {
+        FramedSource::new(self)
     }
 }
 

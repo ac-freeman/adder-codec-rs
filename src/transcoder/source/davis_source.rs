@@ -65,6 +65,8 @@ pub struct DavisSource {
     mode: DavisTranscoderMode, // phantom: PhantomData<T>,
 }
 
+unsafe impl Sync for DavisSource {}
+
 impl DavisSource {
     /// Initialize the framed source and read first frame of source, in order to get `height`
     /// and `width` and initialize [`Video`]

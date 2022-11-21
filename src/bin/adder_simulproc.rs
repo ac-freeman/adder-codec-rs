@@ -66,7 +66,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     if !args.output_events_filename.is_empty() {
         source_builder = source_builder.output_events_filename(args.output_events_filename);
     }
-    let source = source_builder.finish();
+    let source = source_builder.finish().unwrap();
     let source_fps = source.source_fps;
 
     let width = source.get_video().width;

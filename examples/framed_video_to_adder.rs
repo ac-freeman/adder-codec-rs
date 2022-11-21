@@ -21,7 +21,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     .contrast_thresholds(10, 10)
     .show_display(true)
     .time_parameters(255, 255 * 30)
-    .finish();
+    .finish()
+    .unwrap();
 
     let pool = rayon::ThreadPoolBuilder::new()
         .num_threads(current_num_threads())
