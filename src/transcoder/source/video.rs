@@ -49,7 +49,7 @@ pub struct Video {
     pub(crate) show_live: bool,
     pub in_interval_count: u32,
     pub(crate) _instantaneous_display_frame: Mat,
-    pub(crate) instantaneous_frame: Mat,
+    pub instantaneous_frame: Mat,
     pub event_sender: Sender<Vec<Event>>,
     pub(crate) write_out: bool,
     pub channels: usize,
@@ -244,22 +244,18 @@ impl Video {
             self.stream.encode_events_events(&big_buffer);
         }
 
-        show_display("Input", &matrix, 1, self);
+        let db = self.instantaneous_frame.data_bytes_mut().unwrap();
+        db.par_iter_mut().enumerate().for_each(|(idx, val)| {
+            let y = idx / (self.width as usize * self.channels);
+            let x = (idx % (self.width as usize * self.channels)) / self.channels;
+            let c = idx % self.channels;
+            *val = match self.event_pixel_trees[[y, x, c]].arena[0].best_event {
+                Some(event) => u8::get_frame_value(&event, SourceType::U8, self.ref_time as DeltaT),
+                None => *val,
+            };
+        });
 
         if self.show_live {
-            let db = self.instantaneous_frame.data_bytes_mut().unwrap();
-            db.par_iter_mut().enumerate().for_each(|(idx, val)| {
-                let y = idx / (self.width as usize * self.channels);
-                let x = (idx % (self.width as usize * self.channels)) / self.channels;
-                let c = idx % self.channels;
-                *val = match self.event_pixel_trees[[y, x, c]].arena[0].best_event {
-                    Some(event) => {
-                        u8::get_frame_value(&event, SourceType::U8, self.ref_time as DeltaT)
-                    }
-                    None => *val,
-                };
-            });
-
             show_display("instance", &self.instantaneous_frame, 1, self);
         }
 
