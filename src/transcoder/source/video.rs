@@ -273,6 +273,27 @@ impl Video {
             px.base_val = intensity;
         });
     }
+
+    /// Get `ref_time`
+    pub fn get_ref_time(&self) -> u32 {
+        self.ref_time
+    }
+
+    /// Set a new value for `delta_t_max`
+    pub fn update_delta_t_max(&mut self, dtm: u32) {
+        // Validate new value
+        self.delta_t_max = self.ref_time.max(dtm);
+    }
+
+    /// Set a new value for `c_thresh_pos`
+    pub fn update_adder_thresh_pos(&mut self, c: u8) {
+        self.c_thresh_pos = c;
+    }
+
+    /// Set a new value for `c_thresh_neg`
+    pub fn update_adder_thresh_neg(&mut self, c: u8) {
+        self.c_thresh_neg = c;
+    }
 }
 
 pub fn integrate_for_px(
