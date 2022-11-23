@@ -279,6 +279,11 @@ impl Video {
         self.ref_time
     }
 
+    /// Get `delta_t_max`
+    pub fn get_delta_t_max(&self) -> u32 {
+        self.delta_t_max
+    }
+
     /// Set a new value for `delta_t_max`
     pub fn update_delta_t_max(&mut self, dtm: u32) {
         // Validate new value
