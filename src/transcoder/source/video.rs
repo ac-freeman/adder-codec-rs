@@ -36,6 +36,13 @@ pub enum SourceError {
     NoData,
 }
 
+#[derive(PartialEq, Clone, Copy)]
+pub enum InstantaneousViewMode {
+    Intensity,
+    D,
+    Delta_t,
+}
+
 /// Attributes common to ADΔER transcode process
 pub struct Video {
     pub width: u16,
@@ -50,6 +57,7 @@ pub struct Video {
     pub in_interval_count: u32,
     pub(crate) _instantaneous_display_frame: Mat,
     pub instantaneous_frame: Mat,
+    pub instantaneous_view_mode: InstantaneousViewMode,
     pub event_sender: Sender<Vec<Event>>,
     pub(crate) write_out: bool,
     pub channels: usize,
@@ -164,6 +172,7 @@ impl Video {
             in_interval_count: 0,
             _instantaneous_display_frame: Mat::default(),
             instantaneous_frame,
+            instantaneous_view_mode: InstantaneousViewMode::Intensity,
             event_sender,
             write_out,
             channels,
@@ -245,12 +254,24 @@ impl Video {
         }
 
         let db = self.instantaneous_frame.data_bytes_mut().unwrap();
+
+        // TODO: When there's full support for various bit-depth sources, modify this accordingly
+        let practical_d_max =
+            fast_math::log2_raw(255.0 * (self.delta_t_max / self.ref_time) as f32);
         db.par_iter_mut().enumerate().for_each(|(idx, val)| {
             let y = idx / (self.width as usize * self.channels);
             let x = (idx % (self.width as usize * self.channels)) / self.channels;
             let c = idx % self.channels;
             *val = match self.event_pixel_trees[[y, x, c]].arena[0].best_event {
-                Some(event) => u8::get_frame_value(&event, SourceType::U8, self.ref_time as DeltaT),
+                Some(event) => match self.instantaneous_view_mode {
+                    InstantaneousViewMode::Intensity => {
+                        u8::get_frame_value(&event, SourceType::U8, self.ref_time as DeltaT)
+                    }
+                    InstantaneousViewMode::D => ((event.d as f32 / practical_d_max) * 255.0) as u8,
+                    InstantaneousViewMode::Delta_t => {
+                        ((event.delta_t as f32 / self.delta_t_max as f32) * 255.0) as u8
+                    }
+                },
                 None => *val,
             };
         });
