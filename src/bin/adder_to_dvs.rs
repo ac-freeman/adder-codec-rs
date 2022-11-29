@@ -323,8 +323,6 @@ fn set_instant_dvs_pixel(
     frame_count: usize,
     value: u128,
 ) {
-    assert!(frame_idx - frame_count >= 0);
-
     // Grow the deque if necessary
     let grow_len = frame_idx as i32 - frame_count as i32 - frames.len() as i32 + 1;
 

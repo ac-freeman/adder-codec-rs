@@ -36,6 +36,13 @@ pub enum SourceError {
     NoData,
 }
 
+#[derive(PartialEq, Clone, Copy)]
+pub enum InstantaneousViewMode {
+    Intensity,
+    D,
+    DeltaT,
+}
+
 /// Attributes common to ADΔER transcode process
 pub struct Video {
     pub width: u16,
@@ -49,7 +56,8 @@ pub struct Video {
     pub(crate) show_live: bool,
     pub in_interval_count: u32,
     pub(crate) _instantaneous_display_frame: Mat,
-    pub(crate) instantaneous_frame: Mat,
+    pub instantaneous_frame: Mat,
+    pub instantaneous_view_mode: InstantaneousViewMode,
     pub event_sender: Sender<Vec<Event>>,
     pub(crate) write_out: bool,
     pub channels: usize,
@@ -164,6 +172,7 @@ impl Video {
             in_interval_count: 0,
             _instantaneous_display_frame: Mat::default(),
             instantaneous_frame,
+            instantaneous_view_mode: InstantaneousViewMode::Intensity,
             event_sender,
             write_out,
             channels,
@@ -244,22 +253,30 @@ impl Video {
             self.stream.encode_events_events(&big_buffer);
         }
 
-        show_display("Input", &matrix, 1, self);
+        let db = self.instantaneous_frame.data_bytes_mut().unwrap();
 
-        if self.show_live {
-            let db = self.instantaneous_frame.data_bytes_mut().unwrap();
-            db.par_iter_mut().enumerate().for_each(|(idx, val)| {
-                let y = idx / (self.width as usize * self.channels);
-                let x = (idx % (self.width as usize * self.channels)) / self.channels;
-                let c = idx % self.channels;
-                *val = match self.event_pixel_trees[[y, x, c]].arena[0].best_event {
-                    Some(event) => {
+        // TODO: When there's full support for various bit-depth sources, modify this accordingly
+        let practical_d_max =
+            fast_math::log2_raw(255.0 * (self.delta_t_max / self.ref_time) as f32);
+        db.par_iter_mut().enumerate().for_each(|(idx, val)| {
+            let y = idx / (self.width as usize * self.channels);
+            let x = (idx % (self.width as usize * self.channels)) / self.channels;
+            let c = idx % self.channels;
+            *val = match self.event_pixel_trees[[y, x, c]].arena[0].best_event {
+                Some(event) => match self.instantaneous_view_mode {
+                    InstantaneousViewMode::Intensity => {
                         u8::get_frame_value(&event, SourceType::U8, self.ref_time as DeltaT)
                     }
-                    None => *val,
-                };
-            });
+                    InstantaneousViewMode::D => ((event.d as f32 / practical_d_max) * 255.0) as u8,
+                    InstantaneousViewMode::DeltaT => {
+                        ((event.delta_t as f32 / self.delta_t_max as f32) * 255.0) as u8
+                    }
+                },
+                None => *val,
+            };
+        });
 
+        if self.show_live {
             show_display("instance", &self.instantaneous_frame, 1, self);
         }
 
@@ -276,6 +293,37 @@ impl Video {
             px.arena[0].set_d(d_start);
             px.base_val = intensity;
         });
+    }
+
+    /// Get `ref_time`
+    pub fn get_ref_time(&self) -> u32 {
+        self.ref_time
+    }
+
+    /// Get `delta_t_max`
+    pub fn get_delta_t_max(&self) -> u32 {
+        self.delta_t_max
+    }
+
+    /// Get `tps`
+    pub fn get_tps(&self) -> u32 {
+        self.tps
+    }
+
+    /// Set a new value for `delta_t_max`
+    pub fn update_delta_t_max(&mut self, dtm: u32) {
+        // Validate new value
+        self.delta_t_max = self.ref_time.max(dtm);
+    }
+
+    /// Set a new value for `c_thresh_pos`
+    pub fn update_adder_thresh_pos(&mut self, c: u8) {
+        self.c_thresh_pos = c;
+    }
+
+    /// Set a new value for `c_thresh_neg`
+    pub fn update_adder_thresh_neg(&mut self, c: u8) {
+        self.c_thresh_neg = c;
     }
 }
 

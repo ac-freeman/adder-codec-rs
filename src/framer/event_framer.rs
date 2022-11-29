@@ -8,7 +8,6 @@ use std::collections::VecDeque;
 use std::fs::File;
 use std::io::BufWriter;
 use std::ops::Add;
-use std::process::Output;
 
 // Want one main framer with the same functions
 // Want additional functions
@@ -25,7 +24,7 @@ pub struct EventCoordless {
 impl Add<EventCoordless> for EventCoordless {
     type Output = EventCoordless;
 
-    fn add(self, rhs: EventCoordless) -> EventCoordless {
+    fn add(self, _rhs: EventCoordless) -> EventCoordless {
         todo!()
     }
 }

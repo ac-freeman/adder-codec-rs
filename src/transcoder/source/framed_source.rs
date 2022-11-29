@@ -33,10 +33,11 @@ pub struct FramedSource {
     pub(crate) input_frame: Mat,
     pub frame_idx_start: u32,
     pub source_fps: f64,
-    scale: f64,
+    pub scale: f64,
     color_input: bool,
     pub(crate) video: Video,
 }
+unsafe impl Sync for FramedSource {}
 
 pub struct FramedSourceBuilder {
     input_filename: String,
@@ -137,8 +138,8 @@ impl FramedSourceBuilder {
         self
     }
 
-    pub fn finish(self) -> FramedSource {
-        FramedSource::new(self).unwrap()
+    pub fn finish(self) -> Result<FramedSource> {
+        FramedSource::new(self)
     }
 }
 
