@@ -305,6 +305,11 @@ impl Video {
         self.delta_t_max
     }
 
+    /// Get `tps`
+    pub fn get_tps(&self) -> u32 {
+        self.tps
+    }
+
     /// Set a new value for `delta_t_max`
     pub fn update_delta_t_max(&mut self, dtm: u32) {
         // Validate new value
