@@ -40,7 +40,7 @@ pub enum SourceError {
 pub enum InstantaneousViewMode {
     Intensity,
     D,
-    Delta_t,
+    DeltaT,
 }
 
 /// Attributes common to ADΔER transcode process
@@ -268,7 +268,7 @@ impl Video {
                         u8::get_frame_value(&event, SourceType::U8, self.ref_time as DeltaT)
                     }
                     InstantaneousViewMode::D => ((event.d as f32 / practical_d_max) * 255.0) as u8,
-                    InstantaneousViewMode::Delta_t => {
+                    InstantaneousViewMode::DeltaT => {
                         ((event.delta_t as f32 / self.delta_t_max as f32) * 255.0) as u8
                     }
                 },

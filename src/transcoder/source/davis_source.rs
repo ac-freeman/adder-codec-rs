@@ -26,16 +26,6 @@ use crate::framer::scale_intensity::FrameValue;
 use crate::transcoder::event_pixel_tree::Intensity32;
 use tokio::runtime::Runtime;
 
-// https://stackoverflow.com/questions/51344951/how-do-you-unwrap-a-result-on-ok-or-return-from-the-function-on-err
-macro_rules! unwrap_or_return {
-    ( $e:expr ) => {
-        match $e {
-            Some(x) => x,
-            None => return,
-        }
-    };
-}
-
 pub struct Framed {}
 pub struct Raw {}
 

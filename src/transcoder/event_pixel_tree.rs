@@ -651,7 +651,6 @@ mod tests {
         assert_eq!(tree.arena[0].state.d, 6);
         tree.integrate(101.0, 20.0, &Continuous, &dtm, &20);
         assert!(tree.arena[0].best_event.is_some());
-        let node = &tree.arena[0];
 
         tree.integrate(40.0, 30.0, &Continuous, &dtm, &30);
         let event = tree.arena[0].best_event.unwrap();

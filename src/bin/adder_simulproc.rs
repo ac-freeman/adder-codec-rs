@@ -167,7 +167,7 @@ mod tests {
         if !args.output_events_filename.is_empty() {
             source_builder = source_builder.output_events_filename(args.output_events_filename);
         }
-        let source = source_builder.finish();
+        let source = source_builder.finish().unwrap();
         let ref_time = source.get_ref_time();
 
         let mut simul_processor = SimulProcessor::new::<u8>(
