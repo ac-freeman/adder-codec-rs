@@ -232,6 +232,10 @@ pub type PixelAddress = u16;
 
 pub const EOF_PX_ADDRESS: PixelAddress = u16::MAX;
 
+pub extern crate aedat;
+
+pub extern crate davis_edi_rs;
+
 #[repr(packed)]
 #[derive(Debug, Copy, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct Coord {
