@@ -2,7 +2,7 @@ use crate::transcoder::d_controller::DecimationMode;
 use crate::transcoder::event_pixel_tree::Mode::Continuous;
 use crate::transcoder::source::video::SourceError::BufferEmpty;
 use crate::transcoder::source::video::{
-    integrate_for_px, show_display, Source, SourceError, Video,
+    integrate_for_px, show_display, InstantaneousViewMode, Source, SourceError, Video,
 };
 use crate::SourceCamera::DavisU8;
 use crate::{Codec, DeltaT, Event, SourceType};
@@ -29,6 +29,7 @@ use tokio::runtime::Runtime;
 pub struct Framed {}
 pub struct Raw {}
 
+#[derive(PartialEq, Clone, Copy)]
 pub enum DavisTranscoderMode {
     Framed,
     RawDavis,
@@ -52,7 +53,7 @@ pub struct DavisSource {
     pub dvs_last_timestamps: Array3<i64>,
     pub dvs_last_ln_val: Array3<f64>,
     optimize_adder_controller: bool,
-    mode: DavisTranscoderMode, // phantom: PhantomData<T>,
+    pub mode: DavisTranscoderMode, // phantom: PhantomData<T>,
 }
 
 unsafe impl Sync for DavisSource {}
@@ -363,19 +364,30 @@ impl DavisSource {
             self.video.stream.encode_events_events(&big_buffer);
         }
 
-        if self.video.show_live {
-            let db = self.video.instantaneous_frame.data_bytes_mut().unwrap();
-            db.par_iter_mut().enumerate().for_each(|(idx, val)| {
-                let y = idx / self.video.width as usize;
-                let x = idx % self.video.width as usize;
-                *val = match self.video.event_pixel_trees[[y, x, 0]].arena[0].best_event {
-                    Some(event) => {
+        let db = self.video.instantaneous_frame.data_bytes_mut().unwrap();
+
+        // TODO: split off into separate function
+        // TODO: When there's full support for various bit-depth sources, modify this accordingly
+        let practical_d_max =
+            fast_math::log2_raw(255.0 * (self.video.delta_t_max / self.video.ref_time) as f32);
+        db.par_iter_mut().enumerate().for_each(|(idx, val)| {
+            let y = idx / (self.video.width as usize * self.video.channels);
+            let x = (idx % (self.video.width as usize * self.video.channels)) / self.video.channels;
+            let c = idx % self.video.channels;
+            *val = match self.video.event_pixel_trees[[y, x, c]].arena[0].best_event {
+                Some(event) => match self.video.instantaneous_view_mode {
+                    InstantaneousViewMode::Intensity => {
                         u8::get_frame_value(&event, SourceType::U8, self.video.ref_time as DeltaT)
                     }
-                    None => *val,
-                };
-            });
-
+                    InstantaneousViewMode::D => ((event.d as f32 / practical_d_max) * 255.0) as u8,
+                    InstantaneousViewMode::DeltaT => {
+                        ((event.delta_t as f32 / self.video.delta_t_max as f32) * 255.0) as u8
+                    }
+                },
+                None => *val,
+            };
+        });
+        if self.video.show_live {
             show_display("instance", &self.video.instantaneous_frame, 1, &self.video);
         }
     }
@@ -403,6 +415,14 @@ impl DavisSource {
                 }
             }
         }
+    }
+
+    pub fn get_reconstructor(&self) -> &Reconstructor {
+        &self.reconstructor
+    }
+
+    pub fn get_reconstructor_mut(&mut self) -> &mut Reconstructor {
+        &mut self.reconstructor
     }
 }
 
