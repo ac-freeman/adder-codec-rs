@@ -135,6 +135,7 @@ impl FramerBuilder {
         self
     }
 
+    // TODO: Make this return a result
     pub fn finish<T>(self) -> FrameSequence<T>
     where
         T: FrameValue<Output = T>,
