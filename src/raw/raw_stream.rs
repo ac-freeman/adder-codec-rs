@@ -39,7 +39,7 @@ pub struct RawStream {
     output_stream: Option<BufWriter<File>>,
     input_stream: Option<BufReader<File>>,
     pub codec_version: u8,
-    header_size: usize,
+    pub header_size: usize,
     pub width: u16,
     pub height: u16,
     pub tps: DeltaT,

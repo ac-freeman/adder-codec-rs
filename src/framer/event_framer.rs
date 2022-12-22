@@ -57,6 +57,7 @@ impl num_traits::Zero for EventCoordless {
 //     }
 // }
 
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum FramerMode {
     INSTANTANEOUS,
     INTEGRATION,
@@ -72,6 +73,7 @@ pub enum SourceType {
     F64,
 }
 
+#[derive(Clone)]
 pub struct FramerBuilder {
     num_rows: usize,
     num_cols: usize,
@@ -191,14 +193,14 @@ pub enum FrameSequenceError {
 #[allow(dead_code)]
 pub struct FrameSequence<T> {
     pub(crate) frames: Vec<VecDeque<Frame<Option<T>>>>,
-    pub(crate) frames_written: i64,
+    pub frames_written: i64,
     pub(crate) frame_idx_offsets: Vec<i64>,
     pub(crate) pixel_ts_tracker: Vec<Array3<BigT>>,
     pub(crate) last_filled_tracker: Vec<Array3<i64>>,
     pub(crate) last_frame_intensity_tracker: Vec<Array3<T>>,
     chunk_filled_tracker: Vec<bool>,
     pub(crate) mode: FramerMode,
-    pub(crate) tpf: DeltaT,
+    pub tpf: DeltaT,
     pub(crate) source: SourceType,
     codec_version: u8,
     source_camera: SourceCamera,
@@ -424,6 +426,16 @@ impl<
 }
 
 impl<T: Clone + Default + FrameValue<Output = T> + Serialize> FrameSequence<T> {
+    /// Get the number of frames queue'd up to be written
+    pub fn get_frames_len(&self) -> usize {
+        self.frames.len()
+    }
+
+    /// Get the number of chunks in a frame
+    pub fn get_frame_chunks_num(&self) -> usize {
+        self.pixel_ts_tracker.len()
+    }
+
     pub fn px_at_current(&self, row: usize, col: usize, channel: usize) -> &Option<T> {
         if self.frames.is_empty() {
             panic!("Frame not initialized");
@@ -565,6 +577,44 @@ impl<T: Clone + Default + FrameValue<Output = T> + Serialize> FrameSequence<T> {
         }
         frame_count
     }
+
+    // pub fn copy_frame_bytes_to_mat(&mut self, mat: &mut Mat) -> Mat {
+    //     let mat = unsafe {
+    //         Mat::new_rows_cols_with_data(
+    //             1,
+    //             bytes.len() as i32,
+    //             u8::typ(),
+    //             bytes.as_mut_ptr() as *mut c_void,
+    //             core::Mat_AUTO_STEP,
+    //         )?
+    //     };
+    //
+    //     let none_val = T::default();
+    //     for chunk_num in 0..self.frames.len() {
+    //         match self.pop_next_frame_for_chunk(chunk_num) {
+    //             Some(arr) => {
+    //                 for px in arr.iter() {
+    //                     match self.bincode.serialize_into(
+    //                         &mut *writer,
+    //                         match px {
+    //                             Some(event) => event,
+    //                             None => &none_val,
+    //                         },
+    //                     ) {
+    //                         Ok(_) => {}
+    //                         Err(e) => {
+    //                             panic!("{}", e)
+    //                         }
+    //                     };
+    //                 }
+    //             }
+    //             None => {
+    //                 println!("Couldn't pop chunk {}!", chunk_num)
+    //             }
+    //         }
+    //     }
+    //     self.frames_written += 1;
+    // }
 }
 
 fn ingest_event_for_chunk<
@@ -596,7 +646,7 @@ fn ingest_event_for_chunk<
         if event.d != 0xFF {
             // If d == 0xFF, then the event was empty, and we simply repeat the last non-empty
             // event's intensity. Else we reset the intensity here.
-            *last_frame_intensity_ref = T::get_frame_value(event, source, tpf);
+            *last_frame_intensity_ref = T::get_frame_value(event, source, ref_interval);
         }
         *last_filled_frame_ref = (*running_ts_ref - 1) as i64 / tpf as i64;
 
@@ -662,7 +712,8 @@ fn ingest_event_for_chunk<
         }
         && *running_ts_ref % ref_interval as BigT > 0
     {
-        *running_ts_ref = (*last_filled_frame_ref as BigT + 1) * ref_interval as BigT;
+        *running_ts_ref = ((*last_filled_frame_ref as f64 + 1.0) * ref_interval as f64
+            / (ref_interval as f64 / tpf as f64)) as u64;
     }
 
     debug_assert!(*last_filled_frame_ref >= 0);
