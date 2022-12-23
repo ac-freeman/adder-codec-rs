@@ -63,6 +63,14 @@ pub enum FramerMode {
     INTEGRATION,
 }
 
+// TODO: support framing different components for visualization
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub enum FramerViewMode {
+    Intensity,
+    D,
+    DeltaT,
+}
+
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum SourceType {
     U8,
@@ -335,6 +343,7 @@ impl<
     fn ingest_event(&mut self, event: &mut Event) -> bool {
         let channel = event.coord.c.unwrap_or(0);
         let chunk_num = event.coord.y as usize / self.chunk_rows;
+
         event.coord.y -= (chunk_num * self.chunk_rows) as u16; // Modify the coordinate here, so it gets ingested at the right place
 
         let frame_chunk = &mut self.frames[chunk_num];
@@ -345,6 +354,7 @@ impl<
         let frame_idx_offset = &mut self.frame_idx_offsets[chunk_num];
         let last_frame_intensity_ref = &mut self.last_frame_intensity_tracker[chunk_num]
             [[event.coord.y.into(), event.coord.x.into(), channel.into()]];
+
         self.chunk_filled_tracker[chunk_num] = ingest_event_for_chunk(
             event,
             frame_chunk,
@@ -712,8 +722,7 @@ fn ingest_event_for_chunk<
         }
         && *running_ts_ref % ref_interval as BigT > 0
     {
-        *running_ts_ref = ((*last_filled_frame_ref as f64 + 1.0) * ref_interval as f64
-            / (ref_interval as f64 / tpf as f64)) as u64;
+        *running_ts_ref = ((*running_ts_ref / ref_interval as BigT) + 1) * ref_interval as BigT;
     }
 
     debug_assert!(*last_filled_frame_ref >= 0);
