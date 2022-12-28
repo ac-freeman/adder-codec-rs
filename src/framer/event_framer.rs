@@ -63,14 +63,6 @@ pub enum FramerMode {
     INTEGRATION,
 }
 
-// TODO: support framing different components for visualization
-#[derive(Debug, Copy, Clone, PartialEq)]
-pub enum FramerViewMode {
-    Intensity,
-    D,
-    DeltaT,
-}
-
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum SourceType {
     U8,
@@ -89,10 +81,12 @@ pub struct FramerBuilder {
     tps: DeltaT,
     output_fps: f64,
     mode: FramerMode,
+    view_mode: FramedViewMode,
     source: SourceType,
     codec_version: u8,
     source_camera: SourceCamera,
     ref_interval: DeltaT,
+    delta_t_max: DeltaT,
     pub chunk_rows: usize,
 }
 
@@ -111,26 +105,35 @@ impl FramerBuilder {
             tps: 150000,
             output_fps: 30.0,
             mode: FramerMode::INSTANTANEOUS,
+            view_mode: FramedViewMode::Intensity,
             source: SourceType::U8,
             codec_version: 1,
             source_camera: Default::default(),
             ref_interval: 5000,
+            delta_t_max: 5000,
         }
     }
     pub fn time_parameters(
         mut self,
         tps: DeltaT,
         ref_interval: DeltaT,
+        delta_t_max: DeltaT,
         output_fps: f64,
     ) -> FramerBuilder {
         self.tps = tps;
         self.ref_interval = ref_interval;
+        self.delta_t_max = delta_t_max;
         self.output_fps = output_fps;
         self
     }
 
     pub fn mode(mut self, mode: FramerMode) -> FramerBuilder {
         self.mode = mode;
+        self
+    }
+
+    pub fn view_mode(mut self, mode: FramedViewMode) -> FramerBuilder {
+        self.view_mode = mode;
         self
     }
 
@@ -208,17 +211,20 @@ pub struct FrameSequence<T> {
     pub(crate) last_frame_intensity_tracker: Vec<Array3<T>>,
     chunk_filled_tracker: Vec<bool>,
     pub(crate) mode: FramerMode,
+    view_mode: FramedViewMode,
     pub tpf: DeltaT,
     pub(crate) source: SourceType,
     codec_version: u8,
     source_camera: SourceCamera,
     ref_interval: DeltaT,
+    source_dtm: DeltaT,
     pub chunk_rows: usize,
     bincode: WithOtherEndian<WithOtherIntEncoding<DefaultOptions, FixintEncoding>, BigEndian>,
 }
 
 use ndarray::Array3;
 
+use crate::transcoder::source::video::FramedViewMode;
 use rayon::prelude::IntoParallelIterator;
 use serde::Serialize;
 
@@ -296,11 +302,13 @@ impl<
             last_frame_intensity_tracker,
             chunk_filled_tracker: vec![false; num_chunks],
             mode: builder.mode,
+            view_mode: builder.view_mode,
             tpf: builder.tps / builder.output_fps as u32,
             source: builder.source,
             codec_version: builder.codec_version,
             source_camera: builder.source_camera,
             ref_interval: builder.ref_interval,
+            source_dtm: builder.delta_t_max,
             chunk_rows,
             bincode: DefaultOptions::new()
                 .with_fixint_encoding()
@@ -368,6 +376,8 @@ impl<
             self.codec_version,
             self.source_camera,
             self.ref_interval,
+            self.source_dtm,
+            self.view_mode,
         );
         for chunk in &self.chunk_filled_tracker {
             if !chunk {
@@ -426,6 +436,8 @@ impl<
                             self.codec_version,
                             self.source_camera,
                             self.ref_interval,
+                            self.source_dtm,
+                            self.view_mode,
                         );
                     }
                 },
@@ -627,6 +639,7 @@ impl<T: Clone + Default + FrameValue<Output = T> + Serialize> FrameSequence<T> {
     // }
 }
 
+// TODO: refactor this garbage
 fn ingest_event_for_chunk<
     T: Clone + Default + FrameValue<Output = T> + Copy + Serialize + Send + Sync,
 >(
@@ -642,6 +655,8 @@ fn ingest_event_for_chunk<
     codec_version: u8,
     source_camera: SourceCamera,
     ref_interval: DeltaT,
+    delta_t_max: DeltaT,
+    view_mode: FramedViewMode,
 ) -> bool {
     let channel = event.coord.c.unwrap_or(0);
 
@@ -656,7 +671,16 @@ fn ingest_event_for_chunk<
         if event.d != 0xFF {
             // If d == 0xFF, then the event was empty, and we simply repeat the last non-empty
             // event's intensity. Else we reset the intensity here.
-            *last_frame_intensity_ref = T::get_frame_value(event, source, ref_interval);
+            let practical_d_max =
+                fast_math::log2_raw(T::max_f32() * (delta_t_max / ref_interval) as f32);
+            *last_frame_intensity_ref = T::get_frame_value(
+                event,
+                source,
+                ref_interval,
+                practical_d_max,
+                delta_t_max,
+                view_mode,
+            );
         }
         *last_filled_frame_ref = (*running_ts_ref - 1) as i64 / tpf as i64;
 
