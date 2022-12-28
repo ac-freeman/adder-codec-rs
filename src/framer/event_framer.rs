@@ -331,7 +331,7 @@ impl<
     /// FramerBuilder::new(
     ///             10, 10, 3, 64)
     ///             .codec_version(1)
-    ///             .time_parameters(50000, 1500, 50.0)
+    ///             .time_parameters(50000, 1500, 3000, 50.0)
     ///             .mode(INSTANTANEOUS)
     ///             .source(U8, FramedU8)
     ///             .finish();

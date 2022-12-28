@@ -62,7 +62,7 @@ fn test_sample_perfect_dt() {
         64,
     )
     .codec_version(stream.codec_version)
-    .time_parameters(stream.tps, stream.ref_interval, reconstructed_frame_rate)
+    .time_parameters(stream.tps, stream.ref_interval, stream.delta_t_max, reconstructed_frame_rate)
     .mode(INSTANTANEOUS)
     .source(stream.get_source_type(), stream.source_camera)
     .finish();
@@ -130,7 +130,7 @@ fn test_sample_perfect_dt_color() {
         64,
     )
     .codec_version(stream.codec_version)
-    .time_parameters(stream.tps, stream.ref_interval, reconstructed_frame_rate)
+    .time_parameters(stream.tps, stream.ref_interval,stream.delta_t_max,  reconstructed_frame_rate)
     .mode(INSTANTANEOUS)
     .source(stream.get_source_type(), stream.source_camera)
     .finish();
@@ -328,7 +328,7 @@ fn test_event_framer_ingest() {
 
     let mut frame_sequence: FrameSequence<EventCoordless> = FramerBuilder::new(10, 10, 3, 64)
         .codec_version(1)
-        .time_parameters(50000, 1000, 50.0)
+        .time_parameters(50000, 1000, 1000, 50.0)
         .mode(INSTANTANEOUS)
         .source(U8, FramedU8)
         .finish();
@@ -363,7 +363,7 @@ fn test_event_framer_ingest_get_filled() {
     use adder_codec_rs::{Coord, Event};
     let mut frame_sequence: FrameSequence<EventCoordless> = FramerBuilder::new(5, 5, 1, 64)
         .codec_version(1)
-        .time_parameters(50000, 1000, 50.0)
+        .time_parameters(50000, 1000, 1000, 50.0)
         .mode(INSTANTANEOUS)
         .source(U8, FramedU8)
         .finish();
@@ -402,7 +402,7 @@ fn get_frame_bytes_eventcoordless() {
     use adder_codec_rs::{Coord, Event};
     let mut frame_sequence: FrameSequence<EventCoordless> = FramerBuilder::new(5, 5, 1, 64)
         .codec_version(1)
-        .time_parameters(50000, 1000, 50.0)
+        .time_parameters(50000, 1000, 1000, 50.0)
         .mode(INSTANTANEOUS)
         .source(U8, FramedU8)
         .finish();
@@ -461,7 +461,7 @@ fn get_frame_bytes_u8() {
     use adder_codec_rs::{Coord, Event};
     let mut frame_sequence: FrameSequence<u8> = FramerBuilder::new(5, 5, 1, 64)
         .codec_version(1)
-        .time_parameters(50000, 1000, 50.0)
+        .time_parameters(50000, 1000, 1000, 50.0)
         .mode(INSTANTANEOUS)
         .source(U8, FramedU8)
         .finish();
@@ -519,7 +519,7 @@ fn get_frame_bytes_u16() {
     use adder_codec_rs::{Coord, Event};
     let mut frame_sequence: FrameSequence<u16> = FramerBuilder::new(5, 5, 1, 64)
         .codec_version(1)
-        .time_parameters(50000, 1000, 50.0)
+        .time_parameters(50000, 1000, 1000, 50.0)
         .mode(INSTANTANEOUS)
         .source(U8, FramedU8)
         .finish();
@@ -576,7 +576,7 @@ fn get_frame_bytes_u32() {
     use adder_codec_rs::{Coord, Event};
     let mut frame_sequence: FrameSequence<u32> = FramerBuilder::new(5, 5, 1, 46)
         .codec_version(1)
-        .time_parameters(50000, 1000, 50.0)
+        .time_parameters(50000, 1000, 1000, 50.0)
         .mode(INSTANTANEOUS)
         .source(U8, FramedU8)
         .finish();
@@ -633,7 +633,7 @@ fn get_frame_bytes_u64() {
     use adder_codec_rs::{Coord, Event};
     let mut frame_sequence: FrameSequence<u64> = FramerBuilder::new(5, 5, 1, 64)
         .codec_version(1)
-        .time_parameters(50000, 1000, 50.0)
+        .time_parameters(50000, 1000, 1000, 50.0)
         .mode(INSTANTANEOUS)
         .source(U8, FramedU8)
         .finish();
@@ -690,7 +690,7 @@ fn test_get_empty_frame() {
     use adder_codec_rs::{Coord, Event};
     let mut frame_sequence: FrameSequence<u8> = FramerBuilder::new(5, 5, 1, 64)
         .codec_version(1)
-        .time_parameters(50000, 1000, 50.0)
+        .time_parameters(50000, 1000, 1000, 50.0)
         .mode(INSTANTANEOUS)
         .source(U8, FramedU8)
         .finish();
@@ -743,7 +743,7 @@ fn test_sample_unordered() {
         64,
     )
     .codec_version(stream.codec_version)
-    .time_parameters(stream.tps, stream.ref_interval, reconstructed_frame_rate)
+    .time_parameters(stream.tps, stream.ref_interval, stream.delta_t_max, reconstructed_frame_rate)
     .mode(INSTANTANEOUS)
     .source(stream.get_source_type(), stream.source_camera)
     .finish();
@@ -810,7 +810,7 @@ fn test_sample_ordered() {
         64,
     )
     .codec_version(stream.codec_version)
-    .time_parameters(stream.tps, stream.ref_interval, reconstructed_frame_rate)
+    .time_parameters(stream.tps, stream.ref_interval, stream.delta_t_max, reconstructed_frame_rate)
     .mode(INSTANTANEOUS)
     .source(stream.get_source_type(), stream.source_camera)
     .finish();

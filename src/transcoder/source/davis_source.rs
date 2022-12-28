@@ -2,7 +2,7 @@ use crate::transcoder::d_controller::DecimationMode;
 use crate::transcoder::event_pixel_tree::Mode::Continuous;
 use crate::transcoder::source::video::SourceError::BufferEmpty;
 use crate::transcoder::source::video::{
-    integrate_for_px, show_display, FramedViewMode, Source, SourceError, Video,
+    integrate_for_px, show_display, Source, SourceError, Video,
 };
 use crate::SourceCamera::DavisU8;
 use crate::{Codec, DeltaT, Event, SourceType};

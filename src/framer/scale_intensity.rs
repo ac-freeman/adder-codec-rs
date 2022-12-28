@@ -22,9 +22,9 @@ impl FrameValue for EventCoordless {
         event: &Event,
         _source_type: SourceType,
         _tpf: DeltaT,
-        practical_d_max: f32,
-        delta_t_max: DeltaT,
-        view_mode: FramedViewMode,
+        _practical_d_max: f32,
+        _delta_t_max: DeltaT,
+        _view_mode: FramedViewMode,
     ) -> Self::Output {
         EventCoordless {
             d: event.d,
@@ -33,7 +33,7 @@ impl FrameValue for EventCoordless {
     }
 
     fn max_f32() -> f32 {
-        todo!() as f32
+        1.0
     }
 }
 
