@@ -2,7 +2,7 @@ use crate::transcoder::d_controller::DecimationMode;
 use crate::transcoder::event_pixel_tree::Mode::Continuous;
 use crate::transcoder::source::video::SourceError::BufferEmpty;
 use crate::transcoder::source::video::{
-    integrate_for_px, show_display, InstantaneousViewMode, Source, SourceError, Video,
+    integrate_for_px, show_display, Source, SourceError, Video,
 };
 use crate::SourceCamera::DavisU8;
 use crate::{Codec, DeltaT, Event, SourceType};
@@ -375,15 +375,14 @@ impl DavisSource {
             let x = (idx % (self.video.width as usize * self.video.channels)) / self.video.channels;
             let c = idx % self.video.channels;
             *val = match self.video.event_pixel_trees[[y, x, c]].arena[0].best_event {
-                Some(event) => match self.video.instantaneous_view_mode {
-                    InstantaneousViewMode::Intensity => {
-                        u8::get_frame_value(&event, SourceType::U8, self.video.ref_time as DeltaT)
-                    }
-                    InstantaneousViewMode::D => ((event.d as f32 / practical_d_max) * 255.0) as u8,
-                    InstantaneousViewMode::DeltaT => {
-                        ((event.delta_t as f32 / self.video.delta_t_max as f32) * 255.0) as u8
-                    }
-                },
+                Some(event) => u8::get_frame_value(
+                    &event,
+                    SourceType::U8,
+                    self.video.ref_time as DeltaT,
+                    practical_d_max,
+                    self.video.delta_t_max,
+                    self.video.instantaneous_view_mode,
+                ),
                 None => *val,
             };
         });

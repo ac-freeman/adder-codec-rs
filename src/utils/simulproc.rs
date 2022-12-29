@@ -125,7 +125,12 @@ impl SimulProcessor {
         let mut framer = thread_pool_framer.install(|| {
             FramerBuilder::new(height, width, channels, source.video.chunk_rows)
                 .codec_version(1)
-                .time_parameters(source.video.tps, ref_time, reconstructed_frame_rate)
+                .time_parameters(
+                    source.video.tps,
+                    ref_time,
+                    source.video.delta_t_max,
+                    reconstructed_frame_rate,
+                )
                 .mode(INSTANTANEOUS)
                 .source(U8, FramedU8)
                 .finish::<T>()

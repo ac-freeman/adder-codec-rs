@@ -39,7 +39,7 @@ pub struct RawStream {
     output_stream: Option<BufWriter<File>>,
     input_stream: Option<BufReader<File>>,
     pub codec_version: u8,
-    header_size: usize,
+    pub header_size: usize,
     pub width: u16,
     pub height: u16,
     pub tps: DeltaT,
@@ -314,6 +314,8 @@ impl Codec for RawStream {
                 self.delta_t_max = header.delta_t_max;
                 self.channels = header.channels;
                 self.event_size = header.event_size;
+
+                // TODO: return error instead of panicking
                 assert_eq!(header.magic, MAGIC_RAW);
                 let header_size = std::mem::size_of::<EventStreamHeader>()
                     + match header.version {

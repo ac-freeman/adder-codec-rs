@@ -57,6 +57,7 @@ impl num_traits::Zero for EventCoordless {
 //     }
 // }
 
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum FramerMode {
     INSTANTANEOUS,
     INTEGRATION,
@@ -72,6 +73,7 @@ pub enum SourceType {
     F64,
 }
 
+#[derive(Clone)]
 pub struct FramerBuilder {
     num_rows: usize,
     num_cols: usize,
@@ -79,10 +81,12 @@ pub struct FramerBuilder {
     tps: DeltaT,
     output_fps: f64,
     mode: FramerMode,
+    view_mode: FramedViewMode,
     source: SourceType,
     codec_version: u8,
     source_camera: SourceCamera,
     ref_interval: DeltaT,
+    delta_t_max: DeltaT,
     pub chunk_rows: usize,
 }
 
@@ -101,26 +105,35 @@ impl FramerBuilder {
             tps: 150000,
             output_fps: 30.0,
             mode: FramerMode::INSTANTANEOUS,
+            view_mode: FramedViewMode::Intensity,
             source: SourceType::U8,
             codec_version: 1,
             source_camera: Default::default(),
             ref_interval: 5000,
+            delta_t_max: 5000,
         }
     }
     pub fn time_parameters(
         mut self,
         tps: DeltaT,
         ref_interval: DeltaT,
+        delta_t_max: DeltaT,
         output_fps: f64,
     ) -> FramerBuilder {
         self.tps = tps;
         self.ref_interval = ref_interval;
+        self.delta_t_max = delta_t_max;
         self.output_fps = output_fps;
         self
     }
 
     pub fn mode(mut self, mode: FramerMode) -> FramerBuilder {
         self.mode = mode;
+        self
+    }
+
+    pub fn view_mode(mut self, mode: FramedViewMode) -> FramerBuilder {
+        self.view_mode = mode;
         self
     }
 
@@ -135,6 +148,7 @@ impl FramerBuilder {
         self
     }
 
+    // TODO: Make this return a result
     pub fn finish<T>(self) -> FrameSequence<T>
     where
         T: FrameValue<Output = T>,
@@ -191,24 +205,27 @@ pub enum FrameSequenceError {
 #[allow(dead_code)]
 pub struct FrameSequence<T> {
     pub(crate) frames: Vec<VecDeque<Frame<Option<T>>>>,
-    pub(crate) frames_written: i64,
+    pub frames_written: i64,
     pub(crate) frame_idx_offsets: Vec<i64>,
     pub(crate) pixel_ts_tracker: Vec<Array3<BigT>>,
     pub(crate) last_filled_tracker: Vec<Array3<i64>>,
     pub(crate) last_frame_intensity_tracker: Vec<Array3<T>>,
     chunk_filled_tracker: Vec<bool>,
     pub(crate) mode: FramerMode,
-    pub(crate) tpf: DeltaT,
+    view_mode: FramedViewMode,
+    pub tpf: DeltaT,
     pub(crate) source: SourceType,
     codec_version: u8,
     source_camera: SourceCamera,
     ref_interval: DeltaT,
+    source_dtm: DeltaT,
     pub chunk_rows: usize,
     bincode: WithOtherEndian<WithOtherIntEncoding<DefaultOptions, FixintEncoding>, BigEndian>,
 }
 
 use ndarray::Array3;
 
+use crate::transcoder::source::video::FramedViewMode;
 use rayon::prelude::IntoParallelIterator;
 use serde::Serialize;
 
@@ -286,11 +303,13 @@ impl<
             last_frame_intensity_tracker,
             chunk_filled_tracker: vec![false; num_chunks],
             mode: builder.mode,
+            view_mode: builder.view_mode,
             tpf: builder.tps / builder.output_fps as u32,
             source: builder.source,
             codec_version: builder.codec_version,
             source_camera: builder.source_camera,
             ref_interval: builder.ref_interval,
+            source_dtm: builder.delta_t_max,
             chunk_rows,
             bincode: DefaultOptions::new()
                 .with_fixint_encoding()
@@ -313,7 +332,7 @@ impl<
     /// FramerBuilder::new(
     ///             10, 10, 3, 64)
     ///             .codec_version(1)
-    ///             .time_parameters(50000, 1500, 50.0)
+    ///             .time_parameters(50000, 1000, 1000, 50.0)
     ///             .mode(INSTANTANEOUS)
     ///             .source(U8, FramedU8)
     ///             .finish();
@@ -333,6 +352,7 @@ impl<
     fn ingest_event(&mut self, event: &mut Event) -> bool {
         let channel = event.coord.c.unwrap_or(0);
         let chunk_num = event.coord.y as usize / self.chunk_rows;
+
         event.coord.y -= (chunk_num * self.chunk_rows) as u16; // Modify the coordinate here, so it gets ingested at the right place
 
         let frame_chunk = &mut self.frames[chunk_num];
@@ -343,6 +363,7 @@ impl<
         let frame_idx_offset = &mut self.frame_idx_offsets[chunk_num];
         let last_frame_intensity_ref = &mut self.last_frame_intensity_tracker[chunk_num]
             [[event.coord.y.into(), event.coord.x.into(), channel.into()]];
+
         self.chunk_filled_tracker[chunk_num] = ingest_event_for_chunk(
             event,
             frame_chunk,
@@ -356,6 +377,8 @@ impl<
             self.codec_version,
             self.source_camera,
             self.ref_interval,
+            self.source_dtm,
+            self.view_mode,
         );
         for chunk in &self.chunk_filled_tracker {
             if !chunk {
@@ -414,6 +437,8 @@ impl<
                             self.codec_version,
                             self.source_camera,
                             self.ref_interval,
+                            self.source_dtm,
+                            self.view_mode,
                         );
                     }
                 },
@@ -424,6 +449,16 @@ impl<
 }
 
 impl<T: Clone + Default + FrameValue<Output = T> + Serialize> FrameSequence<T> {
+    /// Get the number of frames queue'd up to be written
+    pub fn get_frames_len(&self) -> usize {
+        self.frames.len()
+    }
+
+    /// Get the number of chunks in a frame
+    pub fn get_frame_chunks_num(&self) -> usize {
+        self.pixel_ts_tracker.len()
+    }
+
     pub fn px_at_current(&self, row: usize, col: usize, channel: usize) -> &Option<T> {
         if self.frames.is_empty() {
             panic!("Frame not initialized");
@@ -565,8 +600,47 @@ impl<T: Clone + Default + FrameValue<Output = T> + Serialize> FrameSequence<T> {
         }
         frame_count
     }
+
+    // pub fn copy_frame_bytes_to_mat(&mut self, mat: &mut Mat) -> Mat {
+    //     let mat = unsafe {
+    //         Mat::new_rows_cols_with_data(
+    //             1,
+    //             bytes.len() as i32,
+    //             u8::typ(),
+    //             bytes.as_mut_ptr() as *mut c_void,
+    //             core::Mat_AUTO_STEP,
+    //         )?
+    //     };
+    //
+    //     let none_val = T::default();
+    //     for chunk_num in 0..self.frames.len() {
+    //         match self.pop_next_frame_for_chunk(chunk_num) {
+    //             Some(arr) => {
+    //                 for px in arr.iter() {
+    //                     match self.bincode.serialize_into(
+    //                         &mut *writer,
+    //                         match px {
+    //                             Some(event) => event,
+    //                             None => &none_val,
+    //                         },
+    //                     ) {
+    //                         Ok(_) => {}
+    //                         Err(e) => {
+    //                             panic!("{}", e)
+    //                         }
+    //                     };
+    //                 }
+    //             }
+    //             None => {
+    //                 println!("Couldn't pop chunk {}!", chunk_num)
+    //             }
+    //         }
+    //     }
+    //     self.frames_written += 1;
+    // }
 }
 
+// TODO: refactor this garbage
 fn ingest_event_for_chunk<
     T: Clone + Default + FrameValue<Output = T> + Copy + Serialize + Send + Sync,
 >(
@@ -582,6 +656,8 @@ fn ingest_event_for_chunk<
     codec_version: u8,
     source_camera: SourceCamera,
     ref_interval: DeltaT,
+    delta_t_max: DeltaT,
+    view_mode: FramedViewMode,
 ) -> bool {
     let channel = event.coord.c.unwrap_or(0);
 
@@ -596,7 +672,16 @@ fn ingest_event_for_chunk<
         if event.d != 0xFF {
             // If d == 0xFF, then the event was empty, and we simply repeat the last non-empty
             // event's intensity. Else we reset the intensity here.
-            *last_frame_intensity_ref = T::get_frame_value(event, source, tpf);
+            let practical_d_max =
+                fast_math::log2_raw(T::max_f32() * (delta_t_max / ref_interval) as f32);
+            *last_frame_intensity_ref = T::get_frame_value(
+                event,
+                source,
+                ref_interval,
+                practical_d_max,
+                delta_t_max,
+                view_mode,
+            );
         }
         *last_filled_frame_ref = (*running_ts_ref - 1) as i64 / tpf as i64;
 
@@ -662,7 +747,7 @@ fn ingest_event_for_chunk<
         }
         && *running_ts_ref % ref_interval as BigT > 0
     {
-        *running_ts_ref = (*last_filled_frame_ref as BigT + 1) * ref_interval as BigT;
+        *running_ts_ref = ((*running_ts_ref / ref_interval as BigT) + 1) * ref_interval as BigT;
     }
 
     debug_assert!(*last_filled_frame_ref >= 0);
