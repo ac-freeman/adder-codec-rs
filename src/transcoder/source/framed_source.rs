@@ -184,12 +184,8 @@ impl FramedSource {
             .unwrap();
 
         let mut init_frame_scaled = Mat::default();
-        println!("Original width is {}", init_frame.size()?.width);
         resize_input(&mut init_frame, &mut init_frame_scaled, builder.scale).unwrap();
-
         init_frame = init_frame_scaled;
-
-        println!("Width is {}", init_frame.size()?.width);
 
         // Sanity checks
         // assert!(init_frame.size()?.width > 50);
