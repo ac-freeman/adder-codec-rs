@@ -6,6 +6,11 @@ sudo apt-get update
 sudo apt-get install -y clang libharfbuzz0b git curl zip unzip tar bison gperf libx11-dev libxft-dev libxext-dev \
 	libgles2-mesa-dev autoconf libtool build-essential libxrandr-dev libxi-dev libxcursor-dev libxdamage-dev libxinerama-dev
 
+sudo apt-get -y install libsdl2-dev
+sudo apt-get -y install libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev
+sudo apt-get -y install g++ pkg-config libx11-dev libasound2-dev libudev-dev
+sudo apt-get -y install libatk1.0-dev
+
 export VCPKG_ROOT="$HOME/build/vcpkg"
 if [[ -e "$VCPKG_ROOT" && ! -e "$VCPKG_ROOT/.git" ]]; then
 	rm -rf "$VCPKG_ROOT"
