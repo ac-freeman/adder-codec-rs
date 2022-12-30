@@ -12,12 +12,8 @@ license = "MIT OR Apache-2.0"
 keywords = ["neuromorphic", "decoding", "event", "asynchronous", "video"]
 categories = ["multimedia::encoding", "science"]
 
-[dependencies.adder_codec_rs]
-version = '0.2.3'
-package = 'adder-codec-rs'
-default-features = false
-features = ["transcoder"]
-optional = false
-
 [dependencies]
+adder-codec-rs = { version = "0.2.3", path = "../adder-codec-rs", features = [
+    "transcoder",
+] }
 clap = { version = "4.0.17", features = ["derive"] }
