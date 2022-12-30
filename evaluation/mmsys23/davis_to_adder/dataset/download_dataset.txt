@@ -1,3 +1,0 @@
-Manually download our 6 DAVIS sequences here: https://drive.google.com/drive/folders/1Ol-lKDvPiFfpoxEp3fS06bOO2P1G2nfo?usp=share_link
-
-Download the DVSNOISE20 data set here: https://sites.google.com/a/udayton.edu/issl/software/dataset

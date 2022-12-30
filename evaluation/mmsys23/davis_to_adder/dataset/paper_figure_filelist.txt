@@ -1,6 +1,0 @@
-benches-2019_10_10_13_20_50.aedat4
-bricks-2019_10_10_13_31_23.aedat4
-building_exp15000.aedat4
-checkerFast-2019_10_23_12_19_56.aedat4
-dog.aedat4
-labFast-2019_10_23_11_56_38.aedat4
