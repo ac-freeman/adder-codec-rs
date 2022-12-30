@@ -51,5 +51,5 @@ rustc --print=cfg
 
 export CXX=clang++
 # touch build.rs
-cargo test -vv
-cargo test --release -vv
+cargo test -p adder-codec-rs -vv
+cargo test -p adder-codec-rs --release -vv
