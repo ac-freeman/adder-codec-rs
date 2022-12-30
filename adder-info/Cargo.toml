@@ -5,8 +5,8 @@ edition = "2021"
 authors = ["Andrew C. Freeman"]
 description = """
  """
-homepage = ""
-repository = ""
+homepage = "https://github.com/ac-freeman/adder-codec-rs/wiki"
+repository = "https://github.com/ac-freeman/adder-codec-rs/tree/main/adder-info"
 readme = "README.md"
 license = "MIT OR Apache-2.0"
 keywords = ["neuromorphic", "decoding", "event", "asynchronous", "video"]

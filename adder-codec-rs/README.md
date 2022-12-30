@@ -1,0 +1,1 @@
+The core ADΔER library for building asynchronous video applications.

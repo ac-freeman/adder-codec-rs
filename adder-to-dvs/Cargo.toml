@@ -4,9 +4,12 @@ version = "0.1.0"
 edition = "2021"
 authors = ["Andrew C. Freeman"]
 description = """
+This program transcodes an ADΔER file to DVS events in a human-readable text representation.
+Performance is fast. The resulting DVS stream is visualized during the transcode and written
+out as an mp4 file.
  """
-homepage = ""
-repository = ""
+homepage = "https://github.com/ac-freeman/adder-codec-rs/wiki"
+repository = "https://github.com/ac-freeman/adder-codec-rs/tree/main/adder-to-dvs"
 readme = "README.md"
 license = "MIT OR Apache-2.0"
 keywords = ["neuromorphic", "decoding", "event", "asynchronous", "video"]

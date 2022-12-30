@@ -4,6 +4,7 @@ members = [
     "adder-codec-rs",
     "adder-info",
     "adder-to-dvs",
+    "adder-viz",
 ]
 
 [profile.release]
