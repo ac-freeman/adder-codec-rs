@@ -1,0 +1,23 @@
+[package]
+name = "adder-info"
+version = "0.1.0"
+edition = "2021"
+authors = ["Andrew C. Freeman"]
+description = """
+ """
+homepage = ""
+repository = ""
+readme = "README.md"
+license = "MIT"
+keywords = ["neuromorphic", "decoding", "event", "asynchronous", "video"]
+categories = ["multimedia::encoding", "science"]
+
+[dependencies.adder_codec_rs]
+version = '0.2.3'
+package = 'adder-codec-rs'
+default-features = false
+features = ["transcoder"]
+optional = false
+
+[dependencies]
+clap = { version = "4.0.17", features = ["derive"] }
