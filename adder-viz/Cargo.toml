@@ -1,0 +1,36 @@
+[package]
+name = "adder-viz"
+version = "0.1.4"
+edition = "2021"
+resolver = "2"
+authors = ["Andrew C. Freeman"]
+description = """
+A GUI project to visualize and tune parameters of an ADΔER asynchronous video transcode.
+"""
+homepage = "https://github.com/ac-freeman/adder-codec-rs/wiki"
+repository = "https://github.com/ac-freeman/adder-codec-rs/tree/main/adder-viz"
+readme = "README.md"
+license = "MIT OR Apache-2.0"
+keywords = ["neuromorphic", "visualization", "video", "asynchronous", "event"]
+default-run = "adder-viz"
+
+[dependencies.opencv]
+version = '0.66.0'
+package = 'opencv'
+default-features = false
+features = ['videoio', 'imgproc', 'highgui']
+optional = false
+
+[dependencies]
+adder-codec-rs = { version = "0.2.3", path = "../adder-codec-rs", features = [
+    "transcoder",
+] }
+bevy = "0.9.0"
+bevy_egui = "0.18.0"
+bevy_editor_pls = "0.2.0"
+egui_file = "0.5"
+rayon = "1.5.3"
+rfd = "0.10.0"
+tokio = {version = "1.20.1", features = ["full"]}
+strum = "0.24.1"
+strum_macros = "0.24.3"
