@@ -11,136 +11,19 @@ Source 8-bit image frame with shadows boosted ([source video](https://www.pexels
 :-------------------------:|:-------------------------:
 ![](https://github.com/ac-freeman/adder-codec-rs/blob/main/source_frame_0.jpg)  |  ![](https://github.com/ac-freeman/adder-codec-rs/blob/main/out_16bit_2_c10.jpg)
 
-# Background
+## Included crates
+- **adder-codec-rs**: the ADΔER library [[source](https://github.com/ac-freeman/adder-codec-rs/tree/main/adder-codec-rs)] [![Crates.io](https://img.shields.io/crates/v/adder-codec-rs)](https://crates.io/crates/adder-codec-rs)
+- **adder-info**: tool for reading metadata of a .adder file [[source](https://github.com/ac-freeman/adder-codec-rs/tree/main/adder-info)] [![Crates.io](https://img.shields.io/crates/v/adder-info)](https://crates.io/crates/adder-info)
+- **adder-to-dvs**: tool for quickly converting a .adder file to a reasonable DVS representation in a text format [[source](https://github.com/ac-freeman/adder-codec-rs/tree/main/adder-to-dvs)] [![Crates.io](https://img.shields.io/crates/v/adder-to-dvs)](https://crates.io/crates/adder-to-dvs)
+- **adder-viz**: GUI application for transcoding framed and event (DVS/DAVIS) video to ADΔER, playing back .adder files, and visualizing the _many_ available ADΔER parameters [[source](https://github.com/ac-freeman/adder-codec-rs/tree/main/adder-viz)] [![Crates.io](https://img.shields.io/crates/v/adder-viz)](https://crates.io/crates/adder-viz)
 
-The ADΔER (pronounced "adder") representation is inspired by the ASINT camera design by [Singh et al](https://www.researchgate.net/publication/318351141_A_Frameless_Imaging_Sensor_with_Asynchronous_Pixels_An_Architectural_Evaluation). It aims to help us move away from thinking about video in terms of fixed sample rates and frames, and to provide a one-size-fits-all ("narrow waist") method for representing intensity information **_asynchronously_**.
+## Other crates
+- **davis-edi-rs**: a super high-speed system for performing frame deblurring and framed reconstruction from DAVIS/DVS streams, forming the backbone for the event camera driver code in the ADΔER library [[source](https://github.com/ac-freeman/davis-EDI-rs)] [![Crates.io](https://img.shields.io/crates/v/davis-edi-rs)](https://crates.io/crates/davis-edi-rs)
 
- <a href="http://www.youtube.com/watch?v=yfzwn5PrMpw"><img align="right" width="384" height="288" src="https://yt-embed.herokuapp.com/embed?v=yfzwn5PrMpw"></a>
+## More information
+Read the [wiki](https://github.com/ac-freeman/adder-codec-rs/wiki/) for background on ADΔER, how to use it, and what tools are included.
 
-Under the ASINT model, a pixel $\langle x,y\rangle$ continuously integrates light, firing an ADΔER event $\langle x,y,D,\Delta t\rangle$ when it accumulates $2^D$ intensity units (e.g., photons), where $D$ is a _decimation threshold_ and $\Delta t$ is the time elapsed since the pixel last fired an event. we measure $t$ in clock “ticks,'' where the granularity of a clock tick length is user-adjustable. In a raw ADΔER stream, the events are time-ordered and spatially interleaved. An ADΔER event directly specifies an intensity, $I$, by $I \approx \frac{2^D}{\Delta t}$. The key insight of the ASINT model is _the dynamic, pixelwise control of_ $D$. Lowering $D$ for a pixel will increase its event rate, while raising $D$ will decrease its event rate. With this multi-faceted $D$ control, we can ensure that pixel sensitivities are well-tuned to scene dynamics.
-
-Practically speaking, it's most useful to think about ADΔER in reference to the source data type. In the current iteration of this package, I only provide tools for transcoding framed video to ADΔER, but in the future I will release tools for transcoding data from real-world event cameras (e.g., DVS and DAVIS).
-
-In the context of framed video, ADΔER allows us to have multi-frame intensity _averaging_ for stable (unchanging) regions of a scene. This can function both to denoise the video and enable higher dynamic range, all while preserving the temporal synchronicity of the source. See the info on [simultaneous transcoding](#Simultaneously-transcode-framed-video-_to_-ADΔER-events-and-_back_-to-framed-video) to quickly test this out!
-
-# Setup
-
-If you just want to use the hooks for encoding/decoding ADΔER streams (i.e., not a transcoder for producing the ADΔER events for a given source), then you can include the library by adding the following to your Cargo.toml file:
-
-`adder-codec-rs = {version = "0.1.15", features = ["raw-codec"]}`
-
-If you want to use the provided transcoder(s), then you have to install OpenCV 4.0+ according to the configuration guidelines for [opencv-rust](https://github.com/twistedfall/opencv-rust). Then, include the library in your project as normal:
-
-`adder-codec-rs = "0.1.15"`
-
-# Examples
-
-Clone this repository to run examples provided in `/examples` and `/src/bin`
-
-## Transcode framed video _to_ ADΔER events
-We can transcode an arbitrary framed video to the ADΔER format. Run the program `/examples/framed_video_to_adder.rs`. You will need to adjust the parameters for the FramedSourceBuilder to suit your needs, as described below.
-
-```
- let mut source =
-        // The file path to the video you want to transcode, and the bit depth of the video
-        FramedSourceBuilder::new("~/Downloads/excerpt.mp4".to_string(),
-                                 SourceCamera::FramedU8)    
-        
-        // Which frame of the input video to begin your transcode
-        .frame_start(1420)  
-	
-	// How many rows of event pixels per chunk. Chunks are distributed between the number of available threads.
-	.chunk_rows(64)
-        
-        // Input video is scaled by this amount before transcoding
-        .scale(0.5)         
-        
-        // Must be true for us to do anything with the events
-        .communicate_events(true)   
-        
-        // The file path to store the ADΔER events
-        .output_events_filename("~/Downloads/events.adder".to_string())     
-        
-        // Use color, or convert input video to grayscale first?
-        .color(false)       
-        
-        // Positive and negative contrast thresholds. Larger values = more temporal loss. 0 = nearly no distortion.
-        .contrast_thresholds(10, 10)    
-        
-        // Show a live view of the input frames as they're being transcoded?
-        .show_display(true) 
-        
-        .time_parameters(5000,  // The reference interval: How many ticks does each input frame span?
-                         300000,    // Ticks per second. Must equal (reference interval) * (source frame rate)
-                         3000000)   // Δt_max: the maximum Δt value for any generated ADΔER event
-        .finish();
-```
-
-## Generate framed video _from_ ADΔER events
-
-We can also transform our ADΔER file back into a framed video, so we can easily view the effects of our transcode parameters. Run the program `/examples/events_to_instantaneous_frames.rs`. You will need to set the `input_path` to point to an ADΔER file, and the `output_path` to where you want the resulting framed video to be. This output file is in a raw pixel format for encoding with FFmpeg: either `gray` or `bgr24` (if in color), assuming that we have constructed a `FrameSequence<u8>`. Other formats can be encoded, e.g. with `FrameSequence<u16>`, `FrameSequence<f64>`, etc.
-
-To take our raw frame data and encode it in a standard format, we can use an FFmpeg command as follows:
-```
-ffmpeg -f rawvideo -pix_fmt gray -s:v 960x540 -r 60 -i ./events.adder -crf 0 -c:v libx264 -y ./events_to_framed.mp4
-```
-
-## Simultaneously transcode framed video _to_ ADΔER events and _back_ to framed video
-
-This is the most thorough example, complete with an argument parser so you don't have to edit the code. Run the program `/src/bin/adder_simulproc.rs`, like this:
-
-```
-cargo run --release --bin adder_simulproc -- 
-    --scale 1.0 
-    --input-filename "/path/to/video"
-    --output-raw-video-filename "/path/to/output_video"
-    --c-thresh-pos 10
-    --c-thresh-neg 10
-```
-
-The program will re-frame the ADΔER events as they are being generated, without having to write them out to a file. This lets you quickly experiment with different values for `c_thresh_pos`, `c_thresh_neg`, `ref_time`, `delta_t_max`, and `tps`, to see what effect they have on the output.
-
-## Direct usage
-
-
-Encode a raw stream:
-```
-let mut stream: RawStream = Codec::new();
-match stream.open_writer("/path/to/file") {
-    Ok(_) => {}
-    Err(e) => {panic!("{}", e)}
-};
-stream.encode_header(500, 200, 50000, 5000, 50000, 1);
-
-let event: Event = Event {
-        coord: Coord {
-            x: 10,
-            y: 30,
-            c: None
-        },
-        d: 5,
-        delta_t: 1000
-    };
-let events = vec![event, event, event]; // Encode three identical events, for brevity's sake
-stream.encode_events(&events);
-stream.close_writer();
-```
-
-Read a raw stream:
-
-```
-let mut stream: RawStream = Codec::new();
-stream.open_reader(args.input_filename.as_str())?;
-stream.decode_header();
-match self.stream.decode_event() {
-    Ok(event) => {
-        // Do something with the event
-    }
-    Err(_) => panic!("Couldn't read event :("),
-};
-stream.close_reader();
-```
-# Cite this work
+## Cite this work
 
 If you write a paper which references this software, we ask that you reference the following papers on which it is based. Citations are given in the BibTeX format.
 
