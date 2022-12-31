@@ -17,3 +17,7 @@ adder-codec-rs = { version = "0.2.3", path = "../adder-codec-rs", features = [
     "transcoder",
 ] }
 clap = { version = "4.0.17", features = ["derive"] }
+
+[dev-dependencies]
+assert_cmd = "2.0.7"
+predicates = "2.1.4"
