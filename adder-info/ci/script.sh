@@ -53,3 +53,4 @@ export CXX=clang++
 # touch build.rs
 cargo test -p adder-info -vv
 cargo test -p adder-info --release -vv
+
