@@ -42,7 +42,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let mut args: SimulProcArgs = SimulProcArgs::parse();
     if !args.args_filename.is_empty() {
         let content = std::fs::read_to_string(args.args_filename)?;
-        args = toml::from_str(&content).unwrap();
+        args = toml::from_str(&content)?;
     }
     println!("c_pos: {}, c_neg: {}", args.c_thresh_pos, args.c_thresh_neg);
 
@@ -66,7 +66,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     if !args.output_events_filename.is_empty() {
         source_builder = source_builder.output_events_filename(args.output_events_filename);
     }
-    let source = source_builder.finish().unwrap();
+    let source = source_builder.finish()?;
     let source_fps = source.source_fps;
 
     let width = source.get_video().width;
@@ -87,7 +87,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     )?;
 
     let now = std::time::Instant::now();
-    simul_processor.run().unwrap();
+    simul_processor.run()?;
     println!("\n\n{} ms elapsed\n\n", now.elapsed().as_millis());
 
     // Use ffmpeg to encode the raw frame data as an mp4
@@ -113,9 +113,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 + &args.output_raw_video_filename
                 + ".mp4",
         )
-        .spawn()
-        .unwrap();
-    ffmpeg.wait().unwrap();
+        .spawn()?;
+    ffmpeg.wait()?;
 
     Ok(())
 }

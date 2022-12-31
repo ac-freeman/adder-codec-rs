@@ -44,7 +44,7 @@ impl AdderPlayer {
             Some(ext) => match ext.to_str() {
                 None => Err(Box::new(AdderPlayerError("Invalid file type".into()))),
                 Some("adder") => {
-                    let input_path = path_buf.to_str().unwrap().to_string();
+                    let input_path = path_buf.to_str().expect("Invalid string").to_string();
                     let mut stream: RawStream = Codec::new();
                     stream.open_reader(input_path).expect("Invalid path");
                     stream.decode_header().expect("Invalid header");
@@ -80,8 +80,7 @@ impl AdderPlayer {
                                 stream.width as i32,
                                 CV_8UC1,
                                 &mut display_mat,
-                            )
-                            .unwrap();
+                            )?;
                         }
                         3 => {
                             create_continuous(
@@ -89,8 +88,7 @@ impl AdderPlayer {
                                 stream.width as i32,
                                 CV_8UC3,
                                 &mut display_mat,
-                            )
-                            .unwrap();
+                            )?;
                         }
                         _ => {
                             return Err(Box::new(AdderPlayerError(

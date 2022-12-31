@@ -52,9 +52,9 @@ fn main() -> Result<(), Box<dyn Error>> {
     stream.open_reader(file_path).expect("Invalid path");
     let header_bytes = stream.decode_header().expect("Invalid header");
 
-    let first_event_position = stream.get_input_stream_position().unwrap();
+    let first_event_position = stream.get_input_stream_position()?;
 
-    let eof_position_bytes = stream.get_eof_position().unwrap();
+    let eof_position_bytes = stream.get_eof_position()?;
     let num_events = (eof_position_bytes - 1 - header_bytes as u64) / stream.event_size as u64;
     let divisor = num_events / 100;
     let frame_length = stream.tps as f64 / args.playback_fps;
@@ -72,8 +72,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 stream.width as i32,
                 CV_64F,
                 &mut display_mat,
-            )
-            .unwrap();
+            )?;
         }
         3 => {
             create_continuous(
@@ -81,8 +80,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 stream.width as i32,
                 CV_64FC3,
                 &mut display_mat,
-            )
-            .unwrap();
+            )?;
         }
         _ => {
             return Err(Box::new(PlayerError("Bad number of channels".into())));
@@ -100,7 +98,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 "\rPlaying back ADΔER file...{}%",
                 (event_count * 100) / num_events
             )?;
-            handle.flush().unwrap();
+            handle.flush()?;
         }
         if current_t as u128 > (frame_count * frame_length as u128) {
             let wait_time = max(

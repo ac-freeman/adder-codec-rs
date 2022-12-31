@@ -70,7 +70,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let mut args: Args = Args::parse();
     if !args.args_filename.is_empty() {
         let content = std::fs::read_to_string(args.args_filename)?;
-        args = toml::from_str(&content).unwrap();
+        args = toml::from_str(&content)?;
     }
 
     println!("in prog");
@@ -110,8 +110,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let rt = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(12)
         .enable_time()
-        .build()
-        .unwrap();
+        .build()?;
     let reconstructor = rt.block_on(Reconstructor::new(
         edi_args.base_path,
         edi_args.events_filename_0,
@@ -145,15 +144,11 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         rt,
         mode,
         args.write_out,
-    )
-    .unwrap();
+    )?;
 
     let mut now = Instant::now();
     let start_time = std::time::Instant::now();
-    let thread_pool_integration = rayon::ThreadPoolBuilder::new()
-        .num_threads(4)
-        .build()
-        .unwrap();
+    let thread_pool_integration = rayon::ThreadPoolBuilder::new().num_threads(4).build()?;
 
     loop {
         match davis_source.consume(1, &thread_pool_integration) {
@@ -170,7 +165,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 davis_source.get_video().in_interval_count,
                 now.elapsed().as_millis()
             );
-            io::stdout().flush().unwrap();
+            io::stdout().flush()?;
             now = Instant::now();
         }
     }

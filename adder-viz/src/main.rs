@@ -67,10 +67,7 @@ fn main() {
             ..default()
         }))
         .add_plugin(EguiPlugin)
-        .add_system(
-            configure_menu_bar
-                .before(draw_ui)
-        )
+        .add_system(configure_menu_bar.before(draw_ui))
         .add_startup_system(configure_visuals)
         .add_system(update_ui_scale_factor)
         .add_system(draw_ui)
@@ -102,7 +99,7 @@ fn update_ui_scale_factor(
         *toggle_scale_factor = Some(!toggle_scale_factor.unwrap_or(true));
 
         if let Some(window) = windows.get_primary() {
-            let scale_factor = if toggle_scale_factor.unwrap() {
+            let scale_factor = if toggle_scale_factor.unwrap_or(true) {
                 1.0
             } else {
                 1.0 / window.scale_factor()

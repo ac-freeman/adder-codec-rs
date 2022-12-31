@@ -1,4 +1,4 @@
-use adder_codec_rs::framer::event_framer::Framer;
+use adder_codec_rs::framer::event_framer::{FrameSequence, Framer};
 use adder_codec_rs::framer::scale_intensity::event_to_intensity;
 use adder_codec_rs::{Codec, SourceCamera};
 use std::time::Duration;
@@ -255,7 +255,13 @@ impl PlayerState {
         // Reset the stats if we're starting a new looped playback of the video
         if let Ok(pos) = stream.get_input_stream_position() {
             if pos == stream.header_size as u64 {
-                self.player.frame_sequence.as_mut().unwrap().frames_written = 0;
+                match &mut self.player.frame_sequence {
+                    None => { // TODO: error
+                    }
+                    Some(frame_sequence) => {
+                        frame_sequence.frames_written = 0;
+                    }
+                };
                 self.ui_info_state.clear_stats();
                 self.ui_state.current_time = 0.0;
                 self.ui_state.total_time = 0.0;

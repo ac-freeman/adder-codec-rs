@@ -46,16 +46,17 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let output_video_path = args.output_video.as_str();
     let raw_path = "./dvs.gray8";
 
-    let aedat_filename = file_path.split('/').last().unwrap();
-    let base_path = file_path.split(aedat_filename).next().unwrap();
+    let aedat_filename = file_path.split('/').last().expect("Invalid file path");
+    let base_path = file_path
+        .split(aedat_filename)
+        .next()
+        .expect("Invalid file path");
     let rt = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(12)
-        .build()
-        .unwrap();
+        .build()?;
     let thread_pool_edi = rayon::ThreadPoolBuilder::new()
         .num_threads(max(current_num_threads() - 4, 1))
-        .build()
-        .unwrap();
+        .build()?;
     let mut reconstructor = rt.block_on(Reconstructor::new(
         base_path.to_string(),
         aedat_filename.to_string(),
@@ -78,15 +79,13 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
     let mut instantaneous_frame_deque = unsafe {
         let mut instantaneous_frame = Mat::default();
-        instantaneous_frame
-            .create_rows_cols(260, 346, CV_8U)
-            .unwrap();
+        instantaneous_frame.create_rows_cols(260, 346, CV_8U)?;
 
         VecDeque::from([instantaneous_frame])
     };
     match instantaneous_frame_deque
         .back_mut()
-        .unwrap()
+        .expect("Could not get back of deque")
         .data_bytes_mut()
     {
         Ok(bytes) => {
@@ -94,12 +93,12 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 *byte = 128;
             }
         }
-        Err(_) => {
-            panic!("Mat error")
+        Err(e) => {
+            return Err(Box::new(e));
         }
     }
 
-    let mut video_writer: BufWriter<File> = BufWriter::new(File::create(raw_path).unwrap());
+    let mut video_writer: BufWriter<File> = BufWriter::new(File::create(raw_path)?);
 
     let frame_length = (1000000.0 / args.fps) as u128; // length in ticks
     let mut frame_count = 0_usize;
@@ -177,28 +176,31 @@ fn set_instant_dvs_pixel(
     frames: &mut VecDeque<Mat>,
     frame_idx: usize,
     frame_count: usize,
-) {
+) -> opencv::Result<()> {
     // Grow the deque if necessary
     let grow_len = frame_idx as i32 - frame_count as i32 - frames.len() as i32 + 1;
     for _ in 0..grow_len {
         frames.push_back(frames[0].clone());
         // Clear the instantaneous frame
-        match frames.back_mut().unwrap().data_bytes_mut() {
+        match frames
+            .back_mut()
+            .expect("Can't get back of deque")
+            .data_bytes_mut()
+        {
             Ok(bytes) => {
                 for byte in bytes {
                     *byte = 128;
                 }
             }
-            Err(_) => {
-                panic!("Mat error")
+            Err(e) => {
+                return Err(e);
             }
         }
     }
 
     unsafe {
         let px: &mut u8 = frames[frame_idx - frame_count]
-            .at_2d_unchecked_mut(event.y().into(), event.x().into())
-            .unwrap();
+            .at_2d_unchecked_mut(event.y().into(), event.x().into())?;
         *px = match event.on() {
             true => 255,
             false => 0,
@@ -208,4 +210,5 @@ fn set_instant_dvs_pixel(
         //     a => *px = (*px as i16 + a) as u8,
         // }
     }
+    Ok(())
 }
