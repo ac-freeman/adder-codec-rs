@@ -230,7 +230,7 @@ impl SimulProcessor {
         }
 
         println!("Closing stream...");
-        self.source.get_video_mut().end_write_stream();
+        self.source.get_video_mut().end_write_stream()?;
         println!("FINISHED");
 
         Ok(())

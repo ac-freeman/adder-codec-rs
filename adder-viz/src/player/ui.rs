@@ -424,7 +424,7 @@ impl PlayerState {
 
         let display_mat = &mut self.player.display_mat;
 
-        if frame_sequence.is_frame_0_filled().unwrap() {
+        if frame_sequence.is_frame_0_filled() {
             let mut idx = 0;
             for chunk_num in 0..frame_sequence.get_frame_chunks_num() {
                 match frame_sequence.pop_next_frame_for_chunk(chunk_num) {

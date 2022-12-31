@@ -1,4 +1,5 @@
 use opencv::core::{Mat, Size, CV_8U, CV_8UC3};
+use std::io;
 
 use bumpalo::Bump;
 use std::path::Path;
@@ -183,8 +184,8 @@ impl Video {
         }
     }
 
-    pub fn end_write_stream(&mut self) {
-        self.stream.close_writer();
+    pub fn end_write_stream(&mut self) -> io::Result<()> {
+        self.stream.close_writer()
     }
 
     pub(crate) fn integrate_matrix(

@@ -338,11 +338,11 @@ pub trait Codec {
         channels: u8,
         codec_version: u8,
         source_camera: SourceCamera,
-    );
+    ) -> Result<(), Box<dyn Error>>;
 
-    fn decode_header(&mut self) -> Result<usize, StreamError>;
+    fn decode_header(&mut self) -> Result<usize, Box<dyn Error>>;
 
-    fn encode_event(&mut self, event: &Event);
+    fn encode_event(&mut self, event: &Event) -> Result<(), Box<dyn Error>>;
     fn encode_events(&mut self, events: &[Event]);
     fn encode_events_events(&mut self, events: &[Vec<Event>]);
     fn decode_event(&mut self) -> Result<Event, StreamError>;

@@ -22,9 +22,7 @@ fn simul_proc(video_path: &str, scale: f64, thread_count: u8, chunk_rows: usize)
 
     let args: SimulProcArgs = SimulProcArgs {
         args_filename: "".to_string(),
-        color_input: 0,
-        tps: 120000,
-        fps: 24,
+        color_input: false,
         ref_time: 5000,
         delta_t_max: 120000,
         frame_count_max: 300,
