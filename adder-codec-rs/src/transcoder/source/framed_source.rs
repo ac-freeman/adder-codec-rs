@@ -64,7 +64,7 @@ impl FramedSourceBuilder {
             input_filename,
             output_events_filename: None,
             frame_idx_start: 0,
-            chunk_rows: 0,
+            chunk_rows: 64,
             ref_time: 5000,
             tps: 150000,
             delta_t_max: 150000,
