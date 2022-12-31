@@ -4,7 +4,7 @@
 
 A GUI project to make it easier to tune the parameters of ADΔER transcoding.
 
-![](https://github.com/ac-freeman/adder-tuner/blob/main/examples/screenshot.png)
+![](https://github.com/ac-freeman/adder-codec-rs/blob/main/adder-viz/examples/screenshot.png)
 
 # Dependencies
 
