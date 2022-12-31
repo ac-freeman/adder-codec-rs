@@ -4,7 +4,6 @@ use crate::transcoder::source::video::Video;
 use crate::{Coord, Event};
 
 use core::default::Default;
-
 use std::mem::swap;
 
 use crate::transcoder::source::video::SourceError::*;
@@ -253,18 +252,20 @@ impl Source for FramedSource {
 
         if self.input_frame_scaled.empty() {
             eprintln!("End of video");
-            return Err(BufferEmpty);
+            return Err(BufferEmpty.into());
         }
 
         let tmp = self.input_frame_scaled.clone();
-        thread_pool.install(|| {
+        let ret = thread_pool.install(|| {
             self.video.integrate_matrix(
                 tmp,
                 self.video.ref_time as f32,
                 FramePerfect,
                 view_interval,
             )
-        })
+        });
+
+        ret
     }
 
     fn get_video_mut(&mut self) -> &mut Video {

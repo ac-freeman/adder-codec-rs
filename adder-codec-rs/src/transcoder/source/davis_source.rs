@@ -12,7 +12,7 @@ use rayon::iter::ParallelIterator;
 use rayon::iter::{IndexedParallelIterator, IntoParallelRefMutIterator};
 
 use opencv::core::{Mat, CV_8U};
-use opencv::{prelude::*, Result};
+use opencv::prelude::*;
 
 use bumpalo::Bump;
 use ndarray::{Array3, Axis};
@@ -20,6 +20,7 @@ use ndarray::{Array3, Axis};
 use rayon::iter::IntoParallelIterator;
 use rayon::{current_num_threads, ThreadPool};
 use std::cmp::max;
+use std::error::Error;
 
 use std::time::Instant;
 
@@ -75,7 +76,7 @@ impl DavisSource {
         rt: Runtime,
         mode: DavisTranscoderMode,
         write_out: bool,
-    ) -> Result<DavisSource> {
+    ) -> Result<DavisSource, Box<dyn Error>> {
         let video = Video::new(
             reconstructor.width as u16,
             reconstructor.height as u16,
@@ -98,20 +99,17 @@ impl DavisSource {
         );
         let thread_pool_edi = rayon::ThreadPoolBuilder::new()
             .num_threads(max(current_num_threads() - 4, 1))
-            .build()
-            .unwrap();
+            .build()?;
         let thread_pool_integration = rayon::ThreadPoolBuilder::new()
             .num_threads(max(4, 1))
-            .build()
-            .unwrap();
+            .build()?;
 
         let timestamps = vec![0_i64; video.height as usize * video.width as usize * video.channels];
 
         let dvs_last_timestamps: Array3<i64> = Array3::from_shape_vec(
             (video.height.into(), video.width.into(), video.channels),
             timestamps,
-        )
-        .unwrap();
+        )?;
 
         let timestamps =
             vec![0.0_f64; video.height as usize * video.width as usize * video.channels];
@@ -119,8 +117,7 @@ impl DavisSource {
         let dvs_last_ln_val: Array3<f64> = Array3::from_shape_vec(
             (video.height.into(), video.width.into(), video.channels),
             timestamps,
-        )
-        .unwrap();
+        )?;
 
         let davis_source = DavisSource {
             reconstructor,
@@ -285,9 +282,14 @@ impl DavisSource {
         }
     }
 
-    fn integrate_frame_gaps(&mut self) {
+    fn integrate_frame_gaps(&mut self) -> Result<(), SourceError> {
         let px_per_chunk: usize =
             self.video.chunk_rows * self.video.width as usize * self.video.channels;
+
+        let start_of_frame_timestamp = match self.start_of_frame_timestamp {
+            Some(t) => t,
+            None => return Err(SourceError::UninitializedData),
+        };
 
         // Important: if framing the events simultaneously, then the chunk division must be
         // exactly the same as it is for the framer
@@ -321,7 +323,7 @@ impl DavisSource {
 
                     let ticks_per_micro = self.video.tps as f32 / 1e6;
 
-                    let delta_t_micro = self.start_of_frame_timestamp.unwrap()
+                    let delta_t_micro = start_of_frame_timestamp
                         - self.dvs_last_timestamps[[px.coord.y as usize, px.coord.x as usize, 0]];
 
                     let delta_t_ticks = delta_t_micro as f32 * ticks_per_micro;
@@ -364,7 +366,10 @@ impl DavisSource {
             self.video.stream.encode_events_events(&big_buffer);
         }
 
-        let db = self.video.instantaneous_frame.data_bytes_mut().unwrap();
+        let db = match self.video.instantaneous_frame.data_bytes_mut() {
+            Ok(db) => db,
+            Err(e) => return Err(SourceError::OpenCVError(e)),
+        };
 
         // TODO: split off into separate function
         // TODO: When there's full support for various bit-depth sources, modify this accordingly
@@ -389,6 +394,7 @@ impl DavisSource {
         if self.video.show_live {
             show_display("instance", &self.video.instantaneous_frame, 1, &self.video);
         }
+        Ok(())
     }
 
     fn control_latency(&mut self, opt_timestamp: Option<Instant>) {
@@ -477,7 +483,7 @@ impl Source for DavisSource {
                     self.video.stream.encode_events_events(&big_buffer);
                 }
 
-                return Err(SourceError::NoData);
+                return Err(SourceError::NoData.into());
             }
             Some((
                 mat,
@@ -501,23 +507,31 @@ impl Source for DavisSource {
             }
         }
         if with_events {
+            let start_of_frame_timestamp = match self.start_of_frame_timestamp {
+                Some(t) => t,
+                None => return Err(SourceError::UninitializedData.into()),
+            };
             if self.video.in_interval_count == 0 {
                 self.dvs_last_timestamps.par_map_inplace(|ts| {
-                    *ts = self.start_of_frame_timestamp.unwrap();
+                    *ts = start_of_frame_timestamp;
                 });
             } else {
+                let dvs_events_before = match &self.dvs_events_before {
+                    Some(events) => events.clone(),
+                    None => return Err(SourceError::UninitializedData.into()),
+                };
                 self.integrate_dvs_events(
-                    &self.dvs_events_before.as_ref().unwrap().clone(),
-                    &self.start_of_frame_timestamp.unwrap(),
+                    &dvs_events_before,
+                    &start_of_frame_timestamp,
                     check_dvs_before,
                 );
-                self.integrate_frame_gaps();
+                self.integrate_frame_gaps()?;
             }
         }
 
         if self.input_frame_scaled.empty() {
             eprintln!("End of video");
-            return Err(BufferEmpty);
+            return Err(BufferEmpty.into());
         }
 
         self.input_frame_scaled
@@ -589,7 +603,10 @@ impl Source for DavisSource {
             );
         }
 
-        ret
+        match ret {
+            Ok(res) => Ok(res),
+            Err(e) => Err(e.into()),
+        }
     }
 
     fn get_video_mut(&mut self) -> &mut Video {

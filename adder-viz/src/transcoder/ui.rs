@@ -10,6 +10,7 @@ use bevy_egui::egui::{RichText, Ui};
 use opencv::core::{Mat, MatTraitConstManual};
 use opencv::imgproc;
 use rayon::current_num_threads;
+use std::error::Error;
 use std::path::PathBuf;
 
 pub struct ParamsUiState {

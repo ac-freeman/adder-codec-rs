@@ -1,5 +1,5 @@
 use opencv::core::{Mat, Size, CV_8U, CV_8UC3};
-use std::io;
+use std::{fmt, io};
 
 use bumpalo::Bump;
 use std::path::Path;
@@ -35,6 +35,24 @@ pub enum SourceError {
 
     /// No data from next spot in buffer
     NoData,
+
+    /// Data not initialized
+    UninitializedData,
+
+    /// OpenCV error
+    OpenCVError(opencv::Error),
+}
+
+impl fmt::Display for SourceError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Source error")
+    }
+}
+
+impl From<SourceError> for Box<dyn std::error::Error> {
+    fn from(value: SourceError) -> Self {
+        value.to_string().into()
+    }
 }
 
 #[derive(PartialEq, Clone, Copy)]
