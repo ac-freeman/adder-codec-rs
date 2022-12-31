@@ -483,7 +483,7 @@ impl Source for DavisSource {
                     self.video.stream.encode_events_events(&big_buffer);
                 }
 
-                return Err(SourceError::NoData.into());
+                return Err(SourceError::NoData);
             }
             Some((
                 mat,
@@ -509,7 +509,7 @@ impl Source for DavisSource {
         if with_events {
             let start_of_frame_timestamp = match self.start_of_frame_timestamp {
                 Some(t) => t,
-                None => return Err(SourceError::UninitializedData.into()),
+                None => return Err(SourceError::UninitializedData),
             };
             if self.video.in_interval_count == 0 {
                 self.dvs_last_timestamps.par_map_inplace(|ts| {
@@ -518,7 +518,7 @@ impl Source for DavisSource {
             } else {
                 let dvs_events_before = match &self.dvs_events_before {
                     Some(events) => events.clone(),
-                    None => return Err(SourceError::UninitializedData.into()),
+                    None => return Err(SourceError::UninitializedData),
                 };
                 self.integrate_dvs_events(
                     &dvs_events_before,
@@ -531,7 +531,7 @@ impl Source for DavisSource {
 
         if self.input_frame_scaled.empty() {
             eprintln!("End of video");
-            return Err(BufferEmpty.into());
+            return Err(BufferEmpty);
         }
 
         self.input_frame_scaled
@@ -605,7 +605,7 @@ impl Source for DavisSource {
 
         match ret {
             Ok(res) => Ok(res),
-            Err(e) => Err(e.into()),
+            Err(e) => Err(e),
         }
     }
 

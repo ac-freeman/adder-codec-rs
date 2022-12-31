@@ -252,20 +252,20 @@ impl Source for FramedSource {
 
         if self.input_frame_scaled.empty() {
             eprintln!("End of video");
-            return Err(BufferEmpty.into());
+            return Err(BufferEmpty);
         }
 
         let tmp = self.input_frame_scaled.clone();
-        let ret = thread_pool.install(|| {
+        
+
+        thread_pool.install(|| {
             self.video.integrate_matrix(
                 tmp,
                 self.video.ref_time as f32,
                 FramePerfect,
                 view_interval,
             )
-        });
-
-        ret
+        })
     }
 
     fn get_video_mut(&mut self) -> &mut Video {
