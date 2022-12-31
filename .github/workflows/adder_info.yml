@@ -89,7 +89,7 @@ jobs:
         shell: bash
 
       - name: Install Rust
-        uses: adder-info/toolchain@v1
+        uses: actions-rs/toolchain@v1
         with:
           toolchain: ${{ matrix.rust }}
           default: true
