@@ -62,7 +62,12 @@ fn test_sample_perfect_dt() {
         64,
     )
     .codec_version(stream.codec_version)
-    .time_parameters(stream.tps, stream.ref_interval, stream.delta_t_max, reconstructed_frame_rate)
+    .time_parameters(
+        stream.tps,
+        stream.ref_interval,
+        stream.delta_t_max,
+        reconstructed_frame_rate,
+    )
     .mode(INSTANTANEOUS)
     .source(stream.get_source_type(), stream.source_camera)
     .finish();
@@ -73,11 +78,14 @@ fn test_sample_perfect_dt() {
             Ok(mut event) => {
                 if frame_sequence.ingest_event(&mut event) {
                     match frame_sequence.write_multi_frame_bytes(&mut output_stream) {
-                        0 => {
+                        Ok(0) => {
                             panic!("should have frame")
                         }
-                        frames_returned => {
+                        Ok(frames_returned) => {
                             frame_count += frames_returned;
+                        }
+                        Err(e) => {
+                            panic!("error writing frame: {}", e)
                         }
                     }
                 }
@@ -130,7 +138,12 @@ fn test_sample_perfect_dt_color() {
         64,
     )
     .codec_version(stream.codec_version)
-    .time_parameters(stream.tps, stream.ref_interval,stream.delta_t_max,  reconstructed_frame_rate)
+    .time_parameters(
+        stream.tps,
+        stream.ref_interval,
+        stream.delta_t_max,
+        reconstructed_frame_rate,
+    )
     .mode(INSTANTANEOUS)
     .source(stream.get_source_type(), stream.source_camera)
     .finish();
@@ -140,11 +153,14 @@ fn test_sample_perfect_dt_color() {
             Ok(mut event) => {
                 if frame_sequence.ingest_event(&mut event) {
                     match frame_sequence.write_multi_frame_bytes(&mut output_stream) {
-                        0 => {
+                        Ok(0) => {
                             panic!("should have frame")
                         }
-                        frames_returned => {
+                        Ok(frames_returned) => {
                             frame_count += frames_returned;
+                        }
+                        Err(e) => {
+                            panic!("error writing frame: {}", e)
                         }
                     }
                 }
@@ -176,7 +192,9 @@ fn test_sample_perfect_dt_color() {
 #[should_panic]
 fn test_encode_header_non_init() {
     let mut stream: RawStream = Codec::new();
-    stream.encode_header(50, 100, 53000, 4000, 50000, 1, 1, FramedU8);
+    stream
+        .encode_header(50, 100, 53000, 4000, 50000, 1, 1, FramedU8)
+        .unwrap();
     // stream = RawStream::new();
 }
 
@@ -438,7 +456,7 @@ fn get_frame_bytes_eventcoordless() {
 
     assert_eq!(fs::metadata(&path).unwrap().len(), 0);
     match frame_sequence.write_multi_frame_bytes(&mut output_writer) {
-        frame_count if frame_count == 6 => {
+        Ok(6) => {
             output_writer.flush().unwrap();
             drop(output_writer);
 
@@ -498,7 +516,7 @@ fn get_frame_bytes_u8() {
 
     assert_eq!(fs::metadata(&path).unwrap().len(), 0);
     match frame_sequence.write_multi_frame_bytes(&mut output_writer) {
-        frame_count if frame_count == 6 => {
+        Ok(6) => {
             output_writer.flush().unwrap();
             drop(output_writer);
 
@@ -555,7 +573,7 @@ fn get_frame_bytes_u16() {
 
     assert_eq!(fs::metadata(&path).unwrap().len(), 0);
     match frame_sequence.write_multi_frame_bytes(&mut output_writer) {
-        frame_count if frame_count == 6 => {
+        Ok(6) => {
             output_writer.flush().unwrap();
             drop(output_writer);
 
@@ -612,7 +630,7 @@ fn get_frame_bytes_u32() {
 
     assert_eq!(fs::metadata(&path).unwrap().len(), 0);
     match frame_sequence.write_multi_frame_bytes(&mut output_writer) {
-        frame_count if frame_count == 6 => {
+        Ok(6) => {
             output_writer.flush().unwrap();
             drop(output_writer);
 
@@ -669,7 +687,7 @@ fn get_frame_bytes_u64() {
 
     assert_eq!(fs::metadata(&path).unwrap().len(), 0);
     match frame_sequence.write_multi_frame_bytes(&mut output_writer) {
-        frame_count if frame_count == 6 => {
+        Ok(6) => {
             output_writer.flush().unwrap();
             drop(output_writer);
 
@@ -743,7 +761,12 @@ fn test_sample_unordered() {
         64,
     )
     .codec_version(stream.codec_version)
-    .time_parameters(stream.tps, stream.ref_interval, stream.delta_t_max, reconstructed_frame_rate)
+    .time_parameters(
+        stream.tps,
+        stream.ref_interval,
+        stream.delta_t_max,
+        reconstructed_frame_rate,
+    )
     .mode(INSTANTANEOUS)
     .source(stream.get_source_type(), stream.source_camera)
     .finish();
@@ -753,11 +776,14 @@ fn test_sample_unordered() {
             Ok(mut event) => {
                 if frame_sequence.ingest_event(&mut event) {
                     match frame_sequence.write_multi_frame_bytes(&mut output_stream) {
-                        0 => {
+                        Ok(0) => {
                             panic!("should have frame")
                         }
-                        frames_returned => {
+                        Ok(frames_returned) => {
                             frame_count += frames_returned;
+                        }
+                        Err(e) => {
+                            panic!("error writing frame: {}", e)
                         }
                     }
                 }
@@ -810,7 +836,12 @@ fn test_sample_ordered() {
         64,
     )
     .codec_version(stream.codec_version)
-    .time_parameters(stream.tps, stream.ref_interval, stream.delta_t_max, reconstructed_frame_rate)
+    .time_parameters(
+        stream.tps,
+        stream.ref_interval,
+        stream.delta_t_max,
+        reconstructed_frame_rate,
+    )
     .mode(INSTANTANEOUS)
     .source(stream.get_source_type(), stream.source_camera)
     .finish();
@@ -820,11 +851,14 @@ fn test_sample_ordered() {
             Ok(mut event) => {
                 if frame_sequence.ingest_event(&mut event) {
                     match frame_sequence.write_multi_frame_bytes(&mut output_stream) {
-                        0 => {
+                        Ok(0) => {
                             panic!("should have frame")
                         }
-                        frames_returned => {
+                        Ok(frames_returned) => {
                             frame_count += frames_returned;
+                        }
+                        Err(e) => {
+                            panic!("error writing frame: {}", e)
                         }
                     }
                 }

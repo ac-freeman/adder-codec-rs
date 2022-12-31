@@ -341,7 +341,7 @@ pub fn integrate_for_px(
     ref_time: &u32,
 ) {
     if px.need_to_pop_top {
-        buffer.push(px.pop_top_event(Some(intensity)));
+        buffer.push(px.pop_top_event(intensity));
     }
 
     *base_val = px.base_val;
@@ -349,7 +349,7 @@ pub fn integrate_for_px(
     if *frame_val < base_val.saturating_sub(*c_thresh_neg)
         || *frame_val > base_val.saturating_add(*c_thresh_pos)
     {
-        px.pop_best_events(None, buffer);
+        px.pop_best_events(buffer);
         px.base_val = *frame_val;
 
         // If continuous mode and the D value needs to be different now
@@ -370,7 +370,7 @@ pub fn integrate_for_px(
     );
 
     if px.need_to_pop_top {
-        buffer.push(px.pop_top_event(Some(intensity)));
+        buffer.push(px.pop_top_event(intensity));
     }
 }
 

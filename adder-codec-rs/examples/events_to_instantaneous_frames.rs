@@ -5,6 +5,7 @@ use adder_codec_rs::framer::event_framer::FramerMode::INSTANTANEOUS;
 use adder_codec_rs::framer::event_framer::{FrameSequence, FramerBuilder};
 use adder_codec_rs::raw::raw_stream::RawStream;
 use adder_codec_rs::Codec;
+use std::error::Error;
 use std::fs::File;
 use std::io;
 use std::io::{BufWriter, Write};
@@ -34,7 +35,12 @@ fn main() {
         260,
     )
     .codec_version(stream.codec_version)
-    .time_parameters(stream.tps, stream.ref_interval, stream.delta_t_max, reconstructed_frame_rate)
+    .time_parameters(
+        stream.tps,
+        stream.ref_interval,
+        stream.delta_t_max,
+        reconstructed_frame_rate,
+    )
     .mode(INSTANTANEOUS)
     .source(stream.get_source_type(), stream.source_camera)
     .finish();
@@ -46,10 +52,10 @@ fn main() {
             Ok(mut event) => {
                 if frame_sequence.ingest_event(&mut event) {
                     match frame_sequence.write_multi_frame_bytes(&mut output_stream) {
-                        0 => {
+                        Ok(0) => {
                             panic!("Should have frame, but didn't")
                         }
-                        frames_returned => {
+                        Ok(frames_returned) => {
                             frame_count += frames_returned;
                             print!(
                                 "\rOutput frame {}. Got {} frames in  {}ms\t",
@@ -59,6 +65,10 @@ fn main() {
                             );
                             io::stdout().flush().unwrap();
                             now = Instant::now();
+                        }
+                        Err(e) => {
+                            eprintln!("Error writing frame: {}", e);
+                            break;
                         }
                     }
                 }

@@ -2,6 +2,7 @@ use crate::transcoder::event_pixel_tree::Mode::{Continuous, FramePerfect};
 use crate::{Coord, Event, UDshift, D_MAX, D_SHIFT};
 use smallvec::{smallvec, SmallVec};
 use std::cmp::min;
+use std::error::Error;
 
 /// Decimation value; a pixel's sensitivity.
 pub type D = u8;
@@ -81,13 +82,13 @@ impl PixelArena {
     }
 
     /// Pop just the topmost event. Should be called only when dtm is reached for main node
-    pub fn pop_top_event(&mut self, next_intensity: Option<Intensity32>) -> Event {
+    pub fn pop_top_event(&mut self, next_intensity: Intensity32) -> Event {
         self.need_to_pop_top = false;
         let mut root = &mut self.arena[0];
         match root.best_event {
             None => {
                 if root.state.integration == 0.0 && root.state.delta_t > 0.0 {
-                    self.get_zero_event(0, next_intensity)
+                    self.get_zero_event(0, Some(next_intensity))
                 } else {
                     // We can reach here under frame-perfect integration when approaching dtm. The new
                     // node might not have the right D set.
@@ -97,13 +98,14 @@ impl PixelArena {
                         d: fast_math::log2_raw(root.state.integration) as D,
                         delta_t: root.state.delta_t as DeltaT,
                     });
+
                     match self.arena.len() > 1 {
                         true => {
-                            self.arena[1] = PixelNode::new(next_intensity.unwrap());
+                            self.arena[1] = PixelNode::new(next_intensity);
                             self.length = 2;
                         }
                         false => {
-                            self.arena.push(PixelNode::new(next_intensity.unwrap()));
+                            self.arena.push(PixelNode::new(next_intensity));
                             self.length += 1;
                         }
                     }
@@ -126,11 +128,7 @@ impl PixelArena {
     }
 
     /// Recursively pop all the alt events
-    pub fn pop_best_events(
-        &mut self,
-        next_intensity: Option<Intensity32>,
-        buffer: &mut Vec<Event>,
-    ) {
+    pub fn pop_best_events(&mut self, buffer: &mut Vec<Event>) {
         // let mut events = Vec::new();
 
         for node_idx in 0..self.length {
@@ -139,7 +137,7 @@ impl PixelArena {
                     if self.arena[node_idx].state.delta_t > 0.0
                         && self.arena[node_idx].state.integration == 0.0
                     {
-                        buffer.push(self.get_zero_event(node_idx, next_intensity));
+                        buffer.push(self.get_zero_event(node_idx, None));
                     }
                 }
                 Some(event) => {
@@ -154,15 +152,15 @@ impl PixelArena {
         assert!(self.arena[0].alt.is_none());
         self.length = 1;
 
-        match next_intensity {
-            None => {}
-            // TODO: match on mode instead. This is disjoint.
-            Some(intensity) => {
-                self.arena[0].state.d = get_d_from_intensity(intensity);
-                self.arena[0].state.integration = 0.0;
-                self.arena[0].state.delta_t = 0.0;
-            }
-        };
+        // match next_intensity {
+        //     None => {}
+        //     // TODO: match on mode instead. This is disjoint.
+        //     Some(intensity) => {
+        // self.arena[0].state.d = get_d_from_intensity(intensity);
+        // self.arena[0].state.integration = 0.0;
+        // self.arena[0].state.delta_t = 0.0;
+        //     }
+        // };
         self.need_to_pop_top = false;
     }
 
@@ -497,7 +495,7 @@ mod tests {
     fn test_pop_best_states() {
         let mut tree = make_tree();
         let mut events = Vec::new();
-        tree.pop_best_events(None, &mut events);
+        tree.pop_best_events(&mut events);
         assert_eq!(events.len(), 2);
         assert_eq!(events[0].d, 7);
         let tmp = events[0].delta_t;
@@ -514,7 +512,7 @@ mod tests {
     fn test_pop_best_states2() {
         let mut tree = make_tree2();
         let mut events = Vec::new();
-        tree.pop_best_events(None, &mut events);
+        tree.pop_best_events(&mut events);
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].d, 8);
         let tmp = events[0].delta_t;
@@ -545,7 +543,7 @@ mod tests {
         );
         assert!(tree.need_to_pop_top);
         let mut events = Vec::new();
-        tree.pop_best_events(None, &mut events);
+        tree.pop_best_events(&mut events);
         assert!(!tree.need_to_pop_top);
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].d, 126);
@@ -570,7 +568,7 @@ mod tests {
         }
         tree.integrate(245.0, 5000.0, &FramePerfect, &dtm, &5000);
         assert!(tree.need_to_pop_top);
-        let _ = tree.pop_top_event(Some(245.0));
+        let _ = tree.pop_top_event(245.0);
         assert!(!tree.need_to_pop_top);
         let tmp = tree.arena[0].state.delta_t;
         assert_eq!(tmp, 70000.0)

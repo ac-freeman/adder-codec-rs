@@ -20,6 +20,7 @@ use ndarray::{Array3, Axis};
 use rayon::iter::IntoParallelIterator;
 use rayon::{current_num_threads, ThreadPool};
 use std::cmp::max;
+use std::error::Error;
 use std::time::Instant;
 
 use crate::framer::scale_intensity::FrameValue;
@@ -218,7 +219,7 @@ impl DavisSource {
                                 * delta_t_ticks)
                                 .max(0.0);
                             if px.need_to_pop_top {
-                                buffer.push(px.pop_top_event(Some(first_integration)));
+                                buffer.push(px.pop_top_event(first_integration));
                             }
 
                             px.integrate(
@@ -229,7 +230,7 @@ impl DavisSource {
                                 &self.video.ref_time,
                             );
                             if px.need_to_pop_top {
-                                buffer.push(px.pop_top_event(Some(first_integration)));
+                                buffer.push(px.pop_top_event(first_integration));
                             }
 
                             ///////////////////////////////////////////////////////
@@ -249,7 +250,7 @@ impl DavisSource {
                             if frame_val_u8 < base_val.saturating_sub(self.video.c_thresh_neg)
                                 || frame_val_u8 > base_val.saturating_add(self.video.c_thresh_pos)
                             {
-                                px.pop_best_events(None, &mut buffer);
+                                px.pop_best_events(&mut buffer);
                                 px.base_val = frame_val_u8;
 
                                 // If continuous mode and the D value needs to be different now
@@ -352,7 +353,7 @@ impl DavisSource {
                         &self.video.ref_time,
                     );
                     if px.need_to_pop_top {
-                        buffer.push(px.pop_top_event(Some(integration as f32)));
+                        buffer.push(px.pop_top_event(integration as f32));
                     }
                 }
                 buffer
@@ -466,7 +467,7 @@ impl Source for DavisSource {
                     .map(|(_chunk_idx, mut chunk)| {
                         let mut buffer: Vec<Event> = Vec::with_capacity(px_per_chunk);
                         for (_, px) in chunk.iter_mut().enumerate() {
-                            px.pop_best_events(None, &mut buffer);
+                            px.pop_best_events(&mut buffer);
                         }
                         buffer
                     })

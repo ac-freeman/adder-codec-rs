@@ -379,7 +379,7 @@ impl<
     ///         delta_t: 1000
     ///     };
     /// frame_sequence.ingest_event(&mut event);
-    /// let elem = frame_sequence.px_at_current(5, 5, 1);
+    /// let elem = frame_sequence.px_at_current(5, 5, 1).unwrap();
     /// assert_eq!(*elem, Some(32));
     /// ```
     fn ingest_event(&mut self, event: &mut Event) -> bool {
