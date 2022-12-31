@@ -7,7 +7,7 @@ use crate::transcoder::source::video::{
 use crate::SourceCamera::DavisU8;
 use crate::{Codec, DeltaT, Event, SourceType};
 use aedat::events_generated::Event as DvsEvent;
-use davis_edi_rs::util::reconstructor::{IterVal, Reconstructor};
+use davis_edi_rs::util::reconstructor::{IterVal, ReconstructionError, Reconstructor};
 use rayon::iter::ParallelIterator;
 use rayon::iter::{IndexedParallelIterator, IntoParallelRefMutIterator};
 
@@ -368,7 +368,7 @@ impl DavisSource {
 
         let db = match self.video.instantaneous_frame.data_bytes_mut() {
             Ok(db) => db,
-            Err(e) => return Err(SourceError::OpenCVError(e)),
+            Err(e) => return Err(SourceError::OpencvError(e)),
         };
 
         // TODO: split off into separate function
@@ -459,7 +459,7 @@ impl Source for DavisSource {
             with_events,
         ));
         match mat_opt {
-            None => {
+            Ok(None) => {
                 // We've reached the end of the input. Forcibly pop the last event from each pixel.
                 println!("Popping remaining events");
                 let px_per_chunk: usize =
@@ -485,11 +485,11 @@ impl Source for DavisSource {
 
                 return Err(SourceError::NoData);
             }
-            Some((
+            Ok(Some((
                 mat,
                 opt_timestamp,
                 Some((c, events_before, events_after, img_start_ts, img_end_ts)),
-            )) => {
+            ))) => {
                 self.control_latency(opt_timestamp);
 
                 self.input_frame_scaled = mat;
@@ -501,16 +501,21 @@ impl Source for DavisSource {
                 self.video.ref_time_divisor =
                     (img_end_ts - img_start_ts) as f64 / self.video.ref_time as f64;
             }
-            Some((mat, opt_timestamp, None)) => {
+            Ok(Some((mat, opt_timestamp, None))) => {
                 self.control_latency(opt_timestamp);
                 self.input_frame_scaled = mat;
             }
+            Err(e) => return Err(SourceError::EdiError(e)),
         }
+        let start_of_frame_timestamp = match self.start_of_frame_timestamp {
+            Some(t) => t,
+            None => return Err(SourceError::UninitializedData),
+        };
+        let end_of_frame_timestamp = match self.end_of_frame_timestamp {
+            Some(t) => t,
+            None => return Err(SourceError::UninitializedData),
+        };
         if with_events {
-            let start_of_frame_timestamp = match self.start_of_frame_timestamp {
-                Some(t) => t,
-                None => return Err(SourceError::UninitializedData),
-            };
             if self.video.in_interval_count == 0 {
                 self.dvs_last_timestamps.par_map_inplace(|ts| {
                     *ts = start_of_frame_timestamp;
@@ -534,9 +539,15 @@ impl Source for DavisSource {
             return Err(BufferEmpty);
         }
 
-        self.input_frame_scaled
+        match self
+            .input_frame_scaled
             .convert_to(&mut self.image_8u, CV_8U, 255.0, 0.0)
-            .unwrap();
+        {
+            Ok(_) => {}
+            Err(e) => {
+                return Err(SourceError::OpencvError(e));
+            }
+        }
 
         // While `input_frame_scaled` may not be continuous (which would cause problems with
         // iterating over the pixels), cloning it ensures that it is made continuous.
@@ -545,8 +556,7 @@ impl Source for DavisSource {
         let mat_integration_time = match self.mode {
             DavisTranscoderMode::Framed => self.video.ref_time as f32,
             DavisTranscoderMode::RawDavis => {
-                (self.end_of_frame_timestamp.unwrap() - self.start_of_frame_timestamp.unwrap())
-                    as f32
+                (end_of_frame_timestamp - start_of_frame_timestamp) as f32
             }
             DavisTranscoderMode::RawDvs => {
                 // TODO: Note how c is fixed here, since we don't have a mechanism for determining
@@ -558,8 +568,8 @@ impl Source for DavisSource {
                             *byte = 0;
                         }
                     }
-                    Err(_) => {
-                        panic!("Mat error")
+                    Err(e) => {
+                        return Err(SourceError::OpencvError(e));
                     }
                 }
                 0.0
@@ -573,10 +583,12 @@ impl Source for DavisSource {
 
         unsafe {
             for (idx, val) in self.dvs_last_ln_val.iter_mut().enumerate() {
-                let px = self
-                    .input_frame_scaled
-                    .at_unchecked::<f64>(idx as i32)
-                    .unwrap();
+                let px = match self.input_frame_scaled.at_unchecked::<f64>(idx as i32) {
+                    Ok(px) => px,
+                    Err(e) => {
+                        return Err(SourceError::OpencvError(e));
+                    }
+                };
                 match self.mode {
                     DavisTranscoderMode::Framed => {
                         *val = px.ln_1p();
@@ -592,15 +604,15 @@ impl Source for DavisSource {
         }
 
         if with_events {
+            let dvs_events_after = match &self.dvs_events_after {
+                Some(events) => events.clone(),
+                None => return Err(SourceError::UninitializedData),
+            };
             self.dvs_last_timestamps.par_map_inplace(|ts| {
-                *ts = self.end_of_frame_timestamp.unwrap();
+                *ts = end_of_frame_timestamp;
             });
 
-            self.integrate_dvs_events(
-                &self.dvs_events_after.as_ref().unwrap().clone(),
-                &self.end_of_frame_timestamp.unwrap(),
-                check_dvs_after,
-            );
+            self.integrate_dvs_events(&dvs_events_after, &end_of_frame_timestamp, check_dvs_after);
         }
 
         match ret {
@@ -640,19 +652,17 @@ pub async fn get_next_image(
     reconstructor: &mut Reconstructor,
     thread_pool: &ThreadPool,
     with_events: bool,
-) -> Option<IterVal> {
+) -> Result<Option<IterVal>, ReconstructionError> {
     thread_pool
         .install(|| async {
             match reconstructor.next(with_events).await {
                 None => {
                     println!("\nFinished!");
-                    None
+                    Ok(None)
                 }
                 Some(res) => match res {
-                    Ok(a) => Some(a),
-                    Err(_) => {
-                        panic!("No image")
-                    }
+                    Ok(a) => Ok(Some(a)),
+                    Err(e) => Err(e),
                 },
             }
         })

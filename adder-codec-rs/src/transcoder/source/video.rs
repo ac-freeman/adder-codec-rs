@@ -16,6 +16,7 @@ use crate::transcoder::d_controller::DecimationMode;
 use crate::transcoder::event_pixel_tree::Mode::Continuous;
 use crate::transcoder::event_pixel_tree::{DeltaT, Intensity32, Mode, PixelArena};
 use crate::SourceCamera;
+use davis_edi_rs::util::reconstructor::ReconstructionError;
 use ndarray::{Array3, Axis};
 use rayon::iter::IntoParallelIterator;
 use rayon::iter::ParallelIterator;
@@ -40,7 +41,10 @@ pub enum SourceError {
     UninitializedData,
 
     /// OpenCV error
-    OpenCVError(opencv::Error),
+    OpencvError(opencv::Error),
+
+    /// EDI error
+    EdiError(ReconstructionError),
 }
 
 impl fmt::Display for SourceError {

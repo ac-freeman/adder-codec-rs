@@ -112,10 +112,10 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         let mat_opt = rt.block_on(get_next_image(&mut reconstructor, &thread_pool_edi, true));
 
         match mat_opt {
-            None => {
+            Ok(None) => {
                 break;
             }
-            Some((_, _, Some((_, _, events, _, _)))) => match init {
+            Ok(Some((_, _, Some((_, _, events, _, _))))) => match init {
                 None => init = Some(()),
                 Some(()) => {
                     for event in events {
@@ -148,7 +148,11 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                     }
                 }
             },
-            Some((_, _, None)) => {
+            Ok(Some((_, _, None))) => {
+                break;
+            }
+            Err(e) => {
+                println!("Error: {:?}", e);
                 break;
             }
         }
