@@ -55,4 +55,3 @@ cargo build -p adder-viz -vv
 cargo test -p adder-viz -vv
 cargo build -p adder-viz --release -vv
 cargo test -p adder-viz --release -vv
-
