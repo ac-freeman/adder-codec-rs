@@ -20,7 +20,7 @@ use ndarray::{Array3, Axis};
 use rayon::iter::IntoParallelIterator;
 use rayon::{current_num_threads, ThreadPool};
 use std::cmp::max;
-use std::error::Error;
+
 use std::time::Instant;
 
 use crate::framer::scale_intensity::FrameValue;

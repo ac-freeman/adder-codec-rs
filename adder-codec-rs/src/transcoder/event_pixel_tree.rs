@@ -2,7 +2,7 @@ use crate::transcoder::event_pixel_tree::Mode::{Continuous, FramePerfect};
 use crate::{Coord, Event, UDshift, D_MAX, D_SHIFT};
 use smallvec::{smallvec, SmallVec};
 use std::cmp::min;
-use std::error::Error;
+
 
 /// Decimation value; a pixel's sensitivity.
 pub type D = u8;

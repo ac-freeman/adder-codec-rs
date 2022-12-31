@@ -289,7 +289,7 @@ impl Codec for RawStream {
     fn decode_header(&mut self) -> Result<usize, Box<dyn Error>> {
         match &mut self.input_stream {
             None => {
-                return Err(StreamError::UnitializedStream.into());
+                Err(StreamError::UnitializedStream.into())
             }
             Some(stream) => {
                 let header = match self
