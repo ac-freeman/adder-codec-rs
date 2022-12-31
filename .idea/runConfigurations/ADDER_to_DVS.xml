@@ -1,7 +1,7 @@
 <component name="ProjectRunConfigurationManager">
   <configuration default="false" name="ADDER to DVS" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
-    <option name="command" value="run --bin adder_to_dvs -- --input &quot;/mnt/tmp/tmp_events.adder&quot; --output-text &quot;$USER_HOME$/Downloads/adder.dvs&quot; --output-video &quot;$USER_HOME$/Downloads/adder.dvs.mp4&quot; " />
-    <option name="workingDirectory" value="file://$PROJECT_DIR$" />
+    <option name="command" value="run -- --input &quot;/mnt/tmp/tmp_events.adder&quot; --output-text &quot;$USER_HOME$/Downloads/adder.dvs&quot; --output-video &quot;$USER_HOME$/Downloads/adder.dvs.mp4&quot; " />
+    <option name="workingDirectory" value="file://$PROJECT_DIR$/adder-to-dvs" />
     <option name="channel" value="DEFAULT" />
     <option name="requiredFeatures" value="true" />
     <option name="allFeatures" value="false" />

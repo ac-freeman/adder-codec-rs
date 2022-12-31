@@ -9,4 +9,4 @@ sudo apt-get -y install clang
 sudo ln -s libclang.so.1 /usr/lib/llvm-10/lib/libclang.so
 
 export RUST_BACKTRACE=full
-cargo doc -vv --features=docs-only
+cargo doc -vv -p adder-codec-rs --features=docs-only

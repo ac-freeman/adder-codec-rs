@@ -5,10 +5,6 @@ use clap::Parser;
 use std::io::Write;
 use std::path::Path;
 use std::{error, io};
-mod adder_to_dvs;
-mod adder_video_player;
-mod aedat4_dvs_visualize;
-mod davis_to_adder;
 
 /// Command line argument parser
 #[derive(Parser, Debug, Default)]
@@ -126,5 +122,37 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     }
 
     handle.flush().unwrap();
+
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use assert_cmd::prelude::*;
+    use predicates::prelude::*;
+    use std::process::Command;
+
+    #[test]
+    fn test_adder_info() -> Result<(), Box<dyn std::error::Error>> {
+        let mut cmd = Command::cargo_bin("adder-info")?;
+
+        cmd.arg("--input").arg("tests/test_sample.adder");
+        cmd.arg("-d");
+        cmd.assert()
+            .success()
+            .stdout(predicate::str::contains("Width: 2"))
+            .stdout(predicate::str::contains("Height: 2"))
+            .stdout(predicate::str::contains("Color channels: 1"))
+            .stdout(predicate::str::contains("Source camera: FramedU8"))
+            .stdout(predicate::str::contains("Codec version: 1"))
+            .stdout(predicate::str::contains("Ticks per second: 120000"))
+            .stdout(predicate::str::contains("ticks per source interval: 5000"))
+            .stdout(predicate::str::contains("t_max: 240000"))
+            .stdout(predicate::str::contains("File size: 1307"))
+            .stdout(predicate::str::contains("Header size: 29"))
+            .stdout(predicate::str::contains("event count: 140"))
+            .stdout(predicate::str::contains("Events per pixel channel: 35"));
+
+        Ok(())
+    }
 }

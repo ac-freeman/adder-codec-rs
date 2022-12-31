@@ -20,13 +20,9 @@ pub type D = u8;
 /// The maximum possible [`D`] value
 pub const D_MAX: D = 127;
 
-/// Array for computing the intensity to integrate for a given D
-// pub const D_SHIFT: [u32; 21] = [
-//     1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536, 131072,
-//     262144, 524288, 1048576,
-// ];
-
 pub type UDshift = u128;
+
+/// Array for computing the intensity to integrate for a given D
 pub const D_SHIFT: [UDshift; 128] = [
     1 << 0,
     1 << 1,
