@@ -654,7 +654,7 @@ mod tests {
         tree.integrate(40.0, 30.0, &Continuous, &dtm, &30);
         let event = tree.arena[0].best_event.unwrap();
         assert_eq!(event.d, 7);
-        let child = tree.arena[1].clone();
+        let child = tree.arena[1];
         assert!(f32_slack(child.state.delta_t, 9.75));
     }
 }

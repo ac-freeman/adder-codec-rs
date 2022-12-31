@@ -11,7 +11,7 @@ use bincode::{DefaultOptions, Options};
 use std::error::Error;
 use std::fs::File;
 use std::io::{BufReader, BufWriter, Seek, SeekFrom, Write};
-use std::{error, fmt, io, mem};
+use std::{fmt, io, mem};
 
 #[derive(Debug)]
 pub enum StreamError {
@@ -184,7 +184,7 @@ impl Codec for RawStream {
     fn get_input_stream_position(&mut self) -> Result<u64, Box<dyn Error>> {
         match &mut self.input_stream {
             None => {
-                return Err(StreamError::UnitializedStream.into());
+                Err(StreamError::UnitializedStream.into())
             }
             Some(stream) => Ok(stream.stream_position()?),
         }

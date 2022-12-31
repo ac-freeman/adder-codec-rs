@@ -7,7 +7,7 @@ use rayon::iter::ParallelIterator;
 use std::collections::VecDeque;
 use std::error::Error;
 use std::fmt;
-use std::fmt::{Display, Formatter};
+
 use std::fs::File;
 use std::io::BufWriter;
 use std::ops::Add;
