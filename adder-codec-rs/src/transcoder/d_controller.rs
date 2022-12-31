@@ -184,7 +184,7 @@ impl DControl for Aggressive {
 
     /// Adjust [`D`] based on current Δt and proximity to ROI
     fn update_decimation(&mut self, d: &mut D, delta_t: DeltaT, delta_t_max: DeltaT) {
-        if self.roi_factor == (delta_t_max / self.ref_time as u32) as u8 {
+        if self.roi_factor == (delta_t_max / self.ref_time) as u8 {
             if *d < D_MAX && delta_t << 1 <= self.ref_time {
                 *d += 1;
             } else if *d > 0 && delta_t > self.ref_time {

@@ -47,7 +47,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let raw_path = "./dvs.gray8";
 
     let aedat_filename = file_path.split('/').last().unwrap();
-    let base_path = file_path.split(aedat_filename).nth(0).unwrap();
+    let base_path = file_path.split(aedat_filename).next().unwrap();
     let rt = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(12)
         .build()

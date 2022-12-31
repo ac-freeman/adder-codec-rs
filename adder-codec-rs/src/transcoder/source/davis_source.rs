@@ -104,8 +104,7 @@ impl DavisSource {
             .build()
             .unwrap();
 
-        let timestamps =
-            vec![0_i64; video.height as usize * video.width as usize * video.channels as usize];
+        let timestamps = vec![0_i64; video.height as usize * video.width as usize * video.channels];
 
         let dvs_last_timestamps: Array3<i64> = Array3::from_shape_vec(
             (video.height.into(), video.width.into(), video.channels),
@@ -114,7 +113,7 @@ impl DavisSource {
         .unwrap();
 
         let timestamps =
-            vec![0.0_f64; video.height as usize * video.width as usize * video.channels as usize];
+            vec![0.0_f64; video.height as usize * video.width as usize * video.channels];
 
         let dvs_last_ln_val: Array3<f64> = Array3::from_shape_vec(
             (video.height.into(), video.width.into(), video.channels),
@@ -287,7 +286,7 @@ impl DavisSource {
 
     fn integrate_frame_gaps(&mut self) {
         let px_per_chunk: usize =
-            self.video.chunk_rows * self.video.width as usize * self.video.channels as usize;
+            self.video.chunk_rows * self.video.width as usize * self.video.channels;
 
         // Important: if framing the events simultaneously, then the chunk division must be
         // exactly the same as it is for the framer
@@ -456,9 +455,8 @@ impl Source for DavisSource {
             None => {
                 // We've reached the end of the input. Forcibly pop the last event from each pixel.
                 println!("Popping remaining events");
-                let px_per_chunk: usize = self.video.chunk_rows
-                    * self.video.width as usize
-                    * self.video.channels as usize;
+                let px_per_chunk: usize =
+                    self.video.chunk_rows * self.video.width as usize * self.video.channels;
                 let big_buffer: Vec<Vec<Event>> = self
                     .video
                     .event_pixel_trees
@@ -510,7 +508,7 @@ impl Source for DavisSource {
                 self.integrate_dvs_events(
                     &self.dvs_events_before.as_ref().unwrap().clone(),
                     &self.start_of_frame_timestamp.unwrap(),
-                    &check_dvs_before,
+                    check_dvs_before,
                 );
                 self.integrate_frame_gaps();
             }
@@ -586,7 +584,7 @@ impl Source for DavisSource {
             self.integrate_dvs_events(
                 &self.dvs_events_after.as_ref().unwrap().clone(),
                 &self.end_of_frame_timestamp.unwrap(),
-                &check_dvs_after,
+                check_dvs_after,
             );
         }
 

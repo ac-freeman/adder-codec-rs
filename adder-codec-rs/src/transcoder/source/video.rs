@@ -207,7 +207,7 @@ impl Video {
             self.show_live = false;
         }
 
-        let px_per_chunk: usize = self.chunk_rows * self.width as usize * self.channels as usize;
+        let px_per_chunk: usize = self.chunk_rows * self.width as usize * self.channels;
 
         // Important: if framing the events simultaneously, then the chunk division must be
         // exactly the same as it is for the framer

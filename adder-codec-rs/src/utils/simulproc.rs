@@ -120,7 +120,7 @@ impl SimulProcessor {
 
         let height = source.get_video().height as usize;
         let width = source.get_video().width as usize;
-        let channels = source.get_video().channels as usize;
+        let channels = source.get_video().channels;
 
         let mut framer = thread_pool_framer.install(|| {
             FramerBuilder::new(height, width, channels, source.video.chunk_rows)

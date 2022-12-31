@@ -501,7 +501,7 @@ impl<T: Clone + Default + FrameValue<Output = T> + Serialize> FrameSequence<T> {
                 true => {
                     return Err(FrameSequenceError::InvalidIndex);
                 }
-                false => match chunk[frame_idx as usize].filled_count {
+                false => match chunk[frame_idx].filled_count {
                     a if a == chunk[0].array.len() => {}
                     a if a > chunk[0].array.len() => {
                         panic!("Impossible fill count. File a bug report!")

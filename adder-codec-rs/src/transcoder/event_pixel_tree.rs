@@ -265,8 +265,7 @@ impl PixelArena {
             let new_d = get_d_from_intensity(node.state.integration + intensity);
             node.state.d = new_d;
 
-            let prop =
-                (D_SHIFT[node.state.d as usize] as f32 - node.state.integration) as f32 / intensity;
+            let prop = (D_SHIFT[node.state.d as usize] as f32 - node.state.integration) / intensity;
             assert!(prop > 0.0);
             node.best_event = Some(Event {
                 coord: self.coord,

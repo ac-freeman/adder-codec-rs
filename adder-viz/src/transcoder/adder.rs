@@ -137,12 +137,8 @@ impl AdderTranscoder {
                             true,
                         ));
 
-                        let output_string = match output_path_opt {
-                            None => {None}
-                            Some(output_path) => {
-                                Some(output_path.to_str().unwrap().to_string())
-                            }
-                        };
+                        let output_string = output_path_opt
+                            .map(|output_path| output_path.to_str().unwrap().to_string());
 
                         let davis_source = DavisSource::new(
                             reconstructor,

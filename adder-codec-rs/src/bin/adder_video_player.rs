@@ -56,7 +56,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let eof_position_bytes = stream.get_eof_position().unwrap();
     let num_events = (eof_position_bytes - 1 - header_bytes as u64) / stream.event_size as u64;
-    let divisor = num_events as u64 / 100;
+    let divisor = num_events / 100;
     let frame_length = stream.tps as f64 / args.playback_fps;
 
     let stdout = io::stdout();
@@ -98,7 +98,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             write!(
                 handle,
                 "\rPlaying back ADΔER file...{}%",
-                (event_count * 100) / num_events as u64
+                (event_count * 100) / num_events
             )?;
             handle.flush().unwrap();
         }

@@ -61,45 +61,39 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     // Calculate the dynamic range of the events. That is, what is the highest intensity
     // event, and what is the lowest intensity event?
     if args.dynamic_range {
-        let divisor = num_events as u64 / 100;
+        let divisor = num_events / 100;
         stream.set_input_stream_position(first_event_position)?;
         let mut max_intensity: Intensity = 0.0;
         let mut min_intensity: Intensity = f64::MAX;
         let mut event_count: u64 = 0;
-        loop {
-            match stream.decode_event() {
-                Ok(event) => {
-                    match event_to_intensity(&event) {
-                        _ if event.d == 0xFF => {
-                            // ignore empty events
-                        }
-                        a if a.is_infinite() => {
-                            println!("INFINITE");
-                            dbg!(event);
-                        }
-                        a if a < min_intensity => {
-                            if event.d == 0xFE {
-                                min_intensity = 1.0 / event.delta_t as f64;
-                            } else {
-                                min_intensity = a;
-                            }
-                        }
-                        a if a > max_intensity => {
-                            max_intensity = a;
-                        }
-                        _ => {}
+        while let Ok(event) = stream.decode_event() {
+            match event_to_intensity(&event) {
+                _ if event.d == 0xFF => {
+                    // ignore empty events
+                }
+                a if a.is_infinite() => {
+                    println!("INFINITE");
+                    dbg!(event);
+                }
+                a if a < min_intensity => {
+                    if event.d == 0xFE {
+                        min_intensity = 1.0 / event.delta_t as f64;
+                    } else {
+                        min_intensity = a;
                     }
                 }
-                Err(_e) => {
-                    break;
+                a if a > max_intensity => {
+                    max_intensity = a;
                 }
+                _ => {}
             }
+
             event_count += 1;
             if event_count % divisor == 0 {
                 write!(
                     handle,
                     "\rCalculating dynamic range...{}%",
-                    (event_count * 100) / num_events as u64
+                    (event_count * 100) / num_events
                 )?;
                 handle.flush().unwrap();
             }

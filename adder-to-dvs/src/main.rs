@@ -66,7 +66,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let eof_position_bytes = stream.get_eof_position().unwrap();
     let _file_size = Path::new(file_path).metadata().unwrap().len();
     let num_events = (eof_position_bytes - 1 - header_bytes as u64) / stream.event_size as u64;
-    let divisor = num_events as u64 / 100;
+    let divisor = num_events / 100;
 
     let stdout = io::stdout();
     let mut handle = io::BufWriter::new(stdout.lock());
@@ -81,9 +81,10 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     {
         // Write the width and height as first line header
         let dims_str = stream.width.to_string() + " " + &*stream.height.to_string() + "\n";
-        text_writer
+        let amt = text_writer
             .write(dims_str.as_ref())
             .expect("Could not write");
+        debug_assert_eq!(amt, dims_str.len());
     }
 
     let mut event_count: u64 = 0;
@@ -159,7 +160,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             write!(
                 handle,
                 "\rTranscoding ADΔER to DVS...{}%",
-                (event_count * 100) / num_events as u64
+                (event_count * 100) / num_events
             )?;
             handle.flush().unwrap();
         }
@@ -237,9 +238,10 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                                             + y.to_string().as_str()
                                             + " "
                                             + "1\n";
-                                        text_writer
+                                        let amt = text_writer
                                             .write(dvs_string.as_ref())
                                             .expect("Could not write");
+                                        debug_assert_eq!(amt, dvs_string.len());
                                         px.frame_intensity_ln = new_intensity_ln;
                                     }
                                     (a, b) if a <= b - c => {
@@ -258,9 +260,10 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                                             + y.to_string().as_str()
                                             + " "
                                             + "-1\n";
-                                        text_writer
+                                        let amt = text_writer
                                             .write(dvs_string.as_ref())
                                             .expect("Could not write");
+                                        debug_assert_eq!(amt, dvs_string.len());
                                         px.frame_intensity_ln = new_intensity_ln;
                                     }
                                     (_, _) => {}
