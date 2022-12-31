@@ -96,7 +96,7 @@ impl SimulProcessor {
         output_path: &str,
         frame_max: i32,
         num_threads: usize,
-    ) -> SimulProcessor
+    ) -> Result<SimulProcessor, Box<dyn Error>>
     where
         T: Clone + std::marker::Sync + std::marker::Send + 'static,
         T: scale_intensity::FrameValue,
@@ -108,12 +108,10 @@ impl SimulProcessor {
     {
         let thread_pool_framer = rayon::ThreadPoolBuilder::new()
             .num_threads(max(num_threads / 2, 1))
-            .build()
-            .unwrap();
+            .build()?;
         let thread_pool_transcoder = rayon::ThreadPoolBuilder::new()
             .num_threads(max(num_threads / 2, 1))
-            .build()
-            .unwrap();
+            .build()?;
         let reconstructed_frame_rate = source.source_fps;
         // For instantaneous reconstruction, make sure the frame rate matches the source video rate
         assert_eq!(source.video.tps / ref_time, reconstructed_frame_rate as u32);
@@ -136,7 +134,7 @@ impl SimulProcessor {
                 .finish::<T>()
         });
 
-        let mut output_stream = BufWriter::new(File::create(output_path).unwrap());
+        let mut output_stream = BufWriter::new(File::create(output_path)?);
 
         let (events_tx, events_rx): (Sender<Vec<Vec<Event>>>, Receiver<Vec<Vec<Event>>>) =
             channel();
@@ -155,7 +153,8 @@ impl SimulProcessor {
                         if framer.ingest_events_events(events) {
                             match framer.write_multi_frame_bytes(&mut output_stream) {
                                 Ok(0) => {
-                                    panic!("Should have frame, but didn't")
+                                    eprintln!("Should have frame, but didn't");
+                                    break;
                                 }
                                 Ok(frames_returned) => {
                                     frame_count += frames_returned;
@@ -165,7 +164,13 @@ impl SimulProcessor {
                                         frames_returned,
                                         now.elapsed().as_millis() / frames_returned as u128
                                     );
-                                    io::stdout().flush().unwrap();
+                                    match io::stdout().flush() {
+                                        Ok(_) => {}
+                                        Err(_) => {
+                                            eprintln!("Error flushing stdout");
+                                            break;
+                                        }
+                                    };
                                     now = Instant::now();
                                 }
                                 Err(e) => {
@@ -174,9 +179,13 @@ impl SimulProcessor {
                                 }
                             }
                         }
-                        output_stream
-                            .flush()
-                            .expect("Could not flush raw video writer");
+                        match output_stream.flush() {
+                            Ok(_) => {}
+                            Err(_) => {
+                                eprintln!("Error flushing output stream");
+                                break;
+                            }
+                        }
                         if frame_count >= frame_max && frame_max > 0 {
                             eprintln!("Wrote max frames. Exiting channel.");
                             break;
@@ -190,11 +199,11 @@ impl SimulProcessor {
             }
         });
 
-        SimulProcessor {
+        Ok(SimulProcessor {
             source,
             thread_pool: thread_pool_transcoder,
             events_tx,
-        }
+        })
     }
 
     pub fn run(&mut self) -> Result<(), Box<dyn Error>> {
@@ -224,7 +233,13 @@ impl SimulProcessor {
                     video.in_interval_count,
                     now.elapsed().as_millis()
                 );
-                io::stdout().flush().unwrap();
+                match io::stdout().flush() {
+                    Ok(_) => {}
+                    Err(_) => {
+                        eprintln!("Error flushing stdout");
+                        break;
+                    }
+                };
                 now = Instant::now();
             }
         }

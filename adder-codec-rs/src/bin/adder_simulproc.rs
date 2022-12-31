@@ -21,7 +21,7 @@ async fn download_file() -> Result<(), Box<dyn std::error::Error + Send + Sync>>
     let path_str = "./tests/samples/videos/drop.mp4";
     if !Path::new(path_str).exists() {
         let resp = reqwest::get("https://www.pexels.com/video/2603664/download/").await?;
-        let mut file_out = File::create(path_str).expect("Could not create file on disk");
+        let mut file_out = File::create(path_str)?;
         let mut data_in = Cursor::new(resp.bytes().await?);
         std::io::copy(&mut data_in, &mut file_out)?;
     }
@@ -84,7 +84,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         args.output_raw_video_filename.as_str(),
         args.frame_count_max as i32,
         num_threads,
-    );
+    )?;
 
     let now = std::time::Instant::now();
     simul_processor.run().unwrap();
@@ -126,6 +126,7 @@ mod tests {
     use adder_codec_rs::transcoder::source::video::Source;
     use adder_codec_rs::utils::simulproc::{SimulProcArgs, SimulProcessor};
     use adder_codec_rs::SourceCamera::FramedU8;
+    use std::error::Error;
     use std::fs;
     use std::path::PathBuf;
     use std::process::Command;
@@ -133,7 +134,7 @@ mod tests {
     use std::time::Duration;
 
     #[test]
-    fn dark() {
+    fn dark() -> Result<(), Box<dyn Error>> {
         let d = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         let manifest_path_str = d.as_path().to_str().unwrap().to_owned();
 
@@ -176,7 +177,7 @@ mod tests {
             args.output_raw_video_filename.as_str(),
             args.frame_count_max as i32,
             1,
-        );
+        )?;
 
         simul_processor.run().unwrap();
         sleep(Duration::from_secs(5));
@@ -197,7 +198,7 @@ mod tests {
                 .expect("failed to execute process")
         } else {
             fs::remove_file(output_path).unwrap();
-            return;
+            return Ok(());
         };
         // println!("{}", String::from_utf8(output.stdout.clone()).unwrap());
 
@@ -208,6 +209,7 @@ mod tests {
         fs::remove_file(output_path).unwrap();
 
         let output_path = "./tests/samples/TEST_lake_scaled_hd_crop.adder";
-        fs::remove_file(output_path).unwrap();
+        fs::remove_file(output_path)?;
+        Ok(())
     }
 }

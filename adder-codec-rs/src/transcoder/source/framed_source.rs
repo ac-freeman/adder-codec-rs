@@ -4,6 +4,8 @@ use crate::transcoder::source::video::Video;
 use crate::{Coord, Event};
 
 use core::default::Default;
+use std::error::Error;
+use std::io::ErrorKind;
 use std::mem::swap;
 
 use crate::transcoder::source::video::SourceError::*;
@@ -137,7 +139,7 @@ impl FramedSourceBuilder {
         self
     }
 
-    pub fn finish(self) -> Result<FramedSource> {
+    pub fn finish(self) -> Result<FramedSource, Box<dyn Error>> {
         FramedSource::new(self)
     }
 }
@@ -145,7 +147,7 @@ impl FramedSourceBuilder {
 impl FramedSource {
     /// Initialize the framed source and read first frame of source, in order to get `height`
     /// and `width` and initialize [`Video`]
-    fn new(mut builder: FramedSourceBuilder) -> Result<FramedSource> {
+    fn new(mut builder: FramedSourceBuilder) -> Result<FramedSource, Box<dyn Error>> {
         let channels = match builder.color_input {
             true => 3,
             false => 1,
@@ -153,37 +155,30 @@ impl FramedSource {
 
         let mut cap =
             videoio::VideoCapture::from_file(builder.input_filename.as_str(), videoio::CAP_FFMPEG)?;
-        let video_frame_count = cap.get(CAP_PROP_FRAME_COUNT).unwrap();
+        let video_frame_count = cap.get(CAP_PROP_FRAME_COUNT)?;
         assert!(builder.frame_idx_start < video_frame_count as u32);
 
         // Calculate TPS based on ticks per frame and source FPS
-        cap.set(CAP_PROP_POS_FRAMES, builder.frame_idx_start as f64)
-            .unwrap();
-        let source_fps = cap.get(CAP_PROP_FPS).unwrap().round();
+        cap.set(CAP_PROP_POS_FRAMES, builder.frame_idx_start as f64)?;
+        let source_fps = cap.get(CAP_PROP_FPS)?.round();
         builder.tps = builder.ref_time * source_fps as u32;
         assert_eq!(
-            builder.ref_time * cap.get(CAP_PROP_FPS).unwrap().round() as u32,
+            builder.ref_time * cap.get(CAP_PROP_FPS)?.round() as u32,
             builder.tps
         );
 
         let opened = videoio::VideoCapture::is_opened(&cap)?;
         if !opened {
-            panic!("Could not open source")
+            return Err("Failed to open video capture".into());
         }
         let mut init_frame = Mat::default();
-        match cap.read(&mut init_frame) {
-            Ok(_) => {}
-            Err(e) => {
-                panic!("{}", e);
-            }
-        };
+        cap.read(&mut init_frame)?;
 
         // Move start frame back
-        cap.set(CAP_PROP_POS_FRAMES, builder.frame_idx_start as f64)
-            .unwrap();
+        cap.set(CAP_PROP_POS_FRAMES, builder.frame_idx_start as f64)?;
 
         let mut init_frame_scaled = Mat::default();
-        resize_input(&mut init_frame, &mut init_frame_scaled, builder.scale).unwrap();
+        resize_input(&mut init_frame, &mut init_frame_scaled, builder.scale)?;
         init_frame = init_frame_scaled;
 
         // Sanity checks
@@ -206,7 +201,7 @@ impl FramedSource {
             builder.source_camera,
             builder.c_thresh_pos,
             builder.c_thresh_neg,
-        );
+        )?;
 
         Ok(FramedSource {
             cap,
@@ -245,9 +240,7 @@ impl Source for FramedSource {
                     Err(_) => return Err(SourceError::NoData),
                 }
             }
-            Err(e) => {
-                panic!("{}", e);
-            }
+            Err(e) => return Err(SourceError::OpencvError(e)),
         };
 
         if self.input_frame_scaled.empty() {
@@ -256,7 +249,6 @@ impl Source for FramedSource {
         }
 
         let tmp = self.input_frame_scaled.clone();
-        
 
         thread_pool.install(|| {
             self.video.integrate_matrix(

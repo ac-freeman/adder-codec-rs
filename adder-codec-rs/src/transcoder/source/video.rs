@@ -1,4 +1,5 @@
 use opencv::core::{Mat, Size, CV_8U, CV_8UC3};
+use std::error::Error;
 use std::{fmt, io};
 
 use bumpalo::Bump;
@@ -110,7 +111,7 @@ impl Video {
         source_camera: SourceCamera,
         c_thresh_pos: u8,
         c_thresh_neg: u8,
-    ) -> Video {
+    ) -> Result<Video, Box<dyn Error>> {
         assert_eq!(D_SHIFT.len(), D_MAX as usize + 1);
         if write_out {
             assert!(communicate_events);
@@ -124,12 +125,7 @@ impl Video {
             Some(name) => {
                 if write_out {
                     let path = Path::new(&name);
-                    match stream.open_writer(path) {
-                        Ok(_) => {}
-                        Err(e) => {
-                            panic!("{}", e)
-                        }
-                    };
+                    stream.open_writer(path)?;
                     stream.encode_header(
                         width,
                         height,
@@ -139,7 +135,7 @@ impl Video {
                         channels as u8,
                         1,
                         source_camera,
-                    );
+                    )?;
                 }
             }
         }
@@ -165,24 +161,20 @@ impl Video {
         }
 
         let event_pixel_trees: Array3<PixelArena> =
-            Array3::from_shape_vec((height.into(), width.into(), channels), data).unwrap();
+            Array3::from_shape_vec((height.into(), width.into(), channels), data)?;
 
         let mut instantaneous_frame = Mat::default();
         match channels {
             1 => unsafe {
-                instantaneous_frame
-                    .create_rows_cols(height as i32, width as i32, CV_8U)
-                    .unwrap();
+                instantaneous_frame.create_rows_cols(height as i32, width as i32, CV_8U)?;
             },
             _ => unsafe {
-                instantaneous_frame
-                    .create_rows_cols(height as i32, width as i32, CV_8UC3)
-                    .unwrap();
+                instantaneous_frame.create_rows_cols(height as i32, width as i32, CV_8UC3)?;
             },
         }
         let _motion_frame_mat = instantaneous_frame.clone();
 
-        Video {
+        Ok(Video {
             width,
             height,
             chunk_rows,
@@ -203,7 +195,7 @@ impl Video {
             c_thresh_pos,
             c_thresh_neg,
             tps,
-        }
+        })
     }
 
     pub fn end_write_stream(&mut self) -> io::Result<()> {
@@ -217,7 +209,12 @@ impl Video {
         pixel_tree_mode: Mode,
         view_interval: u32,
     ) -> std::result::Result<Vec<Vec<Event>>, SourceError> {
-        let frame_arr: &[u8] = matrix.data_bytes().unwrap();
+        let frame_arr: &[u8] = match matrix.data_bytes() {
+            Ok(v) => v,
+            Err(e) => {
+                return Err(SourceError::OpencvError(e));
+            }
+        };
         if self.in_interval_count == 0 {
             self.set_initial_d(frame_arr);
         }
@@ -276,7 +273,12 @@ impl Video {
             self.stream.encode_events_events(&big_buffer);
         }
 
-        let db = self.instantaneous_frame.data_bytes_mut().unwrap();
+        let db = match self.instantaneous_frame.data_bytes_mut() {
+            Ok(v) => v,
+            Err(e) => {
+                return Err(SourceError::OpencvError(e));
+            }
+        };
 
         // TODO: When there's full support for various bit-depth sources, modify this accordingly
         let practical_d_max =
@@ -403,7 +405,7 @@ pub fn show_display(window_name: &str, mat: &Mat, wait: i32, video: &Video) {
     }
 }
 
-pub fn show_display_force(window_name: &str, mat: &Mat, wait: i32) {
+pub fn show_display_force(window_name: &str, mat: &Mat, wait: i32) -> opencv::Result<()> {
     let mut tmp = Mat::default();
 
     if mat.rows() != 940 {
@@ -418,17 +420,14 @@ pub fn show_display_force(window_name: &str, mat: &Mat, wait: i32) {
             0.0,
             0.0,
             0,
-        )
-        .unwrap();
-        highgui::imshow(window_name, &tmp).unwrap();
+        )?;
+        highgui::imshow(window_name, &tmp)?;
     } else {
-        highgui::imshow(window_name, mat).unwrap();
+        highgui::imshow(window_name, mat)?;
     }
 
-    // highgui::imshow(window_name, &tmp).unwrap();
-
-    highgui::wait_key(wait).unwrap();
-    // resize_window(window_name, mat.cols() / 540, 540);
+    highgui::wait_key(wait)?;
+    Ok(())
 }
 
 pub trait Source {

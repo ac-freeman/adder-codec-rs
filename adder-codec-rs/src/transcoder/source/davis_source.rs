@@ -96,7 +96,7 @@ impl DavisSource {
             DavisU8,
             adder_c_thresh_pos,
             adder_c_thresh_neg,
-        );
+        )?;
         let thread_pool_edi = rayon::ThreadPoolBuilder::new()
             .num_threads(max(current_num_threads() - 4, 1))
             .build()?;
