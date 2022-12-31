@@ -8,12 +8,16 @@ use crate::{
 };
 use bincode::config::{BigEndian, FixintEncoding, WithOtherEndian, WithOtherIntEncoding};
 use bincode::{DefaultOptions, Options};
+use std::error::Error;
 use std::fs::File;
 use std::io::{BufReader, BufWriter, Seek, SeekFrom, Write};
-use std::{error, fmt, mem};
+use std::{error, fmt, io, mem};
 
 #[derive(Debug)]
 pub enum StreamError {
+    /// Stream has not been initialized
+    UnitializedStream,
+
     /// Reached end of file when expected
     Eof,
 
@@ -33,7 +37,11 @@ impl fmt::Display for StreamError {
     }
 }
 
-impl error::Error for StreamError {}
+impl From<StreamError> for Box<dyn std::error::Error> {
+    fn from(value: StreamError) -> Self {
+        value.to_string().into()
+    }
+}
 
 pub struct RawStream {
     output_stream: Option<BufWriter<File>>,
@@ -106,26 +114,25 @@ impl Codec for RawStream {
             }
         }
     }
-    fn flush_writer(&mut self) {
+    fn flush_writer(&mut self) -> io::Result<()> {
         match &mut self.output_stream {
-            None => {}
-            Some(stream) => {
-                stream.flush().unwrap();
-            }
+            None => Ok(()),
+            Some(stream) => Ok(stream.flush()?),
         }
     }
 
-    fn close_writer(&mut self) {
+    fn close_writer(&mut self) -> io::Result<()> {
         self.write_eof();
         match &mut self.output_stream {
             None => {}
             Some(stream) => {
-                stream.flush().unwrap();
+                stream.flush()?;
             }
         }
         let mut tmp = None;
         mem::swap(&mut tmp, &mut self.output_stream);
         drop(tmp);
+        Ok(())
     }
 
     fn close_reader(&mut self) {
@@ -148,7 +155,7 @@ impl Codec for RawStream {
         }
         match &mut self.input_stream {
             None => {
-                panic!("Input stream not initialized");
+                return Err(StreamError::UnitializedStream);
             }
             Some(stream) => match stream.seek(SeekFrom::Start(pos)) {
                 Ok(_) => {}
@@ -164,7 +171,7 @@ impl Codec for RawStream {
         }
         match &mut self.input_stream {
             None => {
-                panic!("Input stream not initialized");
+                return Err(StreamError::UnitializedStream);
             }
             Some(stream) => match stream.seek(SeekFrom::End(pos)) {
                 Ok(_) => {}
@@ -174,25 +181,21 @@ impl Codec for RawStream {
         Ok(())
     }
 
-    fn get_input_stream_position(&mut self) -> Result<u64, StreamError> {
+    fn get_input_stream_position(&mut self) -> Result<u64, Box<dyn Error>> {
         match &mut self.input_stream {
             None => {
-                panic!("Input stream not initialized");
+                return Err(StreamError::UnitializedStream.into());
             }
-            Some(stream) => Ok(stream.stream_position().unwrap()),
+            Some(stream) => Ok(stream.stream_position()?),
         }
     }
 
-    fn get_eof_position(&mut self) -> Result<u64, StreamError> {
+    fn get_eof_position(&mut self) -> Result<u64, Box<dyn Error>> {
         match &mut self.input_stream {
             None => {
-                panic!("Input stream not initialized");
+                return Err(StreamError::UnitializedStream.into());
             }
-            Some(stream) => {
-                stream
-                    .seek(SeekFrom::End(-(self.event_size as i64)))
-                    .expect("Invalid seek position");
-            }
+            Some(stream) => stream.seek(SeekFrom::End(-(self.event_size as i64)))?,
         };
 
         for _ in 0..10 {

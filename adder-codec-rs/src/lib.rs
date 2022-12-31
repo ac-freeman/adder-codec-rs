@@ -2,8 +2,10 @@ use crate::framer::event_framer::{EventCoordless, SourceType};
 use crate::header::EventStreamHeader;
 use crate::raw::raw_stream::StreamError;
 use serde::{Deserialize, Serialize};
+use std::error::Error;
 use std::fmt::Formatter;
 use std::fs::File;
+use std::io;
 use std::io::{BufReader, BufWriter};
 use std::path::Path;
 
@@ -309,8 +311,8 @@ pub trait Codec {
 
     fn write_eof(&mut self);
     /// Flush the stream so that program can be exited safely
-    fn flush_writer(&mut self);
-    fn close_writer(&mut self);
+    fn flush_writer(&mut self) -> io::Result<()>;
+    fn close_writer(&mut self) -> io::Result<()>;
 
     /// Close the stream so that program can be exited safely
     fn close_reader(&mut self);
@@ -322,9 +324,9 @@ pub trait Codec {
     /// not aligned to an [Event]
     fn set_input_stream_position(&mut self, pos: u64) -> Result<(), StreamError>;
     fn set_input_stream_position_from_end(&mut self, pos: i64) -> Result<(), StreamError>;
-    fn get_input_stream_position(&mut self) -> Result<u64, StreamError>;
+    fn get_input_stream_position(&mut self) -> Result<u64, Box<dyn Error>>;
 
-    fn get_eof_position(&mut self) -> Result<u64, StreamError>;
+    fn get_eof_position(&mut self) -> Result<u64, Box<dyn Error>>;
 
     fn encode_header(
         &mut self,

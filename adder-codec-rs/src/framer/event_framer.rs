@@ -5,6 +5,9 @@ use bincode::{DefaultOptions, Options};
 use rayon::iter::ParallelIterator;
 
 use std::collections::VecDeque;
+use std::error::Error;
+use std::fmt;
+use std::fmt::{Display, Formatter};
 use std::fs::File;
 use std::io::BufWriter;
 use std::ops::Add;
@@ -200,7 +203,37 @@ pub(crate) struct Frame<T> {
 pub enum FrameSequenceError {
     /// Frame index out of bounds
     InvalidIndex,
+
+    /// Frame not initialized
+    UninitializedFrame,
+
+    /// An impossible "fill count" encountered
+    BadFillCount,
 }
+
+impl fmt::Display for FrameSequenceError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            FrameSequenceError::InvalidIndex => write!(f, "Invalid frame index"),
+            FrameSequenceError::UninitializedFrame => write!(f, "Uninitialized frame"),
+            FrameSequenceError::BadFillCount => write!(f, "Bad fill count"),
+        }
+    }
+}
+
+impl From<FrameSequenceError> for Box<dyn std::error::Error> {
+    fn from(value: FrameSequenceError) -> Self {
+        value.to_string().into()
+    }
+}
+
+// impl Display for FrameSequenceError {
+//     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+//         todo!()
+//     }
+// }
+//
+// impl std::error::Error for FrameSequenceError {}
 
 #[allow(dead_code)]
 pub struct FrameSequence<T> {
@@ -385,7 +418,7 @@ impl<
                 return false;
             }
         }
-        debug_assert!(self.is_frame_0_filled().unwrap());
+        debug_assert!(self.is_frame_0_filled());
         true
     }
 
@@ -444,7 +477,7 @@ impl<
                 },
             );
 
-        self.is_frame_0_filled().unwrap()
+        self.is_frame_0_filled()
     }
 }
 
@@ -459,13 +492,18 @@ impl<T: Clone + Default + FrameValue<Output = T> + Serialize> FrameSequence<T> {
         self.pixel_ts_tracker.len()
     }
 
-    pub fn px_at_current(&self, row: usize, col: usize, channel: usize) -> &Option<T> {
+    pub fn px_at_current(
+        &self,
+        row: usize,
+        col: usize,
+        channel: usize,
+    ) -> Result<&Option<T>, FrameSequenceError> {
         if self.frames.is_empty() {
-            panic!("Frame not initialized");
+            return Err(FrameSequenceError::UninitializedFrame);
         }
         let chunk_num = row / self.chunk_rows;
         let local_row = row - (chunk_num * self.chunk_rows);
-        &self.frames[chunk_num][0].array[[local_row, col, channel]]
+        Ok(&self.frames[chunk_num][0].array[[local_row, col, channel]])
     }
 
     pub fn px_at_frame(
@@ -504,7 +542,7 @@ impl<T: Clone + Default + FrameValue<Output = T> + Serialize> FrameSequence<T> {
                 false => match chunk[frame_idx].filled_count {
                     a if a == chunk[0].array.len() => {}
                     a if a > chunk[0].array.len() => {
-                        panic!("Impossible fill count. File a bug report!")
+                        return Err(FrameSequenceError::BadFillCount);
                     }
                     _ => {
                         return Ok(false);
@@ -515,13 +553,13 @@ impl<T: Clone + Default + FrameValue<Output = T> + Serialize> FrameSequence<T> {
         Ok(true)
     }
 
-    pub fn is_frame_0_filled(&self) -> Result<bool, FrameSequenceError> {
+    pub fn is_frame_0_filled(&self) -> bool {
         for chunk in &self.chunk_filled_tracker {
             if !chunk {
-                return Ok(false);
+                return false;
             }
         }
-        Ok(true)
+        true
     }
 
     pub fn pop_next_frame(&mut self) -> Option<Vec<Array3<Option<T>>>> {
@@ -560,28 +598,26 @@ impl<T: Clone + Default + FrameValue<Output = T> + Serialize> FrameSequence<T> {
                 self.chunk_filled_tracker[chunk_num] = false;
                 Some(a.array)
             }
-            None => panic!("No frame to pop"), // TODO: remove again
+            None => None,
         }
     }
 
-    pub fn write_frame_bytes(&mut self, writer: &mut BufWriter<File>) {
+    pub fn write_frame_bytes(
+        &mut self,
+        writer: &mut BufWriter<File>,
+    ) -> Result<(), Box<dyn Error>> {
         let none_val = T::default();
         for chunk_num in 0..self.frames.len() {
             match self.pop_next_frame_for_chunk(chunk_num) {
                 Some(arr) => {
                     for px in arr.iter() {
-                        match self.bincode.serialize_into(
+                        self.bincode.serialize_into(
                             &mut *writer,
                             match px {
                                 Some(event) => event,
                                 None => &none_val,
                             },
-                        ) {
-                            Ok(_) => {}
-                            Err(e) => {
-                                panic!("{}", e)
-                            }
-                        };
+                        )?;
                     }
                 }
                 None => {
@@ -590,15 +626,19 @@ impl<T: Clone + Default + FrameValue<Output = T> + Serialize> FrameSequence<T> {
             }
         }
         self.frames_written += 1;
+        Ok(())
     }
 
-    pub fn write_multi_frame_bytes(&mut self, writer: &mut BufWriter<File>) -> i32 {
+    pub fn write_multi_frame_bytes(
+        &mut self,
+        writer: &mut BufWriter<File>,
+    ) -> Result<i32, Box<dyn Error>> {
         let mut frame_count = 0;
-        while self.is_frame_filled(0).unwrap() {
-            self.write_frame_bytes(writer);
+        while self.is_frame_filled(0)? {
+            self.write_frame_bytes(writer)?;
             frame_count += 1;
         }
-        frame_count
+        Ok(frame_count)
     }
 
     // pub fn copy_frame_bytes_to_mat(&mut self, mat: &mut Mat) -> Mat {

@@ -154,10 +154,10 @@ impl SimulProcessor {
                         // Frame the events
                         if framer.ingest_events_events(events) {
                             match framer.write_multi_frame_bytes(&mut output_stream) {
-                                0 => {
+                                Ok(0) => {
                                     panic!("Should have frame, but didn't")
                                 }
-                                frames_returned => {
+                                Ok(frames_returned) => {
                                     frame_count += frames_returned;
                                     print!(
                                         "\rOutput frame {}. Got {} frames in  {} ms/frame\t",
@@ -167,6 +167,10 @@ impl SimulProcessor {
                                     );
                                     io::stdout().flush().unwrap();
                                     now = Instant::now();
+                                }
+                                Err(e) => {
+                                    eprintln!("Error writing frame: {}", e);
+                                    break;
                                 }
                             }
                         }
