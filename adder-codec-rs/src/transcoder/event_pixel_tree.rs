@@ -3,7 +3,6 @@ use crate::{Coord, Event, UDshift, D_MAX, D_SHIFT};
 use smallvec::{smallvec, SmallVec};
 use std::cmp::min;
 
-
 /// Decimation value; a pixel's sensitivity.
 pub type D = u8;
 
@@ -250,6 +249,7 @@ impl PixelArena {
 
     /// Integrate an intensity for a given node. Returns `Some()` if the node fires an event, so
     /// that the newly-created branch's node only gets integrated with the remaining intensity.
+    #[allow(clippy::similar_names)]
     pub fn integrate_main(
         &mut self,
         index: usize,

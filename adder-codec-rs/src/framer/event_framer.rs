@@ -94,6 +94,7 @@ pub struct FramerBuilder {
 }
 
 impl FramerBuilder {
+    #[must_use]
     pub fn new(
         num_rows: usize,
         num_cols: usize,
@@ -105,7 +106,7 @@ impl FramerBuilder {
             num_cols,
             num_channels,
             chunk_rows,
-            tps: 150000,
+            tps: 150_000,
             output_fps: 30.0,
             mode: FramerMode::INSTANTANEOUS,
             view_mode: FramedViewMode::Intensity,
