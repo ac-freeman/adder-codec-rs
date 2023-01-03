@@ -60,7 +60,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let mut reconstructor = rt.block_on(Reconstructor::new(
         base_path.to_string(),
         aedat_filename.to_string(),
-        "".to_string(),
+        String::new(),
         "file".to_string(),
         0.15,
         false,
@@ -100,7 +100,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
     let mut video_writer: BufWriter<File> = BufWriter::new(File::create(raw_path)?);
 
-    let frame_length = (1000000.0 / args.fps) as u128; // length in ticks
+    let frame_length = (1_000_000.0 / args.fps) as u128; // length in ticks
     let mut frame_count = 0_usize;
     let mut base_t = 0;
     let mut current_t = 0;
@@ -119,7 +119,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 Some(()) => {
                     for event in events {
                         event_count += 1;
-                        if current_t > (frame_count as u128 * frame_length) + 1000000 {
+                        if current_t > (frame_count as u128 * frame_length) + 1_000_000 {
                             match instantaneous_frame_deque.pop_front() {
                                 None => {}
                                 Some(frame) => {
@@ -151,7 +151,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 break;
             }
             Err(e) => {
-                println!("Error: {:?}", e);
+                println!("Error: {e:?}");
                 break;
             }
         }
@@ -163,7 +163,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         }
         write_frame_to_video(&frame, &mut video_writer)?;
     }
-    println!("\nDVS event count: {}", event_count);
+    println!("\nDVS event count: {event_count}");
     println!("\n");
     encode_video_ffmpeg(raw_path, output_video_path)?;
     println!("Finished!");

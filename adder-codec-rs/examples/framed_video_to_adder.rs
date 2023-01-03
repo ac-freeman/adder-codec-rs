@@ -36,7 +36,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         match source.consume(1, &pool) {
             Ok(_) => {} // Returns Vec<Vec<Event>>, but we're just writing the events out in this example
             Err(e) => {
-                println!("Err: {:?}", e);
+                println!("Err: {e:?}");
                 break;
             }
         };

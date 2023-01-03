@@ -20,8 +20,8 @@ fn main() {
     let output_path = "/home/andrew/Downloads/temppp_out";
     let mut output_stream = BufWriter::new(File::create(output_path).unwrap());
 
-    let reconstructed_frame_rate = (stream.tps / stream.ref_interval) as f64;
-    println!("reconstructed_frame_rate: {}", reconstructed_frame_rate);
+    let reconstructed_frame_rate = f64::from(stream.tps / stream.ref_interval);
+    println!("reconstructed_frame_rate: {reconstructed_frame_rate}");
     // For instantaneous reconstruction, make sure the frame rate matches the source video rate
     // assert_eq!(
     //     stream.tps / stream.ref_interval,
@@ -67,7 +67,7 @@ fn main() {
                             now = Instant::now();
                         }
                         Err(e) => {
-                            eprintln!("Error writing frame: {}", e);
+                            eprintln!("Error writing frame: {e}");
                             break;
                         }
                     }

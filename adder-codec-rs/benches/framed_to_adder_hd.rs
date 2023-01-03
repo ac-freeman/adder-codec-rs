@@ -27,7 +27,7 @@ fn simul_proc(video_path: &str, scale: f64, thread_count: u8, chunk_rows: usize)
         delta_t_max: 120000,
         frame_count_max: 300,
         frame_idx_start: 0,
-        show_display: 0,
+        show_display: false,
         input_filename: video_path.to_string(),
         output_events_filename: "".parse().unwrap(),
         output_raw_video_filename: manifest_path_str + "/benches/run/bench_out",

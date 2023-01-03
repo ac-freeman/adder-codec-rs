@@ -184,10 +184,10 @@ impl Video {
         let mut instantaneous_frame = Mat::default();
         match channels {
             1 => unsafe {
-                instantaneous_frame.create_rows_cols(height as i32, width as i32, CV_8U)?;
+                instantaneous_frame.create_rows_cols(i32::from(height), i32::from(width), CV_8U)?;
             },
             _ => unsafe {
-                instantaneous_frame.create_rows_cols(height as i32, width as i32, CV_8UC3)?;
+                instantaneous_frame.create_rows_cols(i32::from(height), i32::from(width), CV_8UC3)?;
             },
         }
         let _motion_frame_mat = instantaneous_frame.clone();
@@ -266,7 +266,7 @@ impl Video {
                     *px_idx = chunk_px_idx + px_per_chunk * chunk_idx;
 
                     *frame_val_intensity32 =
-                        (frame_arr[*px_idx] as f64 * self.ref_time_divisor) as Intensity32;
+                        (f64::from(frame_arr[*px_idx]) * self.ref_time_divisor) as Intensity32;
                     *frame_val = *frame_val_intensity32 as u8;
 
                     integrate_for_px(
@@ -331,7 +331,7 @@ impl Video {
                 + px.coord.x as usize * self.channels
                 + px.coord.c.unwrap_or(0) as usize;
             let intensity = frame_arr[idx];
-            let d_start = (intensity as f32).log2().floor() as D;
+            let d_start = f32::from(intensity).log2().floor() as D;
             px.arena[0].set_d(d_start);
             px.base_val = intensity;
         });
@@ -416,7 +416,7 @@ pub fn integrate_for_px(
     }
 }
 
-/// If [`MyArgs`]`.show_display`, shows the given [`Mat`] in an OpenCV window
+/// If [`MyArgs`]`.show_display`, shows the given [`Mat`] in an `OpenCV` window
 pub fn show_display(window_name: &str, mat: &Mat, wait: i32, video: &Video) -> opencv::Result<()> {
     if video.show_display {
         show_display_force(window_name, mat, wait)?;

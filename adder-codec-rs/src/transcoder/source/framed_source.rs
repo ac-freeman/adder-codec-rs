@@ -8,7 +8,7 @@ use std::error::Error;
 
 use std::mem::swap;
 
-use crate::transcoder::source::video::SourceError::*;
+use crate::transcoder::source::video::SourceError::BufferEmpty;
 
 use opencv::core::{Mat, Size};
 use opencv::videoio::{VideoCapture, CAP_PROP_FPS, CAP_PROP_FRAME_COUNT, CAP_PROP_POS_FRAMES};
@@ -60,15 +60,15 @@ pub struct FramedSourceBuilder {
 }
 
 impl FramedSourceBuilder {
-    pub fn new(input_filename: String, source_camera: SourceCamera) -> FramedSourceBuilder {
+    #[must_use] pub fn new(input_filename: String, source_camera: SourceCamera) -> FramedSourceBuilder {
         FramedSourceBuilder {
             input_filename,
             output_events_filename: None,
             frame_idx_start: 0,
             chunk_rows: 64,
             ref_time: 5000,
-            tps: 150000,
-            delta_t_max: 150000,
+            tps: 150_000,
+            delta_t_max: 150_000,
             scale: 1.0,
             frame_skip_interval: 0,
             color_input: true,
@@ -81,30 +81,30 @@ impl FramedSourceBuilder {
         }
     }
 
-    pub fn output_events_filename(mut self, output_events_filename: String) -> FramedSourceBuilder {
+    #[must_use] pub fn output_events_filename(mut self, output_events_filename: String) -> FramedSourceBuilder {
         self.output_events_filename = Some(output_events_filename);
         self.write_out = true;
         self
     }
 
-    pub fn frame_start(mut self, frame_idx_start: u32) -> FramedSourceBuilder {
+    #[must_use] pub fn frame_start(mut self, frame_idx_start: u32) -> FramedSourceBuilder {
         self.frame_idx_start = frame_idx_start;
         self
     }
 
-    pub fn chunk_rows(mut self, chunk_rows: usize) -> FramedSourceBuilder {
+    #[must_use] pub fn chunk_rows(mut self, chunk_rows: usize) -> FramedSourceBuilder {
         self.chunk_rows = chunk_rows;
         self
     }
 
-    pub fn time_parameters(mut self, ref_time: DeltaT, delta_t_max: DeltaT) -> FramedSourceBuilder {
+    #[must_use] pub fn time_parameters(mut self, ref_time: DeltaT, delta_t_max: DeltaT) -> FramedSourceBuilder {
         self.delta_t_max = delta_t_max;
         self.ref_time = ref_time;
         assert_eq!(self.delta_t_max % self.ref_time, 0);
         self
     }
 
-    pub fn contrast_thresholds(
+    #[must_use] pub fn contrast_thresholds(
         mut self,
         c_thresh_pos: u8,
         c_thresh_neg: u8,
@@ -114,27 +114,27 @@ impl FramedSourceBuilder {
         self
     }
 
-    pub fn scale(mut self, scale: f64) -> FramedSourceBuilder {
+    #[must_use] pub fn scale(mut self, scale: f64) -> FramedSourceBuilder {
         self.scale = scale;
         self
     }
 
-    pub fn skip_interval(mut self, frame_skip_interval: u8) -> FramedSourceBuilder {
+    #[must_use] pub fn skip_interval(mut self, frame_skip_interval: u8) -> FramedSourceBuilder {
         self.frame_skip_interval = frame_skip_interval;
         self
     }
 
-    pub fn color(mut self, color_input: bool) -> FramedSourceBuilder {
+    #[must_use] pub fn color(mut self, color_input: bool) -> FramedSourceBuilder {
         self.color_input = color_input;
         self
     }
 
-    pub fn communicate_events(mut self, communicate_events: bool) -> FramedSourceBuilder {
+    #[must_use] pub fn communicate_events(mut self, communicate_events: bool) -> FramedSourceBuilder {
         self.communicate_events = communicate_events;
         self
     }
 
-    pub fn show_display(mut self, show_display_b: bool) -> FramedSourceBuilder {
+    #[must_use] pub fn show_display(mut self, show_display_b: bool) -> FramedSourceBuilder {
         self.show_display_b = show_display_b;
         self
     }
@@ -161,7 +161,7 @@ impl FramedSource {
         };
 
         // Calculate TPS based on ticks per frame and source FPS
-        cap.set(CAP_PROP_POS_FRAMES, builder.frame_idx_start as f64)?;
+        cap.set(CAP_PROP_POS_FRAMES, f64::from(builder.frame_idx_start))?;
         let source_fps = cap.get(CAP_PROP_FPS)?.round();
         builder.tps = builder.ref_time * source_fps as u32;
         if builder.ref_time * cap.get(CAP_PROP_FPS)?.round() as u32 != builder.tps {
@@ -176,7 +176,7 @@ impl FramedSource {
         cap.read(&mut init_frame)?;
 
         // Move start frame back
-        cap.set(CAP_PROP_POS_FRAMES, builder.frame_idx_start as f64)?;
+        cap.set(CAP_PROP_POS_FRAMES, f64::from(builder.frame_idx_start))?;
 
         let mut init_frame_scaled = Mat::default();
         resize_input(&mut init_frame, &mut init_frame_scaled, builder.scale)?;

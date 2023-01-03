@@ -16,7 +16,7 @@ pub(crate) struct DController {
     delta_t_predicted: DeltaT,
 }
 
-/// Define the shared functions of our DController
+/// Define the shared functions of our `DController`
 pub trait DControl {
     fn throttle_decimation(&mut self, d: &mut D, delta_t_max: DeltaT);
     fn update_decimation(&mut self, d: &mut D, delta_t: DeltaT, delta_t_max: DeltaT);
@@ -136,7 +136,7 @@ fn throttle_decimation_general(controller: &mut DController, d: &mut D, delta_t_
     let old_d = *d;
     let threshold = controller.delta_t_predicted as f32 * 1.2;
     if *d > 0 && delta_t_max > threshold as u32 {
-        *d = fast_math::log2_raw(*d as f32) as D;
+        *d = fast_math::log2_raw(f32::from(*d)) as D;
         if *d > 0 && *d == old_d {
             *d -= 1;
         }
@@ -191,10 +191,10 @@ impl DControl for Aggressive {
                 *d = crate::D_START;
             }
         } else if *d < D_MAX
-            && (delta_t << 1) as f32 <= (delta_t_max / (self.roi_factor as u32)) as f32 * 0.8
+            && (delta_t << 1) as f32 <= (delta_t_max / u32::from(self.roi_factor)) as f32 * 0.8
         {
             *d += 1;
-        } else if *d > 0 && delta_t > delta_t_max / (self.roi_factor as u32) {
+        } else if *d > 0 && delta_t > delta_t_max / u32::from(self.roi_factor) {
             *d -= 1;
         }
         if *d > self.controller.lookahead_d && self.controller.lookahead_d != 255 {

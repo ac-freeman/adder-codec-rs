@@ -138,10 +138,10 @@ mod tests {
         let manifest_path_str = d.as_path().to_str().unwrap().to_owned();
 
         let args: SimulProcArgs = SimulProcArgs {
-            args_filename: "".to_string(),
+            args_filename: String::new(),
             color_input: false,
             ref_time: 5000,
-            delta_t_max: 120000,
+            delta_t_max: 120_000,
             frame_count_max: 0,
             frame_idx_start: 1,
             show_display: false,
@@ -184,8 +184,8 @@ mod tests {
         let output_path = "./tests/samples/TEST_lake_scaled_hd_crop";
         assert_eq!(
             fs::metadata(output_path).unwrap().len()
-                % (simul_processor.source.get_video().width as u64
-                    * simul_processor.source.get_video().height as u64),
+                % (u64::from(simul_processor.source.get_video().width)
+                    * u64::from(simul_processor.source.get_video().height)),
             0
         );
 

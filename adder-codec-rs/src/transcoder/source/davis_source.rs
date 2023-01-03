@@ -148,10 +148,10 @@ impl DavisSource {
         event_check: F,
     ) -> Result<(), StreamError> {
         let mut dvs_chunks: [Vec<DvsEvent>; 4] = [
-            Vec::with_capacity(100000),
-            Vec::with_capacity(100000),
-            Vec::with_capacity(100000),
-            Vec::with_capacity(100000),
+            Vec::with_capacity(100_000),
+            Vec::with_capacity(100_000),
+            Vec::with_capacity(100_000),
+            Vec::with_capacity(100_000),
         ];
 
         let mut chunk_idx;
@@ -184,7 +184,7 @@ impl DavisSource {
                     chunk_idx,
                     (mut px_chunk, (mut dvs_last_ln_val_chunk, mut dvs_last_timestamps_chunk)),
                 )| {
-                    let mut buffer: Vec<Event> = Vec::with_capacity(100000);
+                    let mut buffer: Vec<Event> = Vec::with_capacity(100_000);
 
                     for event in &dvs_chunks[chunk_idx] {
                         // Ignore events occuring during the deblurred frame's
@@ -340,7 +340,7 @@ impl DavisSource {
                     // );
 
                     let integration =
-                        ((last_val / self.video.ref_time as f64) * delta_t_ticks as f64).max(0.0);
+                        ((last_val / f64::from(self.video.ref_time)) * f64::from(delta_t_ticks)).max(0.0);
                     assert!(integration >= 0.0);
 
                     integrate_for_px(
@@ -404,7 +404,7 @@ impl DavisSource {
             match opt_timestamp {
                 None => {}
                 Some(timestamp) => {
-                    let latency = (Instant::now() - timestamp).as_millis();
+                    let latency = timestamp.elapsed().as_millis();
                     match latency as f64 >= self.reconstructor.target_latency * 3.0 {
                         true => {
                             self.video.c_thresh_pos = self.video.c_thresh_pos.saturating_add(1);
@@ -501,7 +501,7 @@ impl Source for DavisSource {
                 self.start_of_frame_timestamp = Some(img_start_ts);
                 self.end_of_frame_timestamp = Some(img_end_ts);
                 self.video.ref_time_divisor =
-                    (img_end_ts - img_start_ts) as f64 / self.video.ref_time as f64;
+                    (img_end_ts - img_start_ts) as f64 / f64::from(self.video.ref_time);
             }
             Ok(Some((mat, opt_timestamp, None))) => {
                 self.control_latency(opt_timestamp);

@@ -11,7 +11,7 @@ pub type D = u8;
 /// Number of ticks elapsed since a given pixel last fired an [`pixel::Event`]
 pub type DeltaT = u32;
 
-/// Measure of an amount of light intensity. Is f32 so that we can use fast_math::log2_raw
+/// Measure of an amount of light intensity. Is f32 so that we can use `fast_math::log2_raw`
 pub type Intensity32 = f32;
 
 /// Pixel x- or y- coordinate address in the ADΔER model
@@ -185,8 +185,8 @@ impl PixelArena {
     }
 
     /// Integrates the intensity. Returns bool indicating whether or not the topmost event MUST be popped
-    /// or else risk losing accuracy. Should only return true when d=D_MAX, which should be
-    /// extremely rare, or when delta_t_max is hit
+    /// or else risk losing accuracy. Should only return true when `d=D_MAX`, which should be
+    /// extremely rare, or when `delta_t_max` is hit
     pub fn integrate(
         &mut self,
         mut intensity: Intensity32,
@@ -525,7 +525,7 @@ mod tests {
     #[test]
     fn test_d_max() {
         // 1048576
-        let dtm = 100000000;
+        let dtm = 100_000_000;
         let mut tree = PixelArena::new(
             (1u128 << 126u128) as f32,
             Coord {
@@ -536,10 +536,10 @@ mod tests {
         );
         tree.integrate(
             (1u128 << 126u128) as f32,
-            100000.0,
+            100_000.0,
             &Continuous,
             &dtm,
-            &100000,
+            &100_000,
         );
         assert!(tree.need_to_pop_top);
         let mut events = Vec::new();
@@ -548,13 +548,13 @@ mod tests {
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].d, 126);
         let tmp = events[0].delta_t;
-        assert_eq!(tmp, 100000);
+        assert_eq!(tmp, 100_000);
         assert!(f32_slack(tree.arena[0].state.integration, 0.0));
     }
 
     #[test]
     fn test_dtm() {
-        let dtm = 240000;
+        let dtm = 240_000;
         let mut tree = PixelArena::new(
             245.0,
             Coord {
@@ -576,7 +576,7 @@ mod tests {
 
     #[test]
     fn test_big_integration() {
-        let dtm = 1000000;
+        let dtm = 1_000_000;
         let mut tree = PixelArena::new(
             146.0,
             Coord {
@@ -599,7 +599,7 @@ mod tests {
 
     #[test]
     fn test_big_integration2() {
-        let dtm = 10000000;
+        let dtm = 10_000_000;
         let mut tree = PixelArena::new(
             255.0,
             Coord {

@@ -52,15 +52,15 @@ impl FrameValue for u8 {
             FramedViewMode::Intensity => {
                 let intensity = event_to_intensity(event);
                 match source_type {
-                    SourceType::U8 => (intensity * tpf as f64) as u8,
+                    SourceType::U8 => (intensity * f64::from(tpf)) as u8,
                     SourceType::U16 => {
-                        (intensity / u16::MAX as f64 * tpf as f64 * u8::MAX as f64) as u8
+                        (intensity / f64::from(u16::MAX) * f64::from(tpf) * f64::from(u8::MAX)) as u8
                     }
                     SourceType::U32 => {
-                        (intensity / u32::MAX as f64 * tpf as f64 * u8::MAX as f64) as u8
+                        (intensity / f64::from(u32::MAX) * f64::from(tpf) * f64::from(u8::MAX)) as u8
                     }
                     SourceType::U64 => {
-                        (intensity / u64::MAX as f64 * tpf as f64 * u8::MAX as f64) as u8
+                        (intensity / u64::MAX as f64 * f64::from(tpf) * f64::from(u8::MAX)) as u8
                     }
                     SourceType::F32 => {
                         todo!()
@@ -70,15 +70,15 @@ impl FrameValue for u8 {
                     }
                 }
             }
-            FramedViewMode::D => ((event.d as f32 / practical_d_max) * u8::MAX as f32) as u8,
+            FramedViewMode::D => ((f32::from(event.d) / practical_d_max) * f32::from(u8::MAX)) as u8,
             FramedViewMode::DeltaT => {
-                ((event.delta_t as f32 / delta_t_max as f32) * u8::MAX as f32) as u8
+                ((event.delta_t as f32 / delta_t_max as f32) * f32::from(u8::MAX)) as u8
             }
         }
     }
 
     fn max_f32() -> f32 {
-        u8::MAX as f32
+        f32::from(u8::MAX)
     }
 }
 
@@ -98,14 +98,14 @@ impl FrameValue for u16 {
                 let intensity = event_to_intensity(event);
                 match source_type {
                     SourceType::U8 => {
-                        (intensity / u8::MAX as f64 * tpf as f64 * u16::MAX as f64) as u16
+                        (intensity / f64::from(u8::MAX) * f64::from(tpf) * f64::from(u16::MAX)) as u16
                     }
-                    SourceType::U16 => (intensity * tpf as f64) as u16,
+                    SourceType::U16 => (intensity * f64::from(tpf)) as u16,
                     SourceType::U32 => {
-                        (intensity / u32::MAX as f64 * tpf as f64 * u16::MAX as f64) as u16
+                        (intensity / f64::from(u32::MAX) * f64::from(tpf) * f64::from(u16::MAX)) as u16
                     }
                     SourceType::U64 => {
-                        (intensity / u64::MAX as f64 * tpf as f64 * u16::MAX as f64) as u16
+                        (intensity / u64::MAX as f64 * f64::from(tpf) * f64::from(u16::MAX)) as u16
                     }
                     SourceType::F32 => {
                         todo!()
@@ -115,15 +115,15 @@ impl FrameValue for u16 {
                     }
                 }
             }
-            FramedViewMode::D => ((event.d as f32 / practical_d_max) * u16::MAX as f32) as u16,
+            FramedViewMode::D => ((f32::from(event.d) / practical_d_max) * f32::from(u16::MAX)) as u16,
             FramedViewMode::DeltaT => {
-                ((event.delta_t as f32 / delta_t_max as f32) * u16::MAX as f32) as u16
+                ((event.delta_t as f32 / delta_t_max as f32) * f32::from(u16::MAX)) as u16
             }
         }
     }
 
     fn max_f32() -> f32 {
-        u16::MAX as f32
+        f32::from(u16::MAX)
     }
 }
 
@@ -143,14 +143,14 @@ impl FrameValue for u32 {
                 let intensity = event_to_intensity(event);
                 match source_type {
                     SourceType::U8 => {
-                        (intensity / u8::MAX as f64 * tpf as f64 * u32::MAX as f64) as u32
+                        (intensity / f64::from(u8::MAX) * f64::from(tpf) * f64::from(u32::MAX)) as u32
                     }
                     SourceType::U16 => {
-                        (intensity / u16::MAX as f64 * tpf as f64 * u32::MAX as f64) as u32
+                        (intensity / f64::from(u16::MAX) * f64::from(tpf) * f64::from(u32::MAX)) as u32
                     }
-                    SourceType::U32 => (intensity * tpf as f64) as u32,
+                    SourceType::U32 => (intensity * f64::from(tpf)) as u32,
                     SourceType::U64 => {
-                        (intensity / u64::MAX as f64 * tpf as f64 * u32::MAX as f64) as u32
+                        (intensity / u64::MAX as f64 * f64::from(tpf) * f64::from(u32::MAX)) as u32
                     }
                     SourceType::F32 => {
                         todo!()
@@ -160,7 +160,7 @@ impl FrameValue for u32 {
                     }
                 }
             }
-            FramedViewMode::D => ((event.d as f32 / practical_d_max) * u32::MAX as f32) as u32,
+            FramedViewMode::D => ((f32::from(event.d) / practical_d_max) * u32::MAX as f32) as u32,
             FramedViewMode::DeltaT => {
                 ((event.delta_t as f32 / delta_t_max as f32) * u32::MAX as f32) as u32
             }
@@ -188,15 +188,15 @@ impl FrameValue for u64 {
                 let intensity = event_to_intensity(event);
                 match source_type {
                     SourceType::U8 => {
-                        (intensity / u8::MAX as f64 * tpf as f64 * u64::MAX as f64) as u64
+                        (intensity / f64::from(u8::MAX) * f64::from(tpf) * u64::MAX as f64) as u64
                     }
                     SourceType::U16 => {
-                        (intensity / u16::MAX as f64 * tpf as f64 * u64::MAX as f64) as u64
+                        (intensity / f64::from(u16::MAX) * f64::from(tpf) * u64::MAX as f64) as u64
                     }
                     SourceType::U32 => {
-                        (intensity / u32::MAX as f64 * tpf as f64 * u64::MAX as f64) as u64
+                        (intensity / f64::from(u32::MAX) * f64::from(tpf) * u64::MAX as f64) as u64
                     }
-                    SourceType::U64 => (intensity * tpf as f64) as u64,
+                    SourceType::U64 => (intensity * f64::from(tpf)) as u64,
                     SourceType::F32 => {
                         todo!()
                     }
@@ -205,7 +205,7 @@ impl FrameValue for u64 {
                     }
                 }
             }
-            FramedViewMode::D => ((event.d as f32 / practical_d_max) * u64::MAX as f32) as u64,
+            FramedViewMode::D => ((f32::from(event.d) / practical_d_max) * u64::MAX as f32) as u64,
             FramedViewMode::DeltaT => {
                 ((event.delta_t as f32 / delta_t_max as f32) * u64::MAX as f32) as u64
             }
@@ -217,19 +217,19 @@ impl FrameValue for u64 {
     }
 }
 
-pub fn event_to_intensity(event: &Event) -> Intensity {
+#[must_use] pub fn event_to_intensity(event: &Event) -> Intensity {
     match event.d as usize {
-        a if a >= D_SHIFT.len() => 0 as Intensity,
+        a if a >= D_SHIFT.len() => f64::from(0),
         _ => match event.delta_t {
             0 => D_SHIFT[event.d as usize] as Intensity, // treat it as dt = 1
-            _ => D_SHIFT[event.d as usize] as Intensity / event.delta_t as Intensity,
+            _ => D_SHIFT[event.d as usize] as Intensity / f64::from(event.delta_t),
         },
     }
 }
 
 fn _eventcoordless_to_intensity(event: &EventCoordless) -> Intensity {
     match event.d as usize {
-        a if a >= D_SHIFT.len() => 0 as Intensity,
-        _ => D_SHIFT[event.d as usize] as Intensity / event.delta_t as Intensity,
+        a if a >= D_SHIFT.len() => f64::from(0),
+        _ => D_SHIFT[event.d as usize] as Intensity / f64::from(event.delta_t),
     }
 }

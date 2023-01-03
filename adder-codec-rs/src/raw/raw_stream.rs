@@ -203,7 +203,7 @@ impl Codec for RawStream {
             None => {
                 return Err(StreamError::UnitializedStream.into());
             }
-            Some(stream) => stream.seek(SeekFrom::End(-(self.event_size as i64)))?,
+            Some(stream) => stream.seek(SeekFrom::End(-i64::from(self.event_size)))?,
         };
 
         for _ in 0..10 {
@@ -213,7 +213,7 @@ impl Codec for RawStream {
                         .input_stream
                         .as_mut()
                         .ok_or(StreamError::UnitializedStream)?;
-                    return Ok(stream.stream_position()? - self.event_size as u64);
+                    return Ok(stream.stream_position()? - u64::from(self.event_size));
                 }
                 Err(Deserialize) => break,
                 _ => {}
@@ -225,7 +225,7 @@ impl Codec for RawStream {
                 .ok_or(StreamError::UnitializedStream)?;
 
             // Keep iterating back, searching for the Eof
-            match stream.seek(SeekFrom::Current(-(self.event_size as i64 * 2))) {
+            match stream.seek(SeekFrom::Current(-(i64::from(self.event_size) * 2))) {
                 Ok(_) => {}
                 Err(_) => break,
             };
@@ -235,10 +235,10 @@ impl Codec for RawStream {
         self.get_input_stream_position()
     }
 
-    /// Encode the header for this [RawStream]. If an [input_stream] is open for this struct
-    /// already, then it is dropped. Intended usage is to create a separate [RawStream] if you
+    /// Encode the header for this [`RawStream`]. If an [`input_stream`] is open for this struct
+    /// already, then it is dropped. Intended usage is to create a separate [`RawStream`] if you
     /// want to read and write two streams at once (for example, if you are cropping the spatial
-    /// pixels of a stream, reducing the number of channels, or scaling the [DeltaT] values in
+    /// pixels of a stream, reducing the number of channels, or scaling the [`DeltaT`] values in
     /// some way).
     fn encode_header(
         &mut self,
@@ -449,7 +449,7 @@ mod tests {
                 panic!("Couldn't decode event")
             }
         }
-        stream.encode_header(20, 30, 473289, 477893, 4732987, 3, 1, FramedU8);
+        stream.encode_header(20, 30, 473_289, 477_893, 4_732_987, 3, 1, FramedU8);
         assert!(stream.input_stream.is_none());
 
         stream.close_writer();

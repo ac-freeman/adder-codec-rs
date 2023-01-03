@@ -134,9 +134,9 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let mut davis_source = DavisSource::new(
         reconstructor,
         Some(args.output_events_filename),
-        1000000, // TODO
-        1000000.0 / edi_args.output_fps,
-        (1000000.0 * args.delta_t_max_multiplier) as u32, // TODO
+        1_000_000, // TODO
+        1_000_000.0 / edi_args.output_fps,
+        (1_000_000.0 * args.delta_t_max_multiplier) as u32, // TODO
         args.show_display,
         args.adder_c_thresh_pos,
         args.adder_c_thresh_neg,
@@ -154,7 +154,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         match davis_source.consume(1, &thread_pool_integration) {
             Ok(_events) => {}
             Err(e) => {
-                println!("Err: {:?}", e);
+                println!("Err: {e:?}");
                 break;
             }
         };

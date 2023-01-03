@@ -117,7 +117,7 @@ impl FramerBuilder {
             delta_t_max: 5000,
         }
     }
-    pub fn time_parameters(
+    #[must_use] pub fn time_parameters(
         mut self,
         tps: DeltaT,
         ref_interval: DeltaT,
@@ -131,29 +131,29 @@ impl FramerBuilder {
         self
     }
 
-    pub fn mode(mut self, mode: FramerMode) -> FramerBuilder {
+    #[must_use] pub fn mode(mut self, mode: FramerMode) -> FramerBuilder {
         self.mode = mode;
         self
     }
 
-    pub fn view_mode(mut self, mode: FramedViewMode) -> FramerBuilder {
+    #[must_use] pub fn view_mode(mut self, mode: FramedViewMode) -> FramerBuilder {
         self.view_mode = mode;
         self
     }
 
-    pub fn source(mut self, source: SourceType, source_camera: SourceCamera) -> FramerBuilder {
+    #[must_use] pub fn source(mut self, source: SourceType, source_camera: SourceCamera) -> FramerBuilder {
         self.source_camera = source_camera;
         self.source = source;
         self
     }
 
-    pub fn codec_version(mut self, codec_version: u8) -> FramerBuilder {
+    #[must_use] pub fn codec_version(mut self, codec_version: u8) -> FramerBuilder {
         self.codec_version = codec_version;
         self
     }
 
     // TODO: Make this return a result
-    pub fn finish<T>(self) -> FrameSequence<T>
+    #[must_use] pub fn finish<T>(self) -> FrameSequence<T>
     where
         T: FrameValue<Output = T>,
         T: Clone,
@@ -484,12 +484,12 @@ impl<
 
 impl<T: Clone + Default + FrameValue<Output = T> + Serialize> FrameSequence<T> {
     /// Get the number of frames queue'd up to be written
-    pub fn get_frames_len(&self) -> usize {
+    #[must_use] pub fn get_frames_len(&self) -> usize {
         self.frames.len()
     }
 
     /// Get the number of chunks in a frame
-    pub fn get_frame_chunks_num(&self) -> usize {
+    #[must_use] pub fn get_frame_chunks_num(&self) -> usize {
         self.pixel_ts_tracker.len()
     }
 
@@ -554,7 +554,7 @@ impl<T: Clone + Default + FrameValue<Output = T> + Serialize> FrameSequence<T> {
         Ok(true)
     }
 
-    pub fn is_frame_0_filled(&self) -> bool {
+    #[must_use] pub fn is_frame_0_filled(&self) -> bool {
         for chunk in &self.chunk_filled_tracker {
             if !chunk {
                 return false;
@@ -572,7 +572,7 @@ impl<T: Clone + Default + FrameValue<Output = T> + Serialize> FrameSequence<T> {
                     ret.push(frame);
                 }
                 None => {
-                    println!("Couldn't pop chunk {}!", chunk_num)
+                    println!("Couldn't pop chunk {chunk_num}!")
                 }
             }
         }
@@ -622,7 +622,7 @@ impl<T: Clone + Default + FrameValue<Output = T> + Serialize> FrameSequence<T> {
                     }
                 }
                 None => {
-                    println!("Couldn't pop chunk {}!", chunk_num)
+                    println!("Couldn't pop chunk {chunk_num}!")
                 }
             }
         }
@@ -705,9 +705,9 @@ fn ingest_event_for_chunk<
     let prev_last_filled_frame = *last_filled_frame_ref;
     let _already_filled = *last_filled_frame_ref >= frames_written;
 
-    *running_ts_ref += event.delta_t as BigT;
+    *running_ts_ref += u64::from(event.delta_t);
 
-    if ((*running_ts_ref - 1) as i64 / tpf as i64) > *last_filled_frame_ref {
+    if ((*running_ts_ref - 1) as i64 / i64::from(tpf)) > *last_filled_frame_ref {
         // Set the frame's value from the event
 
         if event.d != 0xFF {
@@ -724,7 +724,7 @@ fn ingest_event_for_chunk<
                 view_mode,
             );
         }
-        *last_filled_frame_ref = (*running_ts_ref - 1) as i64 / tpf as i64;
+        *last_filled_frame_ref = (*running_ts_ref - 1) as i64 / i64::from(tpf);
 
         // Grow the frames vec if necessary
         match *last_filled_frame_ref - *frame_idx_offset {
@@ -786,9 +786,9 @@ fn ingest_event_for_chunk<
             SourceCamera::Atis => false,
             SourceCamera::Asint => false,
         }
-        && *running_ts_ref % ref_interval as BigT > 0
+        && *running_ts_ref % u64::from(ref_interval) > 0
     {
-        *running_ts_ref = ((*running_ts_ref / ref_interval as BigT) + 1) * ref_interval as BigT;
+        *running_ts_ref = ((*running_ts_ref / u64::from(ref_interval)) + 1) * u64::from(ref_interval);
     }
 
     debug_assert!(*last_filled_frame_ref >= 0);

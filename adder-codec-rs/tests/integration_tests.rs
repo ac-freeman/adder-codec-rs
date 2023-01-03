@@ -85,7 +85,7 @@ fn test_sample_perfect_dt() {
                             frame_count += frames_returned;
                         }
                         Err(e) => {
-                            panic!("error writing frame: {}", e)
+                            panic!("error writing frame: {e}")
                         }
                     }
                 }
@@ -160,7 +160,7 @@ fn test_sample_perfect_dt_color() {
                             frame_count += frames_returned;
                         }
                         Err(e) => {
-                            panic!("error writing frame: {}", e)
+                            panic!("error writing frame: {e}")
                         }
                     }
                 }
@@ -783,7 +783,7 @@ fn test_sample_unordered() {
                             frame_count += frames_returned;
                         }
                         Err(e) => {
-                            panic!("error writing frame: {}", e)
+                            panic!("error writing frame: {e}")
                         }
                     }
                 }
@@ -858,7 +858,7 @@ fn test_sample_ordered() {
                             frame_count += frames_returned;
                         }
                         Err(e) => {
-                            panic!("error writing frame: {}", e)
+                            panic!("error writing frame: {e}")
                         }
                     }
                 }
@@ -902,7 +902,7 @@ fn test_framed_to_adder_bunny4() {
     .color(false)
     .contrast_thresholds(5, 5)
     .show_display(false)
-    .time_parameters(5000, 240000)
+    .time_parameters(5000, 240_000)
     .finish()
     .unwrap();
 
@@ -929,7 +929,7 @@ fn test_framed_to_adder_bunny4() {
                 }
             }
             Err(e) => {
-                println!("Err: {:?}", e);
+                println!("Err: {e:?}");
                 break;
             }
         }
@@ -965,7 +965,7 @@ fn array3_test() {
         .axis_chunks_iter_mut(Axis(0), 4)
         .enumerate()
         .len();
-    println!("{}", tmp);
+    println!("{tmp}");
 
     let ret: Vec<i32> = event_pixel_trees
         .axis_chunks_iter_mut(Axis(0), 4)

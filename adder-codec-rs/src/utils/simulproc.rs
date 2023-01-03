@@ -174,7 +174,7 @@ impl SimulProcessor {
                                     now = Instant::now();
                                 }
                                 Err(e) => {
-                                    eprintln!("Error writing frame: {}", e);
+                                    eprintln!("Error writing frame: {e}");
                                     break;
                                 }
                             }
@@ -220,7 +220,7 @@ impl SimulProcessor {
                     };
                 }
                 Err(e) => {
-                    println!("Err: {:?}", e);
+                    println!("Err: {e:?}");
                     break;
                 }
             };

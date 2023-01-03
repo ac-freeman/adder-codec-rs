@@ -55,9 +55,9 @@ fn main() -> Result<(), Box<dyn Error>> {
     let first_event_position = stream.get_input_stream_position()?;
 
     let eof_position_bytes = stream.get_eof_position()?;
-    let num_events = (eof_position_bytes - 1 - header_bytes as u64) / stream.event_size as u64;
+    let num_events = (eof_position_bytes - 1 - header_bytes as u64) / u64::from(stream.event_size);
     let divisor = num_events / 100;
-    let frame_length = stream.tps as f64 / args.playback_fps;
+    let frame_length = f64::from(stream.tps) / args.playback_fps;
 
     let stdout = io::stdout();
     let mut handle = io::BufWriter::new(stdout.lock());
@@ -68,16 +68,16 @@ fn main() -> Result<(), Box<dyn Error>> {
     match stream.channels {
         1 => {
             create_continuous(
-                stream.height as i32,
-                stream.width as i32,
+                i32::from(stream.height),
+                i32::from(stream.width),
                 CV_64F,
                 &mut display_mat,
             )?;
         }
         3 => {
             create_continuous(
-                stream.height as i32,
-                stream.width as i32,
+                i32::from(stream.height),
+                i32::from(stream.width),
                 CV_64FC3,
                 &mut display_mat,
             )?;
@@ -100,7 +100,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             )?;
             handle.flush()?;
         }
-        if current_t as u128 > (frame_count * frame_length as u128) {
+        if u128::from(current_t) > (frame_count * frame_length as u128) {
             let wait_time = max(
                 ((1000.0 / args.playback_fps) as u128)
                     .saturating_sub((Instant::now() - last_frame_displayed_ts).as_millis()),
@@ -114,18 +114,18 @@ fn main() -> Result<(), Box<dyn Error>> {
         match stream.decode_event() {
             Ok(event) if event.d <= 0xFE => {
                 event_count += 1;
-                let y = event.coord.y as i32;
-                let x = event.coord.x as i32;
-                let c = event.coord.c.unwrap_or(0) as i32;
+                let y = i32::from(event.coord.y);
+                let x = i32::from(event.coord.x);
+                let c = i32::from(event.coord.c.unwrap_or(0));
                 if (y | x | c) == 0x0 {
                     current_t += event.delta_t;
                 }
 
-                let frame_intensity = (event_to_intensity(&event) * stream.ref_interval as f64)
+                let frame_intensity = (event_to_intensity(&event) * f64::from(stream.ref_interval))
                     / match stream.source_camera {
-                        SourceCamera::FramedU8 => u8::MAX as f64,
-                        SourceCamera::FramedU16 => u16::MAX as f64,
-                        SourceCamera::FramedU32 => u32::MAX as f64,
+                        SourceCamera::FramedU8 => f64::from(u8::MAX),
+                        SourceCamera::FramedU16 => f64::from(u16::MAX),
+                        SourceCamera::FramedU32 => f64::from(u32::MAX),
                         SourceCamera::FramedU64 => u64::MAX as f64,
                         SourceCamera::FramedF32 => {
                             todo!("Not yet implemented")
@@ -133,8 +133,8 @@ fn main() -> Result<(), Box<dyn Error>> {
                         SourceCamera::FramedF64 => {
                             todo!("Not yet implemented")
                         }
-                        SourceCamera::Dvs => u8::MAX as f64,
-                        SourceCamera::DavisU8 => u8::MAX as f64,
+                        SourceCamera::Dvs => f64::from(u8::MAX),
+                        SourceCamera::DavisU8 => f64::from(u8::MAX),
                         SourceCamera::Atis => {
                             todo!("Not yet implemented")
                         }
