@@ -10,8 +10,8 @@ use std::process::Command;
 
 use adder_codec_rs::framer::event_framer::FramerMode::INSTANTANEOUS;
 use adder_codec_rs::framer::event_framer::{FrameSequence, Framer, FramerBuilder};
-use adder_codec_rs::raw::raw_stream::RawStream;
-use adder_codec_rs::transcoder::source::framed_source::FramedSourceBuilder;
+use adder_codec_rs::raw::stream::Raw;
+use adder_codec_rs::transcoder::source::framed::FramedBuilder;
 use adder_codec_rs::transcoder::source::video::Source;
 use adder_codec_rs::SourceCamera::FramedU8;
 use adder_codec_rs::{Codec, Coord, Event, SourceCamera};
@@ -21,7 +21,7 @@ use rayon::current_num_threads;
 #[test]
 fn test_set_stream_position() {
     let input_path = "./tests/samples/sample_1_raw_events.adder";
-    let mut stream: RawStream = Codec::new();
+    let mut stream: Raw = Codec::new();
     stream.open_reader(input_path).unwrap();
     let header_size = stream.decode_header().unwrap();
     for i in 1..stream.event_size as usize {
@@ -41,7 +41,7 @@ fn test_set_stream_position() {
 #[test]
 fn test_sample_perfect_dt() {
     let input_path = "./tests/samples/sample_1_raw_events.adder";
-    let mut stream: RawStream = Codec::new();
+    let mut stream: Raw = Codec::new();
     stream.open_reader(input_path).unwrap();
     stream.decode_header().unwrap();
 
@@ -117,7 +117,7 @@ fn test_sample_perfect_dt() {
 #[test]
 fn test_sample_perfect_dt_color() {
     let input_path = "./tests/samples/sample_2_raw_events.adder";
-    let mut stream: RawStream = Codec::new();
+    let mut stream: Raw = Codec::new();
     stream.open_reader(input_path).unwrap();
     stream.decode_header().unwrap();
 
@@ -191,7 +191,7 @@ fn test_sample_perfect_dt_color() {
 #[test]
 #[should_panic]
 fn test_encode_header_non_init() {
-    let mut stream: RawStream = Codec::new();
+    let mut stream: Raw = Codec::new();
     stream
         .encode_header(50, 100, 53000, 4000, 50000, 1, 1, FramedU8)
         .unwrap();
@@ -228,8 +228,8 @@ fn test_encode_header_v1() {
     // Don't check the error
 }
 
-fn setup_raw_writer(rand_num: u32) -> RawStream {
-    let mut stream: RawStream = Codec::new();
+fn setup_raw_writer(rand_num: u32) -> Raw {
+    let mut stream: Raw = Codec::new();
     stream
         .open_writer("./TEST_".to_owned() + rand_num.to_string().as_str() + ".addr")
         .expect("Couldn't open file");
@@ -237,8 +237,8 @@ fn setup_raw_writer(rand_num: u32) -> RawStream {
     stream
 }
 
-fn setup_raw_writer_v1(rand_num: u32) -> RawStream {
-    let mut stream: RawStream = Codec::new();
+fn setup_raw_writer_v1(rand_num: u32) -> Raw {
+    let mut stream: Raw = Codec::new();
     stream
         .open_writer("./TEST_".to_owned() + rand_num.to_string().as_str() + ".addr")
         .expect("Couldn't open file");
@@ -246,7 +246,7 @@ fn setup_raw_writer_v1(rand_num: u32) -> RawStream {
     stream
 }
 
-fn cleanup_raw_writer(rand_num: u32, stream: &mut RawStream) {
+fn cleanup_raw_writer(rand_num: u32, stream: &mut Raw) {
     stream.close_writer();
     fs::remove_file("./TEST_".to_owned() + rand_num.to_string().as_str() + ".addr").unwrap();
     // Don't check the error
@@ -288,7 +288,7 @@ fn test_encode_events() {
     cleanup_raw_writer(n, &mut stream)
 }
 
-fn setup_raw_reader(rand_num: u32, stream: &mut RawStream) {
+fn setup_raw_reader(rand_num: u32, stream: &mut Raw) {
     stream
         .open_reader("./TEST_".to_owned() + rand_num.to_string().as_str() + ".addr")
         .expect("Couldn't open file");
@@ -740,7 +740,7 @@ fn test_get_empty_frame() {
 #[test]
 fn test_sample_unordered() {
     let input_path = "./tests/samples/sample_3_unordered.adder";
-    let mut stream: RawStream = Codec::new();
+    let mut stream: Raw = Codec::new();
     stream.open_reader(input_path).unwrap();
     stream.decode_header().unwrap();
 
@@ -815,7 +815,7 @@ fn test_sample_unordered() {
 #[test]
 fn test_sample_ordered() {
     let input_path = "./tests/samples/sample_3_ordered.adder";
-    let mut stream: RawStream = Codec::new();
+    let mut stream: Raw = Codec::new();
     stream.open_reader(input_path).unwrap();
     stream.decode_header().unwrap();
 
@@ -891,14 +891,13 @@ fn test_sample_ordered() {
 fn test_framed_to_adder_bunny4() {
     let data = fs::read_to_string("./tests/samples/bunny4.json").expect("Unable to read file");
     let gt_events: Vec<Event> = serde_json::from_str(data.as_str()).unwrap();
-    let mut source = FramedSourceBuilder::new(
+    let mut source = FramedBuilder::new(
         "./tests/samples/bunny_crop4.mp4".to_string(),
         SourceCamera::FramedU8,
     )
     .chunk_rows(64)
     .frame_start(361)
     .scale(1.0)
-    .communicate_events(true)
     .color(false)
     .contrast_thresholds(5, 5)
     .show_display(false)

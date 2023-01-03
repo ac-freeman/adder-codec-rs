@@ -1,20 +1,19 @@
 use crate::header::{EventStreamHeaderExtensionV0, EventStreamHeaderExtensionV1, MAGIC_RAW};
-use crate::raw::raw_stream::StreamError::{Deserialize, Eof};
 use crate::SourceType::{F32, F64, U16, U32, U64, U8};
 
+use crate::raw::stream::Error::{Deserialize, Eof};
 use crate::{
     Codec, Coord, DeltaT, Event, EventSingle, EventStreamHeader, SourceCamera, SourceType,
     EOF_PX_ADDRESS,
 };
 use bincode::config::{BigEndian, FixintEncoding, WithOtherEndian, WithOtherIntEncoding};
 use bincode::{DefaultOptions, Options};
-use std::error::Error;
 use std::fs::File;
 use std::io::{BufReader, BufWriter, Seek, SeekFrom, Write};
 use std::{fmt, io, mem};
 
 #[derive(Debug)]
-pub enum StreamError {
+pub enum Error {
     /// Stream has not been initialized
     UnitializedStream,
 
@@ -34,25 +33,25 @@ pub enum StreamError {
     BincodeError(bincode::Error),
 }
 
-impl fmt::Display for StreamError {
+impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "Stream error")
     }
 }
 
-impl From<StreamError> for Box<dyn std::error::Error> {
-    fn from(value: StreamError) -> Self {
+impl From<Error> for Box<dyn std::error::Error> {
+    fn from(value: Error) -> Self {
         value.to_string().into()
     }
 }
 
-impl From<Box<bincode::ErrorKind>> for StreamError {
+impl From<Box<bincode::ErrorKind>> for Error {
     fn from(value: Box<bincode::ErrorKind>) -> Self {
-        StreamError::BincodeError(value)
+        Error::BincodeError(value)
     }
 }
 
-pub struct RawStream {
+pub struct Raw {
     output_stream: Option<BufWriter<File>>,
     input_stream: Option<BufReader<File>>,
     pub codec_version: u8,
@@ -68,9 +67,9 @@ pub struct RawStream {
     bincode: WithOtherEndian<WithOtherIntEncoding<DefaultOptions, FixintEncoding>, BigEndian>,
 }
 
-impl Codec for RawStream {
+impl Codec for Raw {
     fn new() -> Self {
-        RawStream {
+        Raw {
             output_stream: None,
             input_stream: None,
             codec_version: 1,
@@ -89,7 +88,7 @@ impl Codec for RawStream {
         }
     }
 
-    #[allow(match_same_arms)]
+    #[allow(clippy::match_same_arms)]
     fn get_source_type(&self) -> SourceType {
         match self.source_camera {
             SourceCamera::FramedU8 => U8,
@@ -105,7 +104,7 @@ impl Codec for RawStream {
         }
     }
 
-    fn write_eof(&mut self) -> Result<(), StreamError> {
+    fn write_eof(&mut self) -> Result<(), Error> {
         match &mut self.output_stream {
             None => {
                 // panic!("Output stream not initialized");
@@ -132,7 +131,7 @@ impl Codec for RawStream {
         }
     }
 
-    fn close_writer(&mut self) -> Result<(), Box<dyn Error>> {
+    fn close_writer(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         self.write_eof()?;
         match &mut self.output_stream {
             None => {}
@@ -160,49 +159,49 @@ impl Codec for RawStream {
         self.input_stream = stream;
     }
 
-    fn set_input_stream_position(&mut self, pos: u64) -> Result<(), StreamError> {
-        if (pos as usize - self.header_size) % self.event_size as usize != 0 {
-            return Err(StreamError::Seek);
+    fn set_input_stream_position(&mut self, pos: u64) -> Result<(), Error> {
+        if (pos - self.header_size as u64) % u64::from(self.event_size) != 0 {
+            return Err(Error::Seek);
         }
         match &mut self.input_stream {
             None => {
-                return Err(StreamError::UnitializedStream);
+                return Err(Error::UnitializedStream);
             }
             Some(stream) => match stream.seek(SeekFrom::Start(pos)) {
                 Ok(_) => {}
-                Err(_) => return Err(StreamError::Seek),
+                Err(_) => return Err(Error::Seek),
             },
         };
         Ok(())
     }
 
-    fn set_input_stream_position_from_end(&mut self, mut pos: i64) -> Result<(), StreamError> {
+    fn set_input_stream_position_from_end(&mut self, mut pos: i64) -> Result<(), Error> {
         if pos > 0 {
             pos = -pos;
         }
         match &mut self.input_stream {
             None => {
-                return Err(StreamError::UnitializedStream);
+                return Err(Error::UnitializedStream);
             }
             Some(stream) => match stream.seek(SeekFrom::End(pos)) {
                 Ok(_) => {}
-                Err(_) => return Err(StreamError::Seek),
+                Err(_) => return Err(Error::Seek),
             },
         };
         Ok(())
     }
 
-    fn get_input_stream_position(&mut self) -> Result<u64, Box<dyn Error>> {
+    fn get_input_stream_position(&mut self) -> Result<u64, Box<dyn std::error::Error>> {
         match &mut self.input_stream {
-            None => Err(StreamError::UnitializedStream.into()),
+            None => Err(Error::UnitializedStream.into()),
             Some(stream) => Ok(stream.stream_position()?),
         }
     }
 
-    fn get_eof_position(&mut self) -> Result<u64, Box<dyn Error>> {
+    fn get_eof_position(&mut self) -> Result<u64, Box<dyn std::error::Error>> {
         match &mut self.input_stream {
             None => {
-                return Err(StreamError::UnitializedStream.into());
+                return Err(Error::UnitializedStream.into());
             }
             Some(stream) => stream.seek(SeekFrom::End(-i64::from(self.event_size)))?,
         };
@@ -210,20 +209,14 @@ impl Codec for RawStream {
         for _ in 0..10 {
             match self.decode_event() {
                 Err(Eof) => {
-                    let stream = self
-                        .input_stream
-                        .as_mut()
-                        .ok_or(StreamError::UnitializedStream)?;
+                    let stream = self.input_stream.as_mut().ok_or(Error::UnitializedStream)?;
                     return Ok(stream.stream_position()? - u64::from(self.event_size));
                 }
                 Err(Deserialize) => break,
                 _ => {}
             }
 
-            let stream = self
-                .input_stream
-                .as_mut()
-                .ok_or(StreamError::UnitializedStream)?;
+            let stream = self.input_stream.as_mut().ok_or(Error::UnitializedStream)?;
 
             // Keep iterating back, searching for the Eof
             match stream.seek(SeekFrom::Current(-(i64::from(self.event_size) * 2))) {
@@ -236,8 +229,8 @@ impl Codec for RawStream {
         self.get_input_stream_position()
     }
 
-    /// Encode the header for this [`RawStream`]. If an [`input_stream`] is open for this struct
-    /// already, then it is dropped. Intended usage is to create a separate [`RawStream`] if you
+    /// Encode the header for this [`Raw`]. If an [`input_stream`] is open for this struct
+    /// already, then it is dropped. Intended usage is to create a separate [`Raw`] if you
     /// want to read and write two streams at once (for example, if you are cropping the spatial
     /// pixels of a stream, reducing the number of channels, or scaling the [`DeltaT`] values in
     /// some way).
@@ -251,7 +244,7 @@ impl Codec for RawStream {
         channels: u8,
         codec_version: u8,
         source_camera: SourceCamera,
-    ) -> Result<(), Box<dyn Error>> {
+    ) -> Result<(), Box<dyn std::error::Error>> {
         self.width = width;
         self.height = height;
         self.tps = tps;
@@ -272,7 +265,7 @@ impl Codec for RawStream {
 
         match &mut self.output_stream {
             None => {
-                return Err(StreamError::UnitializedStream.into());
+                return Err(Error::UnitializedStream.into());
             }
             Some(stream) => {
                 self.bincode.serialize_into(&mut *stream, &header)?;
@@ -287,9 +280,7 @@ impl Codec for RawStream {
                             source: source_camera,
                         },
                     )?,
-                    _ => self
-                        .bincode
-                        .serialize_into(&mut *stream, &EventStreamHeaderExtensionV0 {})?,
+                    _ => return Err(Error::BadFile.into()),
                 };
             }
         }
@@ -297,9 +288,9 @@ impl Codec for RawStream {
         Ok(())
     }
 
-    fn decode_header(&mut self) -> Result<usize, Box<dyn Error>> {
+    fn decode_header(&mut self) -> Result<usize, Box<dyn std::error::Error>> {
         match &mut self.input_stream {
-            None => Err(StreamError::UnitializedStream.into()),
+            None => Err(Error::UnitializedStream.into()),
             Some(stream) => {
                 let header = match self
                     .bincode
@@ -320,7 +311,7 @@ impl Codec for RawStream {
 
                 match header.magic {
                     MAGIC_RAW => {}
-                    _ => return Err(StreamError::BadFile.into()),
+                    _ => return Err(Error::BadFile.into()),
                 };
 
                 let header_size = std::mem::size_of::<EventStreamHeader>()
@@ -350,9 +341,9 @@ impl Codec for RawStream {
         }
     }
 
-    fn encode_event(&mut self, event: &Event) -> Result<(), StreamError> {
+    fn encode_event(&mut self, event: &Event) -> Result<(), Error> {
         match &mut self.output_stream {
-            None => Err(StreamError::UnitializedStream),
+            None => Err(Error::UnitializedStream),
             Some(stream) => {
                 // NOTE: for speed, the following checks only run in debug builds. It's entirely
                 // possibly to encode non-sensical events if you want to.
@@ -371,24 +362,24 @@ impl Codec for RawStream {
         }
     }
 
-    fn encode_events(&mut self, events: &[Event]) -> Result<(), StreamError> {
+    fn encode_events(&mut self, events: &[Event]) -> Result<(), Error> {
         for event in events {
             self.encode_event(event)?;
         }
         Ok(())
     }
 
-    fn encode_events_events(&mut self, events: &[Vec<Event>]) -> Result<(), StreamError> {
+    fn encode_events_events(&mut self, events: &[Vec<Event>]) -> Result<(), Error> {
         for v in events {
             self.encode_events(v)?;
         }
         Ok(())
     }
 
-    fn decode_event(&mut self) -> Result<Event, StreamError> {
+    fn decode_event(&mut self) -> Result<Event, Error> {
         // let mut buf = vec![0u8; self.event_size as usize];
         let event: Event = match &mut self.input_stream {
-            None => return Err(StreamError::UnitializedStream),
+            None => return Err(Error::UnitializedStream),
             Some(stream) => {
                 if self.channels == 1 {
                     match self.bincode.deserialize_from::<_, EventSingle>(stream) {
@@ -412,7 +403,7 @@ impl Codec for RawStream {
 
 #[cfg(test)]
 mod tests {
-    use crate::raw::raw_stream::RawStream;
+    use crate::raw::stream::Raw;
     use crate::SourceCamera::FramedU8;
     use crate::{Codec, Coord, Event};
     use rand::Rng;
@@ -421,7 +412,7 @@ mod tests {
     #[test]
     fn ttt() {
         let n: u32 = rand::thread_rng().gen();
-        let mut stream: RawStream = Codec::new();
+        let mut stream: Raw = Codec::new();
         stream
             .open_writer("./TEST_".to_owned() + n.to_string().as_str() + ".addr")
             .expect("Couldn't open file");

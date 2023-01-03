@@ -55,9 +55,6 @@ We can transcode an arbitrary framed video to the ADΔER format. Run the program
         // Input video is scaled by this amount before transcoding
         .scale(0.5)         
         
-        // Must be true for us to do anything with the events
-        .communicate_events(true)   
-        
         // The file path to store the ADΔER events
         .output_events_filename("~/Downloads/events.adder".to_string())     
         

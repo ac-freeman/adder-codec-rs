@@ -1,6 +1,6 @@
 use crate::transcoder::adder::{replace_adder_transcoder, AdderTranscoder};
 use crate::{slider_pm, Images};
-use adder_codec_rs::transcoder::source::davis_source::DavisTranscoderMode;
+use adder_codec_rs::transcoder::source::davis::TranscoderMode;
 use adder_codec_rs::transcoder::source::video::{FramedViewMode, Source, SourceError};
 use bevy::ecs::system::Resource;
 use bevy::prelude::{Assets, Commands, Image, Res, ResMut, Time};
@@ -28,7 +28,7 @@ pub struct ParamsUiState {
     thread_count_slider: usize,
     pub(crate) color: bool,
     view_mode_radio_state: FramedViewMode,
-    pub(crate) davis_mode_radio_state: DavisTranscoderMode,
+    pub(crate) davis_mode_radio_state: TranscoderMode,
     pub(crate) davis_output_fps: f64,
     davis_output_fps_slider: f64,
     pub(crate) optimize_c: bool,
@@ -50,7 +50,7 @@ impl Default for ParamsUiState {
             thread_count_slider: 4,
             color: true,
             view_mode_radio_state: FramedViewMode::Intensity,
-            davis_mode_radio_state: DavisTranscoderMode::RawDavis,
+            davis_mode_radio_state: TranscoderMode::RawDavis,
             davis_output_fps: 500.0,
             davis_output_fps_slider: 500.0,
             optimize_c: true,
@@ -415,17 +415,17 @@ fn side_panel_grid_contents(
         ui.horizontal(|ui| {
             ui.radio_value(
                 &mut ui_state.davis_mode_radio_state,
-                DavisTranscoderMode::Framed,
+                TranscoderMode::Framed,
                 "Framed recon",
             );
             ui.radio_value(
                 &mut ui_state.davis_mode_radio_state,
-                DavisTranscoderMode::RawDavis,
+                TranscoderMode::RawDavis,
                 "Raw DAVIS",
             );
             ui.radio_value(
                 &mut ui_state.davis_mode_radio_state,
-                DavisTranscoderMode::RawDvs,
+                TranscoderMode::RawDvs,
                 "Raw DVS",
             );
         });

@@ -1,4 +1,4 @@
-use adder_codec_rs::transcoder::source::davis_source::DavisSource;
+use adder_codec_rs::transcoder::source::davis::Davis;
 use adder_codec_rs::transcoder::source::video::Source;
 use aedat::base::ioheader_generated::Compression;
 use clap::Parser;
@@ -7,9 +7,7 @@ use davis_edi_rs::Args as EdiArgs;
 
 use serde::Deserialize;
 
-use adder_codec_rs::transcoder::source::davis_source::DavisTranscoderMode::{
-    Framed, RawDavis, RawDvs,
-};
+use adder_codec_rs::transcoder::source::davis::TranscoderMode::{Framed, RawDavis, RawDvs};
 use std::io::Write;
 use std::time::Instant;
 use std::{error, io};
@@ -131,7 +129,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         edi_args.simulate_packet_latency,
     ));
 
-    let mut davis_source = DavisSource::new(
+    let mut davis_source = Davis::new(
         reconstructor,
         Some(args.output_events_filename),
         1_000_000, // TODO

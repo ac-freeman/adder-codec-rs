@@ -6,8 +6,8 @@ use bumpalo::Bump;
 use std::path::Path;
 use std::sync::mpsc::{channel, Receiver, Sender};
 
-use crate::raw::raw_stream::{RawStream, StreamError};
-use crate::{Codec, Coord, Event, SourceType, D, D_MAX, D_SHIFT};
+use crate::raw::stream::{Error as StreamError, Raw};
+use crate::{raw, Codec, Coord, Event, SourceType, D, D_MAX, D_SHIFT};
 use opencv::highgui;
 use opencv::imgproc::resize;
 use opencv::prelude::*;
@@ -49,7 +49,7 @@ pub enum SourceError {
     /// OpenCV error
     OpencvError(opencv::Error),
 
-    StreamError(StreamError),
+    StreamError(raw::stream::Error),
 
     /// EDI error
     EdiError(ReconstructionError),
@@ -106,7 +106,7 @@ pub struct Video {
     pub(crate) c_thresh_pos: u8,
     pub(crate) c_thresh_neg: u8,
     pub(crate) tps: DeltaT,
-    pub(crate) stream: RawStream,
+    pub(crate) stream: Raw,
 }
 
 impl Video {
@@ -124,20 +124,16 @@ impl Video {
         delta_t_max: DeltaT,
         _d_mode: DecimationMode,
         write_out: bool,
-        communicate_events: bool,
         show_display: bool,
         source_camera: SourceCamera,
         c_thresh_pos: u8,
         c_thresh_neg: u8,
     ) -> Result<Video, Box<dyn Error>> {
         assert_eq!(D_SHIFT.len(), D_MAX as usize + 1);
-        if write_out {
-            assert!(communicate_events);
-        }
 
         let (event_sender, _event_receiver): (Sender<Vec<Event>>, Receiver<Vec<Event>>) = channel();
 
-        let mut stream: RawStream = Codec::new();
+        let mut stream: Raw = Codec::new();
         match output_filename {
             None => {}
             Some(name) => {
@@ -224,7 +220,7 @@ impl Video {
         self.stream.close_writer()
     }
 
-    #[allow(needless_pass_by_value)]
+    #[allow(clippy::needless_pass_by_value)]
     pub(crate) fn integrate_matrix(
         &mut self,
         matrix: Mat,

@@ -1,6 +1,6 @@
 extern crate core;
 
-use adder_codec_rs::transcoder::source::framed_source::FramedSourceBuilder;
+use adder_codec_rs::transcoder::source::framed::FramedBuilder;
 use adder_codec_rs::transcoder::source::video::Source;
 use adder_codec_rs::SourceCamera;
 use rayon::current_num_threads;
@@ -9,13 +9,12 @@ use std::io;
 use std::io::Write;
 use std::time::Instant;
 fn main() -> Result<(), Box<dyn Error>> {
-    let mut source = FramedSourceBuilder::new(
+    let mut source = FramedBuilder::new(
         "/media/andrew/ExternalM2/LAS/GH010017.mp4".to_string(),
         SourceCamera::FramedU8,
     )
     .frame_start(1420)
     .scale(0.5)
-    .communicate_events(true)
     .output_events_filename("/home/andrew/Downloads/events.adder".to_string())
     .color(false)
     .contrast_thresholds(10, 10)

@@ -3,7 +3,7 @@ extern crate core;
 use adder_codec_rs::framer::event_framer::Framer;
 use adder_codec_rs::framer::event_framer::FramerMode::INSTANTANEOUS;
 use adder_codec_rs::framer::event_framer::{FrameSequence, FramerBuilder};
-use adder_codec_rs::raw::raw_stream::RawStream;
+use adder_codec_rs::raw::stream::Raw;
 use adder_codec_rs::Codec;
 use std::error::Error;
 use std::fs::File;
@@ -13,7 +13,7 @@ use std::time::Instant;
 
 fn main() {
     let input_path = "/home/andrew/Downloads/bunny4.adder";
-    let mut stream: RawStream = Codec::new();
+    let mut stream: Raw = Codec::new();
     stream.open_reader(input_path).expect("Invalid path");
     stream.decode_header().expect("Invalid header");
 

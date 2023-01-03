@@ -1,6 +1,6 @@
 use adder_codec_rs::framer::event_framer::FramerMode::INSTANTANEOUS;
 use adder_codec_rs::framer::event_framer::{FrameSequence, FramerBuilder};
-use adder_codec_rs::raw::raw_stream::RawStream;
+use adder_codec_rs::raw::stream::Raw;
 use adder_codec_rs::transcoder::source::video::FramedViewMode;
 use adder_codec_rs::{Codec, DeltaT};
 use bevy::prelude::Image;
@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 pub struct AdderPlayer {
     pub(crate) framer_builder: Option<FramerBuilder>,
     pub(crate) frame_sequence: Option<FrameSequence<u8>>, // TODO: remove this
-    pub(crate) input_stream: Option<RawStream>,
+    pub(crate) input_stream: Option<Raw>,
     pub(crate) current_t_ticks: DeltaT,
     pub(crate) display_mat: Mat,
     pub(crate) live_image: Image,
@@ -45,7 +45,7 @@ impl AdderPlayer {
                 None => Err(Box::new(AdderPlayerError("Invalid file type".into()))),
                 Some("adder") => {
                     let input_path = path_buf.to_str().expect("Invalid string").to_string();
-                    let mut stream: RawStream = Codec::new();
+                    let mut stream: Raw = Codec::new();
                     stream.open_reader(input_path).expect("Invalid path");
                     stream.decode_header().expect("Invalid header");
 

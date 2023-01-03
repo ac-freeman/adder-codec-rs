@@ -1,3 +1,3 @@
-pub mod davis_source;
-pub mod framed_source;
+pub mod davis;
+pub mod framed;
 pub mod video;

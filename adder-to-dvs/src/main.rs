@@ -1,4 +1,4 @@
-use adder_codec_rs::raw::raw_stream::RawStream;
+use adder_codec_rs::raw::stream::Raw;
 use adder_codec_rs::{Codec, Event, D_SHIFT};
 use std::cmp::max;
 use std::collections::VecDeque;
@@ -58,7 +58,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let output_video_path = args.output_video.as_str();
     let raw_path = "./dvs.gray8";
 
-    let mut stream: RawStream = Codec::new();
+    let mut stream: Raw = Codec::new();
     stream.open_reader(file_path).expect("Invalid path");
     let header_bytes = stream.decode_header().expect("Invalid header");
 

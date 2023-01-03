@@ -3,7 +3,7 @@ use crate::framer::event_framer::SourceType::U8;
 use crate::framer::event_framer::{Framer, FramerBuilder};
 use crate::framer::scale_intensity;
 use crate::framer::scale_intensity::FrameValue;
-use crate::transcoder::source::framed_source::FramedSource;
+use crate::transcoder::source::framed::Framed;
 use crate::transcoder::source::video::Source;
 use crate::SourceCamera::FramedU8;
 use crate::{DeltaT, Event};
@@ -84,27 +84,30 @@ pub struct SimulProcArgs {
 }
 
 pub struct SimulProcessor {
-    pub source: FramedSource,
+    pub source: Framed,
     thread_pool: ThreadPool,
     events_tx: Sender<Vec<Vec<Event>>>,
 }
 
 impl SimulProcessor {
     pub fn new<T>(
-        source: FramedSource,
+        source: Framed,
         ref_time: DeltaT,
         output_path: &str,
         frame_max: i32,
         num_threads: usize,
     ) -> Result<SimulProcessor, Box<dyn Error>>
     where
-        T: Clone + std::marker::Sync + std::marker::Send + 'static,
-        T: scale_intensity::FrameValue,
-        T: std::default::Default,
-        T: std::marker::Copy,
-        T: FrameValue<Output = T>,
-        T: Serialize,
-        T: num_traits::Zero,
+        T: Clone
+            + std::marker::Sync
+            + std::marker::Send
+            + 'static
+            + scale_intensity::FrameValue
+            + std::default::Default
+            + std::marker::Copy
+            + FrameValue<Output = T>
+            + Serialize
+            + num_traits::Zero,
     {
         let thread_pool_framer = rayon::ThreadPoolBuilder::new()
             .num_threads(max(num_threads / 2, 1))
@@ -163,7 +166,7 @@ impl SimulProcessor {
                                     frames_returned,
                                     now.elapsed().as_millis() / frames_returned as u128
                                 );
-                                if let Err(_) = io::stdout().flush() {
+                                if io::stdout().flush().is_err() {
                                     eprintln!("Error flushing stdout");
                                     break;
                                 };

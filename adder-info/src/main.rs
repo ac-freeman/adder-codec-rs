@@ -1,5 +1,5 @@
 use adder_codec_rs::framer::scale_intensity::event_to_intensity;
-use adder_codec_rs::raw::raw_stream::RawStream;
+use adder_codec_rs::raw::stream::Raw;
 use adder_codec_rs::{Codec, Intensity, D_SHIFT};
 use clap::Parser;
 use std::io::Write;
@@ -23,7 +23,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let args: MyArgs = MyArgs::parse();
     let file_path = args.input.as_str();
 
-    let mut stream: RawStream = Codec::new();
+    let mut stream: Raw = Codec::new();
     stream.open_reader(file_path).expect("Invalid path");
     let header_bytes = stream.decode_header().expect("Invalid header");
     let first_event_position = stream.get_input_stream_position()?;

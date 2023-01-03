@@ -1,24 +1,18 @@
+use crate::transcoder::d_controller::DecimationMode;
+use crate::transcoder::event_pixel_tree::DeltaT;
+use crate::transcoder::event_pixel_tree::Mode::FramePerfect;
 use crate::transcoder::source::video::Source;
 use crate::transcoder::source::video::SourceError;
-use crate::transcoder::source::video::Video;
-use crate::{Coord, Event};
-
-use core::default::Default;
-use std::error::Error;
-
-use std::mem::swap;
-
 use crate::transcoder::source::video::SourceError::BufferEmpty;
-
+use crate::transcoder::source::video::Video;
+use crate::SourceCamera;
+use crate::{Coord, Event};
 use opencv::core::{Mat, Size};
 use opencv::videoio::{VideoCapture, CAP_PROP_FPS, CAP_PROP_FRAME_COUNT, CAP_PROP_POS_FRAMES};
 use opencv::{imgproc, prelude::*, videoio, Result};
 use rayon::ThreadPool;
-
-use crate::transcoder::d_controller::DecimationMode;
-use crate::transcoder::event_pixel_tree::DeltaT;
-use crate::transcoder::event_pixel_tree::Mode::FramePerfect;
-use crate::SourceCamera;
+use std::error::Error;
+use std::mem::swap;
 
 #[derive(Debug, Copy, Clone)]
 #[repr(C)]
@@ -28,7 +22,7 @@ pub struct IndirectCoord {
 }
 
 /// Attributes of a framed video -> ADΔER transcode
-pub struct FramedSource {
+pub struct Framed {
     cap: VideoCapture,
     pub(crate) input_frame_scaled: Mat,
     pub(crate) input_frame: Mat,
@@ -38,9 +32,9 @@ pub struct FramedSource {
     color_input: bool,
     pub(crate) video: Video,
 }
-unsafe impl Sync for FramedSource {}
+unsafe impl Sync for Framed {}
 
-pub struct FramedSourceBuilder {
+pub struct FramedBuilder {
     input_filename: String,
     output_events_filename: Option<String>,
     frame_idx_start: u32,
@@ -54,15 +48,14 @@ pub struct FramedSourceBuilder {
     c_thresh_pos: u8,
     c_thresh_neg: u8,
     write_out: bool,
-    communicate_events: bool,
     show_display_b: bool,
     source_camera: SourceCamera,
 }
 
-impl FramedSourceBuilder {
+impl FramedBuilder {
     #[must_use]
-    pub fn new(input_filename: String, source_camera: SourceCamera) -> FramedSourceBuilder {
-        FramedSourceBuilder {
+    pub fn new(input_filename: String, source_camera: SourceCamera) -> FramedBuilder {
+        FramedBuilder {
             input_filename,
             output_events_filename: None,
             frame_idx_start: 0,
@@ -76,33 +69,32 @@ impl FramedSourceBuilder {
             c_thresh_pos: 0,
             c_thresh_neg: 0,
             write_out: false,
-            communicate_events: false,
             show_display_b: false,
             source_camera,
         }
     }
 
     #[must_use]
-    pub fn output_events_filename(mut self, output_events_filename: String) -> FramedSourceBuilder {
+    pub fn output_events_filename(mut self, output_events_filename: String) -> FramedBuilder {
         self.output_events_filename = Some(output_events_filename);
         self.write_out = true;
         self
     }
 
     #[must_use]
-    pub fn frame_start(mut self, frame_idx_start: u32) -> FramedSourceBuilder {
+    pub fn frame_start(mut self, frame_idx_start: u32) -> FramedBuilder {
         self.frame_idx_start = frame_idx_start;
         self
     }
 
     #[must_use]
-    pub fn chunk_rows(mut self, chunk_rows: usize) -> FramedSourceBuilder {
+    pub fn chunk_rows(mut self, chunk_rows: usize) -> FramedBuilder {
         self.chunk_rows = chunk_rows;
         self
     }
 
     #[must_use]
-    pub fn time_parameters(mut self, ref_time: DeltaT, delta_t_max: DeltaT) -> FramedSourceBuilder {
+    pub fn time_parameters(mut self, ref_time: DeltaT, delta_t_max: DeltaT) -> FramedBuilder {
         self.delta_t_max = delta_t_max;
         self.ref_time = ref_time;
         assert_eq!(self.delta_t_max % self.ref_time, 0);
@@ -110,55 +102,45 @@ impl FramedSourceBuilder {
     }
 
     #[must_use]
-    pub fn contrast_thresholds(
-        mut self,
-        c_thresh_pos: u8,
-        c_thresh_neg: u8,
-    ) -> FramedSourceBuilder {
+    pub fn contrast_thresholds(mut self, c_thresh_pos: u8, c_thresh_neg: u8) -> FramedBuilder {
         self.c_thresh_pos = c_thresh_pos;
         self.c_thresh_neg = c_thresh_neg;
         self
     }
 
     #[must_use]
-    pub fn scale(mut self, scale: f64) -> FramedSourceBuilder {
+    pub fn scale(mut self, scale: f64) -> FramedBuilder {
         self.scale = scale;
         self
     }
 
     #[must_use]
-    pub fn skip_interval(mut self, frame_skip_interval: u8) -> FramedSourceBuilder {
+    pub fn skip_interval(mut self, frame_skip_interval: u8) -> FramedBuilder {
         self.frame_skip_interval = frame_skip_interval;
         self
     }
 
     #[must_use]
-    pub fn color(mut self, color_input: bool) -> FramedSourceBuilder {
+    pub fn color(mut self, color_input: bool) -> FramedBuilder {
         self.color_input = color_input;
         self
     }
 
     #[must_use]
-    pub fn communicate_events(mut self, communicate_events: bool) -> FramedSourceBuilder {
-        self.communicate_events = communicate_events;
-        self
-    }
-
-    #[must_use]
-    pub fn show_display(mut self, show_display_b: bool) -> FramedSourceBuilder {
+    pub fn show_display(mut self, show_display_b: bool) -> FramedBuilder {
         self.show_display_b = show_display_b;
         self
     }
 
-    pub fn finish(self) -> Result<FramedSource, Box<dyn Error>> {
-        FramedSource::new(self)
+    pub fn finish(self) -> Result<Framed, Box<dyn Error>> {
+        Framed::new(self)
     }
 }
 
-impl FramedSource {
+impl Framed {
     /// Initialize the framed source and read first frame of source, in order to get `height`
     /// and `width` and initialize [`Video`]
-    fn new(mut builder: FramedSourceBuilder) -> Result<FramedSource, Box<dyn std::error::Error>> {
+    fn new(mut builder: FramedBuilder) -> Result<Framed, Box<dyn std::error::Error>> {
         let channels = if builder.color_input { 3 } else { 1 };
 
         let mut cap =
@@ -205,14 +187,13 @@ impl FramedSource {
             builder.delta_t_max,
             DecimationMode::Manual,
             builder.write_out,
-            builder.communicate_events,
             builder.show_display_b,
             builder.source_camera,
             builder.c_thresh_pos,
             builder.c_thresh_neg,
         )?;
 
-        Ok(FramedSource {
+        Ok(Framed {
             cap,
             input_frame_scaled: Mat::default(),
             input_frame: Mat::default(),
@@ -229,7 +210,7 @@ impl FramedSource {
     }
 }
 
-impl Source for FramedSource {
+impl Source for Framed {
     /// Get pixel-wise intensities directly from source frame, and integrate them with
     /// [`ref_time`](Video::ref_time) (the number of ticks each frame is said to span)
     fn consume(

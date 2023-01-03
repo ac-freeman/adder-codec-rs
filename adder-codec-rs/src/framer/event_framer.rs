@@ -161,15 +161,13 @@ impl FramerBuilder {
     #[must_use]
     pub fn finish<T>(self) -> FrameSequence<T>
     where
-        T: FrameValue<Output = T>,
-        T: Clone,
-        T: Default,
-        T: FrameValue,
-        T: Send,
-        T: Serialize,
-        T: Sync,
-        T: std::marker::Copy,
-        T: num_traits::Zero,
+        T: FrameValue<Output = T>
+            + Default
+            + Send
+            + Serialize
+            + Sync
+            + std::marker::Copy
+            + num_traits::Zero,
     {
         FrameSequence::<T>::new(self)
     }
@@ -544,20 +542,19 @@ impl<T: Clone + Default + FrameValue<Output = T> + Serialize> FrameSequence<T> {
 
     pub fn is_frame_filled(&self, frame_idx: usize) -> Result<bool, FrameSequenceError> {
         for chunk in &self.frames {
-            match chunk.len() <= frame_idx {
-                true => {
-                    return Err(FrameSequenceError::InvalidIndex);
+            if chunk.len() <= frame_idx {
+                return Err(FrameSequenceError::InvalidIndex);
+            }
+
+            match chunk[frame_idx].filled_count {
+                a if a == chunk[0].array.len() => {}
+                a if a > chunk[0].array.len() => {
+                    return Err(FrameSequenceError::BadFillCount);
                 }
-                false => match chunk[frame_idx].filled_count {
-                    a if a == chunk[0].array.len() => {}
-                    a if a > chunk[0].array.len() => {
-                        return Err(FrameSequenceError::BadFillCount);
-                    }
-                    _ => {
-                        return Ok(false);
-                    }
-                },
-            };
+                _ => {
+                    return Ok(false);
+                }
+            }
         }
         Ok(true)
     }

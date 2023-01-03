@@ -1,4 +1,4 @@
-use adder_codec_rs::transcoder::source::davis_source::get_next_image;
+use adder_codec_rs::transcoder::source::davis::get_next_image;
 use adder_codec_rs::transcoder::source::video::show_display_force;
 use adder_codec_rs::utils::viz::{encode_video_ffmpeg, write_frame_to_video};
 use aedat::base::ioheader_generated::Compression;

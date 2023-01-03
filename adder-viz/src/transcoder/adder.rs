@@ -1,14 +1,14 @@
 use std::error::Error;
 
-use adder_codec_rs::transcoder::source::davis_source::DavisSource;
-use adder_codec_rs::transcoder::source::framed_source::FramedSource;
-use adder_codec_rs::transcoder::source::framed_source::FramedSourceBuilder;
+use adder_codec_rs::transcoder::source::davis::Davis;
+use adder_codec_rs::transcoder::source::framed::Framed;
+use adder_codec_rs::transcoder::source::framed::FramedBuilder;
 use adder_codec_rs::SourceCamera;
 use bevy::prelude::Image;
 use std::fmt;
 use std::path::{Path, PathBuf};
 
-use adder_codec_rs::transcoder::source::davis_source::DavisTranscoderMode;
+use adder_codec_rs::transcoder::source::davis::TranscoderMode;
 
 use adder_codec_rs::aedat::base::ioheader_generated::Compression;
 use adder_codec_rs::davis_edi_rs::util::reconstructor::Reconstructor;
@@ -19,8 +19,8 @@ use opencv::Result;
 
 #[derive(Default)]
 pub struct AdderTranscoder {
-    pub(crate) framed_source: Option<FramedSource>,
-    pub(crate) davis_source: Option<DavisSource>,
+    pub(crate) framed_source: Option<Framed>,
+    pub(crate) davis_source: Option<Davis>,
     pub(crate) live_image: Image,
 }
 
@@ -48,7 +48,7 @@ impl AdderTranscoder {
                 match ext.to_str() {
                     None => Err(Box::new(AdderTranscoderError("Invalid file type".into()))),
                     Some("mp4") => {
-                        let mut builder = FramedSourceBuilder::new(
+                        let mut builder = FramedBuilder::new(
                             match input_path_buf.to_str() {
                                 None => {
                                     return Err(Box::new(AdderTranscoderError(
@@ -62,7 +62,6 @@ impl AdderTranscoder {
                         .frame_start(current_frame)
                         .chunk_rows(64)
                         .scale(ui_state.scale)
-                        .communicate_events(true)
                         .color(ui_state.color)
                         .contrast_thresholds(ui_state.adder_tresh as u8, ui_state.adder_tresh as u8)
                         .show_display(false)
@@ -104,14 +103,14 @@ impl AdderTranscoder {
                     }
                     Some("aedat4") => {
                         let events_only = match &ui_state.davis_mode_radio_state {
-                            DavisTranscoderMode::Framed => false,
-                            DavisTranscoderMode::RawDavis => false,
-                            DavisTranscoderMode::RawDvs => true,
+                            TranscoderMode::Framed => false,
+                            TranscoderMode::RawDavis => false,
+                            TranscoderMode::RawDvs => true,
                         };
                         let deblur_only = match &ui_state.davis_mode_radio_state {
-                            DavisTranscoderMode::Framed => false,
-                            DavisTranscoderMode::RawDavis => true,
-                            DavisTranscoderMode::RawDvs => true,
+                            TranscoderMode::Framed => false,
+                            TranscoderMode::RawDavis => true,
+                            TranscoderMode::RawDvs => true,
                         };
 
                         let rt = tokio::runtime::Builder::new_multi_thread()
@@ -154,7 +153,7 @@ impl AdderTranscoder {
                         let output_string = output_path_opt
                             .map(|output_path| output_path.to_str().expect("Bad path").to_string());
 
-                        let davis_source = DavisSource::new(
+                        let davis_source = Davis::new(
                             reconstructor,
                             output_string.clone(),
                             1000000_u32, // TODO

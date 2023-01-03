@@ -1,6 +1,6 @@
 use crate::framer::event_framer::{EventCoordless, SourceType};
 use crate::header::EventStreamHeader;
-use crate::raw::raw_stream::StreamError;
+use crate::raw::stream::Error as StreamError;
 use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::fmt::Formatter;
@@ -320,7 +320,7 @@ pub trait Codec {
     fn set_output_stream(&mut self, stream: Option<BufWriter<File>>);
     fn set_input_stream(&mut self, stream: Option<BufReader<File>>);
 
-    /// Go to this position (as a byte address) in the input stream. Returns a [`StreamError`] if
+    /// Go to this position (as a byte address) in the input stream. Returns a [`Error`] if
     /// not aligned to an [Event]
     fn set_input_stream_position(&mut self, pos: u64) -> Result<(), StreamError>;
     fn set_input_stream_position_from_end(&mut self, pos: i64) -> Result<(), StreamError>;

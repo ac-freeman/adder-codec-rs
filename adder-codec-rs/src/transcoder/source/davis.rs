@@ -25,7 +25,7 @@ use std::error::Error;
 use std::time::Instant;
 
 use crate::framer::scale_intensity::FrameValue;
-use crate::raw::raw_stream::StreamError;
+use crate::raw::stream::Error as StreamError;
 use crate::transcoder::event_pixel_tree::Intensity32;
 use tokio::runtime::Runtime;
 
@@ -33,14 +33,14 @@ pub struct Framed {}
 pub struct Raw {}
 
 #[derive(PartialEq, Clone, Copy)]
-pub enum DavisTranscoderMode {
+pub enum TranscoderMode {
     Framed,
     RawDavis,
     RawDvs,
 }
 
 /// Attributes of a framed video -> ADΔER transcode
-pub struct DavisSource {
+pub struct Davis {
     reconstructor: Reconstructor,
     pub(crate) input_frame_scaled: Mat,
     pub(crate) video: Video,
@@ -56,43 +56,42 @@ pub struct DavisSource {
     pub dvs_last_timestamps: Array3<i64>,
     pub dvs_last_ln_val: Array3<f64>,
     optimize_adder_controller: bool,
-    pub mode: DavisTranscoderMode, // phantom: PhantomData<T>,
+    pub mode: TranscoderMode, // phantom: PhantomData<T>,
 }
 
-unsafe impl Sync for DavisSource {}
+unsafe impl Sync for Davis {}
 
-impl DavisSource {
+impl Davis {
     /// Initialize the framed source and read first frame of source, in order to get `height`
     /// and `width` and initialize [`Video`]
     pub fn new(
         reconstructor: Reconstructor,
         output_events_filename: Option<String>,
-        tps: DeltaT,
-        tpf: f64,
+        ticks_per_second: DeltaT,
+        ticks_per_frame: f64,
         delta_t_max: DeltaT,
         show_display_b: bool,
         adder_c_thresh_pos: u8,
         adder_c_thresh_neg: u8,
         optimize_adder_controller: bool,
         rt: Runtime,
-        mode: DavisTranscoderMode,
+        mode: TranscoderMode,
         write_out: bool,
-    ) -> Result<DavisSource, Box<dyn Error>> {
+    ) -> Result<Davis, Box<dyn Error>> {
         let video = Video::new(
-            reconstructor.width as u16,
-            reconstructor.height as u16,
+            reconstructor.width,
+            reconstructor.height,
             64,
             output_events_filename,
             1,
-            tps,
+            ticks_per_second,
             // ref_time is set based on the reconstructor's output_fps, which is the user-set
             // rate OR might be higher if the first APS image in the video has a shorter exposure
             // time than expected
-            tpf as u32,
+            ticks_per_frame as u32,
             delta_t_max,
             DecimationMode::Manual,
             write_out,
-            true,
             show_display_b,
             DavisU8,
             adder_c_thresh_pos,
@@ -120,7 +119,7 @@ impl DavisSource {
             timestamps,
         )?;
 
-        let davis_source = DavisSource {
+        let davis_source = Davis {
             reconstructor,
             input_frame_scaled: Mat::default(),
             video,
@@ -141,7 +140,7 @@ impl DavisSource {
         Ok(davis_source)
     }
 
-    #[allow(cast_sign_loss)]
+    #[allow(clippy::cast_sign_loss)]
     pub fn integrate_dvs_events<F: Fn(i64, i64) -> bool + Send + 'static + std::marker::Sync>(
         &mut self,
         dvs_events: &Vec<DvsEvent>,
@@ -280,6 +279,7 @@ impl DavisSource {
         Ok(())
     }
 
+    #[allow(clippy::cast_possible_truncation)]
     fn integrate_frame_gaps(&mut self) -> Result<(), SourceError> {
         let px_per_chunk: usize =
             self.video.chunk_rows * self.video.width as usize * self.video.channels;
@@ -396,6 +396,7 @@ impl DavisSource {
         Ok(())
     }
 
+    #[allow(clippy::cast_precision_loss)]
     fn control_latency(&mut self, opt_timestamp: Option<Instant>) {
         if self.optimize_adder_controller {
             match opt_timestamp {
@@ -427,7 +428,7 @@ impl DavisSource {
     }
 }
 
-impl Source for DavisSource {
+impl Source for Davis {
     fn consume(
         &mut self,
         view_interval: u32,
@@ -445,8 +446,8 @@ impl Source for DavisSource {
         //          create a new branch for (2)
 
         let with_events = match self.mode {
-            DavisTranscoderMode::Framed => false,
-            DavisTranscoderMode::RawDavis | DavisTranscoderMode::RawDvs => true,
+            TranscoderMode::Framed => false,
+            TranscoderMode::RawDavis | TranscoderMode::RawDvs => true,
         };
         let mat_opt = self.rt.block_on(get_next_image(
             &mut self.reconstructor,
@@ -549,11 +550,9 @@ impl Source for DavisSource {
         // https://stackoverflow.com/questions/33665241/is-opencv-matrix-data-guaranteed-to-be-continuous
         let mut tmp = self.image_8u.clone();
         let mat_integration_time = match self.mode {
-            DavisTranscoderMode::Framed => self.video.ref_time as f32,
-            DavisTranscoderMode::RawDavis => {
-                (end_of_frame_timestamp - start_of_frame_timestamp) as f32
-            }
-            DavisTranscoderMode::RawDvs => {
+            TranscoderMode::Framed => self.video.ref_time as f32,
+            TranscoderMode::RawDavis => (end_of_frame_timestamp - start_of_frame_timestamp) as f32,
+            TranscoderMode::RawDvs => {
                 // TODO: Note how c is fixed here, since we don't have a mechanism for determining
                 // its value
                 self.dvs_c = 0.15;
@@ -576,6 +575,7 @@ impl Source for DavisSource {
                 .integrate_matrix(tmp, mat_integration_time, Continuous, view_interval)
         });
 
+        #[allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
         unsafe {
             for (idx, val) in self.dvs_last_ln_val.iter_mut().enumerate() {
                 let px = match self.input_frame_scaled.at_unchecked::<f64>(idx as i32) {
@@ -585,10 +585,10 @@ impl Source for DavisSource {
                     }
                 };
                 match self.mode {
-                    DavisTranscoderMode::RawDavis | DavisTranscoderMode::Framed => {
+                    TranscoderMode::RawDavis | TranscoderMode::Framed => {
                         *val = px.ln_1p();
                     }
-                    DavisTranscoderMode::RawDvs => {
+                    TranscoderMode::RawDvs => {
                         *val = 0.5_f64.ln_1p();
                     }
                 }
@@ -607,10 +607,7 @@ impl Source for DavisSource {
             self.integrate_dvs_events(&dvs_events_after, &end_of_frame_timestamp, check_dvs_after)?;
         }
 
-        match ret {
-            Ok(res) => Ok(res),
-            Err(e) => Err(e),
-        }
+        ret
     }
 
     fn get_video_mut(&mut self) -> &mut Video {

@@ -363,7 +363,7 @@ mod tests {
         );
 
         assert_eq!(tree.arena[0].state.d, 6);
-        tree.integrate(100.0, 20.0, &Continuous, &dtm, &20);
+        tree.integrate(100.0, 20.0, Continuous, dtm, 20);
         assert!(tree.arena[0].best_event.is_some());
         let node = &tree.arena[0];
         match node.best_event {
@@ -390,7 +390,7 @@ mod tests {
         assert_eq!(tmp, 36.0);
         assert!(f32_slack(tree.arena[1].state.delta_t, 7.2));
 
-        tree.integrate(100.0, 20.0, &Continuous, &dtm, &20);
+        tree.integrate(100.0, 20.0, Continuous, dtm, 20);
         assert_eq!(tree.arena[0].best_event.unwrap().d, 7);
         // Since we're casting, the delta t gets rounded down
         let tmp = tree.arena[0].best_event.unwrap().delta_t;
@@ -427,7 +427,7 @@ mod tests {
     fn make_tree2() -> PixelArena {
         let dtm = 10000;
         let mut tree = make_tree();
-        tree.integrate(30.0, 34.0, &Continuous, &dtm, &34);
+        tree.integrate(30.0, 34.0, Continuous, dtm, 34);
 
         {
             let root = &tree.arena[0];
@@ -453,7 +453,7 @@ mod tests {
         //                                         \
         //                                    (6,12)--------------------6, 38, 35.6
 
-        tree.integrate(26.0, 34.0, &Continuous, &dtm, &34);
+        tree.integrate(26.0, 34.0, Continuous, dtm, 34);
         // Main node just filled
         assert_eq!(tree.arena[0].state.d, 9);
         assert!(f32_slack(tree.arena[0].state.integration, 256.0));
@@ -532,9 +532,9 @@ mod tests {
         tree.integrate(
             (1u128 << 126u128) as f32,
             100_000.0,
-            &Continuous,
-            &dtm,
-            &100_000,
+            Continuous,
+            dtm,
+            100_000,
         );
         assert!(tree.need_to_pop_top);
         let mut events = Vec::new();
@@ -559,9 +559,9 @@ mod tests {
             },
         );
         for _ in 0..47 {
-            tree.integrate(245.0, 5000.0, &FramePerfect, &dtm, &5000);
+            tree.integrate(245.0, 5000.0, FramePerfect, dtm, 5000);
         }
-        tree.integrate(245.0, 5000.0, &FramePerfect, &dtm, &5000);
+        tree.integrate(245.0, 5000.0, FramePerfect, dtm, 5000);
         assert!(tree.need_to_pop_top);
         let _ = tree.pop_top_event(245.0);
         assert!(!tree.need_to_pop_top);
@@ -580,8 +580,8 @@ mod tests {
                 c: None,
             },
         );
-        tree.integrate(146.0, 2000.0, &Continuous, &dtm, &2000);
-        tree.integrate(2_790.863, 38231.0, &Continuous, &dtm, &38231);
+        tree.integrate(146.0, 2000.0, Continuous, dtm, 2000);
+        tree.integrate(2_790.863, 38231.0, Continuous, dtm, 38231);
 
         let head = tree.arena[0];
         let integ = head.state.integration;
@@ -604,7 +604,7 @@ mod tests {
             },
         );
         loop {
-            tree.integrate(255.0, 2000.0, &Continuous, &dtm, &2000);
+            tree.integrate(255.0, 2000.0, Continuous, dtm, 2000);
             if tree.need_to_pop_top {
                 break;
             }
@@ -641,10 +641,10 @@ mod tests {
         );
 
         assert_eq!(tree.arena[0].state.d, 6);
-        tree.integrate(101.0, 20.0, &Continuous, &dtm, &20);
+        tree.integrate(101.0, 20.0, Continuous, dtm, 20);
         assert!(tree.arena[0].best_event.is_some());
 
-        tree.integrate(40.0, 30.0, &Continuous, &dtm, &30);
+        tree.integrate(40.0, 30.0, Continuous, dtm, 30);
         let event = tree.arena[0].best_event.unwrap();
         assert_eq!(event.d, 7);
         let child = tree.arena[1];

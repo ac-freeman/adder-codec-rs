@@ -1,5 +1,5 @@
 use adder_codec_rs::framer::scale_intensity::event_to_intensity;
-use adder_codec_rs::raw::raw_stream::RawStream;
+use adder_codec_rs::raw::stream::Raw;
 use adder_codec_rs::transcoder::source::video::show_display_force;
 use adder_codec_rs::{Codec, SourceCamera};
 use clap::Parser;
@@ -48,7 +48,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let args: MyArgs = MyArgs::parse();
     let file_path = args.input.as_str();
 
-    let mut stream: RawStream = Codec::new();
+    let mut stream: Raw = Codec::new();
     stream.open_reader(file_path).expect("Invalid path");
     let header_bytes = stream.decode_header().expect("Invalid header");
 
