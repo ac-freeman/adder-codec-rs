@@ -234,6 +234,86 @@ pub extern crate aedat;
 
 pub extern crate davis_edi_rs;
 
+/// The size of the image plane in pixels
+#[derive(Clone)]
+pub struct PlaneSize {
+    width: u16,
+    height: u16,
+    channels: u8,
+}
+
+impl Default for PlaneSize {
+    fn default() -> Self {
+        PlaneSize {
+            width: 1,
+            height: 1,
+            channels: 1,
+        }
+    }
+}
+
+impl PlaneSize {
+    pub fn new(width: u16, height: u16, channels: u8) -> Result<Self, String> {
+        if width == 0 || height == 0 || channels == 0 {
+            return Err("PlaneSize must have positive width, height, and channels".to_string());
+        }
+        Ok(Self {
+            width,
+            height,
+            channels,
+        })
+    }
+    /// The width, shorthand for `self.width`
+    pub fn w(&self) -> u16 {
+        self.width
+    }
+
+    /// The height, shorthand for `self.height`
+    pub fn w_usize(&self) -> usize {
+        self.width as usize
+    }
+
+    /// The height, shorthand for `self.height`
+    pub fn h(&self) -> u16 {
+        self.height
+    }
+
+    /// The height, shorthand for `self.height`
+    pub fn h_usize(&self) -> usize {
+        self.height as usize
+    }
+
+    /// The number of channels, shorthand for `self.channels`
+    pub fn c(&self) -> u8 {
+        self.channels
+    }
+
+    /// The number of channels, shorthand for `self.channels`
+    pub fn c_usize(&self) -> usize {
+        self.channels as usize
+    }
+
+    /// The total number of 2D pixels in the image plane, across the height and width dimension
+    pub fn area_wh(&self) -> usize {
+        self.width as usize * self.height as usize
+    }
+
+    /// The total number of 2D pixels in the image plane, across the width and channel dimension
+    pub fn area_wc(&self) -> usize {
+        self.width as usize * self.channels as usize
+    }
+
+    /// The total number of 2D pixels in the image plane, across the height and channel dimension
+    pub fn area_hc(&self) -> usize {
+        self.height as usize * self.channels as usize
+    }
+
+    /// The total number of 3D pixels in the image plane (2D pixels * color depth)
+    pub fn volume(&self) -> usize {
+        self.area_wh() * self.channels as usize
+    }
+}
+
 #[repr(packed)]
 #[derive(Debug, Copy, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct Coord {
@@ -363,12 +443,10 @@ pub trait Codec {
 
     fn encode_header(
         &mut self,
-        width: u16,
-        height: u16,
+        plane_size: PlaneSize,
         tps: u32,
         ref_interval: u32,
         delta_t_max: u32,
-        channels: u8,
         codec_version: u8,
         source_camera: SourceCamera,
     ) -> Result<(), Box<dyn Error>>;

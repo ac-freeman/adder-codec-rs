@@ -53,39 +53,35 @@ impl AdderPlayer {
 
                     reconstructed_frame_rate /= playback_speed as f64;
 
-                    let framer_builder: FramerBuilder = FramerBuilder::new(
-                        stream.height.into(),
-                        stream.width.into(),
-                        stream.channels.into(),
-                        260,
-                    )
-                    .codec_version(stream.codec_version)
-                    .time_parameters(
-                        stream.tps,
-                        stream.ref_interval,
-                        stream.delta_t_max,
-                        reconstructed_frame_rate,
-                    )
-                    .mode(INSTANTANEOUS)
-                    .view_mode(view_mode)
-                    .source(stream.get_source_type(), stream.source_camera);
+                    let framer_builder: FramerBuilder =
+                        FramerBuilder::new(stream.plane.clone(), 260)
+                            .codec_version(stream.codec_version)
+                            .time_parameters(
+                                stream.tps,
+                                stream.ref_interval,
+                                stream.delta_t_max,
+                                reconstructed_frame_rate,
+                            )
+                            .mode(INSTANTANEOUS)
+                            .view_mode(view_mode)
+                            .source(stream.get_source_type(), stream.source_camera);
 
                     let frame_sequence: FrameSequence<u8> = framer_builder.clone().finish();
 
                     let mut display_mat = Mat::default();
-                    match stream.channels {
+                    match stream.plane.c() {
                         1 => {
                             create_continuous(
-                                stream.height as i32,
-                                stream.width as i32,
+                                stream.plane.h() as i32,
+                                stream.plane.w() as i32,
                                 CV_8UC1,
                                 &mut display_mat,
                             )?;
                         }
                         3 => {
                             create_continuous(
-                                stream.height as i32,
-                                stream.width as i32,
+                                stream.plane.h() as i32,
+                                stream.plane.w() as i32,
                                 CV_8UC3,
                                 &mut display_mat,
                             )?;

@@ -119,12 +119,10 @@ impl SimulProcessor {
         // For instantaneous reconstruction, make sure the frame rate matches the source video rate
         assert_eq!(source.video.tps / ref_time, reconstructed_frame_rate as u32);
 
-        let height = source.get_video().height as usize;
-        let width = source.get_video().width as usize;
-        let channels = source.get_video().channels;
+        let plane = source.get_video().plane.clone();
 
         let mut framer = thread_pool_framer.install(|| {
-            FramerBuilder::new(height, width, channels, source.video.chunk_rows)
+            FramerBuilder::new(plane, source.video.chunk_rows)
                 .codec_version(1)
                 .time_parameters(
                     source.video.tps,

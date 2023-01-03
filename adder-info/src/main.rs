@@ -31,16 +31,15 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let eof_position_bytes = stream.get_eof_position()?;
     let file_size = Path::new(file_path).metadata()?.len();
     let num_events = (eof_position_bytes - 1 - header_bytes as u64) / stream.event_size as u64;
-    let events_per_px =
-        num_events / (stream.width as u64 * stream.height as u64 * stream.channels as u64);
+    let events_per_px = num_events / stream.plane.volume() as u64;
 
     let stdout = io::stdout();
     let mut handle = io::BufWriter::new(stdout.lock());
 
     writeln!(handle, "Dimensions")?;
-    writeln!(handle, "\tWidth: {}", stream.width)?;
-    writeln!(handle, "\tHeight: {}", stream.height)?;
-    writeln!(handle, "\tColor channels: {}", stream.channels)?;
+    writeln!(handle, "\tWidth: {}", stream.plane.w())?;
+    writeln!(handle, "\tHeight: {}", stream.plane.h())?;
+    writeln!(handle, "\tColor channels: {}", stream.plane.c())?;
     writeln!(handle, "Source camera: {}", stream.source_camera)?;
     writeln!(handle, "ADΔER transcoder parameters")?;
     writeln!(handle, "\tCodec version: {}", stream.codec_version)?;

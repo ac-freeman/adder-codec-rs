@@ -5,8 +5,8 @@ use crate::transcoder::source::video::Source;
 use crate::transcoder::source::video::SourceError;
 use crate::transcoder::source::video::SourceError::BufferEmpty;
 use crate::transcoder::source::video::Video;
-use crate::SourceCamera;
 use crate::{Coord, Event};
+use crate::{PlaneSize, SourceCamera};
 use opencv::core::{Mat, Size};
 use opencv::videoio::{VideoCapture, CAP_PROP_FPS, CAP_PROP_FRAME_COUNT, CAP_PROP_POS_FRAMES};
 use opencv::{imgproc, prelude::*, videoio, Result};
@@ -181,16 +181,20 @@ impl Framed {
         resize_input(&mut init_frame, &mut init_frame_scaled, builder.scale)?;
         init_frame = init_frame_scaled;
 
+        let plane_size = PlaneSize::new(
+            init_frame.size()?.width as u16,
+            init_frame.size()?.height as u16,
+            channels,
+        )?;
+
         // Sanity checks
         // assert!(init_frame.size()?.width > 50);
         // assert!(init_frame.size()?.height > 50);
 
         let video = Video::new(
-            init_frame.size()?.width as u16,
-            init_frame.size()?.height as u16,
+            plane_size,
             builder.chunk_rows,
             builder.output_events_filename,
-            channels,
             builder.tps,
             builder.ref_time,
             builder.delta_t_max,

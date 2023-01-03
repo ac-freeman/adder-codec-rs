@@ -57,7 +57,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
 
     println!("Closing stream...");
-    source.get_video_mut().end_write_stream();
+    source.get_video_mut().end_write_stream().unwrap();
     println!("FINISHED");
 
     Ok(())

@@ -1,5 +1,5 @@
 use crate::framer::scale_intensity::FrameValue;
-use crate::{BigT, DeltaT, Event, SourceCamera, D};
+use crate::{BigT, DeltaT, Event, PlaneSize, SourceCamera, D};
 use bincode::config::{BigEndian, FixintEncoding, WithOtherEndian, WithOtherIntEncoding};
 use bincode::{DefaultOptions, Options};
 use rayon::iter::ParallelIterator;
@@ -78,9 +78,7 @@ pub enum SourceType {
 
 #[derive(Clone)]
 pub struct FramerBuilder {
-    num_rows: usize,
-    num_cols: usize,
-    num_channels: usize,
+    plane: PlaneSize,
     tps: DeltaT,
     output_fps: f64,
     mode: FramerMode,
@@ -95,16 +93,9 @@ pub struct FramerBuilder {
 
 impl FramerBuilder {
     #[must_use]
-    pub fn new(
-        num_rows: usize,
-        num_cols: usize,
-        num_channels: usize,
-        chunk_rows: usize,
-    ) -> FramerBuilder {
+    pub fn new(plane: PlaneSize, chunk_rows: usize) -> FramerBuilder {
         FramerBuilder {
-            num_rows,
-            num_cols,
-            num_channels,
+            plane,
             chunk_rows,
             tps: 150_000,
             output_fps: 30.0,
@@ -284,17 +275,19 @@ impl<
 {
     type Output = T;
     fn new(builder: FramerBuilder) -> Self {
+        let plane = &builder.plane;
+
         let chunk_rows = builder.chunk_rows;
         assert!(chunk_rows > 0);
 
-        let num_chunks: usize = ((builder.num_rows) as f64 / chunk_rows as f64).ceil() as usize;
-        let last_chunk_rows = builder.num_rows - (num_chunks - 1) * chunk_rows;
+        let num_chunks: usize = ((builder.plane.h()) as f64 / chunk_rows as f64).ceil() as usize;
+        let last_chunk_rows = builder.plane.h_usize() - (num_chunks - 1) * chunk_rows;
 
         assert!(num_chunks > 0);
         let array: Array3<Option<T>> =
-            Array3::<Option<T>>::default((chunk_rows, builder.num_cols, builder.num_channels));
+            Array3::<Option<T>>::default((chunk_rows, plane.w_usize(), plane.c_usize()));
         let last_array: Array3<Option<T>> =
-            Array3::<Option<T>>::default((last_chunk_rows, builder.num_cols, builder.num_channels));
+            Array3::<Option<T>>::default((last_chunk_rows, plane.w_usize(), plane.c_usize()));
 
         let mut frames = vec![
             VecDeque::from(vec![Frame {
@@ -313,21 +306,21 @@ impl<
         };
 
         let mut pixel_ts_tracker: Vec<Array3<BigT>> =
-            vec![Array3::zeros((chunk_rows, builder.num_cols, builder.num_channels)); num_chunks];
+            vec![Array3::zeros((chunk_rows, plane.w_usize(), plane.c_usize())); num_chunks];
         if let Some(last) = pixel_ts_tracker.last_mut() {
-            *last = Array3::zeros((last_chunk_rows, builder.num_cols, builder.num_channels));
+            *last = Array3::zeros((last_chunk_rows, plane.w_usize(), plane.c_usize()));
         };
 
         let mut last_frame_intensity_tracker: Vec<Array3<T>> =
-            vec![Array3::zeros((chunk_rows, builder.num_cols, builder.num_channels)); num_chunks];
+            vec![Array3::zeros((chunk_rows, plane.w_usize(), plane.c_usize())); num_chunks];
         if let Some(last) = last_frame_intensity_tracker.last_mut() {
-            *last = Array3::zeros((last_chunk_rows, builder.num_cols, builder.num_channels));
+            *last = Array3::zeros((last_chunk_rows, plane.w_usize(), plane.c_usize()));
         };
 
         let mut last_filled_tracker: Vec<Array3<i64>> =
-            vec![Array3::zeros((chunk_rows, builder.num_cols, builder.num_channels)); num_chunks];
+            vec![Array3::zeros((chunk_rows, plane.w_usize(), plane.c_usize())); num_chunks];
         if let Some(last) = last_filled_tracker.last_mut() {
-            *last = Array3::zeros((last_chunk_rows, builder.num_cols, builder.num_channels));
+            *last = Array3::zeros((last_chunk_rows, plane.w_usize(), plane.c_usize()));
         };
         for chunk in &mut last_filled_tracker {
             for mut row in chunk.rows_mut() {
@@ -364,7 +357,7 @@ impl<
     /// # Examples
     ///
     /// ```
-    /// # use adder_codec_rs::{Coord, Event};
+    /// # use adder_codec_rs::{Coord, Event, PlaneSize};
     /// # use adder_codec_rs::framer::driver::FramerMode::INSTANTANEOUS;
     /// # use adder_codec_rs::framer::driver::{FrameSequence, Framer, FramerBuilder};
     /// # use adder_codec_rs::framer::driver::SourceType::U8;
@@ -372,7 +365,7 @@ impl<
     ///
     /// let mut frame_sequence: FrameSequence<u8> =
     /// FramerBuilder::new(
-    ///             10, 10, 3, 64)
+    ///             PlaneSize::new(10,10,3).unwrap(), 64)
     ///             .codec_version(1)
     ///             .time_parameters(50000, 1000, 1000, 50.0)
     ///             .mode(INSTANTANEOUS)

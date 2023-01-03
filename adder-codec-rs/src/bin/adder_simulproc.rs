@@ -68,8 +68,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let source = source_builder.finish()?;
     let source_fps = source.source_fps;
 
-    let width = source.get_video().width;
-    let height = source.get_video().height;
+    let plane = source.get_video().plane.clone();
 
     let ref_time = source.get_ref_time();
     let num_threads = match args.thread_count {
@@ -101,9 +100,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
             "ffmpeg -hide_banner -loglevel error -f rawvideo -pix_fmt ".to_owned()
                 + color_str
                 + " -s:v "
-                + width.to_string().as_str()
+                + plane.w().to_string().as_str()
                 + "x"
-                + height.to_string().as_str()
+                + plane.h().to_string().as_str()
                 + " -r "
                 + source_fps.to_string().as_str()
                 + " -i "
@@ -182,8 +181,8 @@ mod tests {
         let output_path = "./tests/samples/TEST_lake_scaled_hd_crop";
         assert_eq!(
             fs::metadata(output_path).unwrap().len()
-                % (u64::from(simul_processor.source.get_video().width)
-                    * u64::from(simul_processor.source.get_video().height)),
+                % (u64::from(simul_processor.source.get_video().plane.w())
+                    * u64::from(simul_processor.source.get_video().plane.h())),
             0
         );
 

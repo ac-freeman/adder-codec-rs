@@ -7,7 +7,7 @@ use std::path::Path;
 use std::sync::mpsc::{channel, Receiver, Sender};
 
 use crate::raw::stream::{Error as StreamError, Raw};
-use crate::{raw, Codec, Coord, Event, SourceType, D};
+use crate::{raw, Codec, Coord, Event, PlaneSize, SourceType, D};
 use opencv::highgui;
 use opencv::imgproc::resize;
 use opencv::prelude::*;
@@ -87,8 +87,7 @@ pub enum FramedViewMode {
 
 /// Attributes common to ADΔER transcode process
 pub struct Video {
-    pub width: u16,
-    pub height: u16,
+    pub plane: PlaneSize,
     pub chunk_rows: usize,
     pub(crate) event_pixel_trees: Array3<PixelArena>,
     pub(crate) ref_time: u32,
@@ -102,7 +101,6 @@ pub struct Video {
     pub instantaneous_view_mode: FramedViewMode,
     pub event_sender: Sender<Vec<Event>>,
     pub(crate) write_out: bool,
-    pub channels: usize,
     pub(crate) c_thresh_pos: u8,
     pub(crate) c_thresh_neg: u8,
     pub(crate) tps: DeltaT,
@@ -116,11 +114,9 @@ impl Video {
     /// # Errors
     /// Returns an error if the output file cannot be opened, or if input parameters are invalid.
     pub fn new(
-        width: u16,
-        height: u16,
+        plane: PlaneSize,
         chunk_rows: usize,
         output_filename: Option<String>,
-        channels: usize,
         tps: DeltaT,
         ref_time: DeltaT,
         delta_t_max: DeltaT,
@@ -141,12 +137,10 @@ impl Video {
                     let path = Path::new(&name);
                     stream.open_writer(path)?;
                     stream.encode_header(
-                        width,
-                        height,
+                        plane.clone(),
                         tps,
                         ref_time,
                         delta_t_max,
-                        channels as u8,
                         1,
                         source_camera,
                     )?;
@@ -155,17 +149,17 @@ impl Video {
         }
 
         let mut data = Vec::new();
-        for y in 0..height {
-            for x in 0..width {
-                for c in 0..channels {
+        for y in 0..plane.height {
+            for x in 0..plane.width {
+                for c in 0..plane.channels {
                     let px = PixelArena::new(
                         1.0,
                         Coord {
                             x,
                             y,
-                            c: match channels {
+                            c: match &plane.channels {
                                 1 => None,
-                                _ => Some(c as u8),
+                                _ => Some(c),
                             },
                         },
                     );
@@ -175,17 +169,17 @@ impl Video {
         }
 
         let event_pixel_trees: Array3<PixelArena> =
-            Array3::from_shape_vec((height.into(), width.into(), channels), data)?;
+            Array3::from_shape_vec((plane.h_usize(), plane.w_usize(), plane.c_usize()), data)?;
 
         let mut instantaneous_frame = Mat::default();
-        match channels {
+        match plane.channels {
             1 => unsafe {
-                instantaneous_frame.create_rows_cols(i32::from(height), i32::from(width), CV_8U)?;
+                instantaneous_frame.create_rows_cols(plane.h() as i32, plane.w() as i32, CV_8U)?;
             },
             _ => unsafe {
                 instantaneous_frame.create_rows_cols(
-                    i32::from(height),
-                    i32::from(width),
+                    plane.h() as i32,
+                    plane.w() as i32,
                     CV_8UC3,
                 )?;
             },
@@ -193,8 +187,7 @@ impl Video {
         let _motion_frame_mat = instantaneous_frame.clone();
 
         Ok(Video {
-            width,
-            height,
+            plane,
             chunk_rows,
             event_pixel_trees,
             ref_time,
@@ -208,7 +201,6 @@ impl Video {
             instantaneous_view_mode: FramedViewMode::Intensity,
             event_sender,
             write_out,
-            channels,
             stream,
             c_thresh_pos,
             c_thresh_neg,
@@ -249,7 +241,7 @@ impl Video {
             self.show_live = false;
         }
 
-        let px_per_chunk: usize = self.chunk_rows * self.width as usize * self.channels;
+        let px_per_chunk: usize = self.chunk_rows * self.plane.area_wc();
 
         // Important: if framing the events simultaneously, then the chunk division must be
         // exactly the same as it is for the framer
@@ -306,9 +298,9 @@ impl Video {
         let practical_d_max =
             fast_math::log2_raw(255.0 * (self.delta_t_max / self.ref_time) as f32);
         db.par_iter_mut().enumerate().for_each(|(idx, val)| {
-            let y = idx / (self.width as usize * self.channels);
-            let x = (idx % (self.width as usize * self.channels)) / self.channels;
-            let c = idx % self.channels;
+            let y = idx / self.plane.area_wc();
+            let x = (idx % self.plane.area_wc()) / self.plane.c_usize();
+            let c = idx % self.plane.c_usize();
             *val = match self.event_pixel_trees[[y, x, c]].arena[0].best_event {
                 Some(event) => u8::get_frame_value(
                     &event,
@@ -331,8 +323,8 @@ impl Video {
 
     fn set_initial_d(&mut self, frame_arr: &[u8]) {
         self.event_pixel_trees.par_map_inplace(|px| {
-            let idx = px.coord.y as usize * self.width as usize * self.channels
-                + px.coord.x as usize * self.channels
+            let idx = px.coord.y as usize * self.plane.area_wc()
+                + px.coord.x as usize * self.plane.c_usize()
                 + px.coord.c.unwrap_or(0) as usize;
             let intensity = frame_arr[idx];
             let d_start = f32::from(intensity).log2().floor() as D;

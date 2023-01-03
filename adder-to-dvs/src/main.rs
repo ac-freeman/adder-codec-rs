@@ -81,7 +81,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let mut text_writer: BufWriter<File> = BufWriter::new(File::create(output_text_path)?);
     {
         // Write the width and height as first line header
-        let dims_str = stream.width.to_string() + " " + &*stream.height.to_string() + "\n";
+        let dims_str = stream.plane.w().to_string() + " " + &*stream.plane.h().to_string() + "\n";
         let amt = text_writer
             .write(dims_str.as_ref())
             .expect("Could not write");
@@ -92,9 +92,9 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
     let mut pixels: Array3<Option<DvsPixel>> = {
         let mut data: Vec<Option<DvsPixel>> = Vec::new();
-        for _ in 0..stream.height {
-            for _ in 0..stream.width {
-                for _ in 0..stream.channels {
+        for _ in 0..stream.plane.h() {
+            for _ in 0..stream.plane.w() {
+                for _ in 0..stream.plane.c() {
                     let px = None;
                     data.push(px);
                 }
@@ -103,34 +103,34 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
         Array3::from_shape_vec(
             (
-                stream.height.into(),
-                stream.width.into(),
-                stream.channels.into(),
+                stream.plane.h().into(),
+                stream.plane.w().into(),
+                stream.plane.c().into(),
             ),
             data,
         )?
     };
 
     let mut event_counts: Array3<u16> = Array3::zeros((
-        stream.height.into(),
-        stream.width.into(),
-        stream.channels.into(),
+        stream.plane.h().into(),
+        stream.plane.w().into(),
+        stream.plane.c().into(),
     ));
 
     let mut instantaneous_frame_deque = {
         let mut instantaneous_frame = Mat::default();
-        match stream.channels {
+        match stream.plane.c() {
             1 => unsafe {
                 instantaneous_frame.create_rows_cols(
-                    stream.height as i32,
-                    stream.width as i32,
+                    stream.plane.h() as i32,
+                    stream.plane.w() as i32,
                     CV_8U,
                 )?;
             },
             _ => unsafe {
                 instantaneous_frame.create_rows_cols(
-                    stream.height as i32,
-                    stream.width as i32,
+                    stream.plane.h() as i32,
+                    stream.plane.w() as i32,
                     CV_8UC3,
                 )?;
             },
@@ -289,9 +289,9 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
     let mut event_count_mat = instantaneous_frame_deque[0].clone();
     unsafe {
-        for y in 0..stream.height as i32 {
-            for x in 0..stream.width as i32 {
-                for c in 0..stream.channels as i32 {
+        for y in 0..stream.plane.h() as i32 {
+            for x in 0..stream.plane.w() as i32 {
+                for c in 0..stream.plane.c() as i32 {
                     *event_count_mat.at_3d_unchecked_mut(y, x, c)? =
                         ((event_counts[[y as usize, x as usize, c as usize]] as f32
                             / max_px_event_count as f32)

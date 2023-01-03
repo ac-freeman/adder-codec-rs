@@ -3,8 +3,8 @@ use crate::SourceType::{F32, F64, U16, U32, U64, U8};
 
 use crate::raw::stream::Error::{Deserialize, Eof};
 use crate::{
-    Codec, Coord, DeltaT, Event, EventSingle, EventStreamHeader, SourceCamera, SourceType,
-    EOF_PX_ADDRESS,
+    Codec, Coord, DeltaT, Event, EventSingle, EventStreamHeader, PlaneSize, SourceCamera,
+    SourceType, EOF_PX_ADDRESS,
 };
 use bincode::config::{BigEndian, FixintEncoding, WithOtherEndian, WithOtherIntEncoding};
 use bincode::{DefaultOptions, Options};
@@ -56,12 +56,10 @@ pub struct Raw {
     input_stream: Option<BufReader<File>>,
     pub codec_version: u8,
     pub header_size: usize,
-    pub width: u16,
-    pub height: u16,
+    pub plane: PlaneSize,
     pub tps: DeltaT,
     pub ref_interval: DeltaT,
     pub delta_t_max: DeltaT,
-    pub channels: u8,
     pub event_size: u8,
     pub source_camera: SourceCamera,
     bincode: WithOtherEndian<WithOtherIntEncoding<DefaultOptions, FixintEncoding>, BigEndian>,
@@ -74,12 +72,10 @@ impl Codec for Raw {
             input_stream: None,
             codec_version: 1,
             header_size: 0,
-            width: 0,
-            height: 0,
+            plane: PlaneSize::default(),
             tps: 0,
             ref_interval: 0,
             delta_t_max: 0,
-            channels: 0,
             event_size: 0,
             source_camera: SourceCamera::default(),
             bincode: DefaultOptions::new()
@@ -238,29 +234,23 @@ impl Codec for Raw {
     /// some way).
     fn encode_header(
         &mut self,
-        width: u16,
-        height: u16,
+        plane: PlaneSize,
         tps: DeltaT,
         ref_interval: DeltaT,
         delta_t_max: DeltaT,
-        channels: u8,
         codec_version: u8,
         source_camera: SourceCamera,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        self.width = width;
-        self.height = height;
+        self.plane = plane.clone();
         self.tps = tps;
         self.ref_interval = ref_interval;
         self.delta_t_max = delta_t_max;
-        self.channels = channels;
         let header = EventStreamHeader::new(
             MAGIC_RAW,
-            width,
-            height,
+            plane,
             tps,
             ref_interval,
             delta_t_max,
-            channels,
             codec_version,
         );
         assert_eq!(header.magic, MAGIC_RAW);
@@ -303,12 +293,17 @@ impl Codec for Raw {
                 };
 
                 self.codec_version = header.version;
-                self.width = header.width;
-                self.height = header.height;
+
+                self.plane = match PlaneSize::new(header.width, header.height, header.channels) {
+                    Ok(a) => a,
+                    Err(_) => {
+                        return Err(Error::BadFile.into());
+                    }
+                };
+
                 self.tps = header.tps;
                 self.ref_interval = header.ref_interval;
                 self.delta_t_max = header.delta_t_max;
-                self.channels = header.channels;
                 self.event_size = header.event_size;
 
                 match header.magic {
@@ -349,10 +344,10 @@ impl Codec for Raw {
             Some(stream) => {
                 // NOTE: for speed, the following checks only run in debug builds. It's entirely
                 // possibly to encode non-sensical events if you want to.
-                debug_assert!(event.coord.x < self.width || event.coord.x == EOF_PX_ADDRESS);
-                debug_assert!(event.coord.y < self.height || event.coord.y == EOF_PX_ADDRESS);
+                debug_assert!(event.coord.x < self.plane.width || event.coord.x == EOF_PX_ADDRESS);
+                debug_assert!(event.coord.y < self.plane.height || event.coord.y == EOF_PX_ADDRESS);
                 let output_event: EventSingle;
-                if self.channels == 1 {
+                if self.plane.channels == 1 {
                     output_event = event.into();
                     self.bincode.serialize_into(&mut *stream, &output_event)?;
                     // bincode::serialize_into(&mut *stream, &output_event, my_options).unwrap();
@@ -383,7 +378,7 @@ impl Codec for Raw {
         let event: Event = match &mut self.input_stream {
             None => return Err(Error::UnitializedStream),
             Some(stream) => {
-                if self.channels == 1 {
+                if self.plane.channels == 1 {
                     match self.bincode.deserialize_from::<_, EventSingle>(stream) {
                         Ok(ev) => ev.into(),
                         Err(_e) => return Err(Deserialize),
@@ -407,7 +402,7 @@ impl Codec for Raw {
 mod tests {
     use crate::raw::stream::Raw;
     use crate::SourceCamera::FramedU8;
-    use crate::{Codec, Coord, Event};
+    use crate::{Codec, Coord, Event, PlaneSize};
     use rand::Rng;
     use std::fs;
 
@@ -418,7 +413,14 @@ mod tests {
         stream
             .open_writer("./TEST_".to_owned() + n.to_string().as_str() + ".addr")
             .expect("Couldn't open file");
-        stream.encode_header(50, 100, 53000, 4000, 50000, 1, 1, FramedU8);
+        let plane = PlaneSize {
+            width: 50,
+            height: 50,
+            channels: 1,
+        };
+        stream
+            .encode_header(plane, 53000, 4000, 50000, 1, FramedU8)
+            .unwrap();
         let event: Event = Event {
             coord: Coord {
                 x: 10,
@@ -428,8 +430,8 @@ mod tests {
             d: 5,
             delta_t: 1000,
         };
-        stream.encode_event(&event);
-        stream.flush_writer();
+        stream.encode_event(&event).unwrap();
+        stream.flush_writer().unwrap();
         stream
             .open_reader("./TEST_".to_owned() + n.to_string().as_str() + ".addr")
             .expect("Couldn't open file");
@@ -443,10 +445,18 @@ mod tests {
                 panic!("Couldn't decode event")
             }
         }
-        stream.encode_header(20, 30, 473_289, 477_893, 4_732_987, 3, 1, FramedU8);
+
+        let plane = PlaneSize {
+            width: 20,
+            height: 30,
+            channels: 3,
+        };
+        stream
+            .encode_header(plane, 473_289, 477_893, 4_732_987, 1, FramedU8)
+            .unwrap();
         assert!(stream.input_stream.is_none());
 
-        stream.close_writer();
+        stream.close_writer().unwrap();
         fs::remove_file("./TEST_".to_owned() + n.to_string().as_str() + ".addr").unwrap();
         // Don't check the error
     }

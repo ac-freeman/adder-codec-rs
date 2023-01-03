@@ -1,4 +1,4 @@
-use crate::SourceCamera;
+use crate::{PlaneSize, SourceCamera};
 use serde::{Deserialize, Serialize};
 
 pub(crate) type Magic = [u8; 5];
@@ -41,37 +41,35 @@ impl HeaderExtension for EventStreamHeaderExtensionV1 {}
 impl EventStreamHeader {
     pub(crate) fn new(
         magic: Magic,
-        width: u16,
-        height: u16,
+        plane_size: PlaneSize,
         tps: u32,
         ref_interval: u32,
         delta_t_max: u32,
-        channels: u8,
         codec_version: u8,
     ) -> EventStreamHeader {
-        assert!(channels > 0);
+        assert!(plane_size.channels > 0);
         assert!(delta_t_max > 0);
-        assert!(width > 0);
-        assert!(height > 0);
+        assert!(plane_size.width > 0);
+        assert!(plane_size.height > 0);
         assert!(magic == MAGIC_RAW || magic == MAGIC_COMPRESSED);
 
         EventStreamHeader {
             magic,
             version: codec_version,
             endianness: 98, // 'b' in ASCII, for big-endian
-            width,
-            height,
+            width: plane_size.width,
+            height: plane_size.height,
             tps,
             ref_interval,
             delta_t_max,
 
             // Number of bytes each event occupies
-            event_size: match channels {
+            event_size: match plane_size.channels {
                 1 => 9, // If single-channel, don't need to waste a byte on the c portion
                 // for every event
                 _ => 10,
             },
-            channels,
+            channels: plane_size.channels,
         }
     }
 }

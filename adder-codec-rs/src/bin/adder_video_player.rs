@@ -65,19 +65,19 @@ fn main() -> Result<(), Box<dyn Error>> {
     stream.set_input_stream_position(first_event_position)?;
 
     let mut display_mat = Mat::default();
-    match stream.channels {
+    match stream.plane.c() {
         1 => {
             create_continuous(
-                i32::from(stream.height),
-                i32::from(stream.width),
+                i32::from(stream.plane.h()),
+                i32::from(stream.plane.w()),
                 CV_64F,
                 &mut display_mat,
             )?;
         }
         3 => {
             create_continuous(
-                i32::from(stream.height),
-                i32::from(stream.width),
+                i32::from(stream.plane.h()),
+                i32::from(stream.plane.w()),
                 CV_64FC3,
                 &mut display_mat,
             )?;

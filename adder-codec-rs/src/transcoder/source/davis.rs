@@ -5,7 +5,7 @@ use crate::transcoder::source::video::{
     integrate_for_px, show_display, Source, SourceError, Video,
 };
 use crate::SourceCamera::DavisU8;
-use crate::{Codec, DeltaT, Event, SourceType};
+use crate::{Codec, DeltaT, Event, PlaneSize, SourceType};
 use aedat::events_generated::Event as DvsEvent;
 use davis_edi_rs::util::reconstructor::{IterVal, ReconstructionError, Reconstructor};
 use rayon::iter::ParallelIterator;
@@ -81,12 +81,11 @@ impl Davis {
         mode: TranscoderMode,
         write_out: bool,
     ) -> Result<Davis, Box<dyn Error>> {
+        let plane = PlaneSize::new(reconstructor.width, reconstructor.height, 1)?;
         let video = Video::new(
-            reconstructor.width,
-            reconstructor.height,
+            plane,
             64,
             output_events_filename,
-            1,
             ticks_per_second,
             // ref_time is set based on the reconstructor's output_fps, which is the user-set
             // rate OR might be higher if the first APS image in the video has a shorter exposure
@@ -107,18 +106,27 @@ impl Davis {
             .num_threads(max(4, 1))
             .build()?;
 
-        let timestamps = vec![0_i64; video.height as usize * video.width as usize * video.channels];
+        let plane = &video.plane;
+
+        let timestamps = vec![0_i64; video.plane.volume()];
 
         let dvs_last_timestamps: Array3<i64> = Array3::from_shape_vec(
-            (video.height.into(), video.width.into(), video.channels),
+            (
+                plane.height.into(),
+                plane.width.into(),
+                plane.channels.into(),
+            ),
             timestamps,
         )?;
 
-        let timestamps =
-            vec![0.0_f64; video.height as usize * video.width as usize * video.channels];
+        let timestamps = vec![0.0_f64; video.plane.volume()];
 
         let dvs_last_ln_val: Array3<f64> = Array3::from_shape_vec(
-            (video.height.into(), video.width.into(), video.channels),
+            (
+                plane.height as usize,
+                plane.width as usize,
+                plane.channels as usize,
+            ),
             timestamps,
         )?;
 
@@ -150,6 +158,7 @@ impl Davis {
         frame_timestamp: &i64,
         event_check: F,
     ) -> Result<(), StreamError> {
+        // TODO: not fixed 4 chunks?
         let mut dvs_chunks: [Vec<DvsEvent>; 4] = [
             Vec::with_capacity(100_000),
             Vec::with_capacity(100_000),
@@ -159,11 +168,11 @@ impl Davis {
 
         let mut chunk_idx;
         for dvs_event in dvs_events {
-            chunk_idx = dvs_event.y() as usize / (self.video.height as usize / 4);
+            chunk_idx = dvs_event.y() as usize / (self.video.plane.h_usize() / 4);
             dvs_chunks[chunk_idx].push(*dvs_event);
         }
 
-        let chunk_rows = self.video.height as usize / 4;
+        let chunk_rows = self.video.plane.h_usize() / 4;
         // let px_per_chunk: usize =
         //     self.video.chunk_rows * self.video.width as usize * self.video.channels as usize;
         let big_buffer: Vec<Vec<Event>> = self
@@ -284,8 +293,7 @@ impl Davis {
 
     #[allow(clippy::cast_possible_truncation)]
     fn integrate_frame_gaps(&mut self) -> Result<(), SourceError> {
-        let px_per_chunk: usize =
-            self.video.chunk_rows * self.video.width as usize * self.video.channels;
+        let px_per_chunk: usize = self.video.chunk_rows * self.video.plane.area_wc();
 
         let start_of_frame_timestamp = match self.start_of_frame_timestamp {
             Some(t) => t,
@@ -378,9 +386,9 @@ impl Davis {
         let practical_d_max =
             fast_math::log2_raw(255.0 * (self.video.delta_t_max / self.video.ref_time) as f32);
         db.par_iter_mut().enumerate().for_each(|(idx, val)| {
-            let y = idx / (self.video.width as usize * self.video.channels);
-            let x = (idx % (self.video.width as usize * self.video.channels)) / self.video.channels;
-            let c = idx % self.video.channels;
+            let y = idx / self.video.plane.area_wc();
+            let x = (idx % self.video.plane.area_wc()) / self.video.plane.c_usize();
+            let c = idx % self.video.plane.c_usize();
             *val = match self.video.event_pixel_trees[[y, x, c]].arena[0].best_event {
                 Some(event) => u8::get_frame_value(
                     &event,
@@ -461,8 +469,7 @@ impl Source for Davis {
             Ok(None) => {
                 // We've reached the end of the input. Forcibly pop the last event from each pixel.
                 println!("Popping remaining events");
-                let px_per_chunk: usize =
-                    self.video.chunk_rows * self.video.width as usize * self.video.channels;
+                let px_per_chunk: usize = self.video.chunk_rows * self.video.plane.area_wc();
                 let big_buffer: Vec<Vec<Event>> = self
                     .video
                     .event_pixel_trees

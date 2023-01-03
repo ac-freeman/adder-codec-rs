@@ -5,7 +5,6 @@ use adder_codec_rs::framer::driver::FramerMode::INSTANTANEOUS;
 use adder_codec_rs::framer::driver::{FrameSequence, FramerBuilder};
 use adder_codec_rs::raw::stream::Raw;
 use adder_codec_rs::Codec;
-use std::error::Error;
 use std::fs::File;
 use std::io;
 use std::io::{BufWriter, Write};
@@ -28,22 +27,17 @@ fn main() {
     //     reconstructed_frame_rate as u32
     // );
 
-    let mut frame_sequence: FrameSequence<u8> = FramerBuilder::new(
-        stream.height.into(),
-        stream.width.into(),
-        stream.channels.into(),
-        260,
-    )
-    .codec_version(stream.codec_version)
-    .time_parameters(
-        stream.tps,
-        stream.ref_interval,
-        stream.delta_t_max,
-        reconstructed_frame_rate,
-    )
-    .mode(INSTANTANEOUS)
-    .source(stream.get_source_type(), stream.source_camera)
-    .finish();
+    let mut frame_sequence: FrameSequence<u8> = FramerBuilder::new(stream.plane.clone(), 260)
+        .codec_version(stream.codec_version)
+        .time_parameters(
+            stream.tps,
+            stream.ref_interval,
+            stream.delta_t_max,
+            reconstructed_frame_rate,
+        )
+        .mode(INSTANTANEOUS)
+        .source(stream.get_source_type(), stream.source_camera)
+        .finish();
 
     let mut now = Instant::now();
     let mut frame_count = 0;

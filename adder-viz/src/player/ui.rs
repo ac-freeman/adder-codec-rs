@@ -356,9 +356,9 @@ impl PlayerState {
                             * 255.0;
 
                         let db = display_mat.data_bytes_mut()?;
-                        db[(y * stream.width as i32 * stream.channels as i32
-                            + x * stream.channels as i32
-                            + c) as usize] = frame_intensity as u8;
+                        db[(y as usize * stream.plane.area_wc()
+                            + x as usize * stream.plane.c_usize()
+                            + c as usize)] = frame_intensity as u8;
                         // unsafe {
                         //     let px: &mut u8 = display_mat.at_3d_unchecked_mut(y, x, c).unwrap();
                         //     *px = frame_intensity as u8;
@@ -398,8 +398,8 @@ impl PlayerState {
         // TODO: refactor
         let image_bevy = Image::new(
             Extent3d {
-                width: stream.width.into(),
-                height: stream.height.into(),
+                width: stream.plane.w().into(),
+                height: stream.plane.h().into(),
                 depth_or_array_layers: 1,
             },
             TextureDimension::D2,
@@ -465,8 +465,8 @@ impl PlayerState {
             // TODO: refactor
             let image_bevy = Image::new(
                 Extent3d {
-                    width: stream.width.into(),
-                    height: stream.height.into(),
+                    width: stream.plane.w().into(),
+                    height: stream.plane.h().into(),
                     depth_or_array_layers: 1,
                 },
                 TextureDimension::D2,
@@ -526,10 +526,8 @@ impl PlayerState {
             );
             self.ui_info_state.events_per_sec =
                 self.ui_info_state.events_total as f64 / duration.as_secs() as f64;
-            self.ui_info_state.events_ppc_total = self.ui_info_state.events_total as f64
-                / stream.width as f64
-                / stream.height as f64
-                / stream.channels as f64;
+            self.ui_info_state.events_ppc_total =
+                self.ui_info_state.events_total as f64 / stream.plane.volume() as f64;
             self.ui_info_state.events_ppc_per_sec =
                 self.ui_info_state.events_ppc_total / duration.as_secs() as f64;
         }
