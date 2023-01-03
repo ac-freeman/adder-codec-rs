@@ -98,15 +98,12 @@ impl PixelArena {
                         delta_t: root.state.delta_t as DeltaT,
                     });
 
-                    match self.arena.len() > 1 {
-                        true => {
-                            self.arena[1] = PixelNode::new(next_intensity);
-                            self.length = 2;
-                        }
-                        false => {
-                            self.arena.push(PixelNode::new(next_intensity));
-                            self.length += 1;
-                        }
+                    if self.arena.len() > 1 {
+                        self.arena[1] = PixelNode::new(next_intensity);
+                        self.length = 2;
+                    } else {
+                        self.arena.push(PixelNode::new(next_intensity));
+                        self.length += 1;
                     }
 
                     self.pop_top_event(next_intensity)
@@ -141,7 +138,7 @@ impl PixelArena {
                 }
                 Some(event) => {
                     assert_ne!(node_idx, self.length - 1);
-                    buffer.push(event)
+                    buffer.push(event);
                 }
             }
         }
@@ -166,19 +163,17 @@ impl PixelArena {
     pub fn set_d_for_continuous(&mut self, next_intensity: Intensity32) -> Option<Event> {
         let head = &mut self.arena[0];
         let next_d = get_d_from_intensity(next_intensity);
-        let ret = match next_d < head.state.d && head.state.delta_t > 0.0 {
-            true => {
-                let ret = Some(Event {
-                    coord: self.coord,
-                    d: 0xFF,
-                    delta_t: (head.state.delta_t) as DeltaT,
-                });
-
-                head.state.delta_t = 0.0;
-                head.state.integration = 0.0;
-                ret
-            }
-            false => None,
+        let ret = if next_d < head.state.d && head.state.delta_t > 0.0 {
+            let ret = Some(Event {
+                coord: self.coord,
+                d: 0xFF,
+                delta_t: (head.state.delta_t) as DeltaT,
+            });
+            head.state.delta_t = 0.0;
+            head.state.integration = 0.0;
+            ret
+        } else {
+            None
         };
         head.state.d = next_d;
         ret
@@ -191,9 +186,9 @@ impl PixelArena {
         &mut self,
         mut intensity: Intensity32,
         mut time: f32,
-        mode: &Mode,
-        dtm: &DeltaT,
-        ref_time: &DeltaT,
+        mode: Mode,
+        dtm: DeltaT,
+        ref_time: DeltaT,
     ) {
         let tail = &mut self.arena[self.length - 1];
         if tail.state.delta_t == 0.0 && tail.state.integration == 0.0 {
@@ -206,11 +201,10 @@ impl PixelArena {
                 None => false,
                 Some((next_intensity, next_time)) => {
                     // self.arena.drain(idx + 1..);
-                    match self.arena.len() > idx + 1 {
-                        true => self.arena[idx + 1] = PixelNode::new(intensity), // TODO: Do new2 with next_intensity?
-                        false => {
-                            self.arena.push(PixelNode::new(intensity));
-                        }
+                    if self.arena.len() > idx + 1 {
+                        self.arena[idx + 1] = PixelNode::new(intensity);
+                    } else {
+                        self.arena.push(PixelNode::new(intensity));
                     }
                     self.length = idx + 2;
                     self.arena[idx].alt = Some(());
@@ -229,7 +223,7 @@ impl PixelArena {
                     // If continuous, we need to integrate the remaining intensity for the current
                     // node and the branching nodes
                     Continuous => {
-                        if time > *ref_time as f32 {
+                        if time > ref_time as f32 {
                             self.arena[idx].state.d = get_d_from_intensity(intensity);
                         }
                     }
@@ -244,7 +238,7 @@ impl PixelArena {
         assert!(self.length > 0);
 
         self.need_to_pop_top =
-            self.arena[0].state.d == D_MAX || self.arena[0].state.delta_t as DeltaT >= *dtm;
+            self.arena[0].state.d == D_MAX || self.arena[0].state.delta_t as DeltaT >= dtm;
     }
 
     /// Integrate an intensity for a given node. Returns `Some()` if the node fires an event, so
@@ -255,7 +249,7 @@ impl PixelArena {
         index: usize,
         intensity: Intensity32,
         time: f32,
-        mode: &Mode,
+        mode: Mode,
     ) -> Option<(Intensity32, f32)> {
         let node = &mut self.arena[index];
         if node.state.integration + intensity >= D_SHIFT[node.state.d as usize] as f32 {
@@ -309,9 +303,10 @@ impl PixelArena {
 fn get_d_from_intensity(intensity: Intensity32) -> D {
     min(
         {
-            match intensity > 0.0 {
-                true => fast_math::log2_raw(intensity) as D,
-                false => 0,
+            if intensity > 0.0 {
+                fast_math::log2_raw(intensity) as D
+            } else {
+                0
             }
         },
         D_MAX,

@@ -187,7 +187,11 @@ impl Video {
                 instantaneous_frame.create_rows_cols(i32::from(height), i32::from(width), CV_8U)?;
             },
             _ => unsafe {
-                instantaneous_frame.create_rows_cols(i32::from(height), i32::from(width), CV_8UC3)?;
+                instantaneous_frame.create_rows_cols(
+                    i32::from(height),
+                    i32::from(width),
+                    CV_8UC3,
+                )?;
             },
         }
         let _motion_frame_mat = instantaneous_frame.clone();
@@ -220,6 +224,7 @@ impl Video {
         self.stream.close_writer()
     }
 
+    #[allow(needless_pass_by_value)]
     pub(crate) fn integrate_matrix(
         &mut self,
         matrix: Mat,
@@ -281,7 +286,7 @@ impl Video {
                         &self.c_thresh_neg,
                         &self.delta_t_max,
                         &self.ref_time,
-                    )
+                    );
                 }
                 buffer
             })
@@ -406,9 +411,9 @@ pub fn integrate_for_px(
     px.integrate(
         intensity,
         time_spanned,
-        &pixel_tree_mode,
-        delta_t_max,
-        ref_time,
+        pixel_tree_mode,
+        *delta_t_max,
+        *ref_time,
     );
 
     if px.need_to_pop_top {
@@ -427,7 +432,9 @@ pub fn show_display(window_name: &str, mat: &Mat, wait: i32, video: &Video) -> o
 pub fn show_display_force(window_name: &str, mat: &Mat, wait: i32) -> opencv::Result<()> {
     let mut tmp = Mat::default();
 
-    if mat.rows() != 940 {
+    if mat.rows() == 940 {
+        highgui::imshow(window_name, mat)?;
+    } else {
         let factor = mat.rows() as f32 / 940.0;
         resize(
             mat,
@@ -441,8 +448,6 @@ pub fn show_display_force(window_name: &str, mat: &Mat, wait: i32) -> opencv::Re
             0,
         )?;
         highgui::imshow(window_name, &tmp)?;
-    } else {
-        highgui::imshow(window_name, mat)?;
     }
 
     highgui::wait_key(wait)?;

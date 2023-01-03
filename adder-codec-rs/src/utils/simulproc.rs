@@ -145,56 +145,50 @@ impl SimulProcessor {
         rayon::spawn(move || {
             let mut frame_count = 1;
             loop {
-                match events_rx.recv() {
-                    Ok(events) => {
-                        // assert_eq!(events.len(), (self.source.get_video().height as f64 / self.framer.chunk_rows as f64).ceil() as usize);
+                if let Ok(events) = events_rx.recv() {
+                    // assert_eq!(events.len(), (self.source.get_video().height as f64 / self.framer.chunk_rows as f64).ceil() as usize);
 
-                        // Frame the events
-                        if framer.ingest_events_events(events) {
-                            match framer.write_multi_frame_bytes(&mut output_stream) {
-                                Ok(0) => {
-                                    eprintln!("Should have frame, but didn't");
-                                    break;
-                                }
-                                Ok(frames_returned) => {
-                                    frame_count += frames_returned;
-                                    print!(
-                                        "\rOutput frame {}. Got {} frames in  {} ms/frame\t",
-                                        frame_count,
-                                        frames_returned,
-                                        now.elapsed().as_millis() / frames_returned as u128
-                                    );
-                                    match io::stdout().flush() {
-                                        Ok(_) => {}
-                                        Err(_) => {
-                                            eprintln!("Error flushing stdout");
-                                            break;
-                                        }
-                                    };
-                                    now = Instant::now();
-                                }
-                                Err(e) => {
-                                    eprintln!("Error writing frame: {e}");
-                                    break;
-                                }
+                    // Frame the events
+                    if framer.ingest_events_events(events) {
+                        match framer.write_multi_frame_bytes(&mut output_stream) {
+                            Ok(0) => {
+                                eprintln!("Should have frame, but didn't");
+                                break;
                             }
-                        }
-                        match output_stream.flush() {
-                            Ok(_) => {}
-                            Err(_) => {
-                                eprintln!("Error flushing output stream");
+                            Ok(frames_returned) => {
+                                frame_count += frames_returned;
+                                print!(
+                                    "\rOutput frame {}. Got {} frames in  {} ms/frame\t",
+                                    frame_count,
+                                    frames_returned,
+                                    now.elapsed().as_millis() / frames_returned as u128
+                                );
+                                if let Err(_) = io::stdout().flush() {
+                                    eprintln!("Error flushing stdout");
+                                    break;
+                                };
+                                now = Instant::now();
+                            }
+                            Err(e) => {
+                                eprintln!("Error writing frame: {e}");
                                 break;
                             }
                         }
-                        if frame_count >= frame_max && frame_max > 0 {
-                            eprintln!("Wrote max frames. Exiting channel.");
+                    }
+                    match output_stream.flush() {
+                        Ok(_) => {}
+                        Err(_) => {
+                            eprintln!("Error flushing output stream");
                             break;
                         }
                     }
-                    Err(_) => {
-                        eprintln!("Event receiver is closed. Exiting channel.");
+                    if frame_count >= frame_max && frame_max > 0 {
+                        eprintln!("Wrote max frames. Exiting channel.");
                         break;
                     }
+                } else {
+                    eprintln!("Event receiver is closed. Exiting channel.");
+                    break;
                 };
             }
         });

@@ -141,6 +141,7 @@ impl DavisSource {
         Ok(davis_source)
     }
 
+    #[allow(cast_sign_loss)]
     pub fn integrate_dvs_events<F: Fn(i64, i64) -> bool + Send + 'static + std::marker::Sync>(
         &mut self,
         dvs_events: &Vec<DvsEvent>,
@@ -208,8 +209,6 @@ impl DavisSource {
                                 continue; // TODO: do better
                             }
                             assert!(delta_t_ticks > 0.0);
-                            let _frame_delta_t = self.video.ref_time;
-                            // integrate_for_px(px, base_val, &frame_val, 0.0, 0.0, Mode::FramePerfect, &mut vec![], &0, &0, &0)
 
                             // First, integrate the previous value enough to fill the time since then
                             let first_integration = ((last_val as Intensity32)
@@ -223,9 +222,9 @@ impl DavisSource {
                             px.integrate(
                                 first_integration,
                                 delta_t_ticks,
-                                &Continuous,
-                                &self.video.delta_t_max,
-                                &self.video.ref_time,
+                                Continuous,
+                                self.video.delta_t_max,
+                                self.video.ref_time,
                             );
                             if px.need_to_pop_top {
                                 buffer.push(px.pop_top_event(first_integration));
@@ -236,10 +235,7 @@ impl DavisSource {
                             // let mut frame_val = (base_val as f64);
                             // let mut lat_frame_val = (frame_val / 255.0).ln();
 
-                            *last_val_ln += match event.on() {
-                                true => self.dvs_c,
-                                false => -self.dvs_c,
-                            };
+                            *last_val_ln += if event.on() { self.dvs_c } else { -self.dvs_c };
                             let mut frame_val = (last_val_ln.exp() - 1.0) * 255.0;
                             clamp_u8(&mut frame_val, last_val_ln);
 
@@ -339,8 +335,9 @@ impl DavisSource {
                     //     (self.video.ref_time as f32 / ticks_per_micro as f32) as i64
                     // );
 
-                    let integration =
-                        ((last_val / f64::from(self.video.ref_time)) * f64::from(delta_t_ticks)).max(0.0);
+                    let integration = ((last_val / f64::from(self.video.ref_time))
+                        * f64::from(delta_t_ticks))
+                    .max(0.0);
                     assert!(integration >= 0.0);
 
                     integrate_for_px(
@@ -405,15 +402,12 @@ impl DavisSource {
                 None => {}
                 Some(timestamp) => {
                     let latency = timestamp.elapsed().as_millis();
-                    match latency as f64 >= self.reconstructor.target_latency * 3.0 {
-                        true => {
-                            self.video.c_thresh_pos = self.video.c_thresh_pos.saturating_add(1);
-                            self.video.c_thresh_neg = self.video.c_thresh_neg.saturating_add(1);
-                        }
-                        false => {
-                            self.video.c_thresh_pos = self.video.c_thresh_pos.saturating_sub(1);
-                            self.video.c_thresh_neg = self.video.c_thresh_neg.saturating_sub(1);
-                        }
+                    if latency as f64 >= self.reconstructor.target_latency * 3.0 {
+                        self.video.c_thresh_pos = self.video.c_thresh_pos.saturating_add(1);
+                        self.video.c_thresh_neg = self.video.c_thresh_neg.saturating_add(1);
+                    } else {
+                        self.video.c_thresh_pos = self.video.c_thresh_pos.saturating_sub(1);
+                        self.video.c_thresh_neg = self.video.c_thresh_neg.saturating_sub(1);
                     }
                     eprintln!(
                         "    adder latency = {}, adder c = {}",
@@ -452,8 +446,7 @@ impl Source for DavisSource {
 
         let with_events = match self.mode {
             DavisTranscoderMode::Framed => false,
-            DavisTranscoderMode::RawDavis => true,
-            DavisTranscoderMode::RawDvs => true,
+            DavisTranscoderMode::RawDavis | DavisTranscoderMode::RawDvs => true,
         };
         let mat_opt = self.rt.block_on(get_next_image(
             &mut self.reconstructor,
@@ -592,10 +585,7 @@ impl Source for DavisSource {
                     }
                 };
                 match self.mode {
-                    DavisTranscoderMode::Framed => {
-                        *val = px.ln_1p();
-                    }
-                    DavisTranscoderMode::RawDavis => {
+                    DavisTranscoderMode::RawDavis | DavisTranscoderMode::Framed => {
                         *val = px.ln_1p();
                     }
                     DavisTranscoderMode::RawDvs => {

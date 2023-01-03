@@ -89,6 +89,7 @@ impl Codec for RawStream {
         }
     }
 
+    #[allow(match_same_arms)]
     fn get_source_type(&self) -> SourceType {
         match self.source_camera {
             SourceCamera::FramedU8 => U8,

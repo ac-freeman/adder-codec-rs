@@ -112,12 +112,13 @@ impl FramerBuilder {
             view_mode: FramedViewMode::Intensity,
             source: SourceType::U8,
             codec_version: 1,
-            source_camera: Default::default(),
+            source_camera: SourceCamera::default(),
             ref_interval: 5000,
             delta_t_max: 5000,
         }
     }
-    #[must_use] pub fn time_parameters(
+    #[must_use]
+    pub fn time_parameters(
         mut self,
         tps: DeltaT,
         ref_interval: DeltaT,
@@ -131,29 +132,34 @@ impl FramerBuilder {
         self
     }
 
-    #[must_use] pub fn mode(mut self, mode: FramerMode) -> FramerBuilder {
+    #[must_use]
+    pub fn mode(mut self, mode: FramerMode) -> FramerBuilder {
         self.mode = mode;
         self
     }
 
-    #[must_use] pub fn view_mode(mut self, mode: FramedViewMode) -> FramerBuilder {
+    #[must_use]
+    pub fn view_mode(mut self, mode: FramedViewMode) -> FramerBuilder {
         self.view_mode = mode;
         self
     }
 
-    #[must_use] pub fn source(mut self, source: SourceType, source_camera: SourceCamera) -> FramerBuilder {
+    #[must_use]
+    pub fn source(mut self, source: SourceType, source_camera: SourceCamera) -> FramerBuilder {
         self.source_camera = source_camera;
         self.source = source;
         self
     }
 
-    #[must_use] pub fn codec_version(mut self, codec_version: u8) -> FramerBuilder {
+    #[must_use]
+    pub fn codec_version(mut self, codec_version: u8) -> FramerBuilder {
         self.codec_version = codec_version;
         self
     }
 
     // TODO: Make this return a result
-    #[must_use] pub fn finish<T>(self) -> FrameSequence<T>
+    #[must_use]
+    pub fn finish<T>(self) -> FrameSequence<T>
     where
         T: FrameValue<Output = T>,
         T: Clone,
@@ -301,25 +307,25 @@ impl<
             *last = VecDeque::from(vec![Frame {
                 array: last_array,
                 filled_count: 0,
-            }])
+            }]);
         };
 
         let mut pixel_ts_tracker: Vec<Array3<BigT>> =
             vec![Array3::zeros((chunk_rows, builder.num_cols, builder.num_channels)); num_chunks];
         if let Some(last) = pixel_ts_tracker.last_mut() {
-            *last = Array3::zeros((last_chunk_rows, builder.num_cols, builder.num_channels))
+            *last = Array3::zeros((last_chunk_rows, builder.num_cols, builder.num_channels));
         };
 
         let mut last_frame_intensity_tracker: Vec<Array3<T>> =
             vec![Array3::zeros((chunk_rows, builder.num_cols, builder.num_channels)); num_chunks];
         if let Some(last) = last_frame_intensity_tracker.last_mut() {
-            *last = Array3::zeros((last_chunk_rows, builder.num_cols, builder.num_channels))
+            *last = Array3::zeros((last_chunk_rows, builder.num_cols, builder.num_channels));
         };
 
         let mut last_filled_tracker: Vec<Array3<i64>> =
             vec![Array3::zeros((chunk_rows, builder.num_cols, builder.num_channels)); num_chunks];
         if let Some(last) = last_filled_tracker.last_mut() {
-            *last = Array3::zeros((last_chunk_rows, builder.num_cols, builder.num_channels))
+            *last = Array3::zeros((last_chunk_rows, builder.num_cols, builder.num_channels));
         };
         for chunk in &mut last_filled_tracker {
             for mut row in chunk.rows_mut() {
@@ -484,12 +490,14 @@ impl<
 
 impl<T: Clone + Default + FrameValue<Output = T> + Serialize> FrameSequence<T> {
     /// Get the number of frames queue'd up to be written
-    #[must_use] pub fn get_frames_len(&self) -> usize {
+    #[must_use]
+    pub fn get_frames_len(&self) -> usize {
         self.frames.len()
     }
 
     /// Get the number of chunks in a frame
-    #[must_use] pub fn get_frame_chunks_num(&self) -> usize {
+    #[must_use]
+    pub fn get_frame_chunks_num(&self) -> usize {
         self.pixel_ts_tracker.len()
     }
 
@@ -554,7 +562,8 @@ impl<T: Clone + Default + FrameValue<Output = T> + Serialize> FrameSequence<T> {
         Ok(true)
     }
 
-    #[must_use] pub fn is_frame_0_filled(&self) -> bool {
+    #[must_use]
+    pub fn is_frame_0_filled(&self) -> bool {
         for chunk in &self.chunk_filled_tracker {
             if !chunk {
                 return false;
@@ -572,7 +581,7 @@ impl<T: Clone + Default + FrameValue<Output = T> + Serialize> FrameSequence<T> {
                     ret.push(frame);
                 }
                 None => {
-                    println!("Couldn't pop chunk {chunk_num}!")
+                    println!("Couldn't pop chunk {chunk_num}!");
                 }
             }
         }
@@ -622,7 +631,7 @@ impl<T: Clone + Default + FrameValue<Output = T> + Serialize> FrameSequence<T> {
                     }
                 }
                 None => {
-                    println!("Couldn't pop chunk {chunk_num}!")
+                    println!("Couldn't pop chunk {chunk_num}!");
                 }
             }
         }
@@ -703,7 +712,6 @@ fn ingest_event_for_chunk<
     let channel = event.coord.c.unwrap_or(0);
 
     let prev_last_filled_frame = *last_filled_frame_ref;
-    let _already_filled = *last_filled_frame_ref >= frames_written;
 
     *running_ts_ref += u64::from(event.delta_t);
 
@@ -775,20 +783,22 @@ fn ingest_event_for_chunk<
     // If framed video source, we can take advantage of scheme that reduces event rate by half
     if codec_version > 0
         && match source_camera {
-            SourceCamera::FramedU8 => true,
-            SourceCamera::FramedU16 => true,
-            SourceCamera::FramedU32 => true,
-            SourceCamera::FramedU64 => true,
-            SourceCamera::FramedF32 => true,
-            SourceCamera::FramedF64 => true,
-            SourceCamera::Dvs => false,
-            SourceCamera::DavisU8 => false, // TODO: switch statement on the transcode MODE (frame-perfect or continuous), not just the source
-            SourceCamera::Atis => false,
-            SourceCamera::Asint => false,
+            SourceCamera::FramedU8
+            | SourceCamera::FramedU16
+            | SourceCamera::FramedU32
+            | SourceCamera::FramedU64
+            | SourceCamera::FramedF32
+            | SourceCamera::FramedF64 => true,
+            SourceCamera::Dvs
+            | SourceCamera::DavisU8
+            | SourceCamera::Atis
+            | SourceCamera::Asint => false,
+            // TODO: switch statement on the transcode MODE (frame-perfect or continuous), not just the source
         }
         && *running_ts_ref % u64::from(ref_interval) > 0
     {
-        *running_ts_ref = ((*running_ts_ref / u64::from(ref_interval)) + 1) * u64::from(ref_interval);
+        *running_ts_ref =
+            ((*running_ts_ref / u64::from(ref_interval)) + 1) * u64::from(ref_interval);
     }
 
     debug_assert!(*last_filled_frame_ref >= 0);

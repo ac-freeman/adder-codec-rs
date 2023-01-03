@@ -60,7 +60,8 @@ pub struct FramedSourceBuilder {
 }
 
 impl FramedSourceBuilder {
-    #[must_use] pub fn new(input_filename: String, source_camera: SourceCamera) -> FramedSourceBuilder {
+    #[must_use]
+    pub fn new(input_filename: String, source_camera: SourceCamera) -> FramedSourceBuilder {
         FramedSourceBuilder {
             input_filename,
             output_events_filename: None,
@@ -81,30 +82,35 @@ impl FramedSourceBuilder {
         }
     }
 
-    #[must_use] pub fn output_events_filename(mut self, output_events_filename: String) -> FramedSourceBuilder {
+    #[must_use]
+    pub fn output_events_filename(mut self, output_events_filename: String) -> FramedSourceBuilder {
         self.output_events_filename = Some(output_events_filename);
         self.write_out = true;
         self
     }
 
-    #[must_use] pub fn frame_start(mut self, frame_idx_start: u32) -> FramedSourceBuilder {
+    #[must_use]
+    pub fn frame_start(mut self, frame_idx_start: u32) -> FramedSourceBuilder {
         self.frame_idx_start = frame_idx_start;
         self
     }
 
-    #[must_use] pub fn chunk_rows(mut self, chunk_rows: usize) -> FramedSourceBuilder {
+    #[must_use]
+    pub fn chunk_rows(mut self, chunk_rows: usize) -> FramedSourceBuilder {
         self.chunk_rows = chunk_rows;
         self
     }
 
-    #[must_use] pub fn time_parameters(mut self, ref_time: DeltaT, delta_t_max: DeltaT) -> FramedSourceBuilder {
+    #[must_use]
+    pub fn time_parameters(mut self, ref_time: DeltaT, delta_t_max: DeltaT) -> FramedSourceBuilder {
         self.delta_t_max = delta_t_max;
         self.ref_time = ref_time;
         assert_eq!(self.delta_t_max % self.ref_time, 0);
         self
     }
 
-    #[must_use] pub fn contrast_thresholds(
+    #[must_use]
+    pub fn contrast_thresholds(
         mut self,
         c_thresh_pos: u8,
         c_thresh_neg: u8,
@@ -114,27 +120,32 @@ impl FramedSourceBuilder {
         self
     }
 
-    #[must_use] pub fn scale(mut self, scale: f64) -> FramedSourceBuilder {
+    #[must_use]
+    pub fn scale(mut self, scale: f64) -> FramedSourceBuilder {
         self.scale = scale;
         self
     }
 
-    #[must_use] pub fn skip_interval(mut self, frame_skip_interval: u8) -> FramedSourceBuilder {
+    #[must_use]
+    pub fn skip_interval(mut self, frame_skip_interval: u8) -> FramedSourceBuilder {
         self.frame_skip_interval = frame_skip_interval;
         self
     }
 
-    #[must_use] pub fn color(mut self, color_input: bool) -> FramedSourceBuilder {
+    #[must_use]
+    pub fn color(mut self, color_input: bool) -> FramedSourceBuilder {
         self.color_input = color_input;
         self
     }
 
-    #[must_use] pub fn communicate_events(mut self, communicate_events: bool) -> FramedSourceBuilder {
+    #[must_use]
+    pub fn communicate_events(mut self, communicate_events: bool) -> FramedSourceBuilder {
         self.communicate_events = communicate_events;
         self
     }
 
-    #[must_use] pub fn show_display(mut self, show_display_b: bool) -> FramedSourceBuilder {
+    #[must_use]
+    pub fn show_display(mut self, show_display_b: bool) -> FramedSourceBuilder {
         self.show_display_b = show_display_b;
         self
     }
@@ -148,10 +159,7 @@ impl FramedSource {
     /// Initialize the framed source and read first frame of source, in order to get `height`
     /// and `width` and initialize [`Video`]
     fn new(mut builder: FramedSourceBuilder) -> Result<FramedSource, Box<dyn std::error::Error>> {
-        let channels = match builder.color_input {
-            true => 3,
-            false => 1,
-        };
+        let channels = if builder.color_input { 3 } else { 1 };
 
         let mut cap =
             videoio::VideoCapture::from_file(builder.input_filename.as_str(), videoio::CAP_FFMPEG)?;
@@ -206,8 +214,8 @@ impl FramedSource {
 
         Ok(FramedSource {
             cap,
-            input_frame_scaled: Default::default(),
-            input_frame: Default::default(),
+            input_frame_scaled: Mat::default(),
+            input_frame: Mat::default(),
             frame_idx_start: builder.frame_idx_start,
             source_fps,
             scale: builder.scale,
@@ -276,7 +284,10 @@ fn resize_input(
     input_frame_scaled: &mut Mat,
     resize_scale: f64,
 ) -> Result<(), opencv::Error> {
-    if resize_scale != 1.0 {
+    if (resize_scale - 1.0).abs() < f64::EPSILON {
+        // For performance. We don't need to read input_frame_gray again anyway
+        swap(input_frame_gray, input_frame_scaled);
+    } else {
         opencv::imgproc::resize(
             input_frame_gray,
             input_frame_scaled,
@@ -288,9 +299,6 @@ fn resize_input(
             resize_scale,
             0,
         )?;
-    } else {
-        // For performance. We don't need to read input_frame_gray again anyway
-        swap(input_frame_gray, input_frame_scaled);
     }
     Ok(())
 }
@@ -302,13 +310,13 @@ fn resize_frame(
     scale: f64,
 ) -> Result<(), opencv::Error> {
     let mut holder = Mat::default();
-    if !color {
+    if color {
+        holder = input.clone();
+    } else {
         // Yields an 8-bit grayscale mat
         imgproc::cvt_color(&input, &mut holder, imgproc::COLOR_BGR2GRAY, 1)?;
         // don't do anything with the error. This happens when we reach the end of
         // the video, so there's nothing to convert.
-    } else {
-        holder = input.clone();
     }
 
     resize_input(&mut holder, output, scale)?;
