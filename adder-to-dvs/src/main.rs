@@ -173,12 +173,12 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 None => {}
                 Some(frame) => {
                     if args.show_display {
-                        show_display_force("DVS", &frame, 1);
+                        show_display_force("DVS", &frame, 1)?;
                     }
                     match video_writer {
                         None => {}
                         Some(ref mut writer) => {
-                            write_frame_to_video(&frame, writer);
+                            write_frame_to_video(&frame, writer)?;
                         }
                     }
                 }
@@ -234,7 +234,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                                             frame_idx,
                                             frame_count,
                                             255,
-                                        );
+                                        )?;
                                         let dvs_string = px.t.to_string()
                                             + " "
                                             + x.to_string().as_str()
@@ -256,7 +256,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                                             frame_idx,
                                             frame_count,
                                             0,
-                                        );
+                                        )?;
                                         let dvs_string = px.t.to_string()
                                             + " "
                                             + x.to_string().as_str()
@@ -303,20 +303,20 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
     for frame in instantaneous_frame_deque {
         if args.show_display {
-            show_display_force("DVS", &frame, 1);
+            show_display_force("DVS", &frame, 1)?;
         }
         match video_writer {
             None => {}
             Some(ref mut writer) => {
-                write_frame_to_video(&frame, writer);
+                write_frame_to_video(&frame, writer)?;
             }
         }
     }
     println!("\n");
     if args.show_display {
-        show_display_force("Event counts", &event_count_mat, 0);
+        show_display_force("Event counts", &event_count_mat, 0)?;
     }
-    encode_video_ffmpeg(raw_path, output_video_path);
+    encode_video_ffmpeg(raw_path, output_video_path)?;
 
     handle.flush()?;
     println!("Finished!");

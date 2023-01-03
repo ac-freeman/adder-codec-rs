@@ -106,7 +106,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                     .saturating_sub((Instant::now() - last_frame_displayed_ts).as_millis()),
                 1,
             ) as i32;
-            show_display_force("ADΔER", &display_mat, wait_time);
+            show_display_force("ADΔER", &display_mat, wait_time)?;
             last_frame_displayed_ts = Instant::now();
             frame_count += 1;
         }

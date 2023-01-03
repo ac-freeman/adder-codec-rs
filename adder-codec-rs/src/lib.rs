@@ -309,10 +309,10 @@ pub trait Codec {
         Ok(())
     }
 
-    fn write_eof(&mut self);
+    fn write_eof(&mut self) -> Result<(), StreamError>;
     /// Flush the stream so that program can be exited safely
     fn flush_writer(&mut self) -> io::Result<()>;
-    fn close_writer(&mut self) -> io::Result<()>;
+    fn close_writer(&mut self) -> Result<(), Box<dyn Error>>;
 
     /// Close the stream so that program can be exited safely
     fn close_reader(&mut self);
@@ -342,9 +342,9 @@ pub trait Codec {
 
     fn decode_header(&mut self) -> Result<usize, Box<dyn Error>>;
 
-    fn encode_event(&mut self, event: &Event) -> Result<(), Box<dyn Error>>;
-    fn encode_events(&mut self, events: &[Event]);
-    fn encode_events_events(&mut self, events: &[Vec<Event>]);
+    fn encode_event(&mut self, event: &Event) -> Result<(), StreamError>;
+    fn encode_events(&mut self, events: &[Event]) -> Result<(), StreamError>;
+    fn encode_events_events(&mut self, events: &[Vec<Event>]) -> Result<(), StreamError>;
     fn decode_event(&mut self) -> Result<Event, StreamError>;
 }
 

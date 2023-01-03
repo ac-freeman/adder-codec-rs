@@ -25,6 +25,7 @@ use std::error::Error;
 use std::time::Instant;
 
 use crate::framer::scale_intensity::FrameValue;
+use crate::raw::raw_stream::StreamError;
 use crate::transcoder::event_pixel_tree::Intensity32;
 use tokio::runtime::Runtime;
 
@@ -145,7 +146,7 @@ impl DavisSource {
         dvs_events: &Vec<DvsEvent>,
         frame_timestamp: &i64,
         event_check: F,
-    ) {
+    ) -> Result<(), StreamError> {
         let mut dvs_chunks: [Vec<DvsEvent>; 4] = [
             Vec::with_capacity(100000),
             Vec::with_capacity(100000),
@@ -278,8 +279,9 @@ impl DavisSource {
         // Using a macro so that CLion still pretty prints correctly
 
         if self.video.write_out {
-            self.video.stream.encode_events_events(&big_buffer);
+            self.video.stream.encode_events_events(&big_buffer)?;
         }
+        Ok(())
     }
 
     fn integrate_frame_gaps(&mut self) -> Result<(), SourceError> {
@@ -363,7 +365,7 @@ impl DavisSource {
             .collect();
 
         if self.video.write_out {
-            self.video.stream.encode_events_events(&big_buffer);
+            self.video.stream.encode_events_events(&big_buffer)?;
         }
 
         let db = match self.video.instantaneous_frame.data_bytes_mut() {
@@ -392,7 +394,7 @@ impl DavisSource {
             };
         });
         if self.video.show_live {
-            show_display("instance", &self.video.instantaneous_frame, 1, &self.video);
+            show_display("instance", &self.video.instantaneous_frame, 1, &self.video)?;
         }
         Ok(())
     }
@@ -480,7 +482,7 @@ impl Source for DavisSource {
                     .collect();
 
                 if self.video.write_out {
-                    self.video.stream.encode_events_events(&big_buffer);
+                    self.video.stream.encode_events_events(&big_buffer)?;
                 }
 
                 return Err(SourceError::NoData);
@@ -529,7 +531,7 @@ impl Source for DavisSource {
                     &dvs_events_before,
                     &start_of_frame_timestamp,
                     check_dvs_before,
-                );
+                )?;
                 self.integrate_frame_gaps()?;
             }
         }
@@ -612,7 +614,7 @@ impl Source for DavisSource {
                 *ts = end_of_frame_timestamp;
             });
 
-            self.integrate_dvs_events(&dvs_events_after, &end_of_frame_timestamp, check_dvs_after);
+            self.integrate_dvs_events(&dvs_events_after, &end_of_frame_timestamp, check_dvs_after)?;
         }
 
         match ret {

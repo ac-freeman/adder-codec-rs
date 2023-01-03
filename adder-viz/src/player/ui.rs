@@ -1,4 +1,4 @@
-use adder_codec_rs::framer::event_framer::{Framer};
+use adder_codec_rs::framer::event_framer::Framer;
 use adder_codec_rs::framer::scale_intensity::event_to_intensity;
 use adder_codec_rs::{Codec, SourceCamera};
 use std::error::Error;
@@ -241,14 +241,14 @@ impl PlayerState {
         images: ResMut<Assets<Image>>,
         handles: ResMut<Images>,
         commands: Commands,
-    ) {
+    ) -> Result<(), Box<dyn Error>> {
         if !self.ui_state.playing {
-            return;
+            return Ok(());
         }
 
         let stream = match &mut self.player.input_stream {
             None => {
-                return;
+                return Ok(());
             }
             Some(s) => s,
         };
@@ -274,12 +274,13 @@ impl PlayerState {
 
         match self.ui_state.reconstruction_method {
             ReconstructionMethod::Fast => {
-                self.consume_source_fast(images, handles, commands);
+                self.consume_source_fast(images, handles, commands)?;
             }
             ReconstructionMethod::Accurate => {
-                self.consume_source_accurate(images, handles, commands);
+                self.consume_source_accurate(images, handles, commands)?;
             }
         }
+        Ok(())
     }
 
     fn consume_source_fast(
@@ -370,7 +371,11 @@ impl PlayerState {
                                 eprintln!("{}", ee)
                             }
                         };
-                        self.player.frame_sequence = self.player.framer_builder.clone().map(|builder| builder.finish());
+                        self.player.frame_sequence = self
+                            .player
+                            .framer_builder
+                            .clone()
+                            .map(|builder| builder.finish());
                         if !self.ui_state.looping {
                             self.ui_state.playing = false;
                         }
@@ -484,7 +489,11 @@ impl PlayerState {
                 }
                 Err(_e) => {
                     stream.set_input_stream_position(stream.header_size as u64)?;
-                    self.player.frame_sequence = self.player.framer_builder.clone().map(|builder| builder.finish());
+                    self.player.frame_sequence = self
+                        .player
+                        .framer_builder
+                        .clone()
+                        .map(|builder| builder.finish());
                     if !self.ui_state.looping {
                         self.ui_state.playing = false;
                     }

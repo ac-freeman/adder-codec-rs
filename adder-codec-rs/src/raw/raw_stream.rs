@@ -29,6 +29,9 @@ pub enum StreamError {
 
     /// Attempted to seek to a bad position in the stream
     Seek,
+
+    /// Bincode error
+    BincodeError(bincode::Error),
 }
 
 impl fmt::Display for StreamError {
@@ -40,6 +43,12 @@ impl fmt::Display for StreamError {
 impl From<StreamError> for Box<dyn std::error::Error> {
     fn from(value: StreamError) -> Self {
         value.to_string().into()
+    }
+}
+
+impl From<Box<bincode::ErrorKind>> for StreamError {
+    fn from(value: Box<bincode::ErrorKind>) -> Self {
+        StreamError::BincodeError(value)
     }
 }
 
@@ -95,7 +104,7 @@ impl Codec for RawStream {
         }
     }
 
-    fn write_eof(&mut self) {
+    fn write_eof(&mut self) -> Result<(), StreamError> {
         match &mut self.output_stream {
             None => {
                 // panic!("Output stream not initialized");
@@ -110,9 +119,10 @@ impl Codec for RawStream {
                     d: 0,
                     delta_t: 0,
                 };
-                self.encode_event(&eof);
+                self.encode_event(&eof)?;
             }
-        }
+        };
+        Ok(())
     }
     fn flush_writer(&mut self) -> io::Result<()> {
         match &mut self.output_stream {
@@ -121,8 +131,8 @@ impl Codec for RawStream {
         }
     }
 
-    fn close_writer(&mut self) -> io::Result<()> {
-        self.write_eof();
+    fn close_writer(&mut self) -> Result<(), Box<dyn Error>> {
+        self.write_eof()?;
         match &mut self.output_stream {
             None => {}
             Some(stream) => {
@@ -288,9 +298,7 @@ impl Codec for RawStream {
 
     fn decode_header(&mut self) -> Result<usize, Box<dyn Error>> {
         match &mut self.input_stream {
-            None => {
-                Err(StreamError::UnitializedStream.into())
-            }
+            None => Err(StreamError::UnitializedStream.into()),
             Some(stream) => {
                 let header = match self
                     .bincode
@@ -341,9 +349,9 @@ impl Codec for RawStream {
         }
     }
 
-    fn encode_event(&mut self, event: &Event) -> Result<(), Box<dyn Error>> {
+    fn encode_event(&mut self, event: &Event) -> Result<(), StreamError> {
         match &mut self.output_stream {
-            None => Err(StreamError::UnitializedStream.into()),
+            None => Err(StreamError::UnitializedStream),
             Some(stream) => {
                 // NOTE: for speed, the following checks only run in debug builds. It's entirely
                 // possibly to encode non-sensical events if you want to.
@@ -362,16 +370,18 @@ impl Codec for RawStream {
         }
     }
 
-    fn encode_events(&mut self, events: &[Event]) {
+    fn encode_events(&mut self, events: &[Event]) -> Result<(), StreamError> {
         for event in events {
-            self.encode_event(event);
+            self.encode_event(event)?;
         }
+        Ok(())
     }
 
-    fn encode_events_events(&mut self, events: &[Vec<Event>]) {
+    fn encode_events_events(&mut self, events: &[Vec<Event>]) -> Result<(), StreamError> {
         for v in events {
-            self.encode_events(v);
+            self.encode_events(v)?;
         }
+        Ok(())
     }
 
     fn decode_event(&mut self) -> Result<Event, StreamError> {

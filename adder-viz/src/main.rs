@@ -37,6 +37,7 @@ impl Tabs {
 #[derive(Resource)]
 pub struct MainUiState {
     view: Tabs,
+    error_msg: Option<String>,
 }
 
 use crate::transcoder::adder::replace_adder_transcoder;
@@ -53,6 +54,7 @@ fn main() {
         .insert_resource(Images::default())
         .insert_resource(MainUiState {
             view: Tabs::Transcoder,
+            error_msg: None,
         })
         .init_resource::<TranscoderState>()
         .init_resource::<PlayerState>()
@@ -234,6 +236,10 @@ fn draw_ui(
             };
             ui.image(texture_id, size);
         }
+
+        if let Some(msg) = main_ui_state.error_msg.as_ref() {
+            ui.label(msg);
+        }
     });
 }
 
@@ -259,13 +265,12 @@ fn consume_source(
     mut transcoder_state: ResMut<TranscoderState>,
     mut player_state: ResMut<PlayerState>,
 ) {
-    match main_ui_state.view {
-        Tabs::Transcoder => {
-            transcoder_state.consume_source(images, handles);
-        }
-        Tabs::Player => {
-            player_state.consume_source(images, handles, commands);
-        }
+    let res = match main_ui_state.view {
+        Tabs::Transcoder => transcoder_state.consume_source(images, handles),
+        Tabs::Player => player_state.consume_source(images, handles, commands),
+    };
+    if let Err(e) = res {
+        eprintln!("Error consuming source: {}", e);
     }
 }
 

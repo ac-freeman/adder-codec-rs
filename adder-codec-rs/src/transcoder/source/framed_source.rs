@@ -147,7 +147,7 @@ impl FramedSourceBuilder {
 impl FramedSource {
     /// Initialize the framed source and read first frame of source, in order to get `height`
     /// and `width` and initialize [`Video`]
-    fn new(mut builder: FramedSourceBuilder) -> Result<FramedSource, Box<dyn Error>> {
+    fn new(mut builder: FramedSourceBuilder) -> Result<FramedSource, Box<dyn std::error::Error>> {
         let channels = match builder.color_input {
             true => 3,
             false => 1,
@@ -156,16 +156,17 @@ impl FramedSource {
         let mut cap =
             videoio::VideoCapture::from_file(builder.input_filename.as_str(), videoio::CAP_FFMPEG)?;
         let video_frame_count = cap.get(CAP_PROP_FRAME_COUNT)?;
-        assert!(builder.frame_idx_start < video_frame_count as u32);
+        if builder.frame_idx_start >= video_frame_count as u32 {
+            return Err(SourceError::StartOutOfBounds.into());
+        };
 
         // Calculate TPS based on ticks per frame and source FPS
         cap.set(CAP_PROP_POS_FRAMES, builder.frame_idx_start as f64)?;
         let source_fps = cap.get(CAP_PROP_FPS)?.round();
         builder.tps = builder.ref_time * source_fps as u32;
-        assert_eq!(
-            builder.ref_time * cap.get(CAP_PROP_FPS)?.round() as u32,
-            builder.tps
-        );
+        if builder.ref_time * cap.get(CAP_PROP_FPS)?.round() as u32 != builder.tps {
+            return Err(SourceError::BadParams.into());
+        }
 
         let opened = videoio::VideoCapture::is_opened(&cap)?;
         if !opened {

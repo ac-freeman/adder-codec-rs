@@ -124,9 +124,9 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                                 None => {}
                                 Some(frame) => {
                                     if args.show_display {
-                                        show_display_force("DVS", &frame, 1);
+                                        show_display_force("DVS", &frame, 1)?;
                                     }
-                                    write_frame_to_video(&frame, &mut video_writer);
+                                    write_frame_to_video(&frame, &mut video_writer)?;
                                 }
                             }
                             frame_count += 1;
@@ -143,7 +143,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                             &mut instantaneous_frame_deque,
                             frame_idx,
                             frame_count,
-                        );
+                        )?;
                     }
                 }
             },
@@ -159,13 +159,13 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
     for frame in instantaneous_frame_deque {
         if args.show_display {
-            show_display_force("DVS", &frame, 1);
+            show_display_force("DVS", &frame, 1)?;
         }
-        write_frame_to_video(&frame, &mut video_writer);
+        write_frame_to_video(&frame, &mut video_writer)?;
     }
     println!("\nDVS event count: {}", event_count);
     println!("\n");
-    encode_video_ffmpeg(raw_path, output_video_path);
+    encode_video_ffmpeg(raw_path, output_video_path)?;
     println!("Finished!");
 
     Ok(())

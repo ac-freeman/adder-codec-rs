@@ -1,12 +1,12 @@
 use opencv::core::{Mat, Size, CV_8U, CV_8UC3};
 use std::error::Error;
-use std::{fmt, io};
+use std::fmt;
 
 use bumpalo::Bump;
 use std::path::Path;
 use std::sync::mpsc::{channel, Receiver, Sender};
 
-use crate::raw::raw_stream::RawStream;
+use crate::raw::raw_stream::{RawStream, StreamError};
 use crate::{Codec, Coord, Event, SourceType, D, D_MAX, D_SHIFT};
 use opencv::highgui;
 use opencv::imgproc::resize;
@@ -29,6 +29,11 @@ pub enum SourceError {
     /// Could not open source file
     Open,
 
+    /// ADDER parameters are invalid for the given source
+    BadParams,
+
+    StartOutOfBounds,
+
     /// Source buffer is empty
     BufferEmpty,
 
@@ -44,6 +49,8 @@ pub enum SourceError {
     /// OpenCV error
     OpencvError(opencv::Error),
 
+    StreamError(StreamError),
+
     /// EDI error
     EdiError(ReconstructionError),
 }
@@ -57,6 +64,17 @@ impl fmt::Display for SourceError {
 impl From<SourceError> for Box<dyn std::error::Error> {
     fn from(value: SourceError) -> Self {
         value.to_string().into()
+    }
+}
+
+impl From<opencv::Error> for SourceError {
+    fn from(value: opencv::Error) -> Self {
+        SourceError::OpencvError(value)
+    }
+}
+impl From<StreamError> for SourceError {
+    fn from(value: StreamError) -> Self {
+        SourceError::StreamError(value)
     }
 }
 
@@ -198,7 +216,7 @@ impl Video {
         })
     }
 
-    pub fn end_write_stream(&mut self) -> io::Result<()> {
+    pub fn end_write_stream(&mut self) -> Result<(), Box<dyn Error>> {
         self.stream.close_writer()
     }
 
@@ -270,7 +288,7 @@ impl Video {
             .collect();
 
         if self.write_out {
-            self.stream.encode_events_events(&big_buffer);
+            self.stream.encode_events_events(&big_buffer)?;
         }
 
         let db = match self.instantaneous_frame.data_bytes_mut() {
@@ -301,7 +319,7 @@ impl Video {
         });
 
         if self.show_live {
-            show_display("instance", &self.instantaneous_frame, 1, self);
+            show_display("instance", &self.instantaneous_frame, 1, self)?;
         }
 
         Ok(big_buffer)
@@ -399,10 +417,11 @@ pub fn integrate_for_px(
 }
 
 /// If [`MyArgs`]`.show_display`, shows the given [`Mat`] in an OpenCV window
-pub fn show_display(window_name: &str, mat: &Mat, wait: i32, video: &Video) {
+pub fn show_display(window_name: &str, mat: &Mat, wait: i32, video: &Video) -> opencv::Result<()> {
     if video.show_display {
-        show_display_force(window_name, mat, wait);
+        show_display_force(window_name, mat, wait)?;
     }
+    Ok(())
 }
 
 pub fn show_display_force(window_name: &str, mat: &Mat, wait: i32) -> opencv::Result<()> {
