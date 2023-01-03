@@ -1,4 +1,4 @@
-use adder_codec_rs::framer::event_framer::{FrameSequence, Framer, FramerBuilder};
+use adder_codec_rs::framer::event_framer::{Framer};
 use adder_codec_rs::framer::scale_intensity::event_to_intensity;
 use adder_codec_rs::{Codec, SourceCamera};
 use std::error::Error;
@@ -370,10 +370,7 @@ impl PlayerState {
                                 eprintln!("{}", ee)
                             }
                         };
-                        self.player.frame_sequence = match self.player.framer_builder.clone() {
-                            None => None,
-                            Some(builder) => Some(builder.finish()),
-                        };
+                        self.player.frame_sequence = self.player.framer_builder.clone().map(|builder| builder.finish());
                         if !self.ui_state.looping {
                             self.ui_state.playing = false;
                         }
@@ -487,10 +484,7 @@ impl PlayerState {
                 }
                 Err(_e) => {
                     stream.set_input_stream_position(stream.header_size as u64)?;
-                    self.player.frame_sequence = match self.player.framer_builder.clone() {
-                        None => None,
-                        Some(builder) => Some(builder.finish()),
-                    };
+                    self.player.frame_sequence = self.player.framer_builder.clone().map(|builder| builder.finish());
                     if !self.ui_state.looping {
                         self.ui_state.playing = false;
                     }

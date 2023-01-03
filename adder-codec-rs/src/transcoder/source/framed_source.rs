@@ -5,7 +5,7 @@ use crate::{Coord, Event};
 
 use core::default::Default;
 use std::error::Error;
-use std::io::ErrorKind;
+
 use std::mem::swap;
 
 use crate::transcoder::source::video::SourceError::*;
