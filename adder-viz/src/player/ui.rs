@@ -1,6 +1,7 @@
-use adder_codec_rs::framer::event_framer::{FrameSequence, Framer};
+use adder_codec_rs::framer::event_framer::{FrameSequence, Framer, FramerBuilder};
 use adder_codec_rs::framer::scale_intensity::event_to_intensity;
 use adder_codec_rs::{Codec, SourceCamera};
+use std::error::Error;
 use std::time::Duration;
 
 use adder_codec_rs::transcoder::source::video::FramedViewMode;
@@ -286,23 +287,23 @@ impl PlayerState {
         mut images: ResMut<Assets<Image>>,
         mut handles: ResMut<Images>,
         _commands: Commands,
-    ) {
+    ) -> Result<(), Box<dyn Error>> {
         if self.ui_state.current_frame == 0 {
             self.ui_state.current_frame = 1; // TODO: temporary hack
         }
         if !self.ui_state.playing {
-            return;
+            return Ok(());
         }
         let stream = match &mut self.player.input_stream {
             None => {
-                return;
+                return Ok(());
             }
             Some(s) => s,
         };
 
         let _frame_sequence = match &mut self.player.frame_sequence {
             None => {
-                return;
+                return Ok(());
             }
             Some(s) => s,
         };
@@ -353,7 +354,7 @@ impl PlayerState {
                             }
                             * 255.0;
 
-                        let db = display_mat.data_bytes_mut().unwrap();
+                        let db = display_mat.data_bytes_mut()?;
                         db[(y * stream.width as i32 * stream.channels as i32
                             + x * stream.channels as i32
                             + c) as usize] = frame_intensity as u8;
@@ -369,13 +370,15 @@ impl PlayerState {
                                 eprintln!("{}", ee)
                             }
                         };
-                        self.player.frame_sequence =
-                            Some(self.player.framer_builder.clone().unwrap().finish());
+                        self.player.frame_sequence = match self.player.framer_builder.clone() {
+                            None => None,
+                            Some(builder) => Some(builder.finish()),
+                        };
                         if !self.ui_state.looping {
                             self.ui_state.playing = false;
                         }
                         self.player.current_t_ticks = 0;
-                        return;
+                        return Ok(());
                     }
                     _ => {}
                 }
@@ -388,8 +391,7 @@ impl PlayerState {
             &mut image_mat_bgra,
             imgproc::COLOR_BGR2BGRA,
             4,
-        )
-        .unwrap();
+        )?;
 
         // TODO: refactor
         let image_bevy = Image::new(
@@ -399,13 +401,14 @@ impl PlayerState {
                 depth_or_array_layers: 1,
             },
             TextureDimension::D2,
-            Vec::from(image_mat_bgra.data_bytes().unwrap()),
+            Vec::from(image_mat_bgra.data_bytes()?),
             TextureFormat::Bgra8UnormSrgb,
         );
         self.player.live_image = image_bevy;
 
         let handle = images.add(self.player.live_image.clone());
         handles.image_view = handle;
+        Ok(())
     }
 
     pub fn consume_source_accurate(
@@ -413,17 +416,17 @@ impl PlayerState {
         mut images: ResMut<Assets<Image>>,
         mut handles: ResMut<Images>,
         _commands: Commands,
-    ) {
+    ) -> Result<(), Box<dyn Error>> {
         let stream = match &mut self.player.input_stream {
             None => {
-                return;
+                return Ok(());
             }
             Some(s) => s,
         };
 
         let frame_sequence = match &mut self.player.frame_sequence {
             None => {
-                return;
+                return Ok(());
             }
             Some(s) => s,
         };
@@ -438,7 +441,7 @@ impl PlayerState {
                         for px in arr.iter() {
                             match px {
                                 Some(event) => {
-                                    let db = display_mat.data_bytes_mut().unwrap();
+                                    let db = display_mat.data_bytes_mut()?;
                                     db[idx] = *event;
                                     idx += 1;
                                 }
@@ -455,8 +458,7 @@ impl PlayerState {
             self.player.current_t_ticks += frame_sequence.tpf;
 
             let mut image_mat_bgra = Mat::default();
-            imgproc::cvt_color(display_mat, &mut image_mat_bgra, imgproc::COLOR_BGR2BGRA, 4)
-                .unwrap();
+            imgproc::cvt_color(display_mat, &mut image_mat_bgra, imgproc::COLOR_BGR2BGRA, 4)?;
 
             // TODO: refactor
             let image_bevy = Image::new(
@@ -466,7 +468,7 @@ impl PlayerState {
                     depth_or_array_layers: 1,
                 },
                 TextureDimension::D2,
-                Vec::from(image_mat_bgra.data_bytes().unwrap()),
+                Vec::from(image_mat_bgra.data_bytes()?),
                 TextureFormat::Bgra8UnormSrgb,
             );
             self.player.live_image = image_bevy;
@@ -484,18 +486,19 @@ impl PlayerState {
                     }
                 }
                 Err(_e) => {
-                    stream
-                        .set_input_stream_position(stream.header_size as u64)
-                        .unwrap();
-                    self.player.frame_sequence =
-                        Some(self.player.framer_builder.clone().unwrap().finish());
+                    stream.set_input_stream_position(stream.header_size as u64)?;
+                    self.player.frame_sequence = match self.player.framer_builder.clone() {
+                        None => None,
+                        Some(builder) => Some(builder.finish()),
+                    };
                     if !self.ui_state.looping {
                         self.ui_state.playing = false;
                     }
-                    return;
+                    return Ok(());
                 }
             }
         }
+        Ok(())
     }
 
     pub fn central_panel_ui(&mut self, ui: &mut Ui, time: Res<Time>) {
@@ -579,9 +582,11 @@ impl PlayerState {
         ) {
             Ok(player) => {
                 self.player = player;
-                self.ui_info_state.source_name =
-                    RichText::from(path_buf.to_str().unwrap().to_string())
-                        .color(Color32::DARK_GREEN);
+                self.ui_info_state.source_name = RichText::from(match path_buf.to_str() {
+                    None => "Error: couldn't get path string".to_string(),
+                    Some(path) => path.to_string(),
+                })
+                .color(Color32::DARK_GREEN);
             }
             Err(e) => {
                 self.ui_info_state.source_name = RichText::new(e.to_string()).color(Color32::RED);

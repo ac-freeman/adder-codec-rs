@@ -49,7 +49,14 @@ impl AdderTranscoder {
                     None => Err(Box::new(AdderTranscoderError("Invalid file type".into()))),
                     Some("mp4") => {
                         let mut builder = FramedSourceBuilder::new(
-                            input_path_buf.to_str().unwrap().to_string(),
+                            match input_path_buf.to_str() {
+                                None => {
+                                    return Err(Box::new(AdderTranscoderError(
+                                        "Couldn't get input path string".into(),
+                                    )))
+                                }
+                                Some(path) => path.to_string(),
+                            },
                             SourceCamera::FramedU8,
                         )
                         .frame_start(current_frame)
@@ -64,12 +71,20 @@ impl AdderTranscoder {
                             ui_state.delta_t_max_mult * ui_state.delta_t_ref as u32,
                         );
 
+                        // TODO: Change the builder to take in a pathbuf directly, not a string,
+                        // and to handle the error checking in the associated function
                         match output_path_opt {
                             None => {}
                             Some(output_path) => {
-                                builder = builder.output_events_filename(
-                                    output_path.to_str().unwrap().parse().unwrap(),
-                                );
+                                builder =
+                                    builder.output_events_filename(match output_path.to_str() {
+                                        None => {
+                                            return Err(Box::new(AdderTranscoderError(
+                                                "Couldn't get output path string".into(),
+                                            )))
+                                        }
+                                        Some(path) => path.parse()?,
+                                    });
                             }
                         };
 
@@ -102,8 +117,7 @@ impl AdderTranscoder {
                         let rt = tokio::runtime::Builder::new_multi_thread()
                             .worker_threads(ui_state.thread_count)
                             .enable_time()
-                            .build()
-                            .unwrap();
+                            .build()?;
                         let dir = input_path_buf
                             .parent()
                             .expect("File must be in some directory")
@@ -138,7 +152,7 @@ impl AdderTranscoder {
                         ));
 
                         let output_string = output_path_opt
-                            .map(|output_path| output_path.to_str().unwrap().to_string());
+                            .map(|output_path| output_path.to_str().expect("Bad path").to_string());
 
                         let davis_source = DavisSource::new(
                             reconstructor,
@@ -153,8 +167,7 @@ impl AdderTranscoder {
                             rt,
                             ui_state.davis_mode_radio_state,
                             output_string.is_some(),
-                        )
-                        .unwrap();
+                        )?;
 
                         Ok(AdderTranscoder {
                             framed_source: None,
@@ -189,11 +202,19 @@ pub(crate) fn replace_adder_transcoder(
         ) {
             Ok(transcoder) => {
                 transcoder_state.transcoder = transcoder;
-                ui_info_state.source_name =
-                    RichText::new(input_path.to_str().unwrap()).color(Color32::DARK_GREEN);
+                ui_info_state.source_name = RichText::new(
+                    input_path
+                        .to_str()
+                        .unwrap_or("Error: invalid source string"),
+                )
+                .color(Color32::DARK_GREEN);
                 if let Some(output_path) = output_path_opt {
-                    ui_info_state.output_name =
-                        RichText::new(output_path.to_str().unwrap()).color(Color32::DARK_GREEN);
+                    ui_info_state.output_name = RichText::new(
+                        output_path
+                            .to_str()
+                            .unwrap_or("Error: invalid output string"),
+                    )
+                    .color(Color32::DARK_GREEN);
                 }
             }
             Err(e) => {

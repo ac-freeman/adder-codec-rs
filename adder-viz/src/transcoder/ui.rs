@@ -10,6 +10,7 @@ use bevy_egui::egui::{RichText, Ui};
 use opencv::core::{Mat, MatTraitConstManual};
 use opencv::imgproc;
 use rayon::current_num_threads;
+use std::error::Error;
 
 use std::path::PathBuf;
 
@@ -243,11 +244,10 @@ impl TranscoderState {
         &mut self,
         mut images: ResMut<Assets<Image>>,
         mut handles: ResMut<Images>,
-    ) {
+    ) -> Result<(), Box<dyn Error>> {
         let pool = rayon::ThreadPoolBuilder::new()
             .num_threads(self.ui_state.thread_count)
-            .build()
-            .unwrap();
+            .build()?;
 
         let mut ui_info_state = &mut self.ui_info_state;
         ui_info_state.events_per_sec = 0.;
@@ -256,7 +256,7 @@ impl TranscoderState {
             match &mut self.transcoder.framed_source {
                 None => match &mut self.transcoder.davis_source {
                     None => {
-                        return;
+                        return Ok(());
                     }
                     Some(source) => source,
                 },
@@ -290,7 +290,7 @@ impl TranscoderState {
                     self.ui_info_state.output_path.clone(),
                     0,
                 );
-                return;
+                return Ok(());
             }
         };
 
@@ -298,7 +298,7 @@ impl TranscoderState {
 
         // add alpha channel
         let mut image_mat_bgra = Mat::default();
-        imgproc::cvt_color(&image_mat, &mut image_mat_bgra, imgproc::COLOR_BGR2BGRA, 4).unwrap();
+        imgproc::cvt_color(&image_mat, &mut image_mat_bgra, imgproc::COLOR_BGR2BGRA, 4)?;
 
         let image_bevy = Image::new(
             Extent3d {
@@ -307,13 +307,14 @@ impl TranscoderState {
                 depth_or_array_layers: 1,
             },
             TextureDimension::D2,
-            Vec::from(image_mat_bgra.data_bytes().unwrap()),
+            Vec::from(image_mat_bgra.data_bytes()?),
             TextureFormat::Bgra8UnormSrgb,
         );
         self.transcoder.live_image = image_bevy;
 
         let handle = images.add(self.transcoder.live_image.clone());
         handles.image_view = handle;
+        Ok(())
     }
 }
 
