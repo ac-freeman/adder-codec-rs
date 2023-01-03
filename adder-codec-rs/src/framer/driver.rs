@@ -212,6 +212,9 @@ pub enum FrameSequenceError {
     /// Frame not initialized
     UninitializedFrame,
 
+    /// Frame not initialized
+    UninitializedFrameChunk,
+
     /// An impossible "fill count" encountered
     BadFillCount,
 }
@@ -221,6 +224,7 @@ impl fmt::Display for FrameSequenceError {
         match self {
             FrameSequenceError::InvalidIndex => write!(f, "Invalid frame index"),
             FrameSequenceError::UninitializedFrame => write!(f, "Uninitialized frame"),
+            FrameSequenceError::UninitializedFrameChunk => write!(f, "Uninitialized frame chunk"),
             FrameSequenceError::BadFillCount => write!(f, "Bad fill count"),
         }
     }
@@ -361,9 +365,9 @@ impl<
     ///
     /// ```
     /// # use adder_codec_rs::{Coord, Event};
-    /// # use adder_codec_rs::framer::event_framer::FramerMode::INSTANTANEOUS;
-    /// # use adder_codec_rs::framer::event_framer::{FrameSequence, Framer, FramerBuilder};
-    /// # use adder_codec_rs::framer::event_framer::SourceType::U8;
+    /// # use adder_codec_rs::framer::driver::FramerMode::INSTANTANEOUS;
+    /// # use adder_codec_rs::framer::driver::{FrameSequence, Framer, FramerBuilder};
+    /// # use adder_codec_rs::framer::driver::SourceType::U8;
     /// use adder_codec_rs::SourceCamera::FramedU8;
     ///
     /// let mut frame_sequence: FrameSequence<u8> =
@@ -499,39 +503,55 @@ impl<T: Clone + Default + FrameValue<Output = T> + Serialize> FrameSequence<T> {
         self.pixel_ts_tracker.len()
     }
 
+    /// Get the reference for the pixel at the given coordinates
+    /// # Arguments
+    /// * `y` - The y coordinate of the pixel
+    /// * `x` - The x coordinate of the pixel
+    /// * `c` - The channel of the pixel
+    /// # Returns
+    /// * `Option<&T>` - The reference to the pixel value
+    /// # Errors
+    /// * If the frame has not been initialized
     pub fn px_at_current(
         &self,
-        row: usize,
-        col: usize,
-        channel: usize,
+        y: usize,
+        x: usize,
+        c: usize,
     ) -> Result<&Option<T>, FrameSequenceError> {
         if self.frames.is_empty() {
             return Err(FrameSequenceError::UninitializedFrame);
         }
-        let chunk_num = row / self.chunk_rows;
-        let local_row = row - (chunk_num * self.chunk_rows);
-        Ok(&self.frames[chunk_num][0].array[[local_row, col, channel]])
+        let chunk_num = y / self.chunk_rows;
+        let local_row = y - (chunk_num * self.chunk_rows);
+        Ok(&self.frames[chunk_num][0].array[[local_row, x, c]])
     }
 
+    /// Get the reference for the pixel at the given coordinates and frame index
+    /// # Arguments
+    /// * `y` - The y coordinate of the pixel
+    /// * `x` - The x coordinate of the pixel
+    /// * `c` - The channel of the pixel
+    /// * `frame_idx` - The index of the frame to get the pixel from
+    /// # Returns
+    /// * `Option<&T>` - The reference to the pixel value
+    /// # Errors
+    /// * If the frame at the given index has not been initialized
     pub fn px_at_frame(
         &self,
-        row: usize,
-        col: usize,
-        channel: usize,
+        y: usize,
+        x: usize,
+        c: usize,
         frame_idx: usize,
     ) -> Result<&Option<T>, FrameSequenceError> {
-        let chunk_num = row / self.chunk_rows;
-        let local_row = row - (chunk_num * self.chunk_rows);
+        let chunk_num = y / self.chunk_rows;
+        let local_row = y - (chunk_num * self.chunk_rows);
         match self.frames.len() {
-            a if frame_idx < a => {
-                Ok(&self.frames[chunk_num][frame_idx].array[[local_row, col, channel]])
-            }
-            _ => {
-                Err(FrameSequenceError::InvalidIndex) // TODO: not the right error
-            }
+            a if frame_idx < a => Ok(&self.frames[chunk_num][frame_idx].array[[local_row, x, c]]),
+            _ => Err(FrameSequenceError::InvalidIndex),
         }
     }
 
+    #[allow(clippy::unused_self)]
     fn _get_frame(&self, _frame_idx: usize) -> Result<&Array3<Option<T>>, FrameSequenceError> {
         todo!()
         // match self.frames.len() <= frame_idx {
@@ -540,6 +560,16 @@ impl<T: Clone + Default + FrameValue<Output = T> + Serialize> FrameSequence<T> {
         // }
     }
 
+    /// Get whether or not the frame at the given index is "filled" (i.e., all pixels have been
+    /// written to)
+    /// # Arguments
+    /// * `frame_idx` - The index of the frame to check
+    /// # Returns
+    /// * `bool` - Whether or not the frame is filled
+    /// # Errors
+    /// * If the frame at the given index has not been initialized
+    /// * If the frame index is out of bounds
+    /// * If the frame is not aligned with the chunk division
     pub fn is_frame_filled(&self, frame_idx: usize) -> Result<bool, FrameSequenceError> {
         for chunk in &self.frames {
             if chunk.len() <= frame_idx {
@@ -609,6 +639,14 @@ impl<T: Clone + Default + FrameValue<Output = T> + Serialize> FrameSequence<T> {
         }
     }
 
+    /// Write out the next frame to the given writer
+    /// # Arguments
+    /// * `writer` - The writer to write the frame to
+    /// # Returns
+    /// * `Result<(), FrameSequenceError>` - Whether or not the write was successful
+    /// # Errors
+    /// * If the frame chunk has not been initialized
+    /// * If the data cannot be written
     pub fn write_frame_bytes(
         &mut self,
         writer: &mut BufWriter<File>,
@@ -628,7 +666,7 @@ impl<T: Clone + Default + FrameValue<Output = T> + Serialize> FrameSequence<T> {
                     }
                 }
                 None => {
-                    println!("Couldn't pop chunk {chunk_num}!");
+                    return Err(FrameSequenceError::UninitializedFrameChunk.into());
                 }
             }
         }
@@ -636,6 +674,13 @@ impl<T: Clone + Default + FrameValue<Output = T> + Serialize> FrameSequence<T> {
         Ok(())
     }
 
+    /// Write out next frames to the given writer so long as the frame is filled
+    /// # Arguments
+    /// * `writer` - The writer to write the frames to
+    /// # Returns
+    /// * `Result<(), FrameSequenceError>` - Whether or not the write was successful
+    /// # Errors
+    /// * If a frame could not be written
     pub fn write_multi_frame_bytes(
         &mut self,
         writer: &mut BufWriter<File>,

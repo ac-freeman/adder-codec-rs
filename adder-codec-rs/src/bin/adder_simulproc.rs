@@ -1,6 +1,6 @@
 extern crate core;
 
-use adder_codec_rs::transcoder::source::framed::FramedBuilder;
+use adder_codec_rs::transcoder::source::framed::Builder;
 use adder_codec_rs::transcoder::source::video::Source;
 use adder_codec_rs::utils::simulproc::{SimulProcArgs, SimulProcessor};
 use adder_codec_rs::SourceCamera::FramedU8;
@@ -54,7 +54,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // args.output_raw_video_filename = "./tests/samples/videos/drop_out".to_string();
     //////////////////////////////////////////////////////
 
-    let mut source_builder = FramedBuilder::new(args.input_filename, FramedU8)
+    let mut source_builder = Builder::new(args.input_filename, FramedU8)
         .chunk_rows(64)
         .frame_start(args.frame_idx_start)
         .scale(args.scale)
@@ -120,7 +120,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
 #[cfg(test)]
 mod tests {
-    use adder_codec_rs::transcoder::source::framed::FramedBuilder;
+    use adder_codec_rs::transcoder::source::framed::Builder;
     use adder_codec_rs::transcoder::source::video::Source;
     use adder_codec_rs::utils::simulproc::{SimulProcArgs, SimulProcessor};
     use adder_codec_rs::SourceCamera::FramedU8;
@@ -154,7 +154,7 @@ mod tests {
             c_thresh_neg: 0,
             thread_count: 1, // Multithreading causes some issues in testing
         };
-        let mut source_builder = FramedBuilder::new(args.input_filename, FramedU8)
+        let mut source_builder = Builder::new(args.input_filename, FramedU8)
             .chunk_rows(64)
             .frame_start(args.frame_idx_start)
             .scale(args.scale)

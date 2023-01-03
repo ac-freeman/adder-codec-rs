@@ -63,7 +63,10 @@ unsafe impl Sync for Davis {}
 
 impl Davis {
     /// Initialize the framed source and read first frame of source, in order to get `height`
-    /// and `width` and initialize [`Video`]
+    /// and `width` and initialize [`Video`](crate::Video) struct.
+    ///
+    /// # Returns
+    /// * [`Davis`] - Initialized [`Davis`] object
     pub fn new(
         reconstructor: Reconstructor,
         output_events_filename: Option<String>,
@@ -637,6 +640,14 @@ fn clamp_u8(frame_val: &mut f64, last_val_ln: &mut f64) {
     }
 }
 
+/// Get the next APS image from the video source.
+/// Returns a tuple of the image, the timestamp of the image, the timestamp of the end of the
+/// frame, and the events occurring during the interval.
+/// # Arguments
+/// * `with_events` - Whether to return events along with the image
+/// * `thread_pool` - The thread pool to use for parallelization
+/// # Errors
+/// * `ReconstructionError` - Some error in `davis-edi-rs`
 pub async fn get_next_image(
     reconstructor: &mut Reconstructor,
     thread_pool: &ThreadPool,

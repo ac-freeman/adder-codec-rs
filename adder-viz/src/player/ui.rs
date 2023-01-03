@@ -1,4 +1,4 @@
-use adder_codec_rs::framer::event_framer::Framer;
+use adder_codec_rs::framer::driver::Framer;
 use adder_codec_rs::framer::scale_intensity::event_to_intensity;
 use adder_codec_rs::{Codec, SourceCamera};
 use std::error::Error;

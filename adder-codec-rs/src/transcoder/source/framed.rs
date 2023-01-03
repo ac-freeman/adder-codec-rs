@@ -34,7 +34,7 @@ pub struct Framed {
 }
 unsafe impl Sync for Framed {}
 
-pub struct FramedBuilder {
+pub struct Builder {
     input_filename: String,
     output_events_filename: Option<String>,
     frame_idx_start: u32,
@@ -52,10 +52,10 @@ pub struct FramedBuilder {
     source_camera: SourceCamera,
 }
 
-impl FramedBuilder {
+impl Builder {
     #[must_use]
-    pub fn new(input_filename: String, source_camera: SourceCamera) -> FramedBuilder {
-        FramedBuilder {
+    pub fn new(input_filename: String, source_camera: SourceCamera) -> Builder {
+        Builder {
             input_filename,
             output_events_filename: None,
             frame_idx_start: 0,
@@ -75,63 +75,67 @@ impl FramedBuilder {
     }
 
     #[must_use]
-    pub fn output_events_filename(mut self, output_events_filename: String) -> FramedBuilder {
+    pub fn output_events_filename(mut self, output_events_filename: String) -> Builder {
         self.output_events_filename = Some(output_events_filename);
         self.write_out = true;
         self
     }
 
     #[must_use]
-    pub fn frame_start(mut self, frame_idx_start: u32) -> FramedBuilder {
+    pub fn frame_start(mut self, frame_idx_start: u32) -> Builder {
         self.frame_idx_start = frame_idx_start;
         self
     }
 
     #[must_use]
-    pub fn chunk_rows(mut self, chunk_rows: usize) -> FramedBuilder {
+    pub fn chunk_rows(mut self, chunk_rows: usize) -> Builder {
         self.chunk_rows = chunk_rows;
         self
     }
 
     #[must_use]
-    pub fn time_parameters(mut self, ref_time: DeltaT, delta_t_max: DeltaT) -> FramedBuilder {
-        self.delta_t_max = delta_t_max;
-        self.ref_time = ref_time;
-        assert_eq!(self.delta_t_max % self.ref_time, 0);
+    pub fn time_parameters(mut self, ref_time: DeltaT, delta_t_max: DeltaT) -> Builder {
+        if self.delta_t_max % self.ref_time == 0 {
+            self.delta_t_max = delta_t_max;
+            self.ref_time = ref_time;
+        }
         self
     }
 
     #[must_use]
-    pub fn contrast_thresholds(mut self, c_thresh_pos: u8, c_thresh_neg: u8) -> FramedBuilder {
+    pub fn contrast_thresholds(mut self, c_thresh_pos: u8, c_thresh_neg: u8) -> Builder {
         self.c_thresh_pos = c_thresh_pos;
         self.c_thresh_neg = c_thresh_neg;
         self
     }
 
     #[must_use]
-    pub fn scale(mut self, scale: f64) -> FramedBuilder {
+    pub fn scale(mut self, scale: f64) -> Builder {
         self.scale = scale;
         self
     }
 
     #[must_use]
-    pub fn skip_interval(mut self, frame_skip_interval: u8) -> FramedBuilder {
+    pub fn skip_interval(mut self, frame_skip_interval: u8) -> Builder {
         self.frame_skip_interval = frame_skip_interval;
         self
     }
 
     #[must_use]
-    pub fn color(mut self, color_input: bool) -> FramedBuilder {
+    pub fn color(mut self, color_input: bool) -> Builder {
         self.color_input = color_input;
         self
     }
 
     #[must_use]
-    pub fn show_display(mut self, show_display_b: bool) -> FramedBuilder {
+    pub fn show_display(mut self, show_display_b: bool) -> Builder {
         self.show_display_b = show_display_b;
         self
     }
 
+    /// Build the source
+    /// # Errors
+    /// If the source cannot be built
     pub fn finish(self) -> Result<Framed, Box<dyn Error>> {
         Framed::new(self)
     }
@@ -140,7 +144,12 @@ impl FramedBuilder {
 impl Framed {
     /// Initialize the framed source and read first frame of source, in order to get `height`
     /// and `width` and initialize [`Video`]
-    fn new(mut builder: FramedBuilder) -> Result<Framed, Box<dyn std::error::Error>> {
+    /// # Errors
+    /// If the source cannot be initialized
+    /// # Safety
+    /// This function is unsafe because it calls [`VideoCapture::from_file`]
+    /// which is unsafe
+    fn new(mut builder: Builder) -> Result<Framed, Box<dyn std::error::Error>> {
         let channels = if builder.color_input { 3 } else { 1 };
 
         let mut cap =

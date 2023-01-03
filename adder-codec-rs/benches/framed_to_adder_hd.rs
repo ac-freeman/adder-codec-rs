@@ -3,7 +3,7 @@ use criterion_perf_events::Perf;
 use perfcnt::linux::HardwareEventType as Hardware;
 use perfcnt::linux::PerfCounterBuilderLinux as Builder;
 
-use adder_codec_rs::transcoder::source::framed::FramedBuilder;
+use adder_codec_rs::transcoder::source::framed::Builder;
 
 use adder_codec_rs::utils::simulproc::{SimulProcArgs, SimulProcessor};
 use adder_codec_rs::SourceCamera::FramedU8;
@@ -36,7 +36,7 @@ fn simul_proc(video_path: &str, scale: f64, thread_count: u8, chunk_rows: usize)
         c_thresh_neg: 0,
         thread_count, // Multithreading causes some issues in testing
     };
-    let source_builder = FramedBuilder::new(args.input_filename, FramedU8)
+    let source_builder = Builder::new(args.input_filename, FramedU8)
         .chunk_rows(chunk_rows)
         .frame_start(args.frame_idx_start)
         .scale(args.scale)

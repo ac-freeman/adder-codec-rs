@@ -1,5 +1,5 @@
-use adder_codec_rs::framer::event_framer::FramerMode::INSTANTANEOUS;
-use adder_codec_rs::framer::event_framer::{FrameSequence, FramerBuilder};
+use adder_codec_rs::framer::driver::FramerMode::INSTANTANEOUS;
+use adder_codec_rs::framer::driver::{FrameSequence, FramerBuilder};
 use adder_codec_rs::raw::stream::Raw;
 use adder_codec_rs::transcoder::source::video::FramedViewMode;
 use adder_codec_rs::{Codec, DeltaT};

@@ -1,6 +1,6 @@
-use crate::framer::event_framer::FramerMode::INSTANTANEOUS;
-use crate::framer::event_framer::SourceType::U8;
-use crate::framer::event_framer::{Framer, FramerBuilder};
+use crate::framer::driver::FramerMode::INSTANTANEOUS;
+use crate::framer::driver::SourceType::U8;
+use crate::framer::driver::{Framer, FramerBuilder};
 use crate::framer::scale_intensity;
 use crate::framer::scale_intensity::FrameValue;
 use crate::transcoder::source::framed::Framed;
@@ -178,12 +178,9 @@ impl SimulProcessor {
                             }
                         }
                     }
-                    match output_stream.flush() {
-                        Ok(_) => {}
-                        Err(_) => {
-                            eprintln!("Error flushing output stream");
-                            break;
-                        }
+                    if output_stream.flush().is_err() {
+                        eprintln!("Error flushing output stream");
+                        break;
                     }
                     if frame_count >= frame_max && frame_max > 0 {
                         eprintln!("Wrote max frames. Exiting channel.");
@@ -230,12 +227,9 @@ impl SimulProcessor {
                     video.in_interval_count,
                     now.elapsed().as_millis()
                 );
-                match io::stdout().flush() {
-                    Ok(_) => {}
-                    Err(_) => {
-                        eprintln!("Error flushing stdout");
-                        break;
-                    }
+                if io::stdout().flush().is_err() {
+                    eprintln!("Error flushing stdout");
+                    break;
                 };
                 now = Instant::now();
             }

@@ -1,4 +1,4 @@
-use crate::framer::event_framer::SourceType;
+use crate::framer::driver::SourceType;
 use crate::transcoder::source::video::FramedViewMode;
 use crate::{DeltaT, Event, EventCoordless, Intensity, D_SHIFT};
 

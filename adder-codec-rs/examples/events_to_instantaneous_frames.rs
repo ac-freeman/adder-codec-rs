@@ -1,8 +1,8 @@
 extern crate core;
 
-use adder_codec_rs::framer::event_framer::Framer;
-use adder_codec_rs::framer::event_framer::FramerMode::INSTANTANEOUS;
-use adder_codec_rs::framer::event_framer::{FrameSequence, FramerBuilder};
+use adder_codec_rs::framer::driver::Framer;
+use adder_codec_rs::framer::driver::FramerMode::INSTANTANEOUS;
+use adder_codec_rs::framer::driver::{FrameSequence, FramerBuilder};
 use adder_codec_rs::raw::stream::Raw;
 use adder_codec_rs::Codec;
 use std::error::Error;

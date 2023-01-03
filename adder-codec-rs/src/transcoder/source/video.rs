@@ -7,7 +7,7 @@ use std::path::Path;
 use std::sync::mpsc::{channel, Receiver, Sender};
 
 use crate::raw::stream::{Error as StreamError, Raw};
-use crate::{raw, Codec, Coord, Event, SourceType, D, D_MAX, D_SHIFT};
+use crate::{raw, Codec, Coord, Event, SourceType, D};
 use opencv::highgui;
 use opencv::imgproc::resize;
 use opencv::prelude::*;
@@ -113,6 +113,8 @@ impl Video {
     /// Initialize the Video. `width` and `height` are determined by the calling source.
     /// Also spawns a thread with an [`OutputWriter`]. This thread receives messages with [`Event`]
     /// types which are then written to the output event stream file.
+    /// # Errors
+    /// Returns an error if the output file cannot be opened, or if input parameters are invalid.
     pub fn new(
         width: u16,
         height: u16,
@@ -129,8 +131,6 @@ impl Video {
         c_thresh_pos: u8,
         c_thresh_neg: u8,
     ) -> Result<Video, Box<dyn Error>> {
-        assert_eq!(D_SHIFT.len(), D_MAX as usize + 1);
-
         let (event_sender, _event_receiver): (Sender<Vec<Event>>, Receiver<Vec<Event>>) = channel();
 
         let mut stream: Raw = Codec::new();
@@ -216,6 +216,9 @@ impl Video {
         })
     }
 
+    /// Close and flush the stream writer.
+    /// # Errors
+    /// Returns an error if the stream writer cannot be closed cleanly.
     pub fn end_write_stream(&mut self) -> Result<(), Box<dyn Error>> {
         self.stream.close_writer()
     }
@@ -417,7 +420,12 @@ pub fn integrate_for_px(
     }
 }
 
-/// If [`MyArgs`]`.show_display`, shows the given [`Mat`] in an `OpenCV` window
+/// If `video.show_display`, shows the given [`Mat`] in an `OpenCV` window
+/// with the given name.
+///
+/// # Errors
+/// Returns an [`OpencvError`] if the window cannot be shown, or the [`Mat`] cannot be scaled as
+/// needed.
 pub fn show_display(window_name: &str, mat: &Mat, wait: i32, video: &Video) -> opencv::Result<()> {
     if video.show_display {
         show_display_force(window_name, mat, wait)?;
@@ -425,6 +433,13 @@ pub fn show_display(window_name: &str, mat: &Mat, wait: i32, video: &Video) -> o
     Ok(())
 }
 
+/// Shows the given [`Mat`] in an `OpenCV` window with the given name.
+/// This function is the same as [`show_display`], except that it does not check
+/// [`Video::show_display`].
+/// This function is useful for debugging.
+/// # Errors
+/// Returns an [`OpencvError`] if the window cannot be shown, or the [`Mat`] cannot be scaled as
+/// needed.
 pub fn show_display_force(window_name: &str, mat: &Mat, wait: i32) -> opencv::Result<()> {
     let mut tmp = Mat::default();
 
@@ -452,7 +467,7 @@ pub fn show_display_force(window_name: &str, mat: &Mat, wait: i32) -> opencv::Re
 
 pub trait Source {
     /// Intake one input interval worth of data from the source stream into the ADΔER model as
-    /// intensities
+    /// intensities.
     fn consume(
         &mut self,
         view_interval: u32,

@@ -1,4 +1,4 @@
-use crate::framer::event_framer::{EventCoordless, SourceType};
+use crate::framer::driver::{EventCoordless, SourceType};
 use crate::header::EventStreamHeader;
 use crate::raw::stream::Error as StreamError;
 use serde::{Deserialize, Serialize};
@@ -297,33 +297,66 @@ pub trait Codec {
 
     fn get_source_type(&self) -> SourceType;
 
+    /// Create a file writer at the given `path`
+    /// # Arguments
+    /// * `path` - The path to the file to write to
+    /// # Errors
+    /// * If the file cannot be created
     fn open_writer<P: AsRef<Path>>(&mut self, path: P) -> Result<(), std::io::Error> {
         let file = File::create(&path)?;
         self.set_output_stream(Some(BufWriter::new(file)));
         Ok(())
     }
 
+    /// Set the input stream to read from
+    /// # Errors
+    /// * If the input stream cannot be opened
     fn open_reader<P: AsRef<Path>>(&mut self, path: P) -> Result<(), std::io::Error> {
         let file = File::open(&path)?;
         self.set_input_stream(Some(BufReader::new(file)));
         Ok(())
     }
 
+    /// Write the EOF event signifier to the output stream
+    /// # Errors
+    /// * If the EOF event cannot be written
     fn write_eof(&mut self) -> Result<(), StreamError>;
+
     /// Flush the stream so that program can be exited safely
+    /// # Errors
+    /// * If the stream cannot be flushed
     fn flush_writer(&mut self) -> io::Result<()>;
+
+    /// Close the stream writer safely
+    /// # Errors
+    /// * If the stream cannot be closed
     fn close_writer(&mut self) -> Result<(), Box<dyn Error>>;
 
-    /// Close the stream so that program can be exited safely
+    /// Close the stream reader safely
     fn close_reader(&mut self);
 
     fn set_output_stream(&mut self, stream: Option<BufWriter<File>>);
     fn set_input_stream(&mut self, stream: Option<BufReader<File>>);
 
-    /// Go to this position (as a byte address) in the input stream. Returns a [`Error`] if
-    /// not aligned to an [Event]
+    /// Go to this position (as a byte address) in the input stream.
+    /// # Errors
+    /// * If the stream cannot be seeked to the given position
+    /// * If the stream is not seekable
+    /// * If the stream is not open
+    /// * If the given `pos` is not aligned to an [Event]
     fn set_input_stream_position(&mut self, pos: u64) -> Result<(), StreamError>;
+
+    /// Go to this position (as a byte address) in the input stream, relative to the end
+    /// of the stream
+    /// # Errors
+    /// * If the stream cannot be seeked to the given position
+    /// * If the stream is not seekable
+    /// * If the stream is not open
     fn set_input_stream_position_from_end(&mut self, pos: i64) -> Result<(), StreamError>;
+
+    /// Get the current position (as a byte address) in the input stream.
+    /// # Errors
+    /// * If the stream is not open
     fn get_input_stream_position(&mut self) -> Result<u64, Box<dyn Error>>;
 
     fn get_eof_position(&mut self) -> Result<u64, Box<dyn Error>>;

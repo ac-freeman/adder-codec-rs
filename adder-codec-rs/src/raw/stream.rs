@@ -179,6 +179,7 @@ impl Codec for Raw {
         if pos > 0 {
             pos = -pos;
         }
+        // TODO: check that the seek position is event-aligned
         match &mut self.input_stream {
             None => {
                 return Err(Error::UnitializedStream);
@@ -198,6 +199,7 @@ impl Codec for Raw {
         }
     }
 
+    // TODO: return more relevant errors
     fn get_eof_position(&mut self) -> Result<u64, Box<dyn std::error::Error>> {
         match &mut self.input_stream {
             None => {

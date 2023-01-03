@@ -1,8 +1,8 @@
 use std::error::Error;
 
 use adder_codec_rs::transcoder::source::davis::Davis;
+use adder_codec_rs::transcoder::source::framed::Builder;
 use adder_codec_rs::transcoder::source::framed::Framed;
-use adder_codec_rs::transcoder::source::framed::FramedBuilder;
 use adder_codec_rs::SourceCamera;
 use bevy::prelude::Image;
 use std::fmt;
@@ -48,7 +48,7 @@ impl AdderTranscoder {
                 match ext.to_str() {
                     None => Err(Box::new(AdderTranscoderError("Invalid file type".into()))),
                     Some("mp4") => {
-                        let mut builder = FramedBuilder::new(
+                        let mut builder = Builder::new(
                             match input_path_buf.to_str() {
                                 None => {
                                     return Err(Box::new(AdderTranscoderError(
