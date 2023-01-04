@@ -94,7 +94,11 @@ impl PixelArena {
                     // TODO: cover with a unit test
                     root.best_event = Some(Event {
                         coord: self.coord,
-                        d: fast_math::log2_raw(root.state.integration) as D,
+                        d: unsafe {
+                            // This should be safe, because we know that the integration will
+                            // not exceed 2^D_MAX
+                            fast_math::log2_raw(root.state.integration).to_int_unchecked::<D>()
+                        },
                         delta_t: root.state.delta_t as DeltaT,
                     });
 
@@ -237,8 +241,8 @@ impl PixelArena {
         debug_assert!(self.length <= self.arena.len());
         assert!(self.length > 0);
 
-        self.need_to_pop_top =
-            self.arena[0].state.d == D_MAX || self.arena[0].state.delta_t as DeltaT >= dtm;
+        self.need_to_pop_top = self.arena[0].state.d == D_MAX
+            || unsafe { self.arena[0].state.delta_t.to_int_unchecked::<DeltaT>() } >= dtm;
     }
 
     /// Integrate an intensity for a given node. Returns `Some()` if the node fires an event, so
@@ -304,7 +308,7 @@ fn get_d_from_intensity(intensity: Intensity32) -> D {
     min(
         {
             if intensity > 0.0 {
-                fast_math::log2_raw(intensity) as D
+                unsafe { fast_math::log2_raw(intensity).to_int_unchecked::<D>() }
             } else {
                 0
             }

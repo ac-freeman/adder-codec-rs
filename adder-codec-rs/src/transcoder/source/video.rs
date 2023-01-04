@@ -128,6 +128,9 @@ impl Video {
         c_thresh_neg: u8,
     ) -> Result<Video, Box<dyn Error>> {
         let (event_sender, _event_receiver): (Sender<Vec<Event>>, Receiver<Vec<Event>>) = channel();
+        if ref_time > f32::MAX as u32 {
+            return Err("Reference time is too large".into());
+        }
 
         let mut stream: Raw = Codec::new();
         match output_filename {

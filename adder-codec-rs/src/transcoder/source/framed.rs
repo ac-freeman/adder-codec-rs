@@ -187,10 +187,6 @@ impl Framed {
             channels,
         )?;
 
-        // Sanity checks
-        // assert!(init_frame.size()?.width > 50);
-        // assert!(init_frame.size()?.height > 50);
-
         let video = Video::new(
             plane_size,
             builder.chunk_rows,
