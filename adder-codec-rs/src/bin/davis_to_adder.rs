@@ -141,7 +141,6 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         args.optimize_adder_controller,
         rt,
         mode,
-        args.write_out,
     )?;
 
     let mut now = Instant::now();

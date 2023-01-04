@@ -165,7 +165,6 @@ impl AdderTranscoder {
                             false,
                             rt,
                             ui_state.davis_mode_radio_state,
-                            output_string.is_some(),
                         )?;
 
                         Ok(AdderTranscoder {
