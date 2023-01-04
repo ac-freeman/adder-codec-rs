@@ -931,7 +931,7 @@ fn test_framed_to_adder_bunny4() {
         }
 
         let video = source.get_video();
-        if frame_max != 0 && video.in_interval_count >= frame_max {
+        if frame_max != 0 && video.state.in_interval_count >= frame_max {
             break;
         }
     }

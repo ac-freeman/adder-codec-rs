@@ -181,8 +181,8 @@ mod tests {
         let output_path = "./tests/samples/TEST_lake_scaled_hd_crop";
         assert_eq!(
             fs::metadata(output_path).unwrap().len()
-                % (u64::from(simul_processor.source.get_video().plane.w())
-                    * u64::from(simul_processor.source.get_video().plane.h())),
+                % (u64::from(simul_processor.source.get_video().state.plane.w())
+                    * u64::from(simul_processor.source.get_video().state.plane.h())),
             0
         );
 

@@ -42,16 +42,16 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         let video = source.get_video();
 
-        if video.in_interval_count % 30 == 0 {
+        if video.state.in_interval_count % 30 == 0 {
             print!(
                 "\rFrame {} in  {}ms",
-                video.in_interval_count,
+                video.state.in_interval_count,
                 now.elapsed().as_millis()
             );
             io::stdout().flush().unwrap();
             now = Instant::now();
         }
-        if frame_max != 0 && video.in_interval_count >= frame_max {
+        if frame_max != 0 && video.state.in_interval_count >= frame_max {
             break;
         }
     }

@@ -225,9 +225,9 @@ impl Video {
             );
             return self;
         }
-        if delta_t_max > ref_time {
+        if delta_t_max < ref_time {
             eprintln!(
-                "Delta t max {} is larger than reference time {}. Keeping current value of {}.",
+                "Delta t max {} is smaller than reference time {}. Keeping current value of {}.",
                 delta_t_max, ref_time, self.state.delta_t_max
             );
             return self;
