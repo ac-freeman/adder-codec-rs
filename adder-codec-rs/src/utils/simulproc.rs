@@ -117,17 +117,20 @@ impl SimulProcessor {
             .build()?;
         let reconstructed_frame_rate = source.source_fps;
         // For instantaneous reconstruction, make sure the frame rate matches the source video rate
-        assert_eq!(source.video.tps / ref_time, reconstructed_frame_rate as u32);
+        assert_eq!(
+            source.video.state.tps / ref_time,
+            reconstructed_frame_rate as u32
+        );
 
-        let plane = source.get_video().plane.clone();
+        let plane = source.get_video().state.plane.clone();
 
         let mut framer = thread_pool_framer.install(|| {
-            FramerBuilder::new(plane, source.video.chunk_rows)
+            FramerBuilder::new(plane, source.video.state.chunk_rows)
                 .codec_version(1)
                 .time_parameters(
-                    source.video.tps,
+                    source.video.state.tps,
                     ref_time,
-                    source.video.delta_t_max,
+                    source.video.state.delta_t_max,
                     reconstructed_frame_rate,
                 )
                 .mode(INSTANTANEOUS)
@@ -219,10 +222,10 @@ impl SimulProcessor {
 
             let video = self.source.get_video();
 
-            if video.in_interval_count % 30 == 0 {
+            if video.state.in_interval_count % 30 == 0 {
                 print!(
                     "\rFrame {} in  {}ms",
-                    video.in_interval_count,
+                    video.state.in_interval_count,
                     now.elapsed().as_millis()
                 );
                 if io::stdout().flush().is_err() {

@@ -207,7 +207,7 @@ impl TranscoderState {
                 Some(source) => {
                     if source.scale != self.ui_state.scale
                         || source.get_ref_time() != self.ui_state.delta_t_ref as u32
-                        || match source.get_video().plane.c() {
+                        || match source.get_video().state.plane.c() {
                             1 => {
                                 // True if the transcoder is gray, but the user wants color
                                 self.ui_state.color
@@ -219,7 +219,7 @@ impl TranscoderState {
                         }
                     {
                         let current_frame =
-                            source.get_video().in_interval_count + source.frame_idx_start;
+                            source.get_video().state.in_interval_count + source.frame_idx_start;
                         replace_adder_transcoder(
                             self,
                             self.ui_info_state.input_path.clone(),
@@ -269,13 +269,13 @@ impl TranscoderState {
                     ui_info_state.events_total += events_vec.len() as u64;
                     ui_info_state.events_per_sec += events_vec.len() as f64;
                 }
-                ui_info_state.events_ppc_total =
-                    ui_info_state.events_total as f64 / (source.get_video().plane.volume() as f64);
+                ui_info_state.events_ppc_total = ui_info_state.events_total as f64
+                    / (source.get_video().state.plane.volume() as f64);
                 let source_fps =
                     source.get_video().get_tps() as f64 / source.get_video().get_ref_time() as f64;
                 ui_info_state.events_per_sec *= source_fps;
                 ui_info_state.events_ppc_per_sec =
-                    ui_info_state.events_per_sec / (source.get_video().plane.volume() as f64);
+                    ui_info_state.events_per_sec / (source.get_video().state.plane.volume() as f64);
             }
             Err(SourceError::Open) => {}
             Err(_) => {
@@ -298,8 +298,8 @@ impl TranscoderState {
 
         let image_bevy = Image::new(
             Extent3d {
-                width: source.get_video().plane.w().into(),
-                height: source.get_video().plane.h().into(),
+                width: source.get_video().state.plane.w().into(),
+                height: source.get_video().state.plane.h().into(),
                 depth_or_array_layers: 1,
             },
             TextureDimension::D2,

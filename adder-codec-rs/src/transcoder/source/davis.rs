@@ -84,6 +84,7 @@ impl Davis {
         let plane = PlaneSize::new(reconstructor.width, reconstructor.height, 1)?;
         let video = Video::new(
             plane,
+            Continuous,
             64,
             output_events_filename,
             ticks_per_second,
@@ -106,9 +107,9 @@ impl Davis {
             .num_threads(max(4, 1))
             .build()?;
 
-        let plane = &video.plane;
+        let plane = &video.state.plane;
 
-        let timestamps = vec![0_i64; video.plane.volume()];
+        let timestamps = vec![0_i64; video.state.plane.volume()];
 
         let dvs_last_timestamps: Array3<i64> = Array3::from_shape_vec(
             (
@@ -119,7 +120,7 @@ impl Davis {
             timestamps,
         )?;
 
-        let timestamps = vec![0.0_f64; video.plane.volume()];
+        let timestamps = vec![0.0_f64; video.state.plane.volume()];
 
         let dvs_last_ln_val: Array3<f64> = Array3::from_shape_vec(
             (
@@ -168,11 +169,11 @@ impl Davis {
 
         let mut chunk_idx;
         for dvs_event in dvs_events {
-            chunk_idx = dvs_event.y() as usize / (self.video.plane.h_usize() / 4);
+            chunk_idx = dvs_event.y() as usize / (self.video.state.plane.h_usize() / 4);
             dvs_chunks[chunk_idx].push(*dvs_event);
         }
 
-        let chunk_rows = self.video.plane.h_usize() / 4;
+        let chunk_rows = self.video.state.plane.h_usize() / 4;
         // let px_per_chunk: usize =
         //     self.video.chunk_rows * self.video.width as usize * self.video.channels as usize;
         let big_buffer: Vec<Vec<Event>> = self
@@ -214,7 +215,7 @@ impl Davis {
                             let delta_t_micro = event.t()
                                 - dvs_last_timestamps_chunk
                                     [[event.y() as usize % chunk_rows, event.x() as usize, 0]];
-                            let ticks_per_micro = self.video.tps as f32 / 1e6;
+                            let ticks_per_micro = self.video.state.tps as f32 / 1e6;
                             let delta_t_ticks = delta_t_micro as f32 * ticks_per_micro;
                             if delta_t_ticks <= 0.0 {
                                 continue; // TODO: do better
@@ -223,7 +224,7 @@ impl Davis {
 
                             // First, integrate the previous value enough to fill the time since then
                             let first_integration = ((last_val as Intensity32)
-                                / self.video.ref_time as f32
+                                / self.video.state.ref_time as f32
                                 * delta_t_ticks)
                                 .max(0.0);
                             if px.need_to_pop_top {
@@ -234,8 +235,8 @@ impl Davis {
                                 first_integration,
                                 delta_t_ticks,
                                 Continuous,
-                                self.video.delta_t_max,
-                                self.video.ref_time,
+                                self.video.state.delta_t_max,
+                                self.video.state.ref_time,
                             );
                             if px.need_to_pop_top {
                                 buffer.push(px.pop_top_event(first_integration));
@@ -252,8 +253,9 @@ impl Davis {
 
                             let frame_val_u8 = frame_val as u8; // TODO: don't let this be lossy here
 
-                            if frame_val_u8 < base_val.saturating_sub(self.video.c_thresh_neg)
-                                || frame_val_u8 > base_val.saturating_add(self.video.c_thresh_pos)
+                            if frame_val_u8 < base_val.saturating_sub(self.video.state.c_thresh_neg)
+                                || frame_val_u8
+                                    > base_val.saturating_add(self.video.state.c_thresh_pos)
                             {
                                 px.pop_best_events(&mut buffer);
                                 px.base_val = frame_val_u8;
@@ -285,7 +287,7 @@ impl Davis {
 
         // Using a macro so that CLion still pretty prints correctly
 
-        if self.video.write_out {
+        if self.video.state.write_out {
             self.video.stream.encode_events_events(&big_buffer)?;
         }
         Ok(())
@@ -293,7 +295,7 @@ impl Davis {
 
     #[allow(clippy::cast_possible_truncation)]
     fn integrate_frame_gaps(&mut self) -> Result<(), SourceError> {
-        let px_per_chunk: usize = self.video.chunk_rows * self.video.plane.area_wc();
+        let px_per_chunk: usize = self.video.state.chunk_rows * self.video.state.plane.area_wc();
 
         let start_of_frame_timestamp = match self.start_of_frame_timestamp {
             Some(t) => t,
@@ -305,11 +307,11 @@ impl Davis {
         let big_buffer: Vec<Vec<Event>> = self
             .video
             .event_pixel_trees
-            .axis_chunks_iter_mut(Axis(0), self.video.chunk_rows)
+            .axis_chunks_iter_mut(Axis(0), self.video.state.chunk_rows)
             .into_par_iter()
             .zip(
                 self.dvs_last_ln_val
-                    .axis_chunks_iter_mut(Axis(0), self.video.chunk_rows)
+                    .axis_chunks_iter_mut(Axis(0), self.video.state.chunk_rows)
                     .into_par_iter(),
             )
             .enumerate()
@@ -330,7 +332,7 @@ impl Davis {
                     *base_val = px.base_val;
                     *frame_val = last_val as u8;
 
-                    let ticks_per_micro = self.video.tps as f32 / 1e6;
+                    let ticks_per_micro = self.video.state.tps as f32 / 1e6;
 
                     let delta_t_micro = start_of_frame_timestamp
                         - self.dvs_last_timestamps[[px.coord.y as usize, px.coord.x as usize, 0]];
@@ -346,7 +348,7 @@ impl Davis {
                     //     (self.video.ref_time as f32 / ticks_per_micro as f32) as i64
                     // );
 
-                    let integration = ((last_val / f64::from(self.video.ref_time))
+                    let integration = ((last_val / f64::from(self.video.state.ref_time))
                         * f64::from(delta_t_ticks))
                     .max(0.0);
                     assert!(integration >= 0.0);
@@ -357,12 +359,8 @@ impl Davis {
                         frame_val,
                         integration as f32,
                         delta_t_ticks,
-                        Continuous,
                         &mut buffer,
-                        &self.video.c_thresh_pos,
-                        &self.video.c_thresh_neg,
-                        &self.video.delta_t_max,
-                        &self.video.ref_time,
+                        &self.video.state,
                     );
                     if px.need_to_pop_top {
                         buffer.push(px.pop_top_event(integration as f32));
@@ -372,7 +370,7 @@ impl Davis {
             })
             .collect();
 
-        if self.video.write_out {
+        if self.video.state.write_out {
             self.video.stream.encode_events_events(&big_buffer)?;
         }
 
@@ -383,25 +381,26 @@ impl Davis {
 
         // TODO: split off into separate function
         // TODO: When there's full support for various bit-depth sources, modify this accordingly
-        let practical_d_max =
-            fast_math::log2_raw(255.0 * (self.video.delta_t_max / self.video.ref_time) as f32);
+        let practical_d_max = fast_math::log2_raw(
+            255.0 * (self.video.state.delta_t_max / self.video.state.ref_time) as f32,
+        );
         db.par_iter_mut().enumerate().for_each(|(idx, val)| {
-            let y = idx / self.video.plane.area_wc();
-            let x = (idx % self.video.plane.area_wc()) / self.video.plane.c_usize();
-            let c = idx % self.video.plane.c_usize();
+            let y = idx / self.video.state.plane.area_wc();
+            let x = (idx % self.video.state.plane.area_wc()) / self.video.state.plane.c_usize();
+            let c = idx % self.video.state.plane.c_usize();
             *val = match self.video.event_pixel_trees[[y, x, c]].arena[0].best_event {
                 Some(event) => u8::get_frame_value(
                     &event,
                     SourceType::U8,
-                    self.video.ref_time as DeltaT,
+                    self.video.state.ref_time as DeltaT,
                     practical_d_max,
-                    self.video.delta_t_max,
+                    self.video.state.delta_t_max,
                     self.video.instantaneous_view_mode,
                 ),
                 None => *val,
             };
         });
-        if self.video.show_live {
+        if self.video.state.show_live {
             show_display("instance", &self.video.instantaneous_frame, 1, &self.video)?;
         }
         Ok(())
@@ -415,15 +414,19 @@ impl Davis {
                 Some(timestamp) => {
                     let latency = timestamp.elapsed().as_millis();
                     if latency as f64 >= self.reconstructor.target_latency * 3.0 {
-                        self.video.c_thresh_pos = self.video.c_thresh_pos.saturating_add(1);
-                        self.video.c_thresh_neg = self.video.c_thresh_neg.saturating_add(1);
+                        self.video.state.c_thresh_pos =
+                            self.video.state.c_thresh_pos.saturating_add(1);
+                        self.video.state.c_thresh_neg =
+                            self.video.state.c_thresh_neg.saturating_add(1);
                     } else {
-                        self.video.c_thresh_pos = self.video.c_thresh_pos.saturating_sub(1);
-                        self.video.c_thresh_neg = self.video.c_thresh_neg.saturating_sub(1);
+                        self.video.state.c_thresh_pos =
+                            self.video.state.c_thresh_pos.saturating_sub(1);
+                        self.video.state.c_thresh_neg =
+                            self.video.state.c_thresh_neg.saturating_sub(1);
                     }
                     eprintln!(
                         "    adder latency = {}, adder c = {}",
-                        latency, self.video.c_thresh_pos
+                        latency, self.video.state.c_thresh_pos
                     );
                 }
             }
@@ -469,11 +472,12 @@ impl Source for Davis {
             Ok(None) => {
                 // We've reached the end of the input. Forcibly pop the last event from each pixel.
                 println!("Popping remaining events");
-                let px_per_chunk: usize = self.video.chunk_rows * self.video.plane.area_wc();
+                let px_per_chunk: usize =
+                    self.video.state.chunk_rows * self.video.state.plane.area_wc();
                 let big_buffer: Vec<Vec<Event>> = self
                     .video
                     .event_pixel_trees
-                    .axis_chunks_iter_mut(Axis(0), self.video.chunk_rows)
+                    .axis_chunks_iter_mut(Axis(0), self.video.state.chunk_rows)
                     .into_par_iter()
                     .enumerate()
                     .map(|(_chunk_idx, mut chunk)| {
@@ -485,7 +489,7 @@ impl Source for Davis {
                     })
                     .collect();
 
-                if self.video.write_out {
+                if self.video.state.write_out {
                     self.video.stream.encode_events_events(&big_buffer)?;
                 }
 
@@ -504,8 +508,8 @@ impl Source for Davis {
                 self.dvs_events_after = Some(events_after);
                 self.start_of_frame_timestamp = Some(img_start_ts);
                 self.end_of_frame_timestamp = Some(img_end_ts);
-                self.video.ref_time_divisor =
-                    (img_end_ts - img_start_ts) as f64 / f64::from(self.video.ref_time);
+                self.video.state.ref_time_divisor =
+                    (img_end_ts - img_start_ts) as f64 / f64::from(self.video.state.ref_time);
             }
             Ok(Some((mat, opt_timestamp, None))) => {
                 self.control_latency(opt_timestamp);
@@ -522,7 +526,7 @@ impl Source for Davis {
             None => return Err(SourceError::UninitializedData),
         };
         if with_events {
-            if self.video.in_interval_count == 0 {
+            if self.video.state.in_interval_count == 0 {
                 self.dvs_last_timestamps.par_map_inplace(|ts| {
                     *ts = start_of_frame_timestamp;
                 });
@@ -560,7 +564,7 @@ impl Source for Davis {
         // https://stackoverflow.com/questions/33665241/is-opencv-matrix-data-guaranteed-to-be-continuous
         let mut tmp = self.image_8u.clone();
         let mat_integration_time = match self.mode {
-            TranscoderMode::Framed => self.video.ref_time as f32,
+            TranscoderMode::Framed => self.video.state.ref_time as f32,
             TranscoderMode::RawDavis => (end_of_frame_timestamp - start_of_frame_timestamp) as f32,
             TranscoderMode::RawDvs => {
                 // TODO: Note how c is fixed here, since we don't have a mechanism for determining
@@ -582,7 +586,7 @@ impl Source for Davis {
 
         let ret = thread_pool.install(|| {
             self.video
-                .integrate_matrix(tmp, mat_integration_time, Continuous, view_interval)
+                .integrate_matrix(tmp, mat_integration_time, view_interval)
         });
 
         #[allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]

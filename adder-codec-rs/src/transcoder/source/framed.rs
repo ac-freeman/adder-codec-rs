@@ -189,6 +189,7 @@ impl Framed {
 
         let video = Video::new(
             plane_size,
+            FramePerfect,
             builder.chunk_rows,
             builder.output_events_filename,
             builder.tps,
@@ -215,7 +216,7 @@ impl Framed {
     }
 
     pub fn get_ref_time(&self) -> u32 {
-        self.video.ref_time
+        self.video.state.ref_time
     }
 }
 
@@ -250,12 +251,8 @@ impl Source for Framed {
         let tmp = self.input_frame_scaled.clone();
 
         thread_pool.install(|| {
-            self.video.integrate_matrix(
-                tmp,
-                self.video.ref_time as f32,
-                FramePerfect,
-                view_interval,
-            )
+            self.video
+                .integrate_matrix(tmp, self.video.state.ref_time as f32, view_interval)
         })
     }
 

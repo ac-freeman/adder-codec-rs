@@ -157,10 +157,10 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             }
         };
 
-        if davis_source.get_video().in_interval_count % 30 == 0 {
+        if davis_source.get_video().state.in_interval_count % 30 == 0 {
             println!(
                 "\rDavis recon frame to ADΔER {} in  {}ms",
-                davis_source.get_video().in_interval_count,
+                davis_source.get_video().state.in_interval_count,
                 now.elapsed().as_millis()
             );
             io::stdout().flush()?;

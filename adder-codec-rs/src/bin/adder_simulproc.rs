@@ -68,7 +68,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let source = source_builder.finish()?;
     let source_fps = source.source_fps;
 
-    let plane = source.get_video().plane.clone();
+    let plane = source.get_video().state.plane.clone();
 
     let ref_time = source.get_ref_time();
     let num_threads = match args.thread_count {

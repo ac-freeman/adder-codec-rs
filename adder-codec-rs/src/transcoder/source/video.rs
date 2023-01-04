@@ -85,25 +85,30 @@ pub enum FramedViewMode {
     DeltaT,
 }
 
-/// Attributes common to ADΔER transcode process
-pub struct Video {
+pub struct VideoState {
     pub plane: PlaneSize,
+    pixel_tree_mode: Mode,
     pub chunk_rows: usize,
-    pub(crate) event_pixel_trees: Array3<PixelArena>,
+    pub in_interval_count: u32,
+    pub(crate) c_thresh_pos: u8,
+    pub(crate) c_thresh_neg: u8,
+    pub(crate) delta_t_max: u32,
     pub(crate) ref_time: u32,
     pub(crate) ref_time_divisor: f64,
-    pub(crate) delta_t_max: u32,
+    pub(crate) tps: DeltaT,
+    pub(crate) write_out: bool,
     pub(crate) show_display: bool,
     pub(crate) show_live: bool,
-    pub in_interval_count: u32,
+}
+
+/// Attributes common to ADΔER transcode process
+pub struct Video {
+    pub state: VideoState,
+    pub(crate) event_pixel_trees: Array3<PixelArena>,
     pub(crate) _instantaneous_display_frame: Mat,
     pub instantaneous_frame: Mat,
     pub instantaneous_view_mode: FramedViewMode,
     pub event_sender: Sender<Vec<Event>>,
-    pub(crate) write_out: bool,
-    pub(crate) c_thresh_pos: u8,
-    pub(crate) c_thresh_neg: u8,
-    pub(crate) tps: DeltaT,
     pub(crate) stream: Raw,
 }
 
@@ -115,6 +120,7 @@ impl Video {
     /// Returns an error if the output file cannot be opened, or if input parameters are invalid.
     pub fn new(
         plane: PlaneSize,
+        pixel_tree_mode: Mode,
         chunk_rows: usize,
         output_filename: Option<String>,
         tps: DeltaT,
@@ -190,24 +196,27 @@ impl Video {
         let _motion_frame_mat = instantaneous_frame.clone();
 
         Ok(Video {
-            plane,
-            chunk_rows,
+            state: VideoState {
+                plane,
+                pixel_tree_mode,
+                chunk_rows,
+                in_interval_count: 0,
+                c_thresh_pos,
+                c_thresh_neg,
+                delta_t_max,
+                ref_time,
+                ref_time_divisor: 1.0,
+                tps,
+                write_out,
+                show_display,
+                show_live: false,
+            },
             event_pixel_trees,
-            ref_time,
-            ref_time_divisor: 1.0,
-            delta_t_max,
-            show_display,
-            show_live: false,
-            in_interval_count: 0,
             _instantaneous_display_frame: Mat::default(),
             instantaneous_frame,
             instantaneous_view_mode: FramedViewMode::Intensity,
             event_sender,
-            write_out,
             stream,
-            c_thresh_pos,
-            c_thresh_neg,
-            tps,
         })
     }
 
@@ -223,7 +232,6 @@ impl Video {
         &mut self,
         matrix: Mat,
         time_spanned: f32,
-        pixel_tree_mode: Mode,
         view_interval: u32,
     ) -> std::result::Result<Vec<Vec<Event>>, SourceError> {
         let frame_arr: &[u8] = match matrix.data_bytes() {
@@ -232,25 +240,25 @@ impl Video {
                 return Err(SourceError::OpencvError(e));
             }
         };
-        if self.in_interval_count == 0 {
+        if self.state.in_interval_count == 0 {
             self.set_initial_d(frame_arr);
         }
 
-        self.in_interval_count += 1;
+        self.state.in_interval_count += 1;
 
-        if self.in_interval_count % view_interval == 0 {
-            self.show_live = true;
+        if self.state.in_interval_count % view_interval == 0 {
+            self.state.show_live = true;
         } else {
-            self.show_live = false;
+            self.state.show_live = false;
         }
 
-        let px_per_chunk: usize = self.chunk_rows * self.plane.area_wc();
+        let px_per_chunk: usize = self.state.chunk_rows * self.state.plane.area_wc();
 
         // Important: if framing the events simultaneously, then the chunk division must be
         // exactly the same as it is for the framer
         let big_buffer: Vec<Vec<Event>> = self
             .event_pixel_trees
-            .axis_chunks_iter_mut(Axis(0), self.chunk_rows)
+            .axis_chunks_iter_mut(Axis(0), self.state.chunk_rows)
             .into_par_iter()
             .enumerate()
             .map(|(chunk_idx, mut chunk)| {
@@ -264,8 +272,9 @@ impl Video {
                 for (chunk_px_idx, px) in chunk.iter_mut().enumerate() {
                     *px_idx = chunk_px_idx + px_per_chunk * chunk_idx;
 
-                    *frame_val_intensity32 =
-                        (f64::from(frame_arr[*px_idx]) * self.ref_time_divisor) as Intensity32;
+                    *frame_val_intensity32 = (f64::from(frame_arr[*px_idx])
+                        * self.state.ref_time_divisor)
+                        as Intensity32;
                     *frame_val = *frame_val_intensity32 as u8;
 
                     integrate_for_px(
@@ -274,19 +283,15 @@ impl Video {
                         frame_val,
                         *frame_val_intensity32, // In this case, frame val is the same as intensity to integrate
                         time_spanned,
-                        pixel_tree_mode,
                         &mut buffer,
-                        &self.c_thresh_pos,
-                        &self.c_thresh_neg,
-                        &self.delta_t_max,
-                        &self.ref_time,
+                        &self.state,
                     );
                 }
                 buffer
             })
             .collect();
 
-        if self.write_out {
+        if self.state.write_out {
             self.stream.encode_events_events(&big_buffer)?;
         }
 
@@ -299,25 +304,25 @@ impl Video {
 
         // TODO: When there's full support for various bit-depth sources, modify this accordingly
         let practical_d_max =
-            fast_math::log2_raw(255.0 * (self.delta_t_max / self.ref_time) as f32);
+            fast_math::log2_raw(255.0 * (self.state.delta_t_max / self.state.ref_time) as f32);
         db.par_iter_mut().enumerate().for_each(|(idx, val)| {
-            let y = idx / self.plane.area_wc();
-            let x = (idx % self.plane.area_wc()) / self.plane.c_usize();
-            let c = idx % self.plane.c_usize();
+            let y = idx / self.state.plane.area_wc();
+            let x = (idx % self.state.plane.area_wc()) / self.state.plane.c_usize();
+            let c = idx % self.state.plane.c_usize();
             *val = match self.event_pixel_trees[[y, x, c]].arena[0].best_event {
                 Some(event) => u8::get_frame_value(
                     &event,
                     SourceType::U8,
-                    self.ref_time as DeltaT,
+                    self.state.ref_time as DeltaT,
                     practical_d_max,
-                    self.delta_t_max,
+                    self.state.delta_t_max,
                     self.instantaneous_view_mode,
                 ),
                 None => *val,
             };
         });
 
-        if self.show_live {
+        if self.state.show_live {
             show_display("instance", &self.instantaneous_frame, 1, self)?;
         }
 
@@ -326,8 +331,8 @@ impl Video {
 
     fn set_initial_d(&mut self, frame_arr: &[u8]) {
         self.event_pixel_trees.par_map_inplace(|px| {
-            let idx = px.coord.y as usize * self.plane.area_wc()
-                + px.coord.x as usize * self.plane.c_usize()
+            let idx = px.coord.y as usize * self.state.plane.area_wc()
+                + px.coord.x as usize * self.state.plane.c_usize()
                 + px.coord.c.unwrap_or(0) as usize;
             let intensity = frame_arr[idx];
             let d_start = f32::from(intensity).log2().floor() as D;
@@ -338,33 +343,33 @@ impl Video {
 
     /// Get `ref_time`
     pub fn get_ref_time(&self) -> u32 {
-        self.ref_time
+        self.state.ref_time
     }
 
     /// Get `delta_t_max`
     pub fn get_delta_t_max(&self) -> u32 {
-        self.delta_t_max
+        self.state.delta_t_max
     }
 
     /// Get `tps`
     pub fn get_tps(&self) -> u32 {
-        self.tps
+        self.state.tps
     }
 
     /// Set a new value for `delta_t_max`
     pub fn update_delta_t_max(&mut self, dtm: u32) {
         // Validate new value
-        self.delta_t_max = self.ref_time.max(dtm);
+        self.state.delta_t_max = self.state.ref_time.max(dtm);
     }
 
     /// Set a new value for `c_thresh_pos`
     pub fn update_adder_thresh_pos(&mut self, c: u8) {
-        self.c_thresh_pos = c;
+        self.state.c_thresh_pos = c;
     }
 
     /// Set a new value for `c_thresh_neg`
     pub fn update_adder_thresh_neg(&mut self, c: u8) {
-        self.c_thresh_neg = c;
+        self.state.c_thresh_neg = c;
     }
 }
 
@@ -374,12 +379,8 @@ pub fn integrate_for_px(
     frame_val: &u8,
     intensity: Intensity32,
     time_spanned: f32,
-    pixel_tree_mode: Mode,
     buffer: &mut Vec<Event>,
-    c_thresh_pos: &u8,
-    c_thresh_neg: &u8,
-    delta_t_max: &u32,
-    ref_time: &u32,
+    state: &VideoState,
 ) {
     if px.need_to_pop_top {
         buffer.push(px.pop_top_event(intensity));
@@ -387,14 +388,14 @@ pub fn integrate_for_px(
 
     *base_val = px.base_val;
 
-    if *frame_val < base_val.saturating_sub(*c_thresh_neg)
-        || *frame_val > base_val.saturating_add(*c_thresh_pos)
+    if *frame_val < base_val.saturating_sub(state.c_thresh_neg)
+        || *frame_val > base_val.saturating_add(state.c_thresh_pos)
     {
         px.pop_best_events(buffer);
         px.base_val = *frame_val;
 
         // If continuous mode and the D value needs to be different now
-        if let Continuous = pixel_tree_mode {
+        if let Continuous = state.pixel_tree_mode {
             match px.set_d_for_continuous(intensity) {
                 None => {}
                 Some(event) => buffer.push(event),
@@ -405,9 +406,9 @@ pub fn integrate_for_px(
     px.integrate(
         intensity,
         time_spanned,
-        pixel_tree_mode,
-        *delta_t_max,
-        *ref_time,
+        state.pixel_tree_mode,
+        state.delta_t_max,
+        state.ref_time,
     );
 
     if px.need_to_pop_top {
@@ -422,7 +423,7 @@ pub fn integrate_for_px(
 /// Returns an [`OpencvError`] if the window cannot be shown, or the [`Mat`] cannot be scaled as
 /// needed.
 pub fn show_display(window_name: &str, mat: &Mat, wait: i32, video: &Video) -> opencv::Result<()> {
-    if video.show_display {
+    if video.state.show_display {
         show_display_force(window_name, mat, wait)?;
     }
     Ok(())
