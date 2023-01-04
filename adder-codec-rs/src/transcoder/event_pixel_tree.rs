@@ -356,7 +356,7 @@ mod tests {
     use super::*;
 
     fn make_tree() -> PixelArena {
-        let dtm = 10000;
+        let dtm = 10_000;
         let mut tree = PixelArena::new(
             100.0,
             Coord {
@@ -429,7 +429,7 @@ mod tests {
     }
 
     fn make_tree2() -> PixelArena {
-        let dtm = 10000;
+        let dtm = 10_000;
         let mut tree = make_tree();
         tree.integrate(30.0, 34.0, Continuous, dtm, 34);
 
@@ -563,14 +563,14 @@ mod tests {
             },
         );
         for _ in 0..47 {
-            tree.integrate(245.0, 5000.0, FramePerfect, dtm, 5000);
+            tree.integrate(245.0, 5_000.0, FramePerfect, dtm, 5_000);
         }
-        tree.integrate(245.0, 5000.0, FramePerfect, dtm, 5000);
+        tree.integrate(245.0, 5_000.0, FramePerfect, dtm, 5_000);
         assert!(tree.need_to_pop_top);
         let _ = tree.pop_top_event(245.0);
         assert!(!tree.need_to_pop_top);
         let tmp = tree.arena[0].state.delta_t;
-        assert_eq!(tmp, 70000.0)
+        assert_eq!(tmp, 70_000.0)
     }
 
     #[test]
@@ -584,7 +584,7 @@ mod tests {
                 c: None,
             },
         );
-        tree.integrate(146.0, 2000.0, Continuous, dtm, 2000);
+        tree.integrate(146.0, 2_000.0, Continuous, dtm, 2_000);
         tree.integrate(2_790.863, 38231.0, Continuous, dtm, 38231);
 
         let head = tree.arena[0];
@@ -592,7 +592,7 @@ mod tests {
         let dt = head.state.delta_t;
         let d = head.state.d;
         assert_eq!(integ, 2_790.863 + 146.0);
-        assert_eq!(dt, 38231.0 + 2000.0);
+        assert_eq!(dt, 38231.0 + 2_000.0);
         assert_eq!(head.best_event.unwrap().d, d - 1);
     }
 
@@ -608,7 +608,7 @@ mod tests {
             },
         );
         loop {
-            tree.integrate(255.0, 2000.0, Continuous, dtm, 2000);
+            tree.integrate(255.0, 2_000.0, Continuous, dtm, 2_000);
             if tree.need_to_pop_top {
                 break;
             }
@@ -634,7 +634,7 @@ mod tests {
 
     #[test]
     fn test_paper_example() {
-        let dtm = 10000;
+        let dtm = 10_000;
         let mut tree = PixelArena::new(
             101.0,
             Coord {

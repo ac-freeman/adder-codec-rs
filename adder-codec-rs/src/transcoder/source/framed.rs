@@ -59,7 +59,7 @@ impl Builder {
             output_events_filename: None,
             frame_idx_start: 0,
             chunk_rows: 64,
-            ref_time: 5000,
+            ref_time: 5_000,
             tps: 150_000,
             delta_t_max: 150_000,
             scale: 1.0,
