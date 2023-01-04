@@ -260,7 +260,7 @@ impl PlayerState {
                     None => { // TODO: error
                     }
                     Some(frame_sequence) => {
-                        frame_sequence.frames_written = 0;
+                        frame_sequence.state.frames_written = 0;
                     }
                 };
                 self.ui_info_state.clear_stats();
@@ -456,8 +456,8 @@ impl PlayerState {
                     }
                 }
             }
-            frame_sequence.frames_written += 1;
-            self.player.current_t_ticks += frame_sequence.tpf;
+            frame_sequence.state.frames_written += 1;
+            self.player.current_t_ticks += frame_sequence.state.tpf;
 
             let mut image_mat_bgra = Mat::default();
             imgproc::cvt_color(display_mat, &mut image_mat_bgra, imgproc::COLOR_BGR2BGRA, 4)?;

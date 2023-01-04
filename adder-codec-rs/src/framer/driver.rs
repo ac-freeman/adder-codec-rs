@@ -18,7 +18,7 @@ use std::ops::Add;
 // Want ability to get full integration frames at a fixed interval, or at api-spec'd times
 
 /// An ADΔER event representation
-#[derive(Debug, Copy, Clone, PartialEq, Default, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Copy, Clone, Default, serde::Serialize, serde::Deserialize)]
 pub struct EventCoordless {
     pub d: D,
     pub delta_t: DeltaT,
@@ -60,13 +60,13 @@ impl num_traits::Zero for EventCoordless {
 //     }
 // }
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum FramerMode {
     INSTANTANEOUS,
     INTEGRATION,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum SourceType {
     U8,
     U16,
@@ -235,23 +235,27 @@ impl From<FrameSequenceError> for Box<dyn std::error::Error> {
 //
 // impl std::error::Error for FrameSequenceError {}
 
-#[allow(dead_code)]
-pub struct FrameSequence<T> {
-    pub(crate) frames: Vec<VecDeque<Frame<Option<T>>>>,
+pub struct FrameSequenceState {
     pub frames_written: i64,
-    pub(crate) frame_idx_offsets: Vec<i64>,
-    pub(crate) pixel_ts_tracker: Vec<Array3<BigT>>,
-    pub(crate) last_filled_tracker: Vec<Array3<i64>>,
-    pub(crate) last_frame_intensity_tracker: Vec<Array3<T>>,
-    chunk_filled_tracker: Vec<bool>,
-    pub(crate) mode: FramerMode,
-    view_mode: FramedViewMode,
     pub tpf: DeltaT,
     pub(crate) source: SourceType,
     codec_version: u8,
     source_camera: SourceCamera,
     ref_interval: DeltaT,
     source_dtm: DeltaT,
+    view_mode: FramedViewMode,
+}
+
+#[allow(dead_code)]
+pub struct FrameSequence<T> {
+    pub state: FrameSequenceState,
+    pub(crate) frames: Vec<VecDeque<Frame<Option<T>>>>,
+    pub(crate) frame_idx_offsets: Vec<i64>,
+    pub(crate) pixel_ts_tracker: Vec<Array3<BigT>>,
+    pub(crate) last_filled_tracker: Vec<Array3<i64>>,
+    pub(crate) last_frame_intensity_tracker: Vec<Array3<T>>,
+    chunk_filled_tracker: Vec<bool>,
+    pub(crate) mode: FramerMode,
     pub chunk_rows: usize,
     bincode: WithOtherEndian<WithOtherIntEncoding<DefaultOptions, FixintEncoding>, BigEndian>,
 }
@@ -330,21 +334,23 @@ impl<
 
         // Array3::<Option<T>>::new(num_rows, num_cols, num_channels);
         FrameSequence {
+            state: FrameSequenceState {
+                frames_written: 0,
+                view_mode: builder.view_mode,
+                tpf: builder.tps / builder.output_fps as u32,
+                source: builder.source,
+                codec_version: builder.codec_version,
+                source_camera: builder.source_camera,
+                ref_interval: builder.ref_interval,
+                source_dtm: builder.delta_t_max,
+            },
             frames,
-            frames_written: 0,
             frame_idx_offsets: vec![0; num_chunks],
             pixel_ts_tracker,
             last_filled_tracker,
             last_frame_intensity_tracker,
             chunk_filled_tracker: vec![false; num_chunks],
             mode: builder.mode,
-            view_mode: builder.view_mode,
-            tpf: builder.tps / builder.output_fps as u32,
-            source: builder.source,
-            codec_version: builder.codec_version,
-            source_camera: builder.source_camera,
-            ref_interval: builder.ref_interval,
-            source_dtm: builder.delta_t_max,
             chunk_rows,
             bincode: DefaultOptions::new()
                 .with_fixint_encoding()
@@ -406,14 +412,7 @@ impl<
             frame_idx_offset,
             last_filled_frame_ref,
             last_frame_intensity_ref,
-            self.frames_written,
-            self.tpf,
-            self.source,
-            self.codec_version,
-            self.source_camera,
-            self.ref_interval,
-            self.source_dtm,
-            self.view_mode,
+            &self.state,
         );
         for chunk in &self.chunk_filled_tracker {
             if !chunk {
@@ -466,14 +465,7 @@ impl<
                             frame_idx_offset,
                             last_filled_frame_ref,
                             last_frame_intensity_ref,
-                            self.frames_written,
-                            self.tpf,
-                            self.source,
-                            self.codec_version,
-                            self.source_camera,
-                            self.ref_interval,
-                            self.source_dtm,
-                            self.view_mode,
+                            &self.state,
                         );
                     }
                 },
@@ -605,7 +597,7 @@ impl<T: Clone + Default + FrameValue<Output = T> + Serialize> FrameSequence<T> {
                 }
             }
         }
-        self.frames_written += 1;
+        self.state.frames_written += 1;
         Some(ret)
     }
 
@@ -663,7 +655,7 @@ impl<T: Clone + Default + FrameValue<Output = T> + Serialize> FrameSequence<T> {
                 }
             }
         }
-        self.frames_written += 1;
+        self.state.frames_written += 1;
         Ok(())
     }
 
@@ -685,44 +677,6 @@ impl<T: Clone + Default + FrameValue<Output = T> + Serialize> FrameSequence<T> {
         }
         Ok(frame_count)
     }
-
-    // pub fn copy_frame_bytes_to_mat(&mut self, mat: &mut Mat) -> Mat {
-    //     let mat = unsafe {
-    //         Mat::new_rows_cols_with_data(
-    //             1,
-    //             bytes.len() as i32,
-    //             u8::typ(),
-    //             bytes.as_mut_ptr() as *mut c_void,
-    //             core::Mat_AUTO_STEP,
-    //         )?
-    //     };
-    //
-    //     let none_val = T::default();
-    //     for chunk_num in 0..self.frames.len() {
-    //         match self.pop_next_frame_for_chunk(chunk_num) {
-    //             Some(arr) => {
-    //                 for px in arr.iter() {
-    //                     match self.bincode.serialize_into(
-    //                         &mut *writer,
-    //                         match px {
-    //                             Some(event) => event,
-    //                             None => &none_val,
-    //                         },
-    //                     ) {
-    //                         Ok(_) => {}
-    //                         Err(e) => {
-    //                             panic!("{}", e)
-    //                         }
-    //                     };
-    //                 }
-    //             }
-    //             None => {
-    //                 println!("Couldn't pop chunk {}!", chunk_num)
-    //             }
-    //         }
-    //     }
-    //     self.frames_written += 1;
-    // }
 }
 
 // TODO: refactor this garbage
@@ -735,14 +689,7 @@ fn ingest_event_for_chunk<
     frame_idx_offset: &mut i64,
     last_filled_frame_ref: &mut i64,
     last_frame_intensity_ref: &mut T,
-    frames_written: i64,
-    tpf: DeltaT,
-    source: SourceType,
-    codec_version: u8,
-    source_camera: SourceCamera,
-    ref_interval: DeltaT,
-    delta_t_max: DeltaT,
-    view_mode: FramedViewMode,
+    state: &FrameSequenceState,
 ) -> bool {
     let channel = event.coord.c.unwrap_or(0);
 
@@ -750,24 +697,24 @@ fn ingest_event_for_chunk<
 
     *running_ts_ref += u64::from(event.delta_t);
 
-    if ((*running_ts_ref - 1) as i64 / i64::from(tpf)) > *last_filled_frame_ref {
+    if ((*running_ts_ref - 1) as i64 / i64::from(state.tpf)) > *last_filled_frame_ref {
         // Set the frame's value from the event
 
         if event.d != 0xFF {
             // If d == 0xFF, then the event was empty, and we simply repeat the last non-empty
             // event's intensity. Else we reset the intensity here.
             let practical_d_max =
-                fast_math::log2_raw(T::max_f32() * (delta_t_max / ref_interval) as f32);
+                fast_math::log2_raw(T::max_f32() * (state.source_dtm / state.ref_interval) as f32);
             *last_frame_intensity_ref = T::get_frame_value(
                 event,
-                source,
-                ref_interval,
+                state.source,
+                state.ref_interval,
                 practical_d_max,
-                delta_t_max,
-                view_mode,
+                state.source_dtm,
+                state.view_mode,
             );
         }
-        *last_filled_frame_ref = (*running_ts_ref - 1) as i64 / i64::from(tpf);
+        *last_filled_frame_ref = (*running_ts_ref - 1) as i64 / i64::from(state.tpf);
 
         // Grow the frames vec if necessary
         match *last_filled_frame_ref - *frame_idx_offset {
@@ -801,14 +748,14 @@ fn ingest_event_for_chunk<
 
         let mut frame: &mut Option<T>;
         for i in prev_last_filled_frame..*last_filled_frame_ref {
-            if i - frames_written + 1 >= 0 {
-                frame = &mut frame_chunk[(i - frames_written + 1) as usize].array
+            if i - state.frames_written + 1 >= 0 {
+                frame = &mut frame_chunk[(i - state.frames_written + 1) as usize].array
                     [[event.coord.y.into(), event.coord.x.into(), channel.into()]];
                 match frame {
                     Some(_val) => {}
                     None => {
                         *frame = Some(*last_frame_intensity_ref);
-                        frame_chunk[(i - frames_written + 1) as usize].filled_count += 1;
+                        frame_chunk[(i - state.frames_written + 1) as usize].filled_count += 1;
                     }
                 }
             }
@@ -816,8 +763,8 @@ fn ingest_event_for_chunk<
     }
 
     // If framed video source, we can take advantage of scheme that reduces event rate by half
-    if codec_version > 0
-        && match source_camera {
+    if state.codec_version > 0
+        && match state.source_camera {
             SourceCamera::FramedU8
             | SourceCamera::FramedU16
             | SourceCamera::FramedU32
@@ -830,10 +777,10 @@ fn ingest_event_for_chunk<
             | SourceCamera::Asint => false,
             // TODO: switch statement on the transcode MODE (frame-perfect or continuous), not just the source
         }
-        && *running_ts_ref % u64::from(ref_interval) > 0
+        && *running_ts_ref % u64::from(state.ref_interval) > 0
     {
         *running_ts_ref =
-            ((*running_ts_ref / u64::from(ref_interval)) + 1) * u64::from(ref_interval);
+            ((*running_ts_ref / u64::from(state.ref_interval)) + 1) * u64::from(state.ref_interval);
     }
 
     debug_assert!(*last_filled_frame_ref >= 0);

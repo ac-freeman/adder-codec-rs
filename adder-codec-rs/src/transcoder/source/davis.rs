@@ -32,7 +32,7 @@ use tokio::runtime::Runtime;
 pub struct Framed {}
 pub struct Raw {}
 
-#[derive(PartialEq, Clone, Copy)]
+#[derive(PartialEq, Eq, Clone, Copy)]
 pub enum TranscoderMode {
     Framed,
     RawDavis,

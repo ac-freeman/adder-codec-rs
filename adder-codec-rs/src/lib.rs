@@ -315,14 +315,14 @@ impl PlaneSize {
 }
 
 #[repr(packed)]
-#[derive(Debug, Copy, Clone, PartialEq, Default, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct Coord {
     pub x: PixelAddress,
     pub y: PixelAddress,
     pub c: Option<u8>,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Default, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct CoordSingle {
     pub x: PixelAddress,
     pub y: PixelAddress,
@@ -330,7 +330,7 @@ pub struct CoordSingle {
 
 /// An ADΔER event representation
 #[repr(packed)]
-#[derive(Debug, Copy, Clone, PartialEq, Default, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct Event {
     pub coord: Coord,
     pub d: D,
@@ -338,7 +338,7 @@ pub struct Event {
 }
 
 /// An ADΔER event representation, without the channel component
-#[derive(Debug, Copy, Clone, PartialEq, Default, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct EventSingle {
     pub coord: CoordSingle,
     pub d: D,
