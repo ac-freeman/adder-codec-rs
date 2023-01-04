@@ -2,7 +2,7 @@ extern crate core;
 
 use adder_codec_rs::transcoder::source::framed::Framed;
 use adder_codec_rs::transcoder::source::video::{Source, VideoBuilder};
-use adder_codec_rs::SourceCamera;
+
 use adder_codec_rs::SourceCamera::FramedU8;
 use rayon::current_num_threads;
 use std::error::Error;

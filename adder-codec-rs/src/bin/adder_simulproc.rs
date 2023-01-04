@@ -59,19 +59,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .frame_start(args.frame_idx_start)?
         .c_thresh_pos(args.c_thresh_pos)
         .c_thresh_neg(args.c_thresh_neg)
-        .show_display(args.show_display);
-
-    let source_fps = source.source_fps;
-    source = source.time_parameters(
-        (args.ref_time as f64 * source_fps) as u32,
-        args.ref_time,
-        args.delta_t_max,
-    );
+        .show_display(args.show_display)
+        .auto_time_parameters(args.ref_time, args.delta_t_max);
 
     if !args.output_events_filename.is_empty() {
         source = *source.write_out(args.output_events_filename, FramedU8)?;
     }
 
+    let source_fps = source.source_fps;
     let plane = source.get_video_ref().state.plane.clone();
 
     let ref_time = source.get_ref_time();

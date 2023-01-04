@@ -14,7 +14,7 @@ use adder_codec_rs::raw::stream::Raw;
 use adder_codec_rs::transcoder::source::framed::Framed;
 use adder_codec_rs::transcoder::source::video::Source;
 use adder_codec_rs::SourceCamera::FramedU8;
-use adder_codec_rs::{Codec, Coord, Event, PlaneSize, SourceCamera};
+use adder_codec_rs::{Codec, Coord, Event, PlaneSize};
 use rand::Rng;
 use rayon::current_num_threads;
 
