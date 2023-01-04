@@ -104,14 +104,14 @@ impl Framed {
         mut self,
         ref_time: crate::transcoder::event_pixel_tree::DeltaT,
         delta_t_max: crate::transcoder::event_pixel_tree::DeltaT,
-    ) -> Self {
+    ) -> Result<Self, Box<dyn Error>> {
         if delta_t_max % ref_time == 0 {
             let tps = (ref_time as f64 * self.source_fps) as DeltaT;
-            self.video = self.video.time_parameters(tps, ref_time, delta_t_max);
+            self.video = self.video.time_parameters(tps, ref_time, delta_t_max)?;
         } else {
             eprintln!("delta_t_max must be a multiple of ref_time");
         }
-        self
+        Ok(self)
     }
 
     pub fn get_ref_time(&self) -> u32 {
@@ -195,13 +195,13 @@ impl VideoBuilder for Framed {
         tps: crate::transcoder::event_pixel_tree::DeltaT,
         ref_time: crate::transcoder::event_pixel_tree::DeltaT,
         delta_t_max: crate::transcoder::event_pixel_tree::DeltaT,
-    ) -> Self {
+    ) -> Result<Self, Box<dyn Error>> {
         if delta_t_max % ref_time == 0 {
-            self.video = self.video.time_parameters(tps, ref_time, delta_t_max);
+            self.video = self.video.time_parameters(tps, ref_time, delta_t_max)?;
         } else {
             eprintln!("delta_t_max must be a multiple of ref_time");
         }
-        self
+        Ok(self)
     }
 
     fn write_out(

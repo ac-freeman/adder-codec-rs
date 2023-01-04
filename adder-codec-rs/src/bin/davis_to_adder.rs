@@ -138,7 +138,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             1_000_000, // TODO
             (1_000_000.0 / edi_args.output_fps) as DeltaT,
             (1_000_000.0 * args.delta_t_max_multiplier) as u32,
-        ) // TODO
+        )? // TODO
         .c_thresh_pos(args.adder_c_thresh_pos)
         .c_thresh_neg(args.adder_c_thresh_neg)
         .write_out(args.output_events_filename, DavisU8)?;

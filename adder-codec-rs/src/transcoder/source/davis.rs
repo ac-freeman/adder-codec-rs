@@ -62,7 +62,7 @@ impl Davis {
     pub fn new(reconstructor: Reconstructor, rt: Runtime) -> Result<Self, Box<dyn Error>> {
         let plane = PlaneSize::new(reconstructor.width, reconstructor.height, 1)?;
 
-        let video = Video::new(plane, Continuous)?.chunk_rows(64);
+        let video = Video::new(plane.clone(), Continuous)?.chunk_rows(plane.h_usize() / 4);
         let thread_pool_edi = rayon::ThreadPoolBuilder::new()
             .num_threads(max(current_num_threads() - 4, 1))
             .build()?;
@@ -143,7 +143,7 @@ impl Davis {
             dvs_chunks[chunk_idx].push(*dvs_event);
         }
 
-        let chunk_rows = self.video.state.plane.h_usize() / 4;
+        let chunk_rows = self.video.state.chunk_rows;
         // let px_per_chunk: usize =
         //     self.video.chunk_rows * self.video.width as usize * self.video.channels as usize;
         let big_buffer: Vec<Vec<Event>> = self
@@ -634,9 +634,9 @@ impl VideoBuilder for Davis {
         tps: crate::transcoder::event_pixel_tree::DeltaT,
         ref_time: crate::transcoder::event_pixel_tree::DeltaT,
         delta_t_max: crate::transcoder::event_pixel_tree::DeltaT,
-    ) -> Self {
-        self.video = self.video.time_parameters(tps, ref_time, delta_t_max);
-        self
+    ) -> Result<Self, Box<dyn Error>> {
+        self.video = self.video.time_parameters(tps, ref_time, delta_t_max)?;
+        Ok(self)
     }
 
     fn write_out(

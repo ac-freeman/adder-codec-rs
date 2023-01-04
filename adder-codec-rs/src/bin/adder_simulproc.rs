@@ -60,7 +60,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .c_thresh_pos(args.c_thresh_pos)
         .c_thresh_neg(args.c_thresh_neg)
         .show_display(args.show_display)
-        .auto_time_parameters(args.ref_time, args.delta_t_max);
+        .auto_time_parameters(args.ref_time, args.delta_t_max)?;
 
     if !args.output_events_filename.is_empty() {
         source = *source.write_out(args.output_events_filename, FramedU8)?;

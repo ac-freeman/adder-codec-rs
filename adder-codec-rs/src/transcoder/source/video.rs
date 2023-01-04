@@ -129,7 +129,14 @@ pub trait VideoBuilder {
 
     fn chunk_rows(self, chunk_rows: usize) -> Self;
 
-    fn time_parameters(self, tps: DeltaT, ref_time: DeltaT, delta_t_max: DeltaT) -> Self;
+    fn time_parameters(
+        self,
+        tps: DeltaT,
+        ref_time: DeltaT,
+        delta_t_max: DeltaT,
+    ) -> Result<Self, Box<dyn Error>>
+    where
+        Self: std::marker::Sized;
 
     fn write_out(
         self,
@@ -225,39 +232,49 @@ impl Video {
         self
     }
 
-    pub fn time_parameters(mut self, tps: DeltaT, ref_time: DeltaT, delta_t_max: DeltaT) -> Self {
+    pub fn time_parameters(
+        mut self,
+        tps: DeltaT,
+        ref_time: DeltaT,
+        delta_t_max: DeltaT,
+    ) -> Result<Self, Box<dyn Error>> {
+        if self.stream.has_output_stream() {
+            return Err(
+                "Cannot change time parameters after output stream has been initialized".into(),
+            );
+        }
         if ref_time > f32::MAX as u32 {
             eprintln!(
                 "Reference time {} is too large. Keeping current value of {}.",
                 ref_time, self.state.ref_time
             );
-            return self;
+            return Ok(self);
         }
         if tps > f32::MAX as u32 {
             eprintln!(
                 "Time per sample {} is too large. Keeping current value of {}.",
                 tps, self.state.tps
             );
-            return self;
+            return Ok(self);
         }
         if delta_t_max > f32::MAX as u32 {
             eprintln!(
                 "Delta t max {} is too large. Keeping current value of {}.",
                 delta_t_max, self.state.delta_t_max
             );
-            return self;
+            return Ok(self);
         }
         if delta_t_max < ref_time {
             eprintln!(
                 "Delta t max {} is smaller than reference time {}. Keeping current value of {}.",
                 delta_t_max, ref_time, self.state.delta_t_max
             );
-            return self;
+            return Ok(self);
         }
         self.state.delta_t_max = delta_t_max;
         self.state.ref_time = ref_time;
         self.state.tps = tps;
-        self
+        Ok(self)
     }
 
     pub fn write_out(

@@ -416,6 +416,9 @@ pub trait Codec {
     fn close_reader(&mut self);
 
     fn set_output_stream(&mut self, stream: Option<BufWriter<File>>);
+
+    fn has_output_stream(&self) -> bool;
+
     fn set_input_stream(&mut self, stream: Option<BufReader<File>>);
 
     /// Go to this position (as a byte address) in the input stream.

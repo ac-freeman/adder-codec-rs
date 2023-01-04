@@ -4,11 +4,11 @@ use perfcnt::linux::HardwareEventType as Hardware;
 use perfcnt::linux::PerfCounterBuilderLinux as Builder;
 
 use adder_codec_rs::utils::simulproc::{SimulProcArgs, SimulProcessor};
-use adder_codec_rs::SourceCamera::FramedU8;
+
 use std::fs;
-use std::fs::File;
-use std::io::Cursor;
-use std::path::{Path, PathBuf};
+
+
+use std::path::{PathBuf};
 
 use adder_codec_rs::transcoder::source::framed::Framed;
 use adder_codec_rs::transcoder::source::video::VideoBuilder;
@@ -16,7 +16,7 @@ use adder_codec_rs::utils::viz::download_file;
 use std::thread::sleep;
 use std::time::Duration;
 
-fn simul_proc(video_path: &str, scale: f64, thread_count: u8, chunk_rows: usize) {
+fn simul_proc(video_path: &str, scale: f64, thread_count: u8, _chunk_rows: usize) {
     let d = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let manifest_path_str = d.as_path().to_str().unwrap().to_owned();
 

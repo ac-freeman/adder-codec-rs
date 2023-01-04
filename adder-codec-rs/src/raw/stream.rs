@@ -151,6 +151,10 @@ impl Codec for Raw {
         self.output_stream = stream;
     }
 
+    fn has_output_stream(&self) -> bool {
+        self.output_stream.is_some()
+    }
+
     fn set_input_stream(&mut self, stream: Option<BufReader<File>>) {
         self.input_stream = stream;
     }
