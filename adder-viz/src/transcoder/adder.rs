@@ -155,7 +155,7 @@ impl AdderTranscoder {
 
                         let davis_source = Davis::new(
                             reconstructor,
-                            output_string.clone(),
+                            output_string,
                             1000000_u32, // TODO
                             1000000.0 / ui_state.davis_output_fps,
                             (1000000.0 * ui_state.delta_t_max_mult as f32) as u32, // TODO

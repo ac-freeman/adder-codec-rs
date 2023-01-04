@@ -1,6 +1,5 @@
-use crate::transcoder::d_controller::DecimationMode;
+use crate::transcoder::event_pixel_tree::DeltaT;
 use crate::transcoder::event_pixel_tree::Mode::FramePerfect;
-use crate::transcoder::event_pixel_tree::{DeltaT, Mode};
 use crate::transcoder::source::video::Source;
 use crate::transcoder::source::video::SourceError;
 use crate::transcoder::source::video::SourceError::BufferEmpty;
@@ -65,7 +64,6 @@ impl Builder {
             delta_t_max: 150_000,
             scale: 1.0,
             frame_skip_interval: 0,
-            mode: FramePerfect,
             color_input: true,
             c_thresh_pos: 0,
             c_thresh_neg: 0,
