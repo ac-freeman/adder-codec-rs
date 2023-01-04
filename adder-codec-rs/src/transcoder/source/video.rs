@@ -4,7 +4,7 @@ use std::fmt;
 
 use bumpalo::Bump;
 use std::path::Path;
-use std::sync::mpsc::{channel, Receiver, Sender};
+use std::sync::mpsc::{channel, Sender};
 
 use crate::raw::stream::{Error as StreamError, Raw};
 use crate::{raw, Codec, Coord, Event, PlaneSize, SourceType, D};
@@ -13,7 +13,6 @@ use opencv::imgproc::resize;
 use opencv::prelude::*;
 
 use crate::framer::scale_intensity::FrameValue;
-use crate::transcoder::d_controller::DecimationMode;
 use crate::transcoder::event_pixel_tree::Mode::Continuous;
 use crate::transcoder::event_pixel_tree::{DeltaT, Intensity32, Mode, PixelArena};
 use crate::SourceCamera;
@@ -101,11 +100,30 @@ pub struct VideoState {
     pub(crate) show_live: bool,
 }
 
+impl Default for VideoState {
+    fn default() -> Self {
+        VideoState {
+            plane: PlaneSize::default(),
+            pixel_tree_mode: Mode::Continuous,
+            chunk_rows: 64,
+            in_interval_count: 1,
+            c_thresh_pos: 0,
+            c_thresh_neg: 0,
+            delta_t_max: 7650,
+            ref_time: 255,
+            ref_time_divisor: 1.0,
+            tps: 7650,
+            write_out: false,
+            show_display: false,
+            show_live: false,
+        }
+    }
+}
+
 /// Attributes common to ADΔER transcode process
 pub struct Video {
     pub state: VideoState,
     pub(crate) event_pixel_trees: Array3<PixelArena>,
-    pub(crate) _instantaneous_display_frame: Mat,
     pub instantaneous_frame: Mat,
     pub instantaneous_view_mode: FramedViewMode,
     pub event_sender: Sender<Vec<Event>>,
@@ -113,49 +131,12 @@ pub struct Video {
 }
 
 impl Video {
-    /// Initialize the Video. `width` and `height` are determined by the calling source.
-    /// Also spawns a thread with an [`OutputWriter`]. This thread receives messages with [`Event`]
-    /// types which are then written to the output event stream file.
-    /// # Errors
-    /// Returns an error if the output file cannot be opened, or if input parameters are invalid.
-    pub fn new(
-        plane: PlaneSize,
-        pixel_tree_mode: Mode,
-        chunk_rows: usize,
-        output_filename: Option<String>,
-        tps: DeltaT,
-        ref_time: DeltaT,
-        delta_t_max: DeltaT,
-        _d_mode: DecimationMode,
-        write_out: bool,
-        show_display: bool,
-        source_camera: SourceCamera,
-        c_thresh_pos: u8,
-        c_thresh_neg: u8,
-    ) -> Result<Video, Box<dyn Error>> {
-        let (event_sender, _event_receiver): (Sender<Vec<Event>>, Receiver<Vec<Event>>) = channel();
-        if ref_time > f32::MAX as u32 {
-            return Err("Reference time is too large".into());
-        }
-
-        let mut stream: Raw = Codec::new();
-        match output_filename {
-            None => {}
-            Some(name) => {
-                if write_out {
-                    let path = Path::new(&name);
-                    stream.open_writer(path)?;
-                    stream.encode_header(
-                        plane.clone(),
-                        tps,
-                        ref_time,
-                        delta_t_max,
-                        1,
-                        source_camera,
-                    )?;
-                }
-            }
-        }
+    /// Initialize the Video with default parameters.
+    pub fn new(plane: PlaneSize, pixel_tree_mode: Mode) -> Result<Video, Box<dyn Error>> {
+        let mut state = VideoState {
+            pixel_tree_mode,
+            ..Default::default()
+        };
 
         let mut data = Vec::new();
         for y in 0..plane.height {
@@ -179,7 +160,6 @@ impl Video {
 
         let event_pixel_trees: Array3<PixelArena> =
             Array3::from_shape_vec((plane.h_usize(), plane.w_usize(), plane.c_usize()), data)?;
-
         let mut instantaneous_frame = Mat::default();
         match plane.channels {
             1 => unsafe {
@@ -193,31 +173,94 @@ impl Video {
                 )?;
             },
         }
-        let _motion_frame_mat = instantaneous_frame.clone();
 
+        state.plane = plane;
+        let instantaneous_view_mode = FramedViewMode::Intensity;
+        let (event_sender, _) = channel();
+        let stream = Raw::new();
         Ok(Video {
-            state: VideoState {
-                plane,
-                pixel_tree_mode,
-                chunk_rows,
-                in_interval_count: 0,
-                c_thresh_pos,
-                c_thresh_neg,
-                delta_t_max,
-                ref_time,
-                ref_time_divisor: 1.0,
-                tps,
-                write_out,
-                show_display,
-                show_live: false,
-            },
+            state,
             event_pixel_trees,
-            _instantaneous_display_frame: Mat::default(),
             instantaneous_frame,
-            instantaneous_view_mode: FramedViewMode::Intensity,
+            instantaneous_view_mode,
             event_sender,
             stream,
         })
+    }
+
+    pub fn c_thresh_pos(mut self, c_thresh_pos: u8) -> Self {
+        self.state.c_thresh_pos = c_thresh_pos;
+        self
+    }
+
+    pub fn c_thresh_neg(mut self, c_thresh_neg: u8) -> Self {
+        self.state.c_thresh_neg = c_thresh_neg;
+        self
+    }
+
+    pub fn chunk_rows(mut self, chunk_rows: usize) -> Self {
+        self.state.chunk_rows = chunk_rows;
+        self
+    }
+
+    pub fn time_parameters(mut self, tps: DeltaT, ref_time: DeltaT, delta_t_max: DeltaT) -> Self {
+        if ref_time > f32::MAX as u32 {
+            eprintln!(
+                "Reference time {} is too large. Keeping current value of {}.",
+                ref_time, self.state.ref_time
+            );
+            return self;
+        }
+        if tps > f32::MAX as u32 {
+            eprintln!(
+                "Time per sample {} is too large. Keeping current value of {}.",
+                tps, self.state.tps
+            );
+            return self;
+        }
+        if delta_t_max > f32::MAX as u32 {
+            eprintln!(
+                "Delta t max {} is too large. Keeping current value of {}.",
+                delta_t_max, self.state.delta_t_max
+            );
+            return self;
+        }
+        if delta_t_max > ref_time {
+            eprintln!(
+                "Delta t max {} is larger than reference time {}. Keeping current value of {}.",
+                delta_t_max, ref_time, self.state.delta_t_max
+            );
+            return self;
+        }
+        self.state.delta_t_max = delta_t_max;
+        self.state.ref_time = ref_time;
+        self.state.tps = tps;
+        self
+    }
+
+    pub fn write_out(
+        mut self,
+        output_filename: String,
+        source_camera: SourceCamera,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
+        self.state.write_out = true;
+
+        let path = Path::new(&output_filename);
+        self.stream.open_writer(path)?;
+        self.stream.encode_header(
+            self.state.plane.clone(),
+            self.state.tps,
+            self.state.ref_time,
+            self.state.delta_t_max,
+            1,
+            source_camera,
+        )?;
+        Ok(self)
+    }
+
+    pub fn show_display(mut self, show_display: bool) -> Self {
+        self.state.show_display = show_display;
+        self
     }
 
     /// Close and flush the stream writer.

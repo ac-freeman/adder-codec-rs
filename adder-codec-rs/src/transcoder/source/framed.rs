@@ -1,4 +1,3 @@
-use crate::transcoder::d_controller::DecimationMode;
 use crate::transcoder::event_pixel_tree::DeltaT;
 use crate::transcoder::event_pixel_tree::Mode::FramePerfect;
 use crate::transcoder::source::video::Source;
@@ -181,27 +180,22 @@ impl Framed {
         resize_input(&mut init_frame, &mut init_frame_scaled, builder.scale)?;
         init_frame = init_frame_scaled;
 
-        let plane_size = PlaneSize::new(
+        let plane = PlaneSize::new(
             init_frame.size()?.width as u16,
             init_frame.size()?.height as u16,
             channels,
         )?;
 
-        let video = Video::new(
-            plane_size,
-            FramePerfect,
-            builder.chunk_rows,
-            builder.output_events_filename,
-            builder.tps,
-            builder.ref_time,
-            builder.delta_t_max,
-            DecimationMode::Manual,
-            builder.write_out,
-            builder.show_display_b,
-            builder.source_camera,
-            builder.c_thresh_pos,
-            builder.c_thresh_neg,
-        )?;
+        let mut video = Video::new(plane, FramePerfect)?
+            .chunk_rows(builder.chunk_rows)
+            .time_parameters(builder.tps, builder.ref_time, builder.delta_t_max)
+            .show_display(builder.show_display_b)
+            .c_thresh_pos(builder.c_thresh_pos)
+            .c_thresh_neg(builder.c_thresh_neg);
+
+        if let Some(filename) = builder.output_events_filename {
+            video = video.write_out(filename, builder.source_camera)?
+        }
 
         Ok(Framed {
             cap,

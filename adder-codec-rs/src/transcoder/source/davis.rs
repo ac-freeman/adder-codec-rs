@@ -1,4 +1,3 @@
-use crate::transcoder::d_controller::DecimationMode;
 use crate::transcoder::event_pixel_tree::Mode::Continuous;
 use crate::transcoder::source::video::SourceError::BufferEmpty;
 use crate::transcoder::source::video::{
@@ -79,27 +78,19 @@ impl Davis {
         optimize_adder_controller: bool,
         rt: Runtime,
         mode: TranscoderMode,
-        write_out: bool,
     ) -> Result<Davis, Box<dyn Error>> {
         let plane = PlaneSize::new(reconstructor.width, reconstructor.height, 1)?;
-        let video = Video::new(
-            plane,
-            Continuous,
-            64,
-            output_events_filename,
-            ticks_per_second,
-            // ref_time is set based on the reconstructor's output_fps, which is the user-set
-            // rate OR might be higher if the first APS image in the video has a shorter exposure
-            // time than expected
-            ticks_per_frame as u32,
-            delta_t_max,
-            DecimationMode::Manual,
-            write_out,
-            show_display_b,
-            DavisU8,
-            adder_c_thresh_pos,
-            adder_c_thresh_neg,
-        )?;
+        let mut video = Video::new(plane, Continuous)?
+            .chunk_rows(64)
+            .time_parameters(ticks_per_second, ticks_per_frame as u32, delta_t_max)
+            .show_display(show_display_b)
+            .c_thresh_pos(adder_c_thresh_pos)
+            .c_thresh_neg(adder_c_thresh_neg);
+
+        if let Some(filename) = output_events_filename {
+            video = video.write_out(filename, DavisU8)?
+        }
+
         let thread_pool_edi = rayon::ThreadPoolBuilder::new()
             .num_threads(max(current_num_threads() - 4, 1))
             .build()?;
