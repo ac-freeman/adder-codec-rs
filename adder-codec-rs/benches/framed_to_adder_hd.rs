@@ -7,8 +7,7 @@ use adder_codec_rs::utils::simulproc::{SimulProcArgs, SimulProcessor};
 
 use std::fs;
 
-
-use std::path::{PathBuf};
+use std::path::PathBuf;
 
 use adder_codec_rs::transcoder::source::framed::Framed;
 use adder_codec_rs::transcoder::source::video::VideoBuilder;
