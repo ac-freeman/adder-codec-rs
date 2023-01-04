@@ -2,7 +2,7 @@ use std::error::Error;
 
 use adder_codec_rs::transcoder::source::davis::Davis;
 use adder_codec_rs::transcoder::source::framed::Framed;
-use adder_codec_rs::{DeltaT, SourceCamera};
+use adder_codec_rs::{DeltaT};
 use bevy::prelude::Image;
 use std::fmt;
 use std::path::{Path, PathBuf};
@@ -49,7 +49,7 @@ impl AdderTranscoder {
                 match ext.to_str() {
                     None => Err(Box::new(AdderTranscoderError("Invalid file type".into()))),
                     Some("mp4") => {
-                        let mut framed = Framed::new(
+                        let framed = Framed::new(
                             match input_path_buf.to_str() {
                                 None => {
                                     return Err(Box::new(AdderTranscoderError(
@@ -156,7 +156,7 @@ impl AdderTranscoder {
                         let output_string = output_path_opt
                             .map(|output_path| output_path.to_str().expect("Bad path").to_string());
 
-                        let mut davis_source = Davis::new(reconstructor, rt)?
+                        let davis_source = Davis::new(reconstructor, rt)?
                             .optimize_adder_controller(false) // TODO
                             .mode(ui_state.davis_mode_radio_state)
                             .time_parameters(

@@ -3,8 +3,6 @@ use criterion_perf_events::Perf;
 use perfcnt::linux::HardwareEventType as Hardware;
 use perfcnt::linux::PerfCounterBuilderLinux as Builder;
 
-use adder_codec_rs::transcoder::source::framed::Builder;
-
 use adder_codec_rs::utils::simulproc::{SimulProcArgs, SimulProcessor};
 use adder_codec_rs::SourceCamera::FramedU8;
 use std::fs;
@@ -36,23 +34,17 @@ fn simul_proc(video_path: &str, scale: f64, thread_count: u8, chunk_rows: usize)
         c_thresh_neg: 0,
         thread_count, // Multithreading causes some issues in testing
     };
-    let source_builder = Builder::new(args.input_filename, FramedU8)
-        .chunk_rows(chunk_rows)
-        .frame_start(args.frame_idx_start)
-        .scale(args.scale)
-        .color(args.color_input != 0)
+    let source_builder = Framed::new(args.input_filename, args.color_input != 0, args.scale)?
+        .frame_start(args.frame_idx_start)?
         .contrast_thresholds(args.c_thresh_pos, args.c_thresh_neg)
         .show_display(args.show_display != 0)
-        .time_parameters(args.tps, args.delta_t_max);
+        .auto_time_parameters(args.tps, args.delta_t_max);
 
-    let source = source_builder.finish();
     let ref_time = source.get_ref_time();
 
     let mut simul_processor = SimulProcessor::new::<u8>(
         source,
         ref_time,
-        args.tps,
-        args.fps,
         args.output_raw_video_filename.as_str(),
         args.frame_count_max as i32,
         thread_count as usize,
