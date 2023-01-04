@@ -14,6 +14,7 @@ use bevy_egui::{egui, EguiContext, EguiPlugin, EguiSettings};
 // use egui_dock::egui as dock_egui;
 use bevy_egui::egui::{emath, global_dark_light_mode_switch, Rounding, Ui, Widget, WidgetText};
 
+use crate::transcoder::adder::replace_adder_transcoder;
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 
@@ -40,7 +41,6 @@ pub struct MainUiState {
     error_msg: Option<String>,
 }
 
-use crate::transcoder::adder::replace_adder_transcoder;
 use crate::utils::slider::NotchedSlider;
 
 /// This example demonstrates the following functionality and use-cases of bevy_egui:

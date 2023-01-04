@@ -1,7 +1,6 @@
 extern crate core;
 
-use adder_codec_rs::transcoder::source::framed::Builder;
-use adder_codec_rs::transcoder::source::video::Source;
+use adder_codec_rs::transcoder::source::video::{Source, VideoBuilder};
 use adder_codec_rs::utils::simulproc::{SimulProcArgs, SimulProcessor};
 use adder_codec_rs::SourceCamera::FramedU8;
 
@@ -11,6 +10,7 @@ use rayon::current_num_threads;
 use std::error::Error;
 use std::fs::File;
 
+use adder_codec_rs::transcoder::source::framed::Framed;
 use std::io::Cursor;
 use std::path::Path;
 use std::process::Command;
@@ -54,19 +54,23 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // args.output_raw_video_filename = "./tests/samples/videos/drop_out".to_string();
     //////////////////////////////////////////////////////
 
-    let mut source_builder = Builder::new(args.input_filename, FramedU8)
-        .chunk_rows(64)
-        .frame_start(args.frame_idx_start)
-        .scale(args.scale)
-        .color(args.color_input)
-        .contrast_thresholds(args.c_thresh_pos, args.c_thresh_neg)
-        .show_display(args.show_display)
-        .time_parameters(args.ref_time, args.delta_t_max);
-    if !args.output_events_filename.is_empty() {
-        source_builder = source_builder.output_events_filename(args.output_events_filename);
-    }
-    let source = source_builder.finish()?;
+    let mut source: Framed = Framed::new(args.input_filename, args.color_input, args.scale)?
+        // .chunk_rows(64)
+        .frame_start(args.frame_idx_start)?
+        .c_thresh_pos(args.c_thresh_pos)
+        .c_thresh_neg(args.c_thresh_neg)
+        .show_display(args.show_display);
+
     let source_fps = source.source_fps;
+    source = source.time_parameters(
+        (args.ref_time as f64 * source_fps) as u32,
+        args.ref_time,
+        args.delta_t_max,
+    );
+
+    if !args.output_events_filename.is_empty() {
+        source = *source.write_out(args.output_events_filename, FramedU8)?;
+    }
 
     let plane = source.get_video_ref().state.plane.clone();
 
@@ -119,9 +123,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
 #[cfg(test)]
 mod tests {
-    use adder_codec_rs::transcoder::source::framed::Builder;
-    use adder_codec_rs::transcoder::source::video::Source;
+    use adder_codec_rs::transcoder::source::framed::Framed;
+    use adder_codec_rs::transcoder::source::video::{Source, VideoBuilder};
     use adder_codec_rs::utils::simulproc::{SimulProcArgs, SimulProcessor};
+    use adder_codec_rs::DeltaT;
     use adder_codec_rs::SourceCamera::FramedU8;
     use std::error::Error;
     use std::fs;
@@ -153,18 +158,22 @@ mod tests {
             c_thresh_neg: 0,
             thread_count: 1, // Multithreading causes some issues in testing
         };
-        let mut source_builder = Builder::new(args.input_filename, FramedU8)
-            .chunk_rows(64)
-            .frame_start(args.frame_idx_start)
-            .scale(args.scale)
-            .color(args.color_input)
-            .contrast_thresholds(args.c_thresh_pos, args.c_thresh_neg)
-            .show_display(args.show_display)
-            .time_parameters(args.ref_time, args.delta_t_max);
+        let mut source = Framed::new(args.input_filename, args.color_input, args.scale)?
+            // .chunk_rows(64)
+            .frame_start(args.frame_idx_start)?
+            .c_thresh_pos(args.c_thresh_pos)
+            .c_thresh_neg(args.c_thresh_neg)
+            .show_display(args.show_display);
+
+        let source_fps = source.source_fps;
+        source = source.time_parameters(
+            (args.ref_time as f64 * source_fps) as DeltaT,
+            args.ref_time,
+            args.delta_t_max,
+        );
         if !args.output_events_filename.is_empty() {
-            source_builder = source_builder.output_events_filename(args.output_events_filename);
+            source = *source.write_out(args.output_events_filename, FramedU8)?;
         }
-        let source = source_builder.finish().unwrap();
         let ref_time = source.get_ref_time();
 
         let mut simul_processor = SimulProcessor::new::<u8>(

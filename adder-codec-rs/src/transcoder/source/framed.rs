@@ -1,9 +1,9 @@
 use crate::transcoder::event_pixel_tree::DeltaT;
 use crate::transcoder::event_pixel_tree::Mode::FramePerfect;
-use crate::transcoder::source::video::Source;
 use crate::transcoder::source::video::SourceError;
 use crate::transcoder::source::video::SourceError::BufferEmpty;
 use crate::transcoder::source::video::Video;
+use crate::transcoder::source::video::{Source, VideoBuilder};
 use crate::{Coord, Event};
 use crate::{PlaneSize, SourceCamera};
 use opencv::core::{Mat, Size};
@@ -33,138 +33,21 @@ pub struct Framed {
 }
 unsafe impl Sync for Framed {}
 
-pub struct Builder {
-    input_filename: String,
-    output_events_filename: Option<String>,
-    frame_idx_start: u32,
-    chunk_rows: usize,
-    ref_time: DeltaT,
-    tps: DeltaT,
-    delta_t_max: DeltaT,
-    scale: f64,
-    frame_skip_interval: u8,
-    color_input: bool,
-    c_thresh_pos: u8,
-    c_thresh_neg: u8,
-    write_out: bool,
-    show_display_b: bool,
-    source_camera: SourceCamera,
-}
-
-impl Builder {
-    #[must_use]
-    pub fn new(input_filename: String, source_camera: SourceCamera) -> Builder {
-        Builder {
-            input_filename,
-            output_events_filename: None,
-            frame_idx_start: 0,
-            chunk_rows: 64,
-            ref_time: 5_000,
-            tps: 150_000,
-            delta_t_max: 150_000,
-            scale: 1.0,
-            frame_skip_interval: 0,
-            color_input: true,
-            c_thresh_pos: 0,
-            c_thresh_neg: 0,
-            write_out: false,
-            show_display_b: false,
-            source_camera,
-        }
-    }
-
-    #[must_use]
-    pub fn output_events_filename(mut self, output_events_filename: String) -> Builder {
-        self.output_events_filename = Some(output_events_filename);
-        self.write_out = true;
-        self
-    }
-
-    #[must_use]
-    pub fn frame_start(mut self, frame_idx_start: u32) -> Builder {
-        self.frame_idx_start = frame_idx_start;
-        self
-    }
-
-    #[must_use]
-    pub fn chunk_rows(mut self, chunk_rows: usize) -> Builder {
-        self.chunk_rows = chunk_rows;
-        self
-    }
-
-    #[must_use]
-    pub fn time_parameters(mut self, ref_time: DeltaT, delta_t_max: DeltaT) -> Builder {
-        if self.delta_t_max % self.ref_time == 0 {
-            self.delta_t_max = delta_t_max;
-            self.ref_time = ref_time;
-        }
-        self
-    }
-
-    #[must_use]
-    pub fn contrast_thresholds(mut self, c_thresh_pos: u8, c_thresh_neg: u8) -> Builder {
-        self.c_thresh_pos = c_thresh_pos;
-        self.c_thresh_neg = c_thresh_neg;
-        self
-    }
-
-    #[must_use]
-    pub fn scale(mut self, scale: f64) -> Builder {
-        self.scale = scale;
-        self
-    }
-
-    #[must_use]
-    pub fn skip_interval(mut self, frame_skip_interval: u8) -> Builder {
-        self.frame_skip_interval = frame_skip_interval;
-        self
-    }
-
-    #[must_use]
-    pub fn color(mut self, color_input: bool) -> Builder {
-        self.color_input = color_input;
-        self
-    }
-
-    #[must_use]
-    pub fn show_display(mut self, show_display_b: bool) -> Builder {
-        self.show_display_b = show_display_b;
-        self
-    }
-
-    /// Build the source
-    /// # Errors
-    /// If the source cannot be built
-    pub fn finish(self) -> Result<Framed, Box<dyn Error>> {
-        Framed::new(self)
-    }
-}
-
 impl Framed {
-    /// Initialize the framed source and read first frame of source, in order to get `height`
-    /// and `width` and initialize [`Video`]
-    /// # Errors
-    /// If the source cannot be initialized
-    /// # Safety
-    /// This function is unsafe because it calls [`VideoCapture::from_file`]
-    /// which is unsafe
-    fn new(mut builder: Builder) -> Result<Framed, Box<dyn std::error::Error>> {
-        let channels = if builder.color_input { 3 } else { 1 };
-
+    pub fn new(
+        input_filename: String,
+        color_input: bool,
+        scale: f64,
+    ) -> Result<Framed, Box<dyn Error>> {
         let mut cap =
-            videoio::VideoCapture::from_file(builder.input_filename.as_str(), videoio::CAP_FFMPEG)?;
-        let video_frame_count = cap.get(CAP_PROP_FRAME_COUNT)?;
-        if builder.frame_idx_start >= video_frame_count as u32 {
-            return Err(SourceError::StartOutOfBounds.into());
-        };
+            videoio::VideoCapture::from_file(input_filename.as_str(), videoio::CAP_FFMPEG)?;
 
         // Calculate TPS based on ticks per frame and source FPS
-        cap.set(CAP_PROP_POS_FRAMES, f64::from(builder.frame_idx_start))?;
         let source_fps = cap.get(CAP_PROP_FPS)?.round();
-        builder.tps = builder.ref_time * source_fps as u32;
-        if builder.ref_time * cap.get(CAP_PROP_FPS)?.round() as u32 != builder.tps {
-            return Err(SourceError::BadParams.into());
-        }
+        // builder.tps = builder.ref_time * source_fps as u32;
+        // if builder.ref_time * cap.get(CAP_PROP_FPS)?.round() as u32 != builder.tps {
+        //     return Err(SourceError::BadParams.into());
+        // }
 
         let opened = videoio::VideoCapture::is_opened(&cap)?;
         if !opened {
@@ -172,41 +55,63 @@ impl Framed {
         }
         let mut init_frame = Mat::default();
         cap.read(&mut init_frame)?;
+        cap.set(CAP_PROP_POS_FRAMES, 0.0)?;
 
         // Move start frame back
-        cap.set(CAP_PROP_POS_FRAMES, f64::from(builder.frame_idx_start))?;
+        // cap.set(CAP_PROP_POS_FRAMES, f64::from(builder.frame_idx_start))?;
 
         let mut init_frame_scaled = Mat::default();
-        resize_input(&mut init_frame, &mut init_frame_scaled, builder.scale)?;
+        resize_input(&mut init_frame, &mut init_frame_scaled, scale)?;
         init_frame = init_frame_scaled;
 
         let plane = PlaneSize::new(
             init_frame.size()?.width as u16,
             init_frame.size()?.height as u16,
-            channels,
+            if color_input { 3 } else { 1 },
         )?;
 
-        let mut video = Video::new(plane, FramePerfect)?
-            .chunk_rows(builder.chunk_rows)
-            .time_parameters(builder.tps, builder.ref_time, builder.delta_t_max)
-            .show_display(builder.show_display_b)
-            .c_thresh_pos(builder.c_thresh_pos)
-            .c_thresh_neg(builder.c_thresh_neg);
-
-        if let Some(filename) = builder.output_events_filename {
-            video = video.write_out(filename, builder.source_camera)?
-        }
+        let video = Video::new(plane, FramePerfect)?;
 
         Ok(Framed {
             cap,
             input_frame_scaled: Mat::default(),
             input_frame: Mat::default(),
-            frame_idx_start: builder.frame_idx_start,
+            frame_idx_start: 0,
             source_fps,
-            scale: builder.scale,
-            color_input: builder.color_input,
+            scale,
+            color_input,
             video,
         })
+    }
+
+    // pub fn skip_interval(mut self, frame_skip_interval: u8) -> Self {
+    //     self.frame_skip_interval = frame_skip_interval;
+    //     self
+    // }
+
+    pub fn frame_start(mut self, frame_idx_start: u32) -> Result<Self, Box<dyn Error>> {
+        let video_frame_count = self.cap.get(CAP_PROP_FRAME_COUNT)?;
+        if frame_idx_start >= video_frame_count as u32 {
+            return Err(SourceError::StartOutOfBounds.into());
+        };
+        self.cap
+            .set(CAP_PROP_POS_FRAMES, f64::from(frame_idx_start))?;
+        self.frame_idx_start = frame_idx_start;
+        Ok(self)
+    }
+
+    pub fn auto_time_parameters(
+        mut self,
+        ref_time: crate::transcoder::event_pixel_tree::DeltaT,
+        delta_t_max: crate::transcoder::event_pixel_tree::DeltaT,
+    ) -> Self {
+        if delta_t_max % ref_time == 0 {
+            let tps = (ref_time as f64 * self.source_fps) as DeltaT;
+            self.video = self.video.time_parameters(tps, ref_time, delta_t_max);
+        } else {
+            eprintln!("delta_t_max must be a multiple of ref_time");
+        }
+        self
     }
 
     pub fn get_ref_time(&self) -> u32 {
@@ -260,6 +165,57 @@ impl Source for Framed {
 
     fn get_video(self) -> Video {
         todo!()
+    }
+}
+
+impl VideoBuilder for Framed {
+    fn contrast_thresholds(mut self, c_thresh_pos: u8, c_thresh_neg: u8) -> Self {
+        self.video = self.video.c_thresh_pos(c_thresh_pos);
+        self.video = self.video.c_thresh_neg(c_thresh_neg);
+        self
+    }
+
+    fn c_thresh_pos(mut self, c_thresh_pos: u8) -> Self {
+        self.video = self.video.c_thresh_pos(c_thresh_pos);
+        self
+    }
+
+    fn c_thresh_neg(mut self, c_thresh_neg: u8) -> Self {
+        self.video = self.video.c_thresh_neg(c_thresh_neg);
+        self
+    }
+
+    fn chunk_rows(mut self, chunk_rows: usize) -> Self {
+        self.video = self.video.chunk_rows(chunk_rows);
+        self
+    }
+
+    fn time_parameters(
+        mut self,
+        tps: crate::transcoder::event_pixel_tree::DeltaT,
+        ref_time: crate::transcoder::event_pixel_tree::DeltaT,
+        delta_t_max: crate::transcoder::event_pixel_tree::DeltaT,
+    ) -> Self {
+        if delta_t_max % ref_time == 0 {
+            self.video = self.video.time_parameters(tps, ref_time, delta_t_max);
+        } else {
+            eprintln!("delta_t_max must be a multiple of ref_time");
+        }
+        self
+    }
+
+    fn write_out(
+        mut self,
+        output_filename: String,
+        source_camera: SourceCamera,
+    ) -> Result<Box<Self>, Box<dyn Error>> {
+        self.video = self.video.write_out(output_filename, source_camera)?;
+        Ok(Box::new(self))
+    }
+
+    fn show_display(mut self, show_display: bool) -> Self {
+        self.video = self.video.show_display(show_display);
+        self
     }
 }
 

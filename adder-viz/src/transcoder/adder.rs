@@ -1,7 +1,6 @@
 use std::error::Error;
 
 use adder_codec_rs::transcoder::source::davis::Davis;
-use adder_codec_rs::transcoder::source::framed::Builder;
 use adder_codec_rs::transcoder::source::framed::Framed;
 use adder_codec_rs::{DeltaT, SourceCamera};
 use bevy::prelude::Image;
@@ -15,7 +14,7 @@ use adder_codec_rs::davis_edi_rs::util::reconstructor::Reconstructor;
 
 use crate::transcoder::ui::{ParamsUiState, TranscoderState};
 use adder_codec_rs::transcoder::source::video::VideoBuilder;
-use adder_codec_rs::SourceCamera::DavisU8;
+use adder_codec_rs::SourceCamera::{DavisU8, FramedU8};
 use bevy_egui::egui::{Color32, RichText};
 use opencv::Result;
 
@@ -50,7 +49,7 @@ impl AdderTranscoder {
                 match ext.to_str() {
                     None => Err(Box::new(AdderTranscoderError("Invalid file type".into()))),
                     Some("mp4") => {
-                        let mut builder = Builder::new(
+                        let mut framed = Framed::new(
                             match input_path_buf.to_str() {
                                 None => {
                                     return Err(Box::new(AdderTranscoderError(
@@ -59,15 +58,18 @@ impl AdderTranscoder {
                                 }
                                 Some(path) => path.to_string(),
                             },
-                            SourceCamera::FramedU8,
-                        )
-                        .frame_start(current_frame)
+                            ui_state.color,
+                            ui_state.scale,
+                        )?
+                        .frame_start(current_frame)?
                         .chunk_rows(64)
-                        .scale(ui_state.scale)
-                        .color(ui_state.color)
-                        .contrast_thresholds(ui_state.adder_tresh as u8, ui_state.adder_tresh as u8)
-                        .show_display(false)
-                        .time_parameters(
+                        .c_thresh_pos(ui_state.adder_tresh as u8)
+                        .c_thresh_neg(ui_state.adder_tresh as u8)
+                        .show_display(false);
+
+                        let source_fps = framed.source_fps;
+                        let mut framed = framed.time_parameters(
+                            (ui_state.delta_t_ref as f64 * source_fps) as u32,
                             ui_state.delta_t_ref as u32,
                             ui_state.delta_t_max_mult * ui_state.delta_t_ref as u32,
                         );
@@ -77,32 +79,31 @@ impl AdderTranscoder {
                         match output_path_opt {
                             None => {}
                             Some(output_path) => {
-                                builder =
-                                    builder.output_events_filename(match output_path.to_str() {
-                                        None => {
-                                            return Err(Box::new(AdderTranscoderError(
-                                                "Couldn't get output path string".into(),
-                                            )))
-                                        }
-                                        Some(path) => path.parse()?,
-                                    });
+                                framed = *framed
+                                    .write_out(output_path.to_str().unwrap().parse()?, FramedU8)?;
+                                //     .output_events_filename(match output_path.to_str() {
+                                //     None => {
+                                //         return Err(Box::new(AdderTranscoderError(
+                                //             "Couldn't get output path string".into(),
+                                //         )))
+                                //     }
+                                //     Some(path) => path.parse()?,
+                                // });
                             }
                         };
 
-                        match builder.finish() {
-                            Ok(source) => {
-                                ui_state.delta_t_ref_max = 255.0;
-                                Ok(AdderTranscoder {
-                                    framed_source: Some(source),
-                                    davis_source: None,
-                                    live_image: Default::default(),
-                                })
-                            }
-                            Err(_e) => {
-                                Err(Box::new(AdderTranscoderError("Invalid file type".into())))
-                            }
-                        }
+                        ui_state.delta_t_ref_max = 255.0;
+                        Ok(AdderTranscoder {
+                            framed_source: Some(framed),
+                            davis_source: None,
+                            live_image: Default::default(),
+                        })
+                        // }
+                        // Err(_e) => {
+                        //     Err(Box::new(AdderTranscoderError("Invalid file type".into())))
+                        // }
                     }
+
                     Some("aedat4") => {
                         let events_only = match &ui_state.davis_mode_radio_state {
                             TranscoderMode::Framed => false,
@@ -187,6 +188,7 @@ impl AdderTranscoder {
                             live_image: Default::default(),
                         })
                     }
+
                     Some(_) => Err(Box::new(AdderTranscoderError("Invalid file type".into()))),
                 }
             }

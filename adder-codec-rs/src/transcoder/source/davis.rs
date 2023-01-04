@@ -56,29 +56,6 @@ pub struct Davis {
     pub mode: TranscoderMode, // phantom: PhantomData<T>,
 }
 
-// impl Default for Davis {
-//     /// Create a new `Davis` transcoder with default values
-//     fn default() -> Self {
-//         Davis {
-//             reconstructor: (),
-//             input_frame_scaled: Default::default(),
-//             video: Video {},
-//             image_8u: Default::default(),
-//             thread_pool_edi: (),
-//             dvs_c: 0.0,
-//             dvs_events_before: None,
-//             dvs_events_after: None,
-//             start_of_frame_timestamp: None,
-//             end_of_frame_timestamp: None,
-//             rt: (),
-//             dvs_last_timestamps: Default::default(),
-//             dvs_last_ln_val: Default::default(),
-//             optimize_adder_controller: false,
-//             mode: TranscoderMode::Framed,
-//         }
-//     }
-// }
-
 unsafe impl Sync for Davis {}
 
 impl Davis {
@@ -631,6 +608,12 @@ impl Source for Davis {
 }
 
 impl VideoBuilder for Davis {
+    fn contrast_thresholds(mut self, c_thresh_pos: u8, c_thresh_neg: u8) -> Self {
+        self.video = self.video.c_thresh_pos(c_thresh_pos);
+        self.video = self.video.c_thresh_neg(c_thresh_neg);
+        self
+    }
+
     fn c_thresh_pos(mut self, c_thresh_pos: u8) -> Self {
         self.video = self.video.c_thresh_pos(c_thresh_pos);
         self

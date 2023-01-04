@@ -121,6 +121,8 @@ impl Default for VideoState {
 }
 
 pub trait VideoBuilder {
+    fn contrast_thresholds(self, c_thresh_pos: u8, c_thresh_neg: u8) -> Self;
+
     fn c_thresh_pos(self, c_thresh_pos: u8) -> Self;
 
     fn c_thresh_neg(self, c_thresh_neg: u8) -> Self;

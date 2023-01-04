@@ -1,17 +1,17 @@
 extern crate adder_codec_rs;
 
+use crate::adder_codec_rs::transcoder::source::video::VideoBuilder;
+use ndarray::{Array3, Axis};
 use std::fs;
 use std::fs::File;
 use std::io::{BufWriter, Write};
-
-use ndarray::{Array3, Axis};
 use std::path::Path;
 use std::process::Command;
 
 use adder_codec_rs::framer::driver::FramerMode::INSTANTANEOUS;
 use adder_codec_rs::framer::driver::{FrameSequence, Framer, FramerBuilder};
 use adder_codec_rs::raw::stream::Raw;
-use adder_codec_rs::transcoder::source::framed::Builder;
+use adder_codec_rs::transcoder::source::framed::Framed;
 use adder_codec_rs::transcoder::source::video::Source;
 use adder_codec_rs::SourceCamera::FramedU8;
 use adder_codec_rs::{Codec, Coord, Event, PlaneSize, SourceCamera};
@@ -888,19 +888,14 @@ fn test_sample_ordered() {
 fn test_framed_to_adder_bunny4() {
     let data = fs::read_to_string("./tests/samples/bunny4.json").expect("Unable to read file");
     let gt_events: Vec<Event> = serde_json::from_str(data.as_str()).unwrap();
-    let mut source = Builder::new(
-        "./tests/samples/bunny_crop4.mp4".to_string(),
-        SourceCamera::FramedU8,
-    )
-    .chunk_rows(64)
-    .frame_start(361)
-    .scale(1.0)
-    .color(false)
-    .contrast_thresholds(5, 5)
-    .show_display(false)
-    .time_parameters(5000, 240_000)
-    .finish()
-    .unwrap();
+    let mut source = Framed::new("./tests/samples/bunny_crop4.mp4".to_string(), false, 1.0)
+        .unwrap()
+        // .chunk_rows(64)
+        .frame_start(361)
+        .unwrap()
+        .contrast_thresholds(5, 5)
+        .show_display(false)
+        .auto_time_parameters(5000, 240_000);
 
     let frame_max = 250;
 

@@ -1,27 +1,26 @@
 extern crate core;
 
-use adder_codec_rs::transcoder::source::framed::Builder;
-use adder_codec_rs::transcoder::source::video::Source;
+use adder_codec_rs::transcoder::source::framed::Framed;
+use adder_codec_rs::transcoder::source::video::{Source, VideoBuilder};
 use adder_codec_rs::SourceCamera;
+use adder_codec_rs::SourceCamera::FramedU8;
 use rayon::current_num_threads;
 use std::error::Error;
 use std::io;
 use std::io::Write;
 use std::time::Instant;
+
 fn main() -> Result<(), Box<dyn Error>> {
-    let mut source = Builder::new(
+    let mut source = Framed::new(
         "/media/andrew/ExternalM2/LAS/GH010017.mp4".to_string(),
-        SourceCamera::FramedU8,
-    )
-    .frame_start(1420)
-    .scale(0.5)
-    .output_events_filename("/home/andrew/Downloads/events.adder".to_string())
-    .color(false)
+        false,
+        0.5,
+    )?
+    .frame_start(1420)?
+    .write_out("/home/andrew/Downloads/events.adder".to_string(), FramedU8)?
     .contrast_thresholds(10, 10)
     .show_display(true)
-    .time_parameters(255, 255 * 30)
-    .finish()
-    .unwrap();
+    .auto_time_parameters(255, 255 * 30);
 
     let pool = rayon::ThreadPoolBuilder::new()
         .num_threads(current_num_threads())
