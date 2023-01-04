@@ -10,6 +10,8 @@ use std::fs::File;
 use std::io::Cursor;
 use std::path::{Path, PathBuf};
 
+use adder_codec_rs::transcoder::source::framed::Framed;
+use adder_codec_rs::transcoder::source::video::VideoBuilder;
 use adder_codec_rs::utils::viz::download_file;
 use std::thread::sleep;
 use std::time::Duration;
@@ -34,10 +36,13 @@ fn simul_proc(video_path: &str, scale: f64, thread_count: u8, chunk_rows: usize)
         c_thresh_neg: 0,
         thread_count, // Multithreading causes some issues in testing
     };
-    let source_builder = Framed::new(args.input_filename, args.color_input != 0, args.scale)?
-        .frame_start(args.frame_idx_start)?
+    let source_builder = Framed::new(args.input_filename, args.color_input != 0, args.scale)
+        .unwrap()
+        // TODO: chunk_rows back
+        .frame_start(args.frame_idx_start)
+        .unwrap()
         .contrast_thresholds(args.c_thresh_pos, args.c_thresh_neg)
-        .show_display(args.show_display != 0)
+        .show_display(args.show_display)
         .auto_time_parameters(args.tps, args.delta_t_max);
 
     let ref_time = source.get_ref_time();
@@ -48,7 +53,8 @@ fn simul_proc(video_path: &str, scale: f64, thread_count: u8, chunk_rows: usize)
         args.output_raw_video_filename.as_str(),
         args.frame_count_max as i32,
         thread_count as usize,
-    );
+    )
+    .unwrap();
 
     simul_processor.run().unwrap();
     sleep(Duration::from_secs(2));
