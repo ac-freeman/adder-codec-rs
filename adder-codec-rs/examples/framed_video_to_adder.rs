@@ -40,7 +40,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             }
         };
 
-        let video = source.get_video();
+        let video = source.get_video_ref();
 
         if video.state.in_interval_count % 30 == 0 {
             print!(

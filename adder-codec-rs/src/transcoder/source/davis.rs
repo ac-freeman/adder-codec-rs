@@ -1,10 +1,9 @@
 use crate::transcoder::event_pixel_tree::Mode::Continuous;
 use crate::transcoder::source::video::SourceError::BufferEmpty;
 use crate::transcoder::source::video::{
-    integrate_for_px, show_display, Source, SourceError, Video,
+    integrate_for_px, show_display, Source, SourceError, Video, VideoBuilder,
 };
-use crate::SourceCamera::DavisU8;
-use crate::{Codec, DeltaT, Event, PlaneSize, SourceType};
+use crate::{Codec, DeltaT, Event, PlaneSize, SourceCamera, SourceType};
 use aedat::events_generated::Event as DvsEvent;
 use davis_edi_rs::util::reconstructor::{IterVal, ReconstructionError, Reconstructor};
 use rayon::iter::ParallelIterator;
@@ -45,7 +44,6 @@ pub struct Davis {
     pub(crate) video: Video,
     image_8u: Mat,
     thread_pool_edi: ThreadPool,
-    _thread_pool_integration: ThreadPool,
     dvs_c: f64,
     dvs_events_before: Option<Vec<DvsEvent>>,
     dvs_events_after: Option<Vec<DvsEvent>>,
@@ -58,44 +56,38 @@ pub struct Davis {
     pub mode: TranscoderMode, // phantom: PhantomData<T>,
 }
 
+// impl Default for Davis {
+//     /// Create a new `Davis` transcoder with default values
+//     fn default() -> Self {
+//         Davis {
+//             reconstructor: (),
+//             input_frame_scaled: Default::default(),
+//             video: Video {},
+//             image_8u: Default::default(),
+//             thread_pool_edi: (),
+//             dvs_c: 0.0,
+//             dvs_events_before: None,
+//             dvs_events_after: None,
+//             start_of_frame_timestamp: None,
+//             end_of_frame_timestamp: None,
+//             rt: (),
+//             dvs_last_timestamps: Default::default(),
+//             dvs_last_ln_val: Default::default(),
+//             optimize_adder_controller: false,
+//             mode: TranscoderMode::Framed,
+//         }
+//     }
+// }
+
 unsafe impl Sync for Davis {}
 
 impl Davis {
-    /// Initialize the framed source and read first frame of source, in order to get `height`
-    /// and `width` and initialize [`Video`](crate::Video) struct.
-    ///
-    /// # Returns
-    /// * [`Davis`] - Initialized [`Davis`] object
-    pub fn new(
-        reconstructor: Reconstructor,
-        output_events_filename: Option<String>,
-        ticks_per_second: DeltaT,
-        ticks_per_frame: f64,
-        delta_t_max: DeltaT,
-        show_display_b: bool,
-        adder_c_thresh_pos: u8,
-        adder_c_thresh_neg: u8,
-        optimize_adder_controller: bool,
-        rt: Runtime,
-        mode: TranscoderMode,
-    ) -> Result<Davis, Box<dyn Error>> {
+    pub fn new(reconstructor: Reconstructor, rt: Runtime) -> Result<Self, Box<dyn Error>> {
         let plane = PlaneSize::new(reconstructor.width, reconstructor.height, 1)?;
-        let mut video = Video::new(plane, Continuous)?
-            .chunk_rows(64)
-            .time_parameters(ticks_per_second, ticks_per_frame as u32, delta_t_max)
-            .show_display(show_display_b)
-            .c_thresh_pos(adder_c_thresh_pos)
-            .c_thresh_neg(adder_c_thresh_neg);
 
-        if let Some(filename) = output_events_filename {
-            video = video.write_out(filename, DavisU8)?
-        }
-
+        let video = Video::new(plane, Continuous)?.chunk_rows(64);
         let thread_pool_edi = rayon::ThreadPoolBuilder::new()
             .num_threads(max(current_num_threads() - 4, 1))
-            .build()?;
-        let thread_pool_integration = rayon::ThreadPoolBuilder::new()
-            .num_threads(max(4, 1))
             .build()?;
 
         let plane = &video.state.plane;
@@ -128,7 +120,6 @@ impl Davis {
             video,
             image_8u: Mat::default(),
             thread_pool_edi,
-            _thread_pool_integration: thread_pool_integration,
             dvs_c: 0.15,
             dvs_events_before: None,
             dvs_events_after: None,
@@ -137,10 +128,21 @@ impl Davis {
             rt,
             dvs_last_timestamps,
             dvs_last_ln_val,
-            optimize_adder_controller,
-            mode,
+            optimize_adder_controller: false,
+            mode: TranscoderMode::Framed,
         };
+
         Ok(davis_source)
+    }
+
+    pub fn optimize_adder_controller(mut self, optimize: bool) -> Self {
+        self.optimize_adder_controller = optimize;
+        self
+    }
+
+    pub fn mode(mut self, mode: TranscoderMode) -> Self {
+        self.mode = mode;
+        self
     }
 
     #[allow(clippy::cast_sign_loss)]
@@ -619,8 +621,53 @@ impl Source for Davis {
         &mut self.video
     }
 
-    fn get_video(&self) -> &Video {
+    fn get_video_ref(&self) -> &Video {
         &self.video
+    }
+
+    fn get_video(self) -> Video {
+        self.video
+    }
+}
+
+impl VideoBuilder for Davis {
+    fn c_thresh_pos(mut self, c_thresh_pos: u8) -> Self {
+        self.video = self.video.c_thresh_pos(c_thresh_pos);
+        self
+    }
+
+    fn c_thresh_neg(mut self, c_thresh_neg: u8) -> Self {
+        self.video = self.video.c_thresh_neg(c_thresh_neg);
+        self
+    }
+
+    fn chunk_rows(mut self, chunk_rows: usize) -> Self {
+        self.video = self.video.chunk_rows(chunk_rows);
+        self
+    }
+
+    fn time_parameters(
+        mut self,
+        tps: crate::transcoder::event_pixel_tree::DeltaT,
+        ref_time: crate::transcoder::event_pixel_tree::DeltaT,
+        delta_t_max: crate::transcoder::event_pixel_tree::DeltaT,
+    ) -> Self {
+        self.video = self.video.time_parameters(tps, ref_time, delta_t_max);
+        self
+    }
+
+    fn write_out(
+        mut self,
+        output_filename: String,
+        source_camera: SourceCamera,
+    ) -> Result<Box<Self>, Box<dyn Error>> {
+        self.video = self.video.write_out(output_filename, source_camera)?;
+        Ok(Box::new(self))
+    }
+
+    fn show_display(mut self, show_display: bool) -> Self {
+        self.video = self.video.show_display(show_display);
+        self
     }
 }
 

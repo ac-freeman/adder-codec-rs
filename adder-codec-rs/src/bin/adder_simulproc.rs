@@ -68,7 +68,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let source = source_builder.finish()?;
     let source_fps = source.source_fps;
 
-    let plane = source.get_video().state.plane.clone();
+    let plane = source.get_video_ref().state.plane.clone();
 
     let ref_time = source.get_ref_time();
     let num_threads = match args.thread_count {
@@ -181,8 +181,8 @@ mod tests {
         let output_path = "./tests/samples/TEST_lake_scaled_hd_crop";
         assert_eq!(
             fs::metadata(output_path).unwrap().len()
-                % (u64::from(simul_processor.source.get_video().state.plane.w())
-                    * u64::from(simul_processor.source.get_video().state.plane.h())),
+                % (u64::from(simul_processor.source.get_video_ref().state.plane.w())
+                    * u64::from(simul_processor.source.get_video_ref().state.plane.h())),
             0
         );
 

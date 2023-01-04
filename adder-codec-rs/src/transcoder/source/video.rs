@@ -120,6 +120,26 @@ impl Default for VideoState {
     }
 }
 
+pub trait VideoBuilder {
+    fn c_thresh_pos(self, c_thresh_pos: u8) -> Self;
+
+    fn c_thresh_neg(self, c_thresh_neg: u8) -> Self;
+
+    fn chunk_rows(self, chunk_rows: usize) -> Self;
+
+    fn time_parameters(self, tps: DeltaT, ref_time: DeltaT, delta_t_max: DeltaT) -> Self;
+
+    fn write_out(
+        self,
+        output_filename: String,
+        source_camera: SourceCamera,
+    ) -> Result<Box<Self>, Box<dyn std::error::Error>>;
+
+    fn show_display(self, show_display: bool) -> Self;
+}
+
+// impl VideoBuilder for Video {}
+
 /// Attributes common to ADΔER transcode process
 pub struct Video {
     pub state: VideoState,
@@ -132,7 +152,7 @@ pub struct Video {
 
 impl Video {
     /// Initialize the Video with default parameters.
-    pub fn new(plane: PlaneSize, pixel_tree_mode: Mode) -> Result<Video, Box<dyn Error>> {
+    pub(crate) fn new(plane: PlaneSize, pixel_tree_mode: Mode) -> Result<Video, Box<dyn Error>> {
         let mut state = VideoState {
             pixel_tree_mode,
             ..Default::default()
@@ -515,5 +535,7 @@ pub trait Source {
 
     fn get_video_mut(&mut self) -> &mut Video;
 
-    fn get_video(&self) -> &Video;
+    fn get_video_ref(&self) -> &Video;
+
+    fn get_video(self) -> Video;
 }

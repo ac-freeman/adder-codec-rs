@@ -254,8 +254,12 @@ impl Source for Framed {
         &mut self.video
     }
 
-    fn get_video(&self) -> &Video {
+    fn get_video_ref(&self) -> &Video {
         &self.video
+    }
+
+    fn get_video(self) -> Video {
+        todo!()
     }
 }
 

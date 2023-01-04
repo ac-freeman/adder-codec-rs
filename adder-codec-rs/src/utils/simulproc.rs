@@ -122,7 +122,7 @@ impl SimulProcessor {
             reconstructed_frame_rate as u32
         );
 
-        let plane = source.get_video().state.plane.clone();
+        let plane = source.get_video_ref().state.plane.clone();
 
         let mut framer = thread_pool_framer.install(|| {
             FramerBuilder::new(plane, source.video.state.chunk_rows)
@@ -220,7 +220,7 @@ impl SimulProcessor {
                 }
             };
 
-            let video = self.source.get_video();
+            let video = self.source.get_video_ref();
 
             if video.state.in_interval_count % 30 == 0 {
                 print!(

@@ -3,7 +3,7 @@ use std::error::Error;
 use adder_codec_rs::transcoder::source::davis::Davis;
 use adder_codec_rs::transcoder::source::framed::Builder;
 use adder_codec_rs::transcoder::source::framed::Framed;
-use adder_codec_rs::SourceCamera;
+use adder_codec_rs::{DeltaT, SourceCamera};
 use bevy::prelude::Image;
 use std::fmt;
 use std::path::{Path, PathBuf};
@@ -14,6 +14,8 @@ use adder_codec_rs::aedat::base::ioheader_generated::Compression;
 use adder_codec_rs::davis_edi_rs::util::reconstructor::Reconstructor;
 
 use crate::transcoder::ui::{ParamsUiState, TranscoderState};
+use adder_codec_rs::transcoder::source::video::VideoBuilder;
+use adder_codec_rs::SourceCamera::DavisU8;
 use bevy_egui::egui::{Color32, RichText};
 use opencv::Result;
 
@@ -153,23 +155,35 @@ impl AdderTranscoder {
                         let output_string = output_path_opt
                             .map(|output_path| output_path.to_str().expect("Bad path").to_string());
 
-                        let davis_source = Davis::new(
-                            reconstructor,
-                            output_string,
-                            1000000_u32, // TODO
-                            1_000_000.0 / ui_state.davis_output_fps,
-                            (1_000_000.0 * ui_state.delta_t_max_mult as f32) as u32, // TODO
-                            false,
-                            ui_state.adder_tresh as u8,
-                            ui_state.adder_tresh as u8,
-                            false,
-                            rt,
-                            ui_state.davis_mode_radio_state,
-                        )?;
+                        let mut davis_source = Davis::new(reconstructor, rt)?
+                            .optimize_adder_controller(false) // TODO
+                            .mode(ui_state.davis_mode_radio_state)
+                            .time_parameters(
+                                1000000_u32, // TODO
+                                (1_000_000.0 / ui_state.davis_output_fps) as DeltaT,
+                                (1_000_000.0 * ui_state.delta_t_max_mult as f32) as u32, // TODO
+                            ) // TODO
+                            .c_thresh_pos(ui_state.adder_tresh as u8)
+                            .c_thresh_neg(ui_state.adder_tresh as u8)
+                            .write_out(output_string.unwrap(), DavisU8)?;
+
+                        // let davis_source = Davis::new_delete(
+                        //     reconstructor,
+                        //     output_string,
+                        //     1000000_u32, // TODO
+                        //     1_000_000.0 / ui_state.davis_output_fps,
+                        //     (1_000_000.0 * ui_state.delta_t_max_mult as f32) as u32, // TODO
+                        //     false,
+                        //     ui_state.adder_tresh as u8,
+                        //     ui_state.adder_tresh as u8,
+                        //     false,
+                        //     rt,
+                        //     ui_state.davis_mode_radio_state,
+                        // )?;
 
                         Ok(AdderTranscoder {
                             framed_source: None,
-                            davis_source: Some(davis_source),
+                            davis_source: Some(*davis_source),
                             live_image: Default::default(),
                         })
                     }

@@ -1,5 +1,5 @@
 use adder_codec_rs::transcoder::source::davis::Davis;
-use adder_codec_rs::transcoder::source::video::Source;
+use adder_codec_rs::transcoder::source::video::{Source, VideoBuilder};
 use aedat::base::ioheader_generated::Compression;
 use clap::Parser;
 use davis_edi_rs::util::reconstructor::Reconstructor;
@@ -8,6 +8,8 @@ use davis_edi_rs::Args as EdiArgs;
 use serde::Deserialize;
 
 use adder_codec_rs::transcoder::source::davis::TranscoderMode::{Framed, RawDavis, RawDvs};
+use adder_codec_rs::DeltaT;
+use adder_codec_rs::SourceCamera::DavisU8;
 use std::io::Write;
 use std::time::Instant;
 use std::{error, io};
@@ -129,19 +131,17 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         edi_args.simulate_packet_latency,
     ));
 
-    let mut davis_source = Davis::new(
-        reconstructor,
-        Some(args.output_events_filename),
-        1_000_000, // TODO
-        1_000_000.0 / edi_args.output_fps,
-        (1_000_000.0 * args.delta_t_max_multiplier) as u32, // TODO
-        args.show_display,
-        args.adder_c_thresh_pos,
-        args.adder_c_thresh_neg,
-        args.optimize_adder_controller,
-        rt,
-        mode,
-    )?;
+    let mut davis_source = Davis::new(reconstructor, rt)?
+        .optimize_adder_controller(args.optimize_adder_controller)
+        .mode(mode)
+        .time_parameters(
+            1_000_000, // TODO
+            (1_000_000.0 / edi_args.output_fps) as DeltaT,
+            (1_000_000.0 * args.delta_t_max_multiplier) as u32,
+        ) // TODO
+        .c_thresh_pos(args.adder_c_thresh_pos)
+        .c_thresh_neg(args.adder_c_thresh_neg)
+        .write_out(args.output_events_filename, DavisU8)?;
 
     let mut now = Instant::now();
     let start_time = std::time::Instant::now();
@@ -156,10 +156,10 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             }
         };
 
-        if davis_source.get_video().state.in_interval_count % 30 == 0 {
+        if davis_source.get_video_ref().state.in_interval_count % 30 == 0 {
             println!(
                 "\rDavis recon frame to ADΔER {} in  {}ms",
-                davis_source.get_video().state.in_interval_count,
+                davis_source.get_video_ref().state.in_interval_count,
                 now.elapsed().as_millis()
             );
             io::stdout().flush()?;

@@ -930,7 +930,7 @@ fn test_framed_to_adder_bunny4() {
             }
         }
 
-        let video = source.get_video();
+        let video = source.get_video_ref();
         if frame_max != 0 && video.state.in_interval_count >= frame_max {
             break;
         }
