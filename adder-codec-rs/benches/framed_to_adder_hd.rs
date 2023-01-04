@@ -36,14 +36,14 @@ fn simul_proc(video_path: &str, scale: f64, thread_count: u8, chunk_rows: usize)
         c_thresh_neg: 0,
         thread_count, // Multithreading causes some issues in testing
     };
-    let source_builder = Framed::new(args.input_filename, args.color_input != 0, args.scale)
+    let source = Framed::new(args.input_filename, args.color_input, args.scale)
         .unwrap()
         // TODO: chunk_rows back
         .frame_start(args.frame_idx_start)
         .unwrap()
         .contrast_thresholds(args.c_thresh_pos, args.c_thresh_neg)
         .show_display(args.show_display)
-        .auto_time_parameters(args.tps, args.delta_t_max);
+        .auto_time_parameters(args.ref_time, args.delta_t_max);
 
     let ref_time = source.get_ref_time();
 
