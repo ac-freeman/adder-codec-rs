@@ -165,7 +165,7 @@ mod tests {
             (args.ref_time as f64 * source_fps) as DeltaT,
             args.ref_time,
             args.delta_t_max,
-        );
+        )?;
         if !args.output_events_filename.is_empty() {
             source = *source.write_out(args.output_events_filename, FramedU8)?;
         }
