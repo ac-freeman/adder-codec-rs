@@ -1,24 +1,24 @@
 use adder_codec_rs::framer::driver::Framer;
-use adder_codec_rs::framer::scale_intensity::event_to_intensity;
-use adder_codec_rs::{Codec, SourceCamera};
+
+use adder_codec_rs::{Codec};
 use std::error::Error;
 use std::path::PathBuf;
-use std::sync::mpsc::{channel, Receiver, SendError, Sender};
+use std::sync::mpsc::{channel, Receiver, Sender};
 use std::time::Duration;
 
 use adder_codec_rs::transcoder::source::video::FramedViewMode;
 use bevy::asset::Assets;
 use bevy::ecs::system::Resource;
 use bevy::prelude::{Commands, Image, Res, ResMut};
-use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
+
 use bevy::time::Time;
 use bevy_egui::egui::{Color32, RichText, Ui};
 
-use crate::player::adder::{AdderPlayer, PlayerArtifact, PlayerStreamArtifact, StreamState};
+use crate::player::adder::{AdderPlayer, PlayerStreamArtifact, StreamState};
 use crate::{add_checkbox_row, add_radio_row, add_slider_row, Images};
 use bevy_egui::egui;
-use opencv::core::{Mat, MatTraitConstManual, MatTraitManual};
-use opencv::imgproc;
+
+
 use rayon::current_num_threads;
 
 #[derive(PartialEq)]
@@ -291,8 +291,8 @@ impl PlayerState {
 
         ui.label(self.ui_info_state.source_name.clone());
 
-        let duration_secs = (self.ui_info_state.stream_state.current_t_ticks as f64
-            / self.ui_info_state.stream_state.tps as f64);
+        let duration_secs = self.ui_info_state.stream_state.current_t_ticks as f64
+            / self.ui_info_state.stream_state.tps as f64;
         self.ui_info_state.events_per_sec = self.ui_info_state.events_total as f64 / duration_secs;
         self.ui_info_state.events_ppc_total =
             self.ui_info_state.events_total as f64 / self.ui_info_state.stream_state.volume as f64;

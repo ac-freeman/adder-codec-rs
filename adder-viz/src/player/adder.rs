@@ -156,7 +156,7 @@ impl AdderPlayer {
     pub fn consume_source(&mut self) -> PlayerStreamArtifact {
         let stream = match &mut self.input_stream {
             None => {
-                return (0, self.stream_state.clone(), None);
+                return (0, self.stream_state, None);
             }
             Some(s) => s,
         };
@@ -185,7 +185,7 @@ impl AdderPlayer {
         };
         match res {
             Ok(a) => (a.0, self.stream_state, a.1),
-            Err(b) => (0, self.stream_state, None),
+            Err(_b) => (0, self.stream_state, None),
         }
     }
 

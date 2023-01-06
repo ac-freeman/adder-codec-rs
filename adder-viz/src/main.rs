@@ -2,12 +2,12 @@ mod player;
 mod transcoder;
 mod utils;
 
-use std::error::Error;
+
 use std::ops::RangeInclusive;
-use std::sync::mpsc::TryRecvError;
+
 
 use crate::player::ui::PlayerState;
-use crate::transcoder::ui::{InfoUiState, TranscoderState};
+use crate::transcoder::ui::{TranscoderState};
 use bevy::ecs::system::Resource;
 use bevy::prelude::*;
 use bevy::window::PresentMode;
@@ -276,7 +276,7 @@ fn consume_source(
         Ok(_) => {}
         Err(e) => {
             if e.is::<std::sync::mpsc::TryRecvError>() {
-                main_ui_state.error_msg = Some(format!("Loading file..."));
+                main_ui_state.error_msg = Some("Loading file...".to_string());
             } else {
                 main_ui_state.error_msg = Some(format!("{}", e));
             }
