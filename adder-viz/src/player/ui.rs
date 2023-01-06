@@ -137,8 +137,9 @@ impl PlayerState {
                 let handle = images.add(image);
                 handles.image_view = handle;
             }
+            return Ok(());
         }
-        Ok(())
+        Err("".into())
     }
 
     // Fill in the side panel with sliders for playback speed and buttons for play/pause/stop
@@ -154,7 +155,7 @@ impl PlayerState {
                 self.ui_state = Default::default();
                 self.ui_state.ui_sliders = Default::default();
                 if self.ui_state.ui_sliders_drag != self.ui_state.ui_sliders {
-                    self.reset_update_adder_params()
+                    self.reset_update_adder_params(true)
                 }
                 self.ui_state.ui_sliders_drag = Default::default();
             }
@@ -164,7 +165,7 @@ impl PlayerState {
                 self.ui_state.ui_sliders = Default::default();
                 self.ui_state.ui_sliders_drag = Default::default();
                 self.ui_info_state = Default::default();
-                self.reset_update_adder_params();
+                self.reset_update_adder_params(false);
                 commands.insert_resource(Images::default());
             }
         });
@@ -269,7 +270,7 @@ impl PlayerState {
         );
 
         if need_to_update {
-            self.reset_update_adder_params()
+            self.reset_update_adder_params(true)
         }
     }
 
@@ -313,7 +314,7 @@ impl PlayerState {
         ));
     }
 
-    fn reset_update_adder_params(&mut self) {
+    fn reset_update_adder_params(&mut self, replace_player: bool) {
         self.ui_state.current_frame = match self.ui_state.reconstruction_method {
             ReconstructionMethod::Fast => 1,
             ReconstructionMethod::Accurate => 0,
@@ -324,13 +325,17 @@ impl PlayerState {
 
         let path_buf = match &self.player_path_buf {
             None => {
-                eprintln!("No path buf!");
                 return;
             }
             Some(p) => p.clone(),
         };
 
-        self.replace_player(&path_buf);
+        if replace_player {
+            self.replace_player(&path_buf);
+        } else {
+            self.player_path_buf = None;
+            self.player_rx = None;
+        }
     }
 
     pub fn replace_player(&mut self, path_buf: &std::path::Path) {
