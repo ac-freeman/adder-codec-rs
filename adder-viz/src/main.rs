@@ -161,6 +161,7 @@ fn configure_menu_bar(
     });
 }
 
+#[allow(clippy::too_many_arguments)]
 fn draw_ui(
     commands: Commands,
     time: Res<Time>, // Time passed since last frame
