@@ -65,8 +65,8 @@ impl AdderPlayer {
                 Some("adder") => {
                     let input_path = path_buf.to_str().expect("Invalid string").to_string();
                     let mut stream: Raw = Codec::new();
-                    stream.open_reader(input_path).expect("Invalid path");
-                    stream.decode_header().expect("Invalid header");
+                    stream.open_reader(input_path)?;
+                    stream.decode_header()?;
 
                     let mut reconstructed_frame_rate = (stream.tps / stream.ref_interval) as f64;
 
