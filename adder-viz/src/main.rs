@@ -2,7 +2,9 @@ mod player;
 mod transcoder;
 mod utils;
 
+use std::error::Error;
 use std::ops::RangeInclusive;
+use std::sync::mpsc::TryRecvError;
 
 use crate::player::ui::PlayerState;
 use crate::transcoder::ui::{InfoUiState, TranscoderState};
@@ -261,17 +263,24 @@ fn update_adder_params(
 fn consume_source(
     images: ResMut<Assets<Image>>,
     handles: ResMut<Images>,
-    commands: Commands,
-    main_ui_state: Res<MainUiState>,
+    mut main_ui_state: ResMut<MainUiState>,
     mut transcoder_state: ResMut<TranscoderState>,
     mut player_state: ResMut<PlayerState>,
 ) {
     let res = match main_ui_state.view {
         Tabs::Transcoder => transcoder_state.consume_source(images, handles),
-        Tabs::Player => player_state.consume_source(images, handles, commands),
+        Tabs::Player => player_state.consume_source(images, handles),
     };
-    if let Err(e) = res {
-        eprintln!("Error consuming source: {}", e);
+
+    match res {
+        Ok(_) => {}
+        Err(e) => {
+            if e.is::<std::sync::mpsc::TryRecvError>() {
+                main_ui_state.error_msg = Some(format!("Loading file..."));
+            } else {
+                main_ui_state.error_msg = Some(format!("{}", e));
+            }
+        }
     }
 }
 
