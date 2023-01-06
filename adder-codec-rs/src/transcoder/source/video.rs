@@ -77,7 +77,7 @@ impl From<StreamError> for SourceError {
     }
 }
 
-#[derive(PartialEq, Eq, Clone, Copy)]
+#[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub enum FramedViewMode {
     Intensity,
     D,
