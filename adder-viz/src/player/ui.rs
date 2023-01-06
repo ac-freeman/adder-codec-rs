@@ -361,6 +361,7 @@ impl PlayerState {
         };
 
         player = player.reconstruction_method(self.ui_state.reconstruction_method.clone());
+        player = player.stream_pos(self.ui_info_state.stream_state.file_pos);
 
         self.ui_state.current_frame = 1;
 

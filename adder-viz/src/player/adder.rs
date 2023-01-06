@@ -20,7 +20,7 @@ pub type PlayerStreamArtifact = (u64, StreamState, Option<Image>);
 pub struct StreamState {
     pub(crate) current_t_ticks: DeltaT,
     pub(crate) tps: DeltaT,
-    file_pos: u64,
+    pub(crate) file_pos: u64,
     pub(crate) volume: usize,
 }
 
@@ -138,6 +138,18 @@ impl AdderPlayer {
 
     pub fn reconstruction_method(mut self, method: ReconstructionMethod) -> Self {
         self.reconstruction_method = method;
+        self
+    }
+
+    pub fn stream_pos(mut self, pos: u64) -> Self {
+        if let Some(ref mut stream) = self.input_stream {
+            if pos > stream.header_size as u64 {
+                match stream.set_input_stream_position(pos) {
+                    Ok(_) => {}
+                    Err(_) => {}
+                }
+            }
+        }
         self
     }
 
