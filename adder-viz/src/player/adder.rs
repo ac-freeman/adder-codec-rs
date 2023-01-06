@@ -11,7 +11,7 @@ use opencv::core::{create_continuous, Mat, MatTraitConstManual, MatTraitManual, 
 use opencv::imgproc;
 use std::error::Error;
 use std::fmt;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 pub type PlayerArtifact = (u64, Option<Image>);
 pub type PlayerStreamArtifact = (u64, StreamState, Option<Image>);
@@ -30,10 +30,7 @@ pub struct AdderPlayer {
     pub(crate) frame_sequence: Option<FrameSequence<u8>>, // TODO: remove this
     pub(crate) input_stream: Option<Raw>,
     pub(crate) display_mat: Mat,
-    pub(crate) live_image: Image,
-    pub(crate) path_buf: Option<PathBuf>,
     playback_speed: f32,
-    thread_count: usize,
     reconstruction_method: ReconstructionMethod,
     current_frame: u32,
     stream_state: StreamState,
@@ -122,11 +119,8 @@ impl AdderPlayer {
                         framer_builder: Some(framer_builder),
                         frame_sequence: Some(frame_sequence),
                         input_stream: Some(stream),
-                        live_image: Default::default(),
                         display_mat,
-                        path_buf: Some(path_buf.to_path_buf()),
                         playback_speed,
-                        thread_count: 1,
                         reconstruction_method: ReconstructionMethod::Accurate,
                         current_frame: 0,
                     })

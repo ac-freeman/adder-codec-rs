@@ -1,6 +1,3 @@
-use adder_codec_rs::framer::driver::Framer;
-
-use adder_codec_rs::{Codec};
 use std::error::Error;
 use std::path::PathBuf;
 use std::sync::mpsc::{channel, Receiver, Sender};
@@ -17,7 +14,6 @@ use bevy_egui::egui::{Color32, RichText, Ui};
 use crate::player::adder::{AdderPlayer, PlayerStreamArtifact, StreamState};
 use crate::{add_checkbox_row, add_radio_row, add_slider_row, Images};
 use bevy_egui::egui;
-
 
 use rayon::current_num_threads;
 
@@ -101,7 +97,7 @@ impl Default for InfoUiState {
 }
 
 impl InfoUiState {
-    fn clear_stats(&mut self) {
+    fn _clear_stats(&mut self) {
         self.events_per_sec = 0.;
         self.events_ppc_per_sec = 0.;
         self.events_ppc_total = 0.0;
@@ -382,7 +378,7 @@ impl PlayerState {
     }
 }
 
-fn to_string(duration: Duration) -> String {
+fn _to_string(duration: Duration) -> String {
     let hours = duration.as_secs() / 3600;
     let mins = (duration.as_secs() % 3600) / 60;
     let secs = duration.as_secs() % 60;
