@@ -14,7 +14,7 @@ use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
 use bevy::time::Time;
 use bevy_egui::egui::{Color32, RichText, Ui};
 
-use crate::player::adder::{AdderPlayer, PlayerArtifact};
+use crate::player::adder::{AdderPlayer, PlayerArtifact, PlayerStreamArtifact, StreamState};
 use crate::{add_checkbox_row, add_radio_row, add_slider_row, Images};
 use bevy_egui::egui;
 use opencv::core::{Mat, MatTraitConstManual, MatTraitManual};
@@ -79,6 +79,7 @@ impl Default for PlayerUiState {
 }
 
 pub struct InfoUiState {
+    stream_state: StreamState,
     events_per_sec: f64,
     events_ppc_per_sec: f64,
     events_ppc_total: f64,
@@ -89,6 +90,7 @@ pub struct InfoUiState {
 impl Default for InfoUiState {
     fn default() -> Self {
         InfoUiState {
+            stream_state: Default::default(),
             events_per_sec: 0.,
             events_ppc_per_sec: 0.,
             events_ppc_total: 0.0,
@@ -109,7 +111,7 @@ impl InfoUiState {
 
 #[derive(Resource, Default)]
 pub struct PlayerState {
-    player_rx: Option<Receiver<PlayerArtifact>>,
+    player_rx: Option<Receiver<PlayerStreamArtifact>>,
     player_path_buf: Option<PathBuf>,
     ui_state: PlayerUiState,
     pub(crate) ui_info_state: InfoUiState,
@@ -127,8 +129,9 @@ impl PlayerState {
             return Ok(());
         }
         if let Some(rx) = &self.player_rx {
-            let (event_count, image_opt) = rx.try_recv()?;
+            let (event_count, stream_state, image_opt) = rx.try_recv()?;
             self.ui_info_state.events_total += event_count;
+            self.ui_info_state.stream_state = stream_state;
 
             if let Some(image) = image_opt {
                 let handle = images.add(image);
@@ -287,18 +290,12 @@ impl PlayerState {
 
         ui.label(self.ui_info_state.source_name.clone());
 
-        // TODO!
-        // if let Some(stream) = &self.player.input_stream {
-        //     let duration = Duration::from_nanos(
-        //         ((self.player.current_t_ticks as f64 / stream.tps as f64) * 1.0e9) as u64,
-        //     );
-        //     self.ui_info_state.events_per_sec =
-        //         self.ui_info_state.events_total as f64 / duration.as_secs() as f64;
-        //     self.ui_info_state.events_ppc_total =
-        //         self.ui_info_state.events_total as f64 / stream.plane.volume() as f64;
-        //     self.ui_info_state.events_ppc_per_sec =
-        //         self.ui_info_state.events_ppc_total / duration.as_secs() as f64;
-        // }
+        let duration_secs = (self.ui_info_state.stream_state.current_t_ticks as f64
+            / self.ui_info_state.stream_state.tps as f64);
+        self.ui_info_state.events_per_sec = self.ui_info_state.events_total as f64 / duration_secs;
+        self.ui_info_state.events_ppc_total =
+            self.ui_info_state.events_total as f64 / self.ui_info_state.stream_state.volume as f64;
+        self.ui_info_state.events_ppc_per_sec = self.ui_info_state.events_ppc_total / duration_secs;
 
         // TODO: make fps accurate and meaningful here
         ui.label(format!(
@@ -338,13 +335,13 @@ impl PlayerState {
 
     pub fn replace_player(&mut self, path_buf: &std::path::Path) {
         self.player_path_buf = Some(PathBuf::from(path_buf.clone()));
+        self.ui_info_state.events_total = 0;
         let mut player = match AdderPlayer::new(
             path_buf,
             self.ui_state.ui_sliders.playback_speed,
             self.ui_state.view_mode,
         ) {
             Ok(player) => {
-                // self.player = player;
                 self.ui_info_state.source_name = RichText::from(match path_buf.to_str() {
                     None => "Error: couldn't get path string".to_string(),
                     Some(path) => path.to_string(),
@@ -358,9 +355,12 @@ impl PlayerState {
             }
         };
 
+        player = player.reconstruction_method(self.ui_state.reconstruction_method.clone());
+
         self.ui_state.current_frame = 1;
 
-        let (player_tx, player_rx): (Sender<PlayerArtifact>, Receiver<PlayerArtifact>) = channel();
+        let (player_tx, player_rx): (Sender<PlayerStreamArtifact>, Receiver<PlayerStreamArtifact>) =
+            channel();
 
         rayon::spawn(move || loop {
             let res = player.consume_source();
