@@ -101,7 +101,7 @@ pub struct PlayerState {
     ui_state: PlayerUiState,
     ui_sliders: PlayerUiSliders,
     ui_sliders_drag: PlayerUiSliders,
-    ui_info_state: InfoUiState,
+    pub(crate) ui_info_state: InfoUiState,
 }
 
 impl PlayerState {

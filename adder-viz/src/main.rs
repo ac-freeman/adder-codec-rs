@@ -5,7 +5,7 @@ mod utils;
 use std::ops::RangeInclusive;
 
 use crate::player::ui::PlayerState;
-use crate::transcoder::ui::TranscoderState;
+use crate::transcoder::ui::{InfoUiState, TranscoderState};
 use bevy::ecs::system::Resource;
 use bevy::prelude::*;
 use bevy::window::PresentMode;
@@ -301,6 +301,7 @@ fn file_drop(
 
             match main_ui_state.view {
                 Tabs::Transcoder => {
+                    transcoder_state.ui_info_state.input_path = Some(path_buf.clone());
                     // TODO: refactor as struct func
                     replace_adder_transcoder(
                         &mut transcoder_state,

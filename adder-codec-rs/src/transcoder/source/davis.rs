@@ -515,7 +515,6 @@ impl Source for Davis {
         }
 
         if self.input_frame_scaled.empty() {
-            eprintln!("End of video");
             return Err(BufferEmpty);
         }
 

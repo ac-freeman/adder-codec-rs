@@ -206,7 +206,7 @@ pub(crate) fn replace_adder_transcoder(
                 )
                 .color(Color32::DARK_GREEN);
                 if let Some(output_path) = output_path_opt {
-                    ui_info_state.output_name = RichText::new(
+                    ui_info_state.output_name.text = RichText::new(
                         output_path
                             .to_str()
                             .unwrap_or("Error: invalid output string"),
@@ -220,5 +220,6 @@ pub(crate) fn replace_adder_transcoder(
             }
         };
     } else {
+        eprintln!("No input path");
     }
 }

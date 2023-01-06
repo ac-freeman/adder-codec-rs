@@ -12,6 +12,7 @@ use opencv::imgproc;
 use rayon::current_num_threads;
 use std::error::Error;
 
+use std::default::Default;
 use std::path::PathBuf;
 
 pub struct ParamsUiState {
@@ -64,10 +65,22 @@ pub struct InfoUiState {
     pub events_ppc_total: f64,
     pub events_total: u64,
     pub source_name: RichText,
-    pub output_name: RichText,
-    input_path: Option<PathBuf>,
+    pub output_name: OutputName,
+    pub(crate) input_path: Option<PathBuf>,
     output_path: Option<PathBuf>,
     pub view_mode_radio_state: FramedViewMode, // TODO: Move to different struct
+}
+
+pub struct OutputName {
+    pub text: RichText,
+}
+
+impl Default for OutputName {
+    fn default() -> Self {
+        OutputName {
+            text: RichText::new("No output selected yet"),
+        }
+    }
 }
 
 impl Default for InfoUiState {
@@ -78,7 +91,7 @@ impl Default for InfoUiState {
             events_ppc_total: 0.0,
             events_total: 0,
             source_name: RichText::new("No input file selected yet"),
-            output_name: RichText::new("No output selected yet"),
+            output_name: Default::default(),
             input_path: None,
             output_path: None,
             view_mode_radio_state: FramedViewMode::Intensity,
@@ -158,7 +171,7 @@ impl TranscoderState {
             }
         }
 
-        ui.label(self.ui_info_state.output_name.clone());
+        ui.label(self.ui_info_state.output_name.text.clone());
 
         ui.label(format!(
             "{:.2} transcoded FPS\t\
@@ -279,13 +292,12 @@ impl TranscoderState {
             }
             Err(SourceError::Open) => {}
             Err(_) => {
+                source.get_video_mut().end_write_stream()?;
+                self.ui_info_state.output_path = None;
+                self.ui_info_state.output_name = Default::default();
+
                 // Start video over from the beginning
-                replace_adder_transcoder(
-                    self,
-                    self.ui_info_state.input_path.clone(),
-                    self.ui_info_state.output_path.clone(),
-                    0,
-                );
+                replace_adder_transcoder(self, self.ui_info_state.input_path.clone(), None, 0);
                 return Ok(());
             }
         };
