@@ -1,5 +1,5 @@
-use adder_codec_rs::transcoder::source::davis_source::DavisSource;
-use adder_codec_rs::transcoder::source::video::Source;
+use adder_codec_rs::transcoder::source::davis::Davis;
+use adder_codec_rs::transcoder::source::video::{Source, VideoBuilder};
 use aedat::base::ioheader_generated::Compression;
 use clap::Parser;
 use davis_edi_rs::util::reconstructor::Reconstructor;
@@ -7,9 +7,9 @@ use davis_edi_rs::Args as EdiArgs;
 
 use serde::Deserialize;
 
-use adder_codec_rs::transcoder::source::davis_source::DavisTranscoderMode::{
-    Framed, RawDavis, RawDvs,
-};
+use adder_codec_rs::transcoder::source::davis::TranscoderMode::{Framed, RawDavis, RawDvs};
+use adder_codec_rs::DeltaT;
+use adder_codec_rs::SourceCamera::DavisU8;
 use std::io::Write;
 use std::time::Instant;
 use std::{error, io};
@@ -70,7 +70,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let mut args: Args = Args::parse();
     if !args.args_filename.is_empty() {
         let content = std::fs::read_to_string(args.args_filename)?;
-        args = toml::from_str(&content).unwrap();
+        args = toml::from_str(&content)?;
     }
 
     println!("in prog");
@@ -110,8 +110,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let rt = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(12)
         .enable_time()
-        .build()
-        .unwrap();
+        .build()?;
     let reconstructor = rt.block_on(Reconstructor::new(
         edi_args.base_path,
         edi_args.events_filename_0,
@@ -132,45 +131,38 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         edi_args.simulate_packet_latency,
     ));
 
-    let mut davis_source = DavisSource::new(
-        reconstructor,
-        Some(args.output_events_filename),
-        (1000000) as u32, // TODO
-        1000000.0 / edi_args.output_fps,
-        (1000000.0 * args.delta_t_max_multiplier) as u32, // TODO
-        args.show_display,
-        args.adder_c_thresh_pos,
-        args.adder_c_thresh_neg,
-        args.optimize_adder_controller,
-        rt,
-        mode,
-        args.write_out,
-    )
-    .unwrap();
+    let mut davis_source = Davis::new(reconstructor, rt)?
+        .optimize_adder_controller(args.optimize_adder_controller)
+        .mode(mode)
+        .time_parameters(
+            1_000_000, // TODO
+            (1_000_000.0 / edi_args.output_fps) as DeltaT,
+            (1_000_000.0 * args.delta_t_max_multiplier) as u32,
+        )? // TODO
+        .c_thresh_pos(args.adder_c_thresh_pos)
+        .c_thresh_neg(args.adder_c_thresh_neg)
+        .write_out(args.output_events_filename, DavisU8)?;
 
     let mut now = Instant::now();
     let start_time = std::time::Instant::now();
-    let thread_pool_integration = rayon::ThreadPoolBuilder::new()
-        .num_threads(4)
-        .build()
-        .unwrap();
+    let thread_pool_integration = rayon::ThreadPoolBuilder::new().num_threads(4).build()?;
 
     loop {
         match davis_source.consume(1, &thread_pool_integration) {
             Ok(_events) => {}
             Err(e) => {
-                println!("Err: {:?}", e);
+                println!("Err: {e:?}");
                 break;
             }
         };
 
-        if davis_source.get_video().in_interval_count % 30 == 0 {
+        if davis_source.get_video_ref().state.in_interval_count % 30 == 0 {
             println!(
                 "\rDavis recon frame to ADΔER {} in  {}ms",
-                davis_source.get_video().in_interval_count,
+                davis_source.get_video_ref().state.in_interval_count,
                 now.elapsed().as_millis()
             );
-            io::stdout().flush().unwrap();
+            io::stdout().flush()?;
             now = Instant::now();
         }
     }

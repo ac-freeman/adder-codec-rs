@@ -1,9 +1,11 @@
-use crate::framer::event_framer::{EventCoordless, SourceType};
+use crate::framer::driver::{EventCoordless, SourceType};
 use crate::header::EventStreamHeader;
-use crate::raw::raw_stream::StreamError;
+use crate::raw::stream::Error as StreamError;
 use serde::{Deserialize, Serialize};
+use std::error::Error;
 use std::fmt::Formatter;
 use std::fs::File;
+use std::io;
 use std::io::{BufReader, BufWriter};
 use std::path::Path;
 
@@ -204,7 +206,7 @@ impl std::fmt::Display for SourceCamera {
                 "Asint - Asynchronous Integration camera"
             }
         };
-        write!(f, "{}", text)
+        write!(f, "{text}")
     }
 }
 
@@ -232,15 +234,95 @@ pub extern crate aedat;
 
 pub extern crate davis_edi_rs;
 
+/// The size of the image plane in pixels
+#[derive(Clone)]
+pub struct PlaneSize {
+    width: u16,
+    height: u16,
+    channels: u8,
+}
+
+impl Default for PlaneSize {
+    fn default() -> Self {
+        PlaneSize {
+            width: 1,
+            height: 1,
+            channels: 1,
+        }
+    }
+}
+
+impl PlaneSize {
+    pub fn new(width: u16, height: u16, channels: u8) -> Result<Self, String> {
+        if width == 0 || height == 0 || channels == 0 {
+            return Err("PlaneSize must have positive width, height, and channels".to_string());
+        }
+        Ok(Self {
+            width,
+            height,
+            channels,
+        })
+    }
+    /// The width, shorthand for `self.width`
+    pub fn w(&self) -> u16 {
+        self.width
+    }
+
+    /// The height, shorthand for `self.height`
+    pub fn w_usize(&self) -> usize {
+        self.width as usize
+    }
+
+    /// The height, shorthand for `self.height`
+    pub fn h(&self) -> u16 {
+        self.height
+    }
+
+    /// The height, shorthand for `self.height`
+    pub fn h_usize(&self) -> usize {
+        self.height as usize
+    }
+
+    /// The number of channels, shorthand for `self.channels`
+    pub fn c(&self) -> u8 {
+        self.channels
+    }
+
+    /// The number of channels, shorthand for `self.channels`
+    pub fn c_usize(&self) -> usize {
+        self.channels as usize
+    }
+
+    /// The total number of 2D pixels in the image plane, across the height and width dimension
+    pub fn area_wh(&self) -> usize {
+        self.width as usize * self.height as usize
+    }
+
+    /// The total number of 2D pixels in the image plane, across the width and channel dimension
+    pub fn area_wc(&self) -> usize {
+        self.width as usize * self.channels as usize
+    }
+
+    /// The total number of 2D pixels in the image plane, across the height and channel dimension
+    pub fn area_hc(&self) -> usize {
+        self.height as usize * self.channels as usize
+    }
+
+    /// The total number of 3D pixels in the image plane (2D pixels * color depth)
+    pub fn volume(&self) -> usize {
+        self.area_wh() * self.channels as usize
+    }
+}
+
 #[repr(packed)]
-#[derive(Debug, Copy, Clone, PartialEq, Default, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct Coord {
     pub x: PixelAddress,
     pub y: PixelAddress,
     pub c: Option<u8>,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Default, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct CoordSingle {
     pub x: PixelAddress,
     pub y: PixelAddress,
@@ -248,7 +330,7 @@ pub struct CoordSingle {
 
 /// An ADΔER event representation
 #[repr(packed)]
-#[derive(Debug, Copy, Clone, PartialEq, Default, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct Event {
     pub coord: Coord,
     pub d: D,
@@ -256,7 +338,7 @@ pub struct Event {
 }
 
 /// An ADΔER event representation, without the channel component
-#[derive(Debug, Copy, Clone, PartialEq, Default, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct EventSingle {
     pub coord: CoordSingle,
     pub d: D,
@@ -295,54 +377,88 @@ pub trait Codec {
 
     fn get_source_type(&self) -> SourceType;
 
+    /// Create a file writer at the given `path`
+    /// # Arguments
+    /// * `path` - The path to the file to write to
+    /// # Errors
+    /// * If the file cannot be created
     fn open_writer<P: AsRef<Path>>(&mut self, path: P) -> Result<(), std::io::Error> {
         let file = File::create(&path)?;
         self.set_output_stream(Some(BufWriter::new(file)));
         Ok(())
     }
 
+    /// Set the input stream to read from
+    /// # Errors
+    /// * If the input stream cannot be opened
     fn open_reader<P: AsRef<Path>>(&mut self, path: P) -> Result<(), std::io::Error> {
         let file = File::open(&path)?;
         self.set_input_stream(Some(BufReader::new(file)));
         Ok(())
     }
 
-    fn write_eof(&mut self);
-    /// Flush the stream so that program can be exited safely
-    fn flush_writer(&mut self);
-    fn close_writer(&mut self);
+    /// Write the EOF event signifier to the output stream
+    /// # Errors
+    /// * If the EOF event cannot be written
+    fn write_eof(&mut self) -> Result<(), StreamError>;
 
-    /// Close the stream so that program can be exited safely
+    /// Flush the stream so that program can be exited safely
+    /// # Errors
+    /// * If the stream cannot be flushed
+    fn flush_writer(&mut self) -> io::Result<()>;
+
+    /// Close the stream writer safely
+    /// # Errors
+    /// * If the stream cannot be closed
+    fn close_writer(&mut self) -> Result<(), Box<dyn Error>>;
+
+    /// Close the stream reader safely
     fn close_reader(&mut self);
 
     fn set_output_stream(&mut self, stream: Option<BufWriter<File>>);
+
+    fn has_output_stream(&self) -> bool;
+
     fn set_input_stream(&mut self, stream: Option<BufReader<File>>);
 
-    /// Go to this position (as a byte address) in the input stream. Returns a [StreamError] if
-    /// not aligned to an [Event]
+    /// Go to this position (as a byte address) in the input stream.
+    /// # Errors
+    /// * If the stream cannot be seeked to the given position
+    /// * If the stream is not seekable
+    /// * If the stream is not open
+    /// * If the given `pos` is not aligned to an [Event]
     fn set_input_stream_position(&mut self, pos: u64) -> Result<(), StreamError>;
-    fn set_input_stream_position_from_end(&mut self, pos: i64) -> Result<(), StreamError>;
-    fn get_input_stream_position(&mut self) -> Result<u64, StreamError>;
 
-    fn get_eof_position(&mut self) -> Result<u64, StreamError>;
+    /// Go to this position (as a byte address) in the input stream, relative to the end
+    /// of the stream
+    /// # Errors
+    /// * If the stream cannot be seeked to the given position
+    /// * If the stream is not seekable
+    /// * If the stream is not open
+    fn set_input_stream_position_from_end(&mut self, pos: i64) -> Result<(), StreamError>;
+
+    /// Get the current position (as a byte address) in the input stream.
+    /// # Errors
+    /// * If the stream is not open
+    fn get_input_stream_position(&mut self) -> Result<u64, Box<dyn Error>>;
+
+    fn get_eof_position(&mut self) -> Result<u64, Box<dyn Error>>;
 
     fn encode_header(
         &mut self,
-        width: u16,
-        height: u16,
+        plane_size: PlaneSize,
         tps: u32,
         ref_interval: u32,
         delta_t_max: u32,
-        channels: u8,
         codec_version: u8,
         source_camera: SourceCamera,
-    );
+    ) -> Result<(), Box<dyn Error>>;
 
-    fn decode_header(&mut self) -> Result<usize, StreamError>;
+    fn decode_header(&mut self) -> Result<usize, Box<dyn Error>>;
 
-    fn encode_event(&mut self, event: &Event);
-    fn encode_events(&mut self, events: &[Event]);
-    fn encode_events_events(&mut self, events: &[Vec<Event>]);
+    fn encode_event(&mut self, event: &Event) -> Result<(), StreamError>;
+    fn encode_events(&mut self, events: &[Event]) -> Result<(), StreamError>;
+    fn encode_events_events(&mut self, events: &[Vec<Event>]) -> Result<(), StreamError>;
     fn decode_event(&mut self) -> Result<Event, StreamError>;
 }
 

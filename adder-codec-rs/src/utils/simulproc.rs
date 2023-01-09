@@ -1,9 +1,9 @@
-use crate::framer::event_framer::FramerMode::INSTANTANEOUS;
-use crate::framer::event_framer::SourceType::U8;
-use crate::framer::event_framer::{Framer, FramerBuilder};
+use crate::framer::driver::FramerMode::INSTANTANEOUS;
+use crate::framer::driver::SourceType::U8;
+use crate::framer::driver::{Framer, FramerBuilder};
 use crate::framer::scale_intensity;
 use crate::framer::scale_intensity::FrameValue;
-use crate::transcoder::source::framed_source::FramedSource;
+use crate::transcoder::source::framed::Framed;
 use crate::transcoder::source::video::Source;
 use crate::SourceCamera::FramedU8;
 use crate::{DeltaT, Event};
@@ -84,51 +84,53 @@ pub struct SimulProcArgs {
 }
 
 pub struct SimulProcessor {
-    pub source: FramedSource,
+    pub source: Framed,
     thread_pool: ThreadPool,
     events_tx: Sender<Vec<Vec<Event>>>,
 }
 
 impl SimulProcessor {
     pub fn new<T>(
-        source: FramedSource,
+        source: Framed,
         ref_time: DeltaT,
         output_path: &str,
         frame_max: i32,
         num_threads: usize,
-    ) -> SimulProcessor
+    ) -> Result<SimulProcessor, Box<dyn Error>>
     where
-        T: Clone + std::marker::Sync + std::marker::Send + 'static,
-        T: scale_intensity::FrameValue,
-        T: std::default::Default,
-        T: std::marker::Copy,
-        T: FrameValue<Output = T>,
-        T: Serialize,
-        T: num_traits::Zero,
+        T: Clone
+            + std::marker::Sync
+            + std::marker::Send
+            + 'static
+            + scale_intensity::FrameValue
+            + std::default::Default
+            + std::marker::Copy
+            + FrameValue<Output = T>
+            + Serialize
+            + num_traits::Zero,
     {
         let thread_pool_framer = rayon::ThreadPoolBuilder::new()
             .num_threads(max(num_threads / 2, 1))
-            .build()
-            .unwrap();
+            .build()?;
         let thread_pool_transcoder = rayon::ThreadPoolBuilder::new()
             .num_threads(max(num_threads / 2, 1))
-            .build()
-            .unwrap();
+            .build()?;
         let reconstructed_frame_rate = source.source_fps;
         // For instantaneous reconstruction, make sure the frame rate matches the source video rate
-        assert_eq!(source.video.tps / ref_time, reconstructed_frame_rate as u32);
+        assert_eq!(
+            source.video.state.tps / ref_time,
+            reconstructed_frame_rate as u32
+        );
 
-        let height = source.get_video().height as usize;
-        let width = source.get_video().width as usize;
-        let channels = source.get_video().channels as usize;
+        let plane = source.get_video_ref().state.plane.clone();
 
         let mut framer = thread_pool_framer.install(|| {
-            FramerBuilder::new(height, width, channels, source.video.chunk_rows)
+            FramerBuilder::new(plane, source.video.state.chunk_rows)
                 .codec_version(1)
                 .time_parameters(
-                    source.video.tps,
+                    source.video.state.tps,
                     ref_time,
-                    source.video.delta_t_max,
+                    source.video.state.delta_t_max,
                     reconstructed_frame_rate,
                 )
                 .mode(INSTANTANEOUS)
@@ -136,7 +138,7 @@ impl SimulProcessor {
                 .finish::<T>()
         });
 
-        let mut output_stream = BufWriter::new(File::create(output_path).unwrap());
+        let mut output_stream = BufWriter::new(File::create(output_path)?);
 
         let (events_tx, events_rx): (Sender<Vec<Vec<Event>>>, Receiver<Vec<Vec<Event>>>) =
             channel();
@@ -147,50 +149,56 @@ impl SimulProcessor {
         rayon::spawn(move || {
             let mut frame_count = 1;
             loop {
-                match events_rx.recv() {
-                    Ok(events) => {
-                        // assert_eq!(events.len(), (self.source.get_video().height as f64 / self.framer.chunk_rows as f64).ceil() as usize);
+                if let Ok(events) = events_rx.recv() {
+                    // assert_eq!(events.len(), (self.source.get_video().height as f64 / self.framer.chunk_rows as f64).ceil() as usize);
 
-                        // Frame the events
-                        if framer.ingest_events_events(events) {
-                            match framer.write_multi_frame_bytes(&mut output_stream) {
-                                0 => {
-                                    panic!("Should have frame, but didn't")
-                                }
-                                frames_returned => {
-                                    frame_count += frames_returned;
-                                    print!(
-                                        "\rOutput frame {}. Got {} frames in  {} ms/frame\t",
-                                        frame_count,
-                                        frames_returned,
-                                        now.elapsed().as_millis() / frames_returned as u128
-                                    );
-                                    io::stdout().flush().unwrap();
-                                    now = Instant::now();
-                                }
+                    // Frame the events
+                    if framer.ingest_events_events(events) {
+                        match framer.write_multi_frame_bytes(&mut output_stream) {
+                            Ok(0) => {
+                                eprintln!("Should have frame, but didn't");
+                                break;
+                            }
+                            Ok(frames_returned) => {
+                                frame_count += frames_returned;
+                                print!(
+                                    "\rOutput frame {}. Got {} frames in  {} ms/frame\t",
+                                    frame_count,
+                                    frames_returned,
+                                    now.elapsed().as_millis() / frames_returned as u128
+                                );
+                                if io::stdout().flush().is_err() {
+                                    eprintln!("Error flushing stdout");
+                                    break;
+                                };
+                                now = Instant::now();
+                            }
+                            Err(e) => {
+                                eprintln!("Error writing frame: {e}");
+                                break;
                             }
                         }
-                        output_stream
-                            .flush()
-                            .expect("Could not flush raw video writer");
-                        if frame_count >= frame_max && frame_max > 0 {
-                            eprintln!("Wrote max frames. Exiting channel.");
-                            break;
-                        }
                     }
-                    Err(_) => {
-                        eprintln!("Event receiver is closed. Exiting channel.");
+                    if output_stream.flush().is_err() {
+                        eprintln!("Error flushing output stream");
                         break;
                     }
+                    if frame_count >= frame_max && frame_max > 0 {
+                        eprintln!("Wrote max frames. Exiting channel.");
+                        break;
+                    }
+                } else {
+                    eprintln!("Event receiver is closed. Exiting channel.");
+                    break;
                 };
             }
         });
 
-        SimulProcessor {
+        Ok(SimulProcessor {
             source,
             thread_pool: thread_pool_transcoder,
             events_tx,
-        }
+        })
     }
 
     pub fn run(&mut self) -> Result<(), Box<dyn Error>> {
@@ -207,26 +215,29 @@ impl SimulProcessor {
                     };
                 }
                 Err(e) => {
-                    println!("Err: {:?}", e);
+                    println!("Err: {e:?}");
                     break;
                 }
             };
 
-            let video = self.source.get_video();
+            let video = self.source.get_video_ref();
 
-            if video.in_interval_count % 30 == 0 {
+            if video.state.in_interval_count % 30 == 0 {
                 print!(
                     "\rFrame {} in  {}ms",
-                    video.in_interval_count,
+                    video.state.in_interval_count,
                     now.elapsed().as_millis()
                 );
-                io::stdout().flush().unwrap();
+                if io::stdout().flush().is_err() {
+                    eprintln!("Error flushing stdout");
+                    break;
+                };
                 now = Instant::now();
             }
         }
 
         println!("Closing stream...");
-        self.source.get_video_mut().end_write_stream();
+        self.source.get_video_mut().end_write_stream()?;
         println!("FINISHED");
 
         Ok(())

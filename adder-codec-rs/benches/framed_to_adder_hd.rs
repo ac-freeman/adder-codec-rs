@@ -3,33 +3,30 @@ use criterion_perf_events::Perf;
 use perfcnt::linux::HardwareEventType as Hardware;
 use perfcnt::linux::PerfCounterBuilderLinux as Builder;
 
-use adder_codec_rs::transcoder::source::framed_source::FramedSourceBuilder;
-
 use adder_codec_rs::utils::simulproc::{SimulProcArgs, SimulProcessor};
-use adder_codec_rs::SourceCamera::FramedU8;
-use std::fs;
-use std::fs::File;
-use std::io::Cursor;
-use std::path::{Path, PathBuf};
 
+use std::fs;
+
+use std::path::PathBuf;
+
+use adder_codec_rs::transcoder::source::framed::Framed;
+use adder_codec_rs::transcoder::source::video::VideoBuilder;
 use adder_codec_rs::utils::viz::download_file;
 use std::thread::sleep;
 use std::time::Duration;
 
-fn simul_proc(video_path: &str, scale: f64, thread_count: u8, chunk_rows: usize) {
+fn simul_proc(video_path: &str, scale: f64, thread_count: u8, _chunk_rows: usize) {
     let d = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let manifest_path_str = d.as_path().to_str().unwrap().to_owned();
 
     let args: SimulProcArgs = SimulProcArgs {
         args_filename: "".to_string(),
-        color_input: 0,
-        tps: 120000,
-        fps: 24,
+        color_input: false,
         ref_time: 5000,
         delta_t_max: 120000,
         frame_count_max: 300,
         frame_idx_start: 0,
-        show_display: 0,
+        show_display: false,
         input_filename: video_path.to_string(),
         output_events_filename: "".parse().unwrap(),
         output_raw_video_filename: manifest_path_str + "/benches/run/bench_out",
@@ -38,28 +35,25 @@ fn simul_proc(video_path: &str, scale: f64, thread_count: u8, chunk_rows: usize)
         c_thresh_neg: 0,
         thread_count, // Multithreading causes some issues in testing
     };
-    let source_builder = FramedSourceBuilder::new(args.input_filename, FramedU8)
-        .chunk_rows(chunk_rows)
+    let source = Framed::new(args.input_filename, args.color_input, args.scale)
+        .unwrap()
+        // TODO: chunk_rows back
         .frame_start(args.frame_idx_start)
-        .scale(args.scale)
-        .communicate_events(true)
-        .color(args.color_input != 0)
+        .unwrap()
         .contrast_thresholds(args.c_thresh_pos, args.c_thresh_neg)
-        .show_display(args.show_display != 0)
-        .time_parameters(args.tps, args.delta_t_max);
+        .show_display(args.show_display)
+        .auto_time_parameters(args.ref_time, args.delta_t_max);
 
-    let source = source_builder.finish();
     let ref_time = source.get_ref_time();
 
     let mut simul_processor = SimulProcessor::new::<u8>(
         source,
         ref_time,
-        args.tps,
-        args.fps,
         args.output_raw_video_filename.as_str(),
         args.frame_count_max as i32,
         thread_count as usize,
-    );
+    )
+    .unwrap();
 
     simul_processor.run().unwrap();
     sleep(Duration::from_secs(2));

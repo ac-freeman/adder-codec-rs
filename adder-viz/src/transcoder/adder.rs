@@ -1,26 +1,27 @@
 use std::error::Error;
 
-use adder_codec_rs::transcoder::source::davis_source::DavisSource;
-use adder_codec_rs::transcoder::source::framed_source::FramedSource;
-use adder_codec_rs::transcoder::source::framed_source::FramedSourceBuilder;
-use adder_codec_rs::SourceCamera;
+use adder_codec_rs::transcoder::source::davis::Davis;
+use adder_codec_rs::transcoder::source::framed::Framed;
+use adder_codec_rs::DeltaT;
 use bevy::prelude::Image;
 use std::fmt;
 use std::path::{Path, PathBuf};
 
-use adder_codec_rs::transcoder::source::davis_source::DavisTranscoderMode;
+use adder_codec_rs::transcoder::source::davis::TranscoderMode;
 
 use adder_codec_rs::aedat::base::ioheader_generated::Compression;
 use adder_codec_rs::davis_edi_rs::util::reconstructor::Reconstructor;
 
 use crate::transcoder::ui::{ParamsUiState, TranscoderState};
+use adder_codec_rs::transcoder::source::video::VideoBuilder;
+use adder_codec_rs::SourceCamera::{DavisU8, FramedU8};
 use bevy_egui::egui::{Color32, RichText};
 use opencv::Result;
 
 #[derive(Default)]
 pub struct AdderTranscoder {
-    pub(crate) framed_source: Option<FramedSource>,
-    pub(crate) davis_source: Option<DavisSource>,
+    pub(crate) framed_source: Option<Framed>,
+    pub(crate) davis_source: Option<Davis>,
     pub(crate) live_image: Image,
 }
 
@@ -48,62 +49,74 @@ impl AdderTranscoder {
                 match ext.to_str() {
                     None => Err(Box::new(AdderTranscoderError("Invalid file type".into()))),
                     Some("mp4") => {
-                        let mut builder = FramedSourceBuilder::new(
-                            input_path_buf.to_str().unwrap().to_string(),
-                            SourceCamera::FramedU8,
-                        )
-                        .frame_start(current_frame)
+                        let mut framed = Framed::new(
+                            match input_path_buf.to_str() {
+                                None => {
+                                    return Err(Box::new(AdderTranscoderError(
+                                        "Couldn't get input path string".into(),
+                                    )))
+                                }
+                                Some(path) => path.to_string(),
+                            },
+                            ui_state.color,
+                            ui_state.scale,
+                        )?
+                        .frame_start(current_frame)?
                         .chunk_rows(64)
-                        .scale(ui_state.scale)
-                        .communicate_events(true)
-                        .color(ui_state.color)
-                        .contrast_thresholds(ui_state.adder_tresh as u8, ui_state.adder_tresh as u8)
-                        .show_display(false)
-                        .time_parameters(
+                        .c_thresh_pos(ui_state.adder_tresh as u8)
+                        .c_thresh_neg(ui_state.adder_tresh as u8)
+                        .auto_time_parameters(
                             ui_state.delta_t_ref as u32,
                             ui_state.delta_t_max_mult * ui_state.delta_t_ref as u32,
-                        );
+                        )?
+                        .show_display(false);
 
+                        // TODO: Change the builder to take in a pathbuf directly, not a string,
+                        // and to handle the error checking in the associated function
                         match output_path_opt {
                             None => {}
                             Some(output_path) => {
-                                builder = builder.output_events_filename(
-                                    output_path.to_str().unwrap().parse().unwrap(),
-                                );
+                                framed = *framed
+                                    .write_out(output_path.to_str().unwrap().parse()?, FramedU8)?;
+                                //     .output_events_filename(match output_path.to_str() {
+                                //     None => {
+                                //         return Err(Box::new(AdderTranscoderError(
+                                //             "Couldn't get output path string".into(),
+                                //         )))
+                                //     }
+                                //     Some(path) => path.parse()?,
+                                // });
                             }
                         };
 
-                        match builder.finish() {
-                            Ok(source) => {
-                                ui_state.delta_t_ref_max = 255.0;
-                                Ok(AdderTranscoder {
-                                    framed_source: Some(source),
-                                    davis_source: None,
-                                    live_image: Default::default(),
-                                })
-                            }
-                            Err(_e) => {
-                                Err(Box::new(AdderTranscoderError("Invalid file type".into())))
-                            }
-                        }
+                        ui_state.delta_t_ref_max = 255.0;
+                        Ok(AdderTranscoder {
+                            framed_source: Some(framed),
+                            davis_source: None,
+                            live_image: Default::default(),
+                        })
+                        // }
+                        // Err(_e) => {
+                        //     Err(Box::new(AdderTranscoderError("Invalid file type".into())))
+                        // }
                     }
+
                     Some("aedat4") => {
                         let events_only = match &ui_state.davis_mode_radio_state {
-                            DavisTranscoderMode::Framed => false,
-                            DavisTranscoderMode::RawDavis => false,
-                            DavisTranscoderMode::RawDvs => true,
+                            TranscoderMode::Framed => false,
+                            TranscoderMode::RawDavis => false,
+                            TranscoderMode::RawDvs => true,
                         };
                         let deblur_only = match &ui_state.davis_mode_radio_state {
-                            DavisTranscoderMode::Framed => false,
-                            DavisTranscoderMode::RawDavis => true,
-                            DavisTranscoderMode::RawDvs => true,
+                            TranscoderMode::Framed => false,
+                            TranscoderMode::RawDavis => true,
+                            TranscoderMode::RawDvs => true,
                         };
 
                         let rt = tokio::runtime::Builder::new_multi_thread()
                             .worker_threads(ui_state.thread_count)
                             .enable_time()
-                            .build()
-                            .unwrap();
+                            .build()?;
                         let dir = input_path_buf
                             .parent()
                             .expect("File must be in some directory")
@@ -137,28 +150,23 @@ impl AdderTranscoder {
                             true,
                         ));
 
-                        let output_string = match output_path_opt {
-                            None => {None}
-                            Some(output_path) => {
-                                Some(output_path.to_str().unwrap().to_string())
-                            }
-                        };
+                        let output_string = output_path_opt
+                            .map(|output_path| output_path.to_str().expect("Bad path").to_string());
 
-                        let davis_source = DavisSource::new(
-                            reconstructor,
-                            output_string.clone(),
-                            1000000_u32, // TODO
-                            1000000.0 / ui_state.davis_output_fps,
-                            (1000000.0 * ui_state.delta_t_max_mult as f32) as u32, // TODO
-                            false,
-                            ui_state.adder_tresh as u8,
-                            ui_state.adder_tresh as u8,
-                            false,
-                            rt,
-                            ui_state.davis_mode_radio_state,
-                            output_string.is_some(),
-                        )
-                        .unwrap();
+                        let mut davis_source = Davis::new(reconstructor, rt)?
+                            .optimize_adder_controller(false) // TODO
+                            .mode(ui_state.davis_mode_radio_state)
+                            .time_parameters(
+                                1000000_u32, // TODO
+                                (1_000_000.0 / ui_state.davis_output_fps) as DeltaT,
+                                (1_000_000.0 * ui_state.delta_t_max_mult as f32) as u32, // TODO
+                            )? // TODO
+                            .c_thresh_pos(ui_state.adder_tresh as u8)
+                            .c_thresh_neg(ui_state.adder_tresh as u8);
+
+                        if let Some(output_string) = output_string {
+                            davis_source = *davis_source.write_out(output_string, DavisU8)?;
+                        }
 
                         Ok(AdderTranscoder {
                             framed_source: None,
@@ -166,6 +174,7 @@ impl AdderTranscoder {
                             live_image: Default::default(),
                         })
                     }
+
                     Some(_) => Err(Box::new(AdderTranscoderError("Invalid file type".into()))),
                 }
             }
@@ -193,11 +202,19 @@ pub(crate) fn replace_adder_transcoder(
         ) {
             Ok(transcoder) => {
                 transcoder_state.transcoder = transcoder;
-                ui_info_state.source_name =
-                    RichText::new(input_path.to_str().unwrap()).color(Color32::DARK_GREEN);
+                ui_info_state.source_name = RichText::new(
+                    input_path
+                        .to_str()
+                        .unwrap_or("Error: invalid source string"),
+                )
+                .color(Color32::DARK_GREEN);
                 if let Some(output_path) = output_path_opt {
-                    ui_info_state.output_name =
-                        RichText::new(output_path.to_str().unwrap()).color(Color32::DARK_GREEN);
+                    ui_info_state.output_name.text = RichText::new(
+                        output_path
+                            .to_str()
+                            .unwrap_or("Error: invalid output string"),
+                    )
+                    .color(Color32::DARK_GREEN);
                 }
             }
             Err(e) => {
@@ -206,5 +223,6 @@ pub(crate) fn replace_adder_transcoder(
             }
         };
     } else {
+        eprintln!("No input path");
     }
 }

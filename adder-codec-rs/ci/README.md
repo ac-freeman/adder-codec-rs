@@ -1,1 +1,0 @@
-Scripts from https://github.com/twistedfall/opencv-rust under MIT license. Used for GitHub Actions.

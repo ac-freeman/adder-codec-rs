@@ -1,7 +1,8 @@
-use adder_codec_rs::raw::raw_stream::RawStream;
+use adder_codec_rs::raw::stream::Raw;
 use adder_codec_rs::{Codec, Event, D_SHIFT};
 use std::cmp::max;
 use std::collections::VecDeque;
+use std::error::Error;
 use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::path::Path;
@@ -57,16 +58,16 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let output_video_path = args.output_video.as_str();
     let raw_path = "./dvs.gray8";
 
-    let mut stream: RawStream = Codec::new();
+    let mut stream: Raw = Codec::new();
     stream.open_reader(file_path).expect("Invalid path");
     let header_bytes = stream.decode_header().expect("Invalid header");
 
-    let first_event_position = stream.get_input_stream_position().unwrap();
+    let first_event_position = stream.get_input_stream_position()?;
 
-    let eof_position_bytes = stream.get_eof_position().unwrap();
-    let _file_size = Path::new(file_path).metadata().unwrap().len();
+    let eof_position_bytes = stream.get_eof_position()?;
+    let _file_size = Path::new(file_path).metadata()?.len();
     let num_events = (eof_position_bytes - 1 - header_bytes as u64) / stream.event_size as u64;
-    let divisor = num_events as u64 / 100;
+    let divisor = num_events / 100;
 
     let stdout = io::stdout();
     let mut handle = io::BufWriter::new(stdout.lock());
@@ -77,22 +78,23 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         Ok(file) => Some(BufWriter::new(file)),
         Err(_) => None,
     };
-    let mut text_writer: BufWriter<File> = BufWriter::new(File::create(output_text_path).unwrap());
+    let mut text_writer: BufWriter<File> = BufWriter::new(File::create(output_text_path)?);
     {
         // Write the width and height as first line header
-        let dims_str = stream.width.to_string() + " " + &*stream.height.to_string() + "\n";
-        text_writer
+        let dims_str = stream.plane.w().to_string() + " " + &*stream.plane.h().to_string() + "\n";
+        let amt = text_writer
             .write(dims_str.as_ref())
             .expect("Could not write");
+        debug_assert_eq!(amt, dims_str.len());
     }
 
     let mut event_count: u64 = 0;
 
     let mut pixels: Array3<Option<DvsPixel>> = {
         let mut data: Vec<Option<DvsPixel>> = Vec::new();
-        for _ in 0..stream.height {
-            for _ in 0..stream.width {
-                for _ in 0..stream.channels {
+        for _ in 0..stream.plane.h() {
+            for _ in 0..stream.plane.w() {
+                for _ in 0..stream.plane.c() {
                     let px = None;
                     data.push(px);
                 }
@@ -101,33 +103,36 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
         Array3::from_shape_vec(
             (
-                stream.height.into(),
-                stream.width.into(),
-                stream.channels.into(),
+                stream.plane.h().into(),
+                stream.plane.w().into(),
+                stream.plane.c().into(),
             ),
             data,
-        )
-        .unwrap()
+        )?
     };
 
     let mut event_counts: Array3<u16> = Array3::zeros((
-        stream.height.into(),
-        stream.width.into(),
-        stream.channels.into(),
+        stream.plane.h().into(),
+        stream.plane.w().into(),
+        stream.plane.c().into(),
     ));
 
     let mut instantaneous_frame_deque = {
         let mut instantaneous_frame = Mat::default();
-        match stream.channels {
+        match stream.plane.c() {
             1 => unsafe {
-                instantaneous_frame
-                    .create_rows_cols(stream.height as i32, stream.width as i32, CV_8U)
-                    .unwrap();
+                instantaneous_frame.create_rows_cols(
+                    stream.plane.h() as i32,
+                    stream.plane.w() as i32,
+                    CV_8U,
+                )?;
             },
             _ => unsafe {
-                instantaneous_frame
-                    .create_rows_cols(stream.height as i32, stream.width as i32, CV_8UC3)
-                    .unwrap();
+                instantaneous_frame.create_rows_cols(
+                    stream.plane.h() as i32,
+                    stream.plane.w() as i32,
+                    CV_8UC3,
+                )?;
             },
         }
 
@@ -136,7 +141,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
     match instantaneous_frame_deque
         .back_mut()
-        .unwrap()
+        .expect("Could not get back of deque")
         .data_bytes_mut()
     {
         Ok(bytes) => {
@@ -144,10 +149,10 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 *byte = 128;
             }
         }
-        Err(_) => {
-            panic!("Mat error")
+        Err(e) => {
+            return Err(Box::new(e));
         }
-    }
+    };
 
     let frame_length = (stream.tps as f32 / args.fps) as u128; // length in ticks
     let mut frame_count = 0_usize;
@@ -159,21 +164,21 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             write!(
                 handle,
                 "\rTranscoding ADΔER to DVS...{}%",
-                (event_count * 100) / num_events as u64
+                (event_count * 100) / num_events
             )?;
-            handle.flush().unwrap();
+            handle.flush()?;
         }
         if current_t > (frame_count as u128 * frame_length) + stream.delta_t_max as u128 * 4 {
             match instantaneous_frame_deque.pop_front() {
                 None => {}
                 Some(frame) => {
                     if args.show_display {
-                        show_display_force("DVS", &frame, 1);
+                        show_display_force("DVS", &frame, 1)?;
                     }
                     match video_writer {
                         None => {}
                         Some(ref mut writer) => {
-                            write_frame_to_video(&frame, writer);
+                            write_frame_to_video(&frame, writer)?;
                         }
                     }
                 }
@@ -201,7 +206,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         }
                         _ => {
                             dbg!(event);
-                            panic!("Shouldn't happen")
+                            return Err("Shouldn't happen".into());
                         }
                     },
                     Some(px) => {
@@ -229,7 +234,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                                             frame_idx,
                                             frame_count,
                                             255,
-                                        );
+                                        )?;
                                         let dvs_string = px.t.to_string()
                                             + " "
                                             + x.to_string().as_str()
@@ -237,9 +242,10 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                                             + y.to_string().as_str()
                                             + " "
                                             + "1\n";
-                                        text_writer
+                                        let amt = text_writer
                                             .write(dvs_string.as_ref())
                                             .expect("Could not write");
+                                        debug_assert_eq!(amt, dvs_string.len());
                                         px.frame_intensity_ln = new_intensity_ln;
                                     }
                                     (a, b) if a <= b - c => {
@@ -250,7 +256,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                                             frame_idx,
                                             frame_count,
                                             0,
-                                        );
+                                        )?;
                                         let dvs_string = px.t.to_string()
                                             + " "
                                             + x.to_string().as_str()
@@ -258,9 +264,10 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                                             + y.to_string().as_str()
                                             + " "
                                             + "-1\n";
-                                        text_writer
+                                        let amt = text_writer
                                             .write(dvs_string.as_ref())
                                             .expect("Could not write");
+                                        debug_assert_eq!(amt, dvs_string.len());
                                         px.frame_intensity_ln = new_intensity_ln;
                                     }
                                     (_, _) => {}
@@ -282,10 +289,10 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
     let mut event_count_mat = instantaneous_frame_deque[0].clone();
     unsafe {
-        for y in 0..stream.height as i32 {
-            for x in 0..stream.width as i32 {
-                for c in 0..stream.channels as i32 {
-                    *event_count_mat.at_3d_unchecked_mut(y, x, c).unwrap() =
+        for y in 0..stream.plane.h() as i32 {
+            for x in 0..stream.plane.w() as i32 {
+                for c in 0..stream.plane.c() as i32 {
+                    *event_count_mat.at_3d_unchecked_mut(y, x, c)? =
                         ((event_counts[[y as usize, x as usize, c as usize]] as f32
                             / max_px_event_count as f32)
                             * 255.0) as u8;
@@ -296,22 +303,22 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
     for frame in instantaneous_frame_deque {
         if args.show_display {
-            show_display_force("DVS", &frame, 1);
+            show_display_force("DVS", &frame, 1)?;
         }
         match video_writer {
             None => {}
             Some(ref mut writer) => {
-                write_frame_to_video(&frame, writer);
+                write_frame_to_video(&frame, writer)?;
             }
         }
     }
     println!("\n");
     if args.show_display {
-        show_display_force("Event counts", &event_count_mat, 0);
+        show_display_force("Event counts", &event_count_mat, 0)?;
     }
-    encode_video_ffmpeg(raw_path, output_video_path);
+    encode_video_ffmpeg(raw_path, output_video_path)?;
 
-    handle.flush().unwrap();
+    handle.flush()?;
     println!("Finished!");
     Ok(())
 }
@@ -322,33 +329,38 @@ fn set_instant_dvs_pixel(
     frame_idx: usize,
     frame_count: usize,
     value: u128,
-) {
+) -> Result<(), Box<dyn Error>> {
     // Grow the deque if necessary
     let grow_len = frame_idx as i32 - frame_count as i32 - frames.len() as i32 + 1;
 
     for _ in 0..grow_len {
         frames.push_back(frames[0].clone());
         // Clear the instantaneous frame
-        match frames.back_mut().unwrap().data_bytes_mut() {
+        match frames
+            .back_mut()
+            .expect("Could not get back of deque")
+            .data_bytes_mut()
+        {
             Ok(bytes) => {
                 for byte in bytes {
                     *byte = 128;
                 }
             }
-            Err(_) => {
-                panic!("Mat error")
+            Err(e) => {
+                return Err(e.into());
             }
-        }
+        };
     }
 
     unsafe {
         let px: &mut u8 = match event.coord.c {
             None => frames[frame_idx - frame_count]
-                .at_2d_unchecked_mut(event.coord.y.into(), event.coord.x.into())
-                .unwrap(),
-            Some(c) => frames[frame_idx - frame_count]
-                .at_3d_unchecked_mut(event.coord.y.into(), event.coord.x.into(), c.into())
-                .unwrap(),
+                .at_2d_unchecked_mut(event.coord.y.into(), event.coord.x.into())?,
+            Some(c) => frames[frame_idx - frame_count].at_3d_unchecked_mut(
+                event.coord.y.into(),
+                event.coord.x.into(),
+                c.into(),
+            )?,
         };
         *px = value as u8;
         // match value {
@@ -356,6 +368,7 @@ fn set_instant_dvs_pixel(
         //     a => *px = (*px as i16 + a) as u8,
         // }
     }
+    Ok(())
 }
 
 fn event_to_frame_intensity(event: &Event, frame_length: u128) -> f64 {

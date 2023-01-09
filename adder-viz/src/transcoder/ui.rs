@@ -1,6 +1,6 @@
 use crate::transcoder::adder::{replace_adder_transcoder, AdderTranscoder};
 use crate::{slider_pm, Images};
-use adder_codec_rs::transcoder::source::davis_source::DavisTranscoderMode;
+use adder_codec_rs::transcoder::source::davis::TranscoderMode;
 use adder_codec_rs::transcoder::source::video::{FramedViewMode, Source, SourceError};
 use bevy::ecs::system::Resource;
 use bevy::prelude::{Assets, Commands, Image, Res, ResMut, Time};
@@ -10,6 +10,9 @@ use bevy_egui::egui::{RichText, Ui};
 use opencv::core::{Mat, MatTraitConstManual};
 use opencv::imgproc;
 use rayon::current_num_threads;
+use std::error::Error;
+
+use std::default::Default;
 use std::path::PathBuf;
 
 pub struct ParamsUiState {
@@ -26,7 +29,7 @@ pub struct ParamsUiState {
     thread_count_slider: usize,
     pub(crate) color: bool,
     view_mode_radio_state: FramedViewMode,
-    pub(crate) davis_mode_radio_state: DavisTranscoderMode,
+    pub(crate) davis_mode_radio_state: TranscoderMode,
     pub(crate) davis_output_fps: f64,
     davis_output_fps_slider: f64,
     pub(crate) optimize_c: bool,
@@ -48,7 +51,7 @@ impl Default for ParamsUiState {
             thread_count_slider: 4,
             color: true,
             view_mode_radio_state: FramedViewMode::Intensity,
-            davis_mode_radio_state: DavisTranscoderMode::RawDavis,
+            davis_mode_radio_state: TranscoderMode::RawDavis,
             davis_output_fps: 500.0,
             davis_output_fps_slider: 500.0,
             optimize_c: true,
@@ -62,10 +65,22 @@ pub struct InfoUiState {
     pub events_ppc_total: f64,
     pub events_total: u64,
     pub source_name: RichText,
-    pub output_name: RichText,
-    input_path: Option<PathBuf>,
+    pub output_name: OutputName,
+    pub(crate) input_path: Option<PathBuf>,
     output_path: Option<PathBuf>,
     pub view_mode_radio_state: FramedViewMode, // TODO: Move to different struct
+}
+
+pub struct OutputName {
+    pub text: RichText,
+}
+
+impl Default for OutputName {
+    fn default() -> Self {
+        OutputName {
+            text: RichText::new("No output selected yet"),
+        }
+    }
 }
 
 impl Default for InfoUiState {
@@ -76,7 +91,7 @@ impl Default for InfoUiState {
             events_ppc_total: 0.0,
             events_total: 0,
             source_name: RichText::new("No input file selected yet"),
-            output_name: RichText::new("No output selected yet"),
+            output_name: Default::default(),
             input_path: None,
             output_path: None,
             view_mode_radio_state: FramedViewMode::Intensity,
@@ -156,7 +171,7 @@ impl TranscoderState {
             }
         }
 
-        ui.label(self.ui_info_state.output_name.clone());
+        ui.label(self.ui_info_state.output_name.text.clone());
 
         ui.label(format!(
             "{:.2} transcoded FPS\t\
@@ -205,7 +220,7 @@ impl TranscoderState {
                 Some(source) => {
                     if source.scale != self.ui_state.scale
                         || source.get_ref_time() != self.ui_state.delta_t_ref as u32
-                        || match source.get_video().channels {
+                        || match source.get_video_ref().state.plane.c() {
                             1 => {
                                 // True if the transcoder is gray, but the user wants color
                                 self.ui_state.color
@@ -217,7 +232,7 @@ impl TranscoderState {
                         }
                     {
                         let current_frame =
-                            source.get_video().in_interval_count + source.frame_idx_start;
+                            source.get_video_ref().state.in_interval_count + source.frame_idx_start;
                         replace_adder_transcoder(
                             self,
                             self.ui_info_state.input_path.clone(),
@@ -242,11 +257,10 @@ impl TranscoderState {
         &mut self,
         mut images: ResMut<Assets<Image>>,
         mut handles: ResMut<Images>,
-    ) {
+    ) -> Result<(), Box<dyn Error>> {
         let pool = rayon::ThreadPoolBuilder::new()
             .num_threads(self.ui_state.thread_count)
-            .build()
-            .unwrap();
+            .build()?;
 
         let mut ui_info_state = &mut self.ui_info_state;
         ui_info_state.events_per_sec = 0.;
@@ -255,7 +269,7 @@ impl TranscoderState {
             match &mut self.transcoder.framed_source {
                 None => match &mut self.transcoder.davis_source {
                     None => {
-                        return;
+                        return Ok(());
                     }
                     Some(source) => source,
                 },
@@ -269,50 +283,46 @@ impl TranscoderState {
                     ui_info_state.events_per_sec += events_vec.len() as f64;
                 }
                 ui_info_state.events_ppc_total = ui_info_state.events_total as f64
-                    / (source.get_video().width as f64
-                        * source.get_video().height as f64
-                        * source.get_video().channels as f64);
-                let source_fps =
-                    source.get_video().get_tps() as f64 / source.get_video().get_ref_time() as f64;
+                    / (source.get_video_ref().state.plane.volume() as f64);
+                let source_fps = source.get_video_ref().get_tps() as f64
+                    / source.get_video_ref().get_ref_time() as f64;
                 ui_info_state.events_per_sec *= source_fps;
                 ui_info_state.events_ppc_per_sec = ui_info_state.events_per_sec
-                    / (source.get_video().width as f64
-                        * source.get_video().height as f64
-                        * source.get_video().channels as f64);
+                    / (source.get_video_ref().state.plane.volume() as f64);
             }
             Err(SourceError::Open) => {}
             Err(_) => {
+                source.get_video_mut().end_write_stream()?;
+                self.ui_info_state.output_path = None;
+                self.ui_info_state.output_name = Default::default();
+
                 // Start video over from the beginning
-                replace_adder_transcoder(
-                    self,
-                    self.ui_info_state.input_path.clone(),
-                    self.ui_info_state.output_path.clone(),
-                    0,
-                );
-                return;
+                replace_adder_transcoder(self, self.ui_info_state.input_path.clone(), None, 0);
+                return Ok(());
             }
         };
 
-        let image_mat = &source.get_video().instantaneous_frame;
+        let image_mat = &source.get_video_ref().instantaneous_frame;
 
         // add alpha channel
         let mut image_mat_bgra = Mat::default();
-        imgproc::cvt_color(&image_mat, &mut image_mat_bgra, imgproc::COLOR_BGR2BGRA, 4).unwrap();
+        imgproc::cvt_color(&image_mat, &mut image_mat_bgra, imgproc::COLOR_BGR2BGRA, 4)?;
 
         let image_bevy = Image::new(
             Extent3d {
-                width: source.get_video().width.into(),
-                height: source.get_video().height.into(),
+                width: source.get_video_ref().state.plane.w().into(),
+                height: source.get_video_ref().state.plane.h().into(),
                 depth_or_array_layers: 1,
             },
             TextureDimension::D2,
-            Vec::from(image_mat_bgra.data_bytes().unwrap()),
+            Vec::from(image_mat_bgra.data_bytes()?),
             TextureFormat::Bgra8UnormSrgb,
         );
         self.transcoder.live_image = image_bevy;
 
         let handle = images.add(self.transcoder.live_image.clone());
         handles.image_view = handle;
+        Ok(())
     }
 }
 
@@ -413,17 +423,17 @@ fn side_panel_grid_contents(
         ui.horizontal(|ui| {
             ui.radio_value(
                 &mut ui_state.davis_mode_radio_state,
-                DavisTranscoderMode::Framed,
+                TranscoderMode::Framed,
                 "Framed recon",
             );
             ui.radio_value(
                 &mut ui_state.davis_mode_radio_state,
-                DavisTranscoderMode::RawDavis,
+                TranscoderMode::RawDavis,
                 "Raw DAVIS",
             );
             ui.radio_value(
                 &mut ui_state.davis_mode_radio_state,
-                DavisTranscoderMode::RawDvs,
+                TranscoderMode::RawDvs,
                 "Raw DVS",
             );
         });

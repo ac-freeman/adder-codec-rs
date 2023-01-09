@@ -2,10 +2,12 @@ mod player;
 mod transcoder;
 mod utils;
 
+
 use std::ops::RangeInclusive;
 
+
 use crate::player::ui::PlayerState;
-use crate::transcoder::ui::TranscoderState;
+use crate::transcoder::ui::{TranscoderState};
 use bevy::ecs::system::Resource;
 use bevy::prelude::*;
 use bevy::window::PresentMode;
@@ -14,6 +16,7 @@ use bevy_egui::{egui, EguiContext, EguiPlugin, EguiSettings};
 // use egui_dock::egui as dock_egui;
 use bevy_egui::egui::{emath, global_dark_light_mode_switch, Rounding, Ui, Widget, WidgetText};
 
+use crate::transcoder::adder::replace_adder_transcoder;
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 
@@ -37,9 +40,9 @@ impl Tabs {
 #[derive(Resource)]
 pub struct MainUiState {
     view: Tabs,
+    error_msg: Option<String>,
 }
 
-use crate::transcoder::adder::replace_adder_transcoder;
 use crate::utils::slider::NotchedSlider;
 
 /// This example demonstrates the following functionality and use-cases of bevy_egui:
@@ -53,6 +56,7 @@ fn main() {
         .insert_resource(Images::default())
         .insert_resource(MainUiState {
             view: Tabs::Transcoder,
+            error_msg: None,
         })
         .init_resource::<TranscoderState>()
         .init_resource::<PlayerState>()
@@ -67,10 +71,7 @@ fn main() {
             ..default()
         }))
         .add_plugin(EguiPlugin)
-        .add_system(
-            configure_menu_bar
-                .before(draw_ui)
-        )
+        .add_system(configure_menu_bar.before(draw_ui))
         .add_startup_system(configure_visuals)
         .add_system(update_ui_scale_factor)
         .add_system(draw_ui)
@@ -102,7 +103,7 @@ fn update_ui_scale_factor(
         *toggle_scale_factor = Some(!toggle_scale_factor.unwrap_or(true));
 
         if let Some(window) = windows.get_primary() {
-            let scale_factor = if toggle_scale_factor.unwrap() {
+            let scale_factor = if toggle_scale_factor.unwrap_or(true) {
                 1.0
             } else {
                 1.0 / window.scale_factor()
@@ -162,6 +163,7 @@ fn configure_menu_bar(
     });
 }
 
+#[allow(clippy::too_many_arguments)]
 fn draw_ui(
     commands: Commands,
     time: Res<Time>, // Time passed since last frame
@@ -237,6 +239,10 @@ fn draw_ui(
             };
             ui.image(texture_id, size);
         }
+
+        if let Some(msg) = main_ui_state.error_msg.as_ref() {
+            ui.label(msg);
+        }
     });
 }
 
@@ -257,17 +263,23 @@ fn update_adder_params(
 fn consume_source(
     images: ResMut<Assets<Image>>,
     handles: ResMut<Images>,
-    commands: Commands,
-    main_ui_state: Res<MainUiState>,
+    mut main_ui_state: ResMut<MainUiState>,
     mut transcoder_state: ResMut<TranscoderState>,
     mut player_state: ResMut<PlayerState>,
 ) {
-    match main_ui_state.view {
-        Tabs::Transcoder => {
-            transcoder_state.consume_source(images, handles);
-        }
-        Tabs::Player => {
-            player_state.consume_source(images, handles, commands);
+    let res = match main_ui_state.view {
+        Tabs::Transcoder => transcoder_state.consume_source(images, handles),
+        Tabs::Player => player_state.consume_source(images, handles),
+    };
+
+    match res {
+        Ok(_) => {}
+        Err(e) => {
+            if e.is::<std::sync::mpsc::TryRecvError>() {
+                main_ui_state.error_msg = Some("Loading file...".to_string());
+            } else {
+                main_ui_state.error_msg = Some(format!("{}", e));
+            }
         }
     }
 }
@@ -298,6 +310,7 @@ fn file_drop(
 
             match main_ui_state.view {
                 Tabs::Transcoder => {
+                    transcoder_state.ui_info_state.input_path = Some(path_buf.clone());
                     // TODO: refactor as struct func
                     replace_adder_transcoder(
                         &mut transcoder_state,

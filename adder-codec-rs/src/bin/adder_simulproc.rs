@@ -1,7 +1,6 @@
 extern crate core;
 
-use adder_codec_rs::transcoder::source::framed_source::FramedSourceBuilder;
-use adder_codec_rs::transcoder::source::video::Source;
+use adder_codec_rs::transcoder::source::video::{Source, VideoBuilder};
 use adder_codec_rs::utils::simulproc::{SimulProcArgs, SimulProcessor};
 use adder_codec_rs::SourceCamera::FramedU8;
 
@@ -11,6 +10,7 @@ use rayon::current_num_threads;
 use std::error::Error;
 use std::fs::File;
 
+use adder_codec_rs::transcoder::source::framed::Framed;
 use std::io::Cursor;
 use std::path::Path;
 use std::process::Command;
@@ -21,7 +21,7 @@ async fn download_file() -> Result<(), Box<dyn std::error::Error + Send + Sync>>
     let path_str = "./tests/samples/videos/drop.mp4";
     if !Path::new(path_str).exists() {
         let resp = reqwest::get("https://www.pexels.com/video/2603664/download/").await?;
-        let mut file_out = File::create(path_str).expect("Could not create file on disk");
+        let mut file_out = File::create(path_str)?;
         let mut data_in = Cursor::new(resp.bytes().await?);
         std::io::copy(&mut data_in, &mut file_out)?;
     }
@@ -42,7 +42,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let mut args: SimulProcArgs = SimulProcArgs::parse();
     if !args.args_filename.is_empty() {
         let content = std::fs::read_to_string(args.args_filename)?;
-        args = toml::from_str(&content).unwrap();
+        args = toml::from_str(&content)?;
     }
     println!("c_pos: {}, c_neg: {}", args.c_thresh_pos, args.c_thresh_neg);
 
@@ -54,23 +54,20 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // args.output_raw_video_filename = "./tests/samples/videos/drop_out".to_string();
     //////////////////////////////////////////////////////
 
-    let mut source_builder = FramedSourceBuilder::new(args.input_filename, FramedU8)
-        .chunk_rows(64)
-        .frame_start(args.frame_idx_start)
-        .scale(args.scale)
-        .communicate_events(true)
-        .color(args.color_input)
-        .contrast_thresholds(args.c_thresh_pos, args.c_thresh_neg)
+    let mut source: Framed = Framed::new(args.input_filename, args.color_input, args.scale)?
+        // .chunk_rows(64)
+        .frame_start(args.frame_idx_start)?
+        .c_thresh_pos(args.c_thresh_pos)
+        .c_thresh_neg(args.c_thresh_neg)
         .show_display(args.show_display)
-        .time_parameters(args.ref_time, args.delta_t_max);
-    if !args.output_events_filename.is_empty() {
-        source_builder = source_builder.output_events_filename(args.output_events_filename);
-    }
-    let source = source_builder.finish().unwrap();
-    let source_fps = source.source_fps;
+        .auto_time_parameters(args.ref_time, args.delta_t_max)?;
 
-    let width = source.get_video().width;
-    let height = source.get_video().height;
+    if !args.output_events_filename.is_empty() {
+        source = *source.write_out(args.output_events_filename, FramedU8)?;
+    }
+
+    let source_fps = source.source_fps;
+    let plane = source.get_video_ref().state.plane.clone();
 
     let ref_time = source.get_ref_time();
     let num_threads = match args.thread_count {
@@ -84,10 +81,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
         args.output_raw_video_filename.as_str(),
         args.frame_count_max as i32,
         num_threads,
-    );
+    )?;
 
     let now = std::time::Instant::now();
-    simul_processor.run().unwrap();
+    simul_processor.run()?;
     println!("\n\n{} ms elapsed\n\n", now.elapsed().as_millis());
 
     // Use ffmpeg to encode the raw frame data as an mp4
@@ -102,9 +99,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
             "ffmpeg -hide_banner -loglevel error -f rawvideo -pix_fmt ".to_owned()
                 + color_str
                 + " -s:v "
-                + width.to_string().as_str()
+                + plane.w().to_string().as_str()
                 + "x"
-                + height.to_string().as_str()
+                + plane.h().to_string().as_str()
                 + " -r "
                 + source_fps.to_string().as_str()
                 + " -i "
@@ -113,19 +110,20 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 + &args.output_raw_video_filename
                 + ".mp4",
         )
-        .spawn()
-        .unwrap();
-    ffmpeg.wait().unwrap();
+        .spawn()?;
+    ffmpeg.wait()?;
 
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
-    use adder_codec_rs::transcoder::source::framed_source::FramedSourceBuilder;
-    use adder_codec_rs::transcoder::source::video::Source;
+    use adder_codec_rs::transcoder::source::framed::Framed;
+    use adder_codec_rs::transcoder::source::video::{Source, VideoBuilder};
     use adder_codec_rs::utils::simulproc::{SimulProcArgs, SimulProcessor};
+    use adder_codec_rs::DeltaT;
     use adder_codec_rs::SourceCamera::FramedU8;
+    use std::error::Error;
     use std::fs;
     use std::path::PathBuf;
     use std::process::Command;
@@ -133,15 +131,15 @@ mod tests {
     use std::time::Duration;
 
     #[test]
-    fn dark() {
+    fn dark() -> Result<(), Box<dyn Error>> {
         let d = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         let manifest_path_str = d.as_path().to_str().unwrap().to_owned();
 
         let args: SimulProcArgs = SimulProcArgs {
-            args_filename: "".to_string(),
+            args_filename: String::new(),
             color_input: false,
             ref_time: 5000,
-            delta_t_max: 120000,
+            delta_t_max: 120_000,
             frame_count_max: 0,
             frame_idx_start: 1,
             show_display: false,
@@ -155,19 +153,22 @@ mod tests {
             c_thresh_neg: 0,
             thread_count: 1, // Multithreading causes some issues in testing
         };
-        let mut source_builder = FramedSourceBuilder::new(args.input_filename, FramedU8)
-            .chunk_rows(64)
-            .frame_start(args.frame_idx_start)
-            .scale(args.scale)
-            .communicate_events(true)
-            .color(args.color_input)
-            .contrast_thresholds(args.c_thresh_pos, args.c_thresh_neg)
-            .show_display(args.show_display)
-            .time_parameters(args.ref_time, args.delta_t_max);
+        let mut source = Framed::new(args.input_filename, args.color_input, args.scale)?
+            // .chunk_rows(64)
+            .frame_start(args.frame_idx_start)?
+            .c_thresh_pos(args.c_thresh_pos)
+            .c_thresh_neg(args.c_thresh_neg)
+            .show_display(args.show_display);
+
+        let source_fps = source.source_fps;
+        source = source.time_parameters(
+            (args.ref_time as f64 * source_fps) as DeltaT,
+            args.ref_time,
+            args.delta_t_max,
+        )?;
         if !args.output_events_filename.is_empty() {
-            source_builder = source_builder.output_events_filename(args.output_events_filename);
+            source = *source.write_out(args.output_events_filename, FramedU8)?;
         }
-        let source = source_builder.finish().unwrap();
         let ref_time = source.get_ref_time();
 
         let mut simul_processor = SimulProcessor::new::<u8>(
@@ -176,7 +177,7 @@ mod tests {
             args.output_raw_video_filename.as_str(),
             args.frame_count_max as i32,
             1,
-        );
+        )?;
 
         simul_processor.run().unwrap();
         sleep(Duration::from_secs(5));
@@ -184,8 +185,8 @@ mod tests {
         let output_path = "./tests/samples/TEST_lake_scaled_hd_crop";
         assert_eq!(
             fs::metadata(output_path).unwrap().len()
-                % (simul_processor.source.get_video().width as u64
-                    * simul_processor.source.get_video().height as u64),
+                % (u64::from(simul_processor.source.get_video_ref().state.plane.w())
+                    * u64::from(simul_processor.source.get_video_ref().state.plane.h())),
             0
         );
 
@@ -197,7 +198,7 @@ mod tests {
                 .expect("failed to execute process")
         } else {
             fs::remove_file(output_path).unwrap();
-            return;
+            return Ok(());
         };
         // println!("{}", String::from_utf8(output.stdout.clone()).unwrap());
 
@@ -208,6 +209,7 @@ mod tests {
         fs::remove_file(output_path).unwrap();
 
         let output_path = "./tests/samples/TEST_lake_scaled_hd_crop.adder";
-        fs::remove_file(output_path).unwrap();
+        fs::remove_file(output_path)?;
+        Ok(())
     }
 }

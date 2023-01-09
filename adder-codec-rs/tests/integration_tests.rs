@@ -1,27 +1,27 @@
 extern crate adder_codec_rs;
 
+use crate::adder_codec_rs::transcoder::source::video::VideoBuilder;
+use ndarray::{Array3, Axis};
 use std::fs;
 use std::fs::File;
 use std::io::{BufWriter, Write};
-
-use ndarray::{Array3, Axis};
 use std::path::Path;
 use std::process::Command;
 
-use adder_codec_rs::framer::event_framer::FramerMode::INSTANTANEOUS;
-use adder_codec_rs::framer::event_framer::{FrameSequence, Framer, FramerBuilder};
-use adder_codec_rs::raw::raw_stream::RawStream;
-use adder_codec_rs::transcoder::source::framed_source::FramedSourceBuilder;
+use adder_codec_rs::framer::driver::FramerMode::INSTANTANEOUS;
+use adder_codec_rs::framer::driver::{FrameSequence, Framer, FramerBuilder};
+use adder_codec_rs::raw::stream::Raw;
+use adder_codec_rs::transcoder::source::framed::Framed;
 use adder_codec_rs::transcoder::source::video::Source;
 use adder_codec_rs::SourceCamera::FramedU8;
-use adder_codec_rs::{Codec, Coord, Event, SourceCamera};
+use adder_codec_rs::{Codec, Coord, Event, PlaneSize};
 use rand::Rng;
 use rayon::current_num_threads;
 
 #[test]
 fn test_set_stream_position() {
     let input_path = "./tests/samples/sample_1_raw_events.adder";
-    let mut stream: RawStream = Codec::new();
+    let mut stream: Raw = Codec::new();
     stream.open_reader(input_path).unwrap();
     let header_size = stream.decode_header().unwrap();
     for i in 1..stream.event_size as usize {
@@ -41,7 +41,7 @@ fn test_set_stream_position() {
 #[test]
 fn test_sample_perfect_dt() {
     let input_path = "./tests/samples/sample_1_raw_events.adder";
-    let mut stream: RawStream = Codec::new();
+    let mut stream: Raw = Codec::new();
     stream.open_reader(input_path).unwrap();
     stream.decode_header().unwrap();
 
@@ -55,17 +55,17 @@ fn test_sample_perfect_dt() {
         reconstructed_frame_rate as u32
     );
 
-    let mut frame_sequence: FrameSequence<u8> = FramerBuilder::new(
-        stream.height.into(),
-        stream.width.into(),
-        stream.channels.into(),
-        64,
-    )
-    .codec_version(stream.codec_version)
-    .time_parameters(stream.tps, stream.ref_interval, stream.delta_t_max, reconstructed_frame_rate)
-    .mode(INSTANTANEOUS)
-    .source(stream.get_source_type(), stream.source_camera)
-    .finish();
+    let mut frame_sequence: FrameSequence<u8> = FramerBuilder::new(stream.plane.clone(), 64)
+        .codec_version(stream.codec_version)
+        .time_parameters(
+            stream.tps,
+            stream.ref_interval,
+            stream.delta_t_max,
+            reconstructed_frame_rate,
+        )
+        .mode(INSTANTANEOUS)
+        .source(stream.get_source_type(), stream.source_camera)
+        .finish();
 
     let mut frame_count = 0;
     loop {
@@ -73,11 +73,14 @@ fn test_sample_perfect_dt() {
             Ok(mut event) => {
                 if frame_sequence.ingest_event(&mut event) {
                     match frame_sequence.write_multi_frame_bytes(&mut output_stream) {
-                        0 => {
+                        Ok(0) => {
                             panic!("should have frame")
                         }
-                        frames_returned => {
+                        Ok(frames_returned) => {
                             frame_count += frames_returned;
+                        }
+                        Err(e) => {
+                            panic!("error writing frame: {e}")
                         }
                     }
                 }
@@ -109,7 +112,7 @@ fn test_sample_perfect_dt() {
 #[test]
 fn test_sample_perfect_dt_color() {
     let input_path = "./tests/samples/sample_2_raw_events.adder";
-    let mut stream: RawStream = Codec::new();
+    let mut stream: Raw = Codec::new();
     stream.open_reader(input_path).unwrap();
     stream.decode_header().unwrap();
 
@@ -123,28 +126,31 @@ fn test_sample_perfect_dt_color() {
         reconstructed_frame_rate as u32
     );
 
-    let mut frame_sequence: FrameSequence<u8> = FramerBuilder::new(
-        stream.height.into(),
-        stream.width.into(),
-        stream.channels.into(),
-        64,
-    )
-    .codec_version(stream.codec_version)
-    .time_parameters(stream.tps, stream.ref_interval,stream.delta_t_max,  reconstructed_frame_rate)
-    .mode(INSTANTANEOUS)
-    .source(stream.get_source_type(), stream.source_camera)
-    .finish();
+    let mut frame_sequence: FrameSequence<u8> = FramerBuilder::new(stream.plane.clone(), 64)
+        .codec_version(stream.codec_version)
+        .time_parameters(
+            stream.tps,
+            stream.ref_interval,
+            stream.delta_t_max,
+            reconstructed_frame_rate,
+        )
+        .mode(INSTANTANEOUS)
+        .source(stream.get_source_type(), stream.source_camera)
+        .finish();
     let mut frame_count = 0;
     loop {
         match stream.decode_event() {
             Ok(mut event) => {
                 if frame_sequence.ingest_event(&mut event) {
                     match frame_sequence.write_multi_frame_bytes(&mut output_stream) {
-                        0 => {
+                        Ok(0) => {
                             panic!("should have frame")
                         }
-                        frames_returned => {
+                        Ok(frames_returned) => {
                             frame_count += frames_returned;
+                        }
+                        Err(e) => {
+                            panic!("error writing frame: {e}")
                         }
                     }
                 }
@@ -175,8 +181,11 @@ fn test_sample_perfect_dt_color() {
 #[test]
 #[should_panic]
 fn test_encode_header_non_init() {
-    let mut stream: RawStream = Codec::new();
-    stream.encode_header(50, 100, 53000, 4000, 50000, 1, 1, FramedU8);
+    let mut stream: Raw = Codec::new();
+    let plane = PlaneSize::new(50, 100, 1).unwrap();
+    stream
+        .encode_header(plane, 53000, 4000, 50000, 1, FramedU8)
+        .unwrap();
     // stream = RawStream::new();
 }
 
@@ -184,7 +193,7 @@ fn test_encode_header_non_init() {
 fn test_encode_header_v0() {
     let n = rand_u32();
     let mut stream = setup_raw_writer(n);
-    stream.close_writer();
+    stream.close_writer().unwrap();
     assert_eq!(
         fs::metadata("./TEST_".to_owned() + n.to_string().as_str() + ".addr")
             .unwrap()
@@ -199,7 +208,7 @@ fn test_encode_header_v0() {
 fn test_encode_header_v1() {
     let n = rand_u32();
     let mut stream = setup_raw_writer_v1(n);
-    stream.close_writer();
+    stream.close_writer().unwrap();
     assert_eq!(
         fs::metadata("./TEST_".to_owned() + n.to_string().as_str() + ".addr")
             .unwrap()
@@ -210,26 +219,32 @@ fn test_encode_header_v1() {
     // Don't check the error
 }
 
-fn setup_raw_writer(rand_num: u32) -> RawStream {
-    let mut stream: RawStream = Codec::new();
+fn setup_raw_writer(rand_num: u32) -> Raw {
+    let mut stream: Raw = Codec::new();
     stream
         .open_writer("./TEST_".to_owned() + rand_num.to_string().as_str() + ".addr")
         .expect("Couldn't open file");
-    stream.encode_header(50, 100, 53000, 4000, 50000, 1, 0, FramedU8);
+    let plane = PlaneSize::new(50, 100, 1).unwrap();
+    stream
+        .encode_header(plane, 53000, 4000, 50000, 0, FramedU8)
+        .unwrap();
     stream
 }
 
-fn setup_raw_writer_v1(rand_num: u32) -> RawStream {
-    let mut stream: RawStream = Codec::new();
+fn setup_raw_writer_v1(rand_num: u32) -> Raw {
+    let mut stream: Raw = Codec::new();
     stream
         .open_writer("./TEST_".to_owned() + rand_num.to_string().as_str() + ".addr")
         .expect("Couldn't open file");
-    stream.encode_header(50, 100, 53000, 4000, 50000, 1, 1, FramedU8);
+    let plane = PlaneSize::new(50, 100, 1).unwrap();
+    stream
+        .encode_header(plane, 53000, 4000, 50000, 1, FramedU8)
+        .unwrap();
     stream
 }
 
-fn cleanup_raw_writer(rand_num: u32, stream: &mut RawStream) {
-    stream.close_writer();
+fn cleanup_raw_writer(rand_num: u32, stream: &mut Raw) {
+    stream.close_writer().unwrap();
     fs::remove_file("./TEST_".to_owned() + rand_num.to_string().as_str() + ".addr").unwrap();
     // Don't check the error
 }
@@ -247,7 +262,7 @@ fn test_encode_event() {
         d: 5,
         delta_t: 1000,
     };
-    stream.encode_event(&event);
+    stream.encode_event(&event).unwrap();
     cleanup_raw_writer(n, &mut stream)
 }
 
@@ -265,12 +280,12 @@ fn test_encode_events() {
         delta_t: 1000,
     };
     let events = vec![event, event, event];
-    stream.encode_events(&events);
-    stream.flush_writer();
+    stream.encode_events(&events).unwrap();
+    stream.flush_writer().unwrap();
     cleanup_raw_writer(n, &mut stream)
 }
 
-fn setup_raw_reader(rand_num: u32, stream: &mut RawStream) {
+fn setup_raw_reader(rand_num: u32, stream: &mut Raw) {
     stream
         .open_reader("./TEST_".to_owned() + rand_num.to_string().as_str() + ".addr")
         .expect("Couldn't open file");
@@ -285,7 +300,7 @@ fn rand_u32() -> u32 {
 fn read_header() {
     let n: u32 = rand::thread_rng().gen();
     let mut stream = setup_raw_writer(n);
-    stream.flush_writer();
+    stream.flush_writer().unwrap();
     setup_raw_reader(n, &mut stream);
     cleanup_raw_writer(n, &mut stream);
 }
@@ -303,8 +318,8 @@ fn read_event() {
         d: 5,
         delta_t: 1000,
     };
-    stream.encode_event(&event);
-    stream.flush_writer();
+    stream.encode_event(&event).unwrap();
+    stream.flush_writer().unwrap();
     setup_raw_reader(n, &mut stream);
     let res = stream.decode_event();
     match res {
@@ -321,12 +336,13 @@ fn read_event() {
 
 #[test]
 fn test_event_framer_ingest() {
-    use adder_codec_rs::framer::event_framer::FramerMode::INSTANTANEOUS;
-    use adder_codec_rs::framer::event_framer::SourceType::U8;
-    use adder_codec_rs::framer::event_framer::{EventCoordless, FrameSequence, Framer};
+    use adder_codec_rs::framer::driver::FramerMode::INSTANTANEOUS;
+    use adder_codec_rs::framer::driver::SourceType::U8;
+    use adder_codec_rs::framer::driver::{EventCoordless, FrameSequence, Framer};
     use adder_codec_rs::{Coord, Event};
 
-    let mut frame_sequence: FrameSequence<EventCoordless> = FramerBuilder::new(10, 10, 3, 64)
+    let plane = PlaneSize::new(10, 10, 3).unwrap();
+    let mut frame_sequence: FrameSequence<EventCoordless> = FramerBuilder::new(plane, 64)
         .codec_version(1)
         .time_parameters(50000, 1000, 1000, 50.0)
         .mode(INSTANTANEOUS)
@@ -357,11 +373,12 @@ fn test_event_framer_ingest() {
 
 #[test]
 fn test_event_framer_ingest_get_filled() {
-    use adder_codec_rs::framer::event_framer::FramerMode::INSTANTANEOUS;
-    use adder_codec_rs::framer::event_framer::SourceType::U8;
-    use adder_codec_rs::framer::event_framer::{EventCoordless, FrameSequence, Framer};
+    use adder_codec_rs::framer::driver::FramerMode::INSTANTANEOUS;
+    use adder_codec_rs::framer::driver::SourceType::U8;
+    use adder_codec_rs::framer::driver::{EventCoordless, FrameSequence, Framer};
     use adder_codec_rs::{Coord, Event};
-    let mut frame_sequence: FrameSequence<EventCoordless> = FramerBuilder::new(5, 5, 1, 64)
+    let plane = PlaneSize::new(5, 5, 1).unwrap();
+    let mut frame_sequence: FrameSequence<EventCoordless> = FramerBuilder::new(plane, 64)
         .codec_version(1)
         .time_parameters(50000, 1000, 1000, 50.0)
         .mode(INSTANTANEOUS)
@@ -396,11 +413,12 @@ fn test_event_framer_ingest_get_filled() {
 
 #[test]
 fn get_frame_bytes_eventcoordless() {
-    use adder_codec_rs::framer::event_framer::FramerMode::INSTANTANEOUS;
-    use adder_codec_rs::framer::event_framer::SourceType::U8;
-    use adder_codec_rs::framer::event_framer::{EventCoordless, FrameSequence, Framer};
+    use adder_codec_rs::framer::driver::FramerMode::INSTANTANEOUS;
+    use adder_codec_rs::framer::driver::SourceType::U8;
+    use adder_codec_rs::framer::driver::{EventCoordless, FrameSequence, Framer};
     use adder_codec_rs::{Coord, Event};
-    let mut frame_sequence: FrameSequence<EventCoordless> = FramerBuilder::new(5, 5, 1, 64)
+    let plane = PlaneSize::new(5, 5, 1).unwrap();
+    let mut frame_sequence: FrameSequence<EventCoordless> = FramerBuilder::new(plane, 64)
         .codec_version(1)
         .time_parameters(50000, 1000, 1000, 50.0)
         .mode(INSTANTANEOUS)
@@ -438,7 +456,7 @@ fn get_frame_bytes_eventcoordless() {
 
     assert_eq!(fs::metadata(&path).unwrap().len(), 0);
     match frame_sequence.write_multi_frame_bytes(&mut output_writer) {
-        frame_count if frame_count == 6 => {
+        Ok(6) => {
             output_writer.flush().unwrap();
             drop(output_writer);
 
@@ -455,11 +473,12 @@ fn get_frame_bytes_eventcoordless() {
 
 #[test]
 fn get_frame_bytes_u8() {
-    use adder_codec_rs::framer::event_framer::FramerMode::INSTANTANEOUS;
-    use adder_codec_rs::framer::event_framer::SourceType::U8;
-    use adder_codec_rs::framer::event_framer::{FrameSequence, Framer};
+    use adder_codec_rs::framer::driver::FramerMode::INSTANTANEOUS;
+    use adder_codec_rs::framer::driver::SourceType::U8;
+    use adder_codec_rs::framer::driver::{FrameSequence, Framer};
     use adder_codec_rs::{Coord, Event};
-    let mut frame_sequence: FrameSequence<u8> = FramerBuilder::new(5, 5, 1, 64)
+    let plane = PlaneSize::new(5, 5, 1).unwrap();
+    let mut frame_sequence: FrameSequence<u8> = FramerBuilder::new(plane, 64)
         .codec_version(1)
         .time_parameters(50000, 1000, 1000, 50.0)
         .mode(INSTANTANEOUS)
@@ -498,7 +517,7 @@ fn get_frame_bytes_u8() {
 
     assert_eq!(fs::metadata(&path).unwrap().len(), 0);
     match frame_sequence.write_multi_frame_bytes(&mut output_writer) {
-        frame_count if frame_count == 6 => {
+        Ok(6) => {
             output_writer.flush().unwrap();
             drop(output_writer);
 
@@ -513,11 +532,12 @@ fn get_frame_bytes_u8() {
 
 #[test]
 fn get_frame_bytes_u16() {
-    use adder_codec_rs::framer::event_framer::FramerMode::INSTANTANEOUS;
-    use adder_codec_rs::framer::event_framer::SourceType::U8;
-    use adder_codec_rs::framer::event_framer::{FrameSequence, Framer};
+    use adder_codec_rs::framer::driver::FramerMode::INSTANTANEOUS;
+    use adder_codec_rs::framer::driver::SourceType::U8;
+    use adder_codec_rs::framer::driver::{FrameSequence, Framer};
     use adder_codec_rs::{Coord, Event};
-    let mut frame_sequence: FrameSequence<u16> = FramerBuilder::new(5, 5, 1, 64)
+    let plane = PlaneSize::new(5, 5, 1).unwrap();
+    let mut frame_sequence: FrameSequence<u16> = FramerBuilder::new(plane, 64)
         .codec_version(1)
         .time_parameters(50000, 1000, 1000, 50.0)
         .mode(INSTANTANEOUS)
@@ -555,7 +575,7 @@ fn get_frame_bytes_u16() {
 
     assert_eq!(fs::metadata(&path).unwrap().len(), 0);
     match frame_sequence.write_multi_frame_bytes(&mut output_writer) {
-        frame_count if frame_count == 6 => {
+        Ok(6) => {
             output_writer.flush().unwrap();
             drop(output_writer);
 
@@ -570,11 +590,12 @@ fn get_frame_bytes_u16() {
 
 #[test]
 fn get_frame_bytes_u32() {
-    use adder_codec_rs::framer::event_framer::FramerMode::INSTANTANEOUS;
-    use adder_codec_rs::framer::event_framer::SourceType::U8;
-    use adder_codec_rs::framer::event_framer::{FrameSequence, Framer};
+    use adder_codec_rs::framer::driver::FramerMode::INSTANTANEOUS;
+    use adder_codec_rs::framer::driver::SourceType::U8;
+    use adder_codec_rs::framer::driver::{FrameSequence, Framer};
     use adder_codec_rs::{Coord, Event};
-    let mut frame_sequence: FrameSequence<u32> = FramerBuilder::new(5, 5, 1, 46)
+    let plane = PlaneSize::new(5, 5, 1).unwrap();
+    let mut frame_sequence: FrameSequence<u32> = FramerBuilder::new(plane, 46)
         .codec_version(1)
         .time_parameters(50000, 1000, 1000, 50.0)
         .mode(INSTANTANEOUS)
@@ -612,7 +633,7 @@ fn get_frame_bytes_u32() {
 
     assert_eq!(fs::metadata(&path).unwrap().len(), 0);
     match frame_sequence.write_multi_frame_bytes(&mut output_writer) {
-        frame_count if frame_count == 6 => {
+        Ok(6) => {
             output_writer.flush().unwrap();
             drop(output_writer);
 
@@ -627,11 +648,12 @@ fn get_frame_bytes_u32() {
 
 #[test]
 fn get_frame_bytes_u64() {
-    use adder_codec_rs::framer::event_framer::FramerMode::INSTANTANEOUS;
-    use adder_codec_rs::framer::event_framer::SourceType::U8;
-    use adder_codec_rs::framer::event_framer::{FrameSequence, Framer};
+    use adder_codec_rs::framer::driver::FramerMode::INSTANTANEOUS;
+    use adder_codec_rs::framer::driver::SourceType::U8;
+    use adder_codec_rs::framer::driver::{FrameSequence, Framer};
     use adder_codec_rs::{Coord, Event};
-    let mut frame_sequence: FrameSequence<u64> = FramerBuilder::new(5, 5, 1, 64)
+    let plane = PlaneSize::new(5, 5, 1).unwrap();
+    let mut frame_sequence: FrameSequence<u64> = FramerBuilder::new(plane, 64)
         .codec_version(1)
         .time_parameters(50000, 1000, 1000, 50.0)
         .mode(INSTANTANEOUS)
@@ -669,7 +691,7 @@ fn get_frame_bytes_u64() {
 
     assert_eq!(fs::metadata(&path).unwrap().len(), 0);
     match frame_sequence.write_multi_frame_bytes(&mut output_writer) {
-        frame_count if frame_count == 6 => {
+        Ok(6) => {
             output_writer.flush().unwrap();
             drop(output_writer);
 
@@ -684,11 +706,12 @@ fn get_frame_bytes_u64() {
 
 #[test]
 fn test_get_empty_frame() {
-    use adder_codec_rs::framer::event_framer::FramerMode::INSTANTANEOUS;
-    use adder_codec_rs::framer::event_framer::SourceType::U8;
-    use adder_codec_rs::framer::event_framer::{FrameSequence, Framer};
+    use adder_codec_rs::framer::driver::FramerMode::INSTANTANEOUS;
+    use adder_codec_rs::framer::driver::SourceType::U8;
+    use adder_codec_rs::framer::driver::{FrameSequence, Framer};
     use adder_codec_rs::{Coord, Event};
-    let mut frame_sequence: FrameSequence<u8> = FramerBuilder::new(5, 5, 1, 64)
+    let plane = PlaneSize::new(5, 5, 1).unwrap();
+    let mut frame_sequence: FrameSequence<u8> = FramerBuilder::new(plane, 64)
         .codec_version(1)
         .time_parameters(50000, 1000, 1000, 50.0)
         .mode(INSTANTANEOUS)
@@ -698,7 +721,9 @@ fn test_get_empty_frame() {
     let path = "./TEST_".to_owned() + n.to_string().as_str() + ".addr";
     let file = File::create(&path).unwrap();
     let mut output_writer = BufWriter::new(file);
-    frame_sequence.write_frame_bytes(&mut output_writer);
+    frame_sequence
+        .write_frame_bytes(&mut output_writer)
+        .unwrap();
     output_writer.flush().unwrap();
     assert_eq!(fs::metadata(&path).unwrap().len(), 25); // Even if it's all empty data, still want
                                                         // to perform the write. Up to the user to make sure that the frame is filled.
@@ -722,7 +747,7 @@ fn test_get_empty_frame() {
 #[test]
 fn test_sample_unordered() {
     let input_path = "./tests/samples/sample_3_unordered.adder";
-    let mut stream: RawStream = Codec::new();
+    let mut stream: Raw = Codec::new();
     stream.open_reader(input_path).unwrap();
     stream.decode_header().unwrap();
 
@@ -736,28 +761,31 @@ fn test_sample_unordered() {
         reconstructed_frame_rate as u32
     );
 
-    let mut frame_sequence: FrameSequence<u8> = FramerBuilder::new(
-        stream.height.into(),
-        stream.width.into(),
-        stream.channels.into(),
-        64,
-    )
-    .codec_version(stream.codec_version)
-    .time_parameters(stream.tps, stream.ref_interval, stream.delta_t_max, reconstructed_frame_rate)
-    .mode(INSTANTANEOUS)
-    .source(stream.get_source_type(), stream.source_camera)
-    .finish();
+    let mut frame_sequence: FrameSequence<u8> = FramerBuilder::new(stream.plane.clone(), 64)
+        .codec_version(stream.codec_version)
+        .time_parameters(
+            stream.tps,
+            stream.ref_interval,
+            stream.delta_t_max,
+            reconstructed_frame_rate,
+        )
+        .mode(INSTANTANEOUS)
+        .source(stream.get_source_type(), stream.source_camera)
+        .finish();
     let mut frame_count = 0;
     loop {
         match stream.decode_event() {
             Ok(mut event) => {
                 if frame_sequence.ingest_event(&mut event) {
                     match frame_sequence.write_multi_frame_bytes(&mut output_stream) {
-                        0 => {
+                        Ok(0) => {
                             panic!("should have frame")
                         }
-                        frames_returned => {
+                        Ok(frames_returned) => {
                             frame_count += frames_returned;
+                        }
+                        Err(e) => {
+                            panic!("error writing frame: {e}")
                         }
                     }
                 }
@@ -789,7 +817,7 @@ fn test_sample_unordered() {
 #[test]
 fn test_sample_ordered() {
     let input_path = "./tests/samples/sample_3_ordered.adder";
-    let mut stream: RawStream = Codec::new();
+    let mut stream: Raw = Codec::new();
     stream.open_reader(input_path).unwrap();
     stream.decode_header().unwrap();
 
@@ -803,28 +831,31 @@ fn test_sample_ordered() {
         reconstructed_frame_rate as u32
     );
 
-    let mut frame_sequence: FrameSequence<u8> = FramerBuilder::new(
-        stream.height.into(),
-        stream.width.into(),
-        stream.channels.into(),
-        64,
-    )
-    .codec_version(stream.codec_version)
-    .time_parameters(stream.tps, stream.ref_interval, stream.delta_t_max, reconstructed_frame_rate)
-    .mode(INSTANTANEOUS)
-    .source(stream.get_source_type(), stream.source_camera)
-    .finish();
+    let mut frame_sequence: FrameSequence<u8> = FramerBuilder::new(stream.plane.clone(), 64)
+        .codec_version(stream.codec_version)
+        .time_parameters(
+            stream.tps,
+            stream.ref_interval,
+            stream.delta_t_max,
+            reconstructed_frame_rate,
+        )
+        .mode(INSTANTANEOUS)
+        .source(stream.get_source_type(), stream.source_camera)
+        .finish();
     let mut frame_count = 0;
     loop {
         match stream.decode_event() {
             Ok(mut event) => {
                 if frame_sequence.ingest_event(&mut event) {
                     match frame_sequence.write_multi_frame_bytes(&mut output_stream) {
-                        0 => {
+                        Ok(0) => {
                             panic!("should have frame")
                         }
-                        frames_returned => {
+                        Ok(frames_returned) => {
                             frame_count += frames_returned;
+                        }
+                        Err(e) => {
+                            panic!("error writing frame: {e}")
                         }
                     }
                 }
@@ -857,20 +888,15 @@ fn test_sample_ordered() {
 fn test_framed_to_adder_bunny4() {
     let data = fs::read_to_string("./tests/samples/bunny4.json").expect("Unable to read file");
     let gt_events: Vec<Event> = serde_json::from_str(data.as_str()).unwrap();
-    let mut source = FramedSourceBuilder::new(
-        "./tests/samples/bunny_crop4.mp4".to_string(),
-        SourceCamera::FramedU8,
-    )
-    .chunk_rows(64)
-    .frame_start(361)
-    .scale(1.0)
-    .communicate_events(true)
-    .color(false)
-    .contrast_thresholds(5, 5)
-    .show_display(false)
-    .time_parameters(5000, 240000)
-    .finish()
-    .unwrap();
+    let mut source = Framed::new("./tests/samples/bunny_crop4.mp4".to_string(), false, 1.0)
+        .unwrap()
+        // .chunk_rows(64)
+        .frame_start(361)
+        .unwrap()
+        .contrast_thresholds(5, 5)
+        .show_display(false)
+        .auto_time_parameters(5000, 240_000)
+        .unwrap();
 
     let frame_max = 250;
 
@@ -895,13 +921,13 @@ fn test_framed_to_adder_bunny4() {
                 }
             }
             Err(e) => {
-                println!("Err: {:?}", e);
+                println!("Err: {e:?}");
                 break;
             }
         }
 
-        let video = source.get_video();
-        if frame_max != 0 && video.in_interval_count >= frame_max {
+        let video = source.get_video_ref();
+        if frame_max != 0 && video.state.in_interval_count >= frame_max {
             break;
         }
     }
@@ -931,7 +957,7 @@ fn array3_test() {
         .axis_chunks_iter_mut(Axis(0), 4)
         .enumerate()
         .len();
-    println!("{}", tmp);
+    println!("{tmp}");
 
     let ret: Vec<i32> = event_pixel_trees
         .axis_chunks_iter_mut(Axis(0), 4)
