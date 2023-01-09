@@ -19,6 +19,7 @@ Source 8-bit image frame with shadows boosted ([source video](https://www.pexels
 
 ## Other crates
 - **davis-edi-rs**: a super high-speed system for performing frame deblurring and framed reconstruction from DAVIS/DVS streams, forming the backbone for the event camera driver code in the ADΔER library [[source](https://github.com/ac-freeman/davis-EDI-rs)] [![Crates.io](https://img.shields.io/crates/v/davis-edi-rs)](https://crates.io/crates/davis-edi-rs)
+- **aedat-rs**: a fast AEDAT 4 Rust reader. [[source](https://github.com/ac-freeman/aedat-rs)] [![Crates.io](https://img.shields.io/crates/v/aedat)](https://crates.io/crates/aedat)
 
 ## More information
 Read the [wiki](https://github.com/ac-freeman/adder-codec-rs/wiki/) for background on ADΔER, how to use it, and what tools are included.
