@@ -2,12 +2,10 @@ mod player;
 mod transcoder;
 mod utils;
 
-
 use std::ops::RangeInclusive;
 
-
 use crate::player::ui::PlayerState;
-use crate::transcoder::ui::{TranscoderState};
+use crate::transcoder::ui::TranscoderState;
 use bevy::ecs::system::Resource;
 use bevy::prelude::*;
 use bevy::window::PresentMode;
@@ -321,6 +319,7 @@ fn file_drop(
                 }
                 Tabs::Player => {
                     player_state.replace_player(path_buf);
+                    player_state.play();
                 }
             }
         }
