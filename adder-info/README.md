@@ -1,3 +1,6 @@
+[![Crates.io](https://img.shields.io/crates/v/adder-info)](https://crates.io/crates/adder-info)
+[![Downloads](https://img.shields.io/crates/dr/adder-info)](https://crates.io/crates/adder-info)
+
 ## Inspect an ADΔER file
 
 Want to quickly view the metadata for an ADΔER file? Just install this program for the current user with `cargo install adder-info`, then run with `adder-info -- -i /path/to/file.adder -d`. This program is analagous to `ffprobe` for framed video.

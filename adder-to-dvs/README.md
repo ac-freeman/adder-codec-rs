@@ -1,3 +1,6 @@
+[![Crates.io](https://img.shields.io/crates/v/adder-to-dvs)](https://crates.io/crates/adder-to-dvs)
+[![Downloads](https://img.shields.io/crates/dr/adder-to-dvs)](https://crates.io/crates/adder-to-dvs)
+
 This program transcodes an ADΔER file to DVS events in a human-readable text representation.
 Performance is fast. The resulting DVS stream is visualized during the transcode and written
 out as an mp4 file.
