@@ -2,12 +2,10 @@ mod player;
 mod transcoder;
 mod utils;
 
-
 use std::ops::RangeInclusive;
 
-
 use crate::player::ui::PlayerState;
-use crate::transcoder::ui::{TranscoderState};
+use crate::transcoder::ui::TranscoderState;
 use bevy::ecs::system::Resource;
 use bevy::prelude::*;
 use bevy::window::PresentMode;
@@ -83,6 +81,7 @@ fn main() {
 
 #[derive(Resource, Default)]
 pub struct Images {
+    last_image_view: Handle<Image>,
     image_view: Handle<Image>,
 }
 
@@ -184,6 +183,8 @@ fn draw_ui(
                 player_state.side_panel_ui(ui, commands, &mut images);
             }
         });
+
+    images.remove(&handles.last_image_view);
 
     let (image, texture_id) = match images.get(&handles.image_view) {
         // texture_id = Some(egui_ctx.add_image(handles.image_view.clone()));
@@ -321,6 +322,7 @@ fn file_drop(
                 }
                 Tabs::Player => {
                     player_state.replace_player(path_buf);
+                    player_state.play();
                 }
             }
         }

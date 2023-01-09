@@ -1,6 +1,6 @@
+use crossbeam_channel::{bounded, Receiver};
 use std::error::Error;
 use std::path::PathBuf;
-use std::sync::mpsc::{channel, Receiver, Sender};
 use std::time::Duration;
 
 use adder_codec_rs::transcoder::source::video::FramedViewMode;
@@ -131,11 +131,16 @@ impl PlayerState {
 
             if let Some(image) = image_opt {
                 let handle = images.add(image);
+                handles.last_image_view = handles.image_view.clone();
                 handles.image_view = handle;
             }
             return Ok(());
         }
         Err("".into())
+    }
+
+    pub fn play(&mut self) {
+        self.ui_state.playing = true;
     }
 
     // Fill in the side panel with sliders for playback speed and buttons for play/pause/stop
@@ -217,6 +222,7 @@ impl PlayerState {
 
             if ui.button("⏮").clicked() {
                 self.ui_state.playing = true;
+                self.ui_info_state.stream_state.file_pos = 0; // To force the player to restart
                 need_to_update = true;
             }
         });
@@ -361,8 +367,7 @@ impl PlayerState {
 
         self.ui_state.current_frame = 1;
 
-        let (player_tx, player_rx): (Sender<PlayerStreamArtifact>, Receiver<PlayerStreamArtifact>) =
-            channel();
+        let (player_tx, player_rx) = bounded(60);
 
         rayon::spawn(move || loop {
             let res = player.consume_source();

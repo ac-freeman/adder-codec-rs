@@ -142,6 +142,11 @@ impl AdderPlayer {
                     Ok(_) => {}
                     Err(_) => {}
                 }
+            } else {
+                match stream.set_input_stream_position(stream.header_size as u64) {
+                    Ok(_) => {}
+                    Err(_) => {}
+                }
             }
         }
         self
