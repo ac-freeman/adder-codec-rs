@@ -1,4 +1,4 @@
-use crossbeam_channel::{bounded, Receiver, Sender};
+use crossbeam_channel::{bounded, Receiver};
 use std::error::Error;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -131,6 +131,7 @@ impl PlayerState {
 
             if let Some(image) = image_opt {
                 let handle = images.add(image);
+                handles.last_image_view = handles.image_view.clone();
                 handles.image_view = handle;
             }
             return Ok(());
@@ -373,7 +374,6 @@ impl PlayerState {
             match player_tx.send(res) {
                 Ok(_) => {}
                 Err(_) => {
-                    println!("Leaving loop");
                     break;
                 }
             };

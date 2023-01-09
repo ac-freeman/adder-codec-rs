@@ -320,6 +320,7 @@ impl TranscoderState {
         );
         self.transcoder.live_image = image_bevy;
 
+        handles.last_image_view = handles.image_view.clone();
         let handle = images.add(self.transcoder.live_image.clone());
         handles.image_view = handle;
         Ok(())
