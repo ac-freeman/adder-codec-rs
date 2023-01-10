@@ -11,7 +11,7 @@ use std::io::{BufWriter, Write};
 use std::time::Instant;
 
 fn main() {
-    let input_path = "/home/andrew/Downloads/bunny4.adder";
+    let input_path = "/home/andrew/Downloads/hjkhjkl_v2.adder";
     let mut stream: Raw = Codec::new();
     stream.open_reader(input_path).expect("Invalid path");
     stream.decode_header().expect("Invalid header");
@@ -28,7 +28,7 @@ fn main() {
     // );
 
     let mut frame_sequence: FrameSequence<u8> = FramerBuilder::new(stream.plane.clone(), 260)
-        .codec_version(stream.codec_version)
+        .codec_version(stream.codec_version, stream.time_mode)
         .time_parameters(
             stream.tps,
             stream.ref_interval,

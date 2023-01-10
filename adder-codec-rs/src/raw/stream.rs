@@ -267,6 +267,8 @@ impl Codec for Raw {
         assert_eq!(header.magic, MAGIC_RAW);
 
         self.input_stream = None;
+        self.source_camera = source_camera.unwrap_or_default();
+        self.time_mode = time_mode.unwrap_or_default();
 
         self.header_size = encode_header_extension(self, header, source_camera, time_mode)?;
         Ok(())

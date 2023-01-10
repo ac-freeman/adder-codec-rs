@@ -718,6 +718,9 @@ fn ingest_event_for_chunk<
             if state.codec_version >= 2 && state.time_mode == TimeMode::AbsoluteT {
                 // event.delta_t -= ((*last_filled_frame_ref + 1) * state.ref_interval as i64) as u32;
                 event.delta_t -= prev_running_ts as u32;
+                if event.coord.x == 0 && event.coord.y == 0 && event.coord.c.unwrap() == 0 {
+                    dbg!(event.delta_t);
+                }
             }
 
             *last_frame_intensity_ref = T::get_frame_value(
