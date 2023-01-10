@@ -3,6 +3,7 @@ extern crate core;
 use adder_codec_rs::transcoder::source::video::{Source, VideoBuilder};
 use adder_codec_rs::utils::simulproc::{SimulProcArgs, SimulProcessor};
 use adder_codec_rs::SourceCamera::FramedU8;
+use adder_codec_rs::TimeMode;
 
 use clap::Parser;
 use rayon::current_num_threads;
@@ -63,7 +64,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .auto_time_parameters(args.ref_time, args.delta_t_max)?;
 
     if !args.output_events_filename.is_empty() {
-        source = *source.write_out(args.output_events_filename, FramedU8)?;
+        source = *source.write_out(args.output_events_filename, FramedU8, TimeMode::DeltaT)?;
     }
 
     let source_fps = source.source_fps;
@@ -121,8 +122,8 @@ mod tests {
     use adder_codec_rs::transcoder::source::framed::Framed;
     use adder_codec_rs::transcoder::source::video::{Source, VideoBuilder};
     use adder_codec_rs::utils::simulproc::{SimulProcArgs, SimulProcessor};
-    use adder_codec_rs::DeltaT;
     use adder_codec_rs::SourceCamera::FramedU8;
+    use adder_codec_rs::{DeltaT, TimeMode};
     use std::error::Error;
     use std::fs;
     use std::path::PathBuf;
@@ -167,7 +168,7 @@ mod tests {
             args.delta_t_max,
         )?;
         if !args.output_events_filename.is_empty() {
-            source = *source.write_out(args.output_events_filename, FramedU8)?;
+            source = *source.write_out(args.output_events_filename, FramedU8, TimeMode::DeltaT)?;
         }
         let ref_time = source.get_ref_time();
 

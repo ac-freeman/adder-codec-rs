@@ -4,6 +4,7 @@ use adder_codec_rs::transcoder::source::framed::Framed;
 use adder_codec_rs::transcoder::source::video::{Source, VideoBuilder};
 
 use adder_codec_rs::SourceCamera::FramedU8;
+use adder_codec_rs::TimeMode;
 use rayon::current_num_threads;
 use std::error::Error;
 use std::io;
@@ -17,7 +18,11 @@ fn main() -> Result<(), Box<dyn Error>> {
         0.5,
     )?
     .frame_start(1420)?
-    .write_out("/home/andrew/Downloads/events.adder".to_string(), FramedU8)?
+    .write_out(
+        "/home/andrew/Downloads/events.adder".to_string(),
+        FramedU8,
+        TimeMode::DeltaT,
+    )?
     .contrast_thresholds(10, 10)
     .show_display(true)
     .auto_time_parameters(255, 255 * 30)?;

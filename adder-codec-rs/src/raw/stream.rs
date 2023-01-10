@@ -1,10 +1,13 @@
-use crate::header::{EventStreamHeaderExtensionV0, EventStreamHeaderExtensionV1, MAGIC_RAW};
+use crate::header::{
+    EventStreamHeaderExtensionV0, EventStreamHeaderExtensionV1, EventStreamHeaderExtensionV2,
+    MAGIC_RAW,
+};
 use crate::SourceType::{F32, F64, U16, U32, U64, U8};
 
 use crate::raw::stream::Error::{Deserialize, Eof};
 use crate::{
     Codec, Coord, DeltaT, Event, EventSingle, EventStreamHeader, PlaneSize, SourceCamera,
-    SourceType, EOF_PX_ADDRESS,
+    SourceType, TimeMode, EOF_PX_ADDRESS,
 };
 use bincode::config::{BigEndian, FixintEncoding, WithOtherEndian, WithOtherIntEncoding};
 use bincode::{DefaultOptions, Options};
@@ -56,6 +59,7 @@ pub struct Raw {
     input_stream: Option<BufReader<File>>,
     pub codec_version: u8,
     pub header_size: usize,
+    pub time_mode: TimeMode,
     pub plane: PlaneSize,
     pub tps: DeltaT,
     pub ref_interval: DeltaT,
@@ -70,8 +74,9 @@ impl Codec for Raw {
         Raw {
             output_stream: None,
             input_stream: None,
-            codec_version: 1,
+            codec_version: 2,
             header_size: 0,
+            time_mode: TimeMode::DeltaT,
             plane: PlaneSize::default(),
             tps: 0,
             ref_interval: 0,
@@ -243,12 +248,14 @@ impl Codec for Raw {
         ref_interval: DeltaT,
         delta_t_max: DeltaT,
         codec_version: u8,
-        source_camera: SourceCamera,
+        source_camera: Option<SourceCamera>,
+        time_mode: Option<TimeMode>,
     ) -> Result<(), Box<dyn std::error::Error>> {
         self.plane = plane.clone();
         self.tps = tps;
         self.ref_interval = ref_interval;
         self.delta_t_max = delta_t_max;
+        self.codec_version = codec_version;
         let header = EventStreamHeader::new(
             MAGIC_RAW,
             plane,
@@ -259,28 +266,9 @@ impl Codec for Raw {
         );
         assert_eq!(header.magic, MAGIC_RAW);
 
-        match &mut self.output_stream {
-            None => {
-                return Err(Error::UnitializedStream.into());
-            }
-            Some(stream) => {
-                self.bincode.serialize_into(&mut *stream, &header)?;
-
-                match codec_version {
-                    0 => self
-                        .bincode
-                        .serialize_into(&mut *stream, &EventStreamHeaderExtensionV0 {})?,
-                    1 => self.bincode.serialize_into(
-                        &mut *stream,
-                        &EventStreamHeaderExtensionV1 {
-                            source: source_camera,
-                        },
-                    )?,
-                    _ => return Err(Error::BadFile.into()),
-                };
-            }
-        }
         self.input_stream = None;
+
+        self.header_size = encode_header_extension(self, header, source_camera, time_mode)?;
         Ok(())
     }
 
@@ -315,29 +303,41 @@ impl Codec for Raw {
                     _ => return Err(Error::BadFile.into()),
                 };
 
-                let header_size = std::mem::size_of::<EventStreamHeader>()
-                    + match header.version {
-                        0 => {
-                            self.source_camera = SourceCamera::default();
-                            0
-                        }
-                        1 => {
-                            self.source_camera = self
-                                .bincode
-                                .deserialize_from::<_, EventStreamHeaderExtensionV1>(
-                                    stream.get_mut(),
-                                )?
-                                .source;
-                            std::mem::size_of::<EventStreamHeaderExtensionV1>()
-                        }
-                        _ => {
-                            self.source_camera = SourceCamera::default();
-                            0
-                        }
-                    };
+                let header_size =
+                    std::mem::size_of::<EventStreamHeader>() + self.decode_header_extension()?;
                 self.header_size = header_size;
 
                 Ok(header_size)
+            }
+        }
+    }
+
+    fn decode_header_extension(&mut self) -> Result<usize, Box<dyn std::error::Error>> {
+        match &mut self.input_stream {
+            None => Err(Error::UnitializedStream.into()),
+            Some(stream) => {
+                let mut added_size = 0;
+                if self.codec_version == 0 {
+                    return Ok(added_size);
+                }
+                self.source_camera = self
+                    .bincode
+                    .deserialize_from::<_, EventStreamHeaderExtensionV1>(stream.get_mut())?
+                    .source;
+                added_size += std::mem::size_of::<EventStreamHeaderExtensionV1>();
+                if self.codec_version == 1 {
+                    return Ok(added_size);
+                }
+
+                self.time_mode = self
+                    .bincode
+                    .deserialize_from::<_, EventStreamHeaderExtensionV2>(stream.get_mut())?
+                    .time_mode;
+                added_size += std::mem::size_of::<EventStreamHeaderExtensionV2>();
+                if self.codec_version == 2 {
+                    return Ok(added_size);
+                }
+                return Err(Error::BadFile.into());
             }
         }
     }
@@ -402,11 +402,58 @@ impl Codec for Raw {
     }
 }
 
+fn encode_header_extension(
+    raw: &mut Raw,
+    header: EventStreamHeader,
+    source_camera: Option<SourceCamera>,
+    time_mode: Option<TimeMode>,
+) -> Result<usize, Box<dyn std::error::Error>> {
+    match &mut raw.output_stream {
+        None => Err(Error::UnitializedStream.into()),
+        Some(stream) => {
+            let mut added_size = 0;
+
+            raw.bincode.serialize_into(&mut *stream, &header)?;
+            added_size += std::mem::size_of::<EventStreamHeader>();
+
+            raw.bincode
+                .serialize_into(&mut *stream, &EventStreamHeaderExtensionV0 {})?;
+            added_size += std::mem::size_of::<EventStreamHeaderExtensionV0>();
+
+            if raw.codec_version == 0 {
+                return Ok(added_size);
+            }
+            raw.bincode.serialize_into(
+                &mut *stream,
+                &EventStreamHeaderExtensionV1 {
+                    source: source_camera.expect("source_camera must be set for codec version 1"),
+                },
+            )?;
+            added_size += std::mem::size_of::<EventStreamHeaderExtensionV1>();
+            if raw.codec_version == 1 {
+                return Ok(added_size);
+            }
+
+            raw.bincode.serialize_into(
+                &mut *stream,
+                &EventStreamHeaderExtensionV2 {
+                    time_mode: time_mode.expect("time_mode must be set for codec version 2"),
+                },
+            )?;
+            added_size += std::mem::size_of::<EventStreamHeaderExtensionV2>();
+            if raw.codec_version == 2 {
+                return Ok(added_size);
+            }
+            return Err(Error::BadFile.into());
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::raw::stream::Raw;
     use crate::SourceCamera::FramedU8;
-    use crate::{Codec, Coord, Event, PlaneSize};
+    use crate::{Codec, Coord, Event, PlaneSize, TimeMode};
     use rand::Rng;
     use std::fs;
 
@@ -423,7 +470,15 @@ mod tests {
             channels: 1,
         };
         stream
-            .encode_header(plane, 53000, 4000, 50000, 1, FramedU8)
+            .encode_header(
+                plane,
+                53000,
+                4000,
+                50000,
+                1,
+                Some(FramedU8),
+                Some(TimeMode::DeltaT),
+            )
             .unwrap();
         let event: Event = Event {
             coord: Coord {
@@ -456,7 +511,15 @@ mod tests {
             channels: 3,
         };
         stream
-            .encode_header(plane, 473_289, 477_893, 4_732_987, 1, FramedU8)
+            .encode_header(
+                plane,
+                473_289,
+                477_893,
+                4_732_987,
+                1,
+                Some(FramedU8),
+                Some(TimeMode::DeltaT),
+            )
             .unwrap();
         assert!(stream.input_stream.is_none());
 

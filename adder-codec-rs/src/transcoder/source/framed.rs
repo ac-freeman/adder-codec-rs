@@ -4,7 +4,7 @@ use crate::transcoder::source::video::SourceError;
 use crate::transcoder::source::video::SourceError::BufferEmpty;
 use crate::transcoder::source::video::Video;
 use crate::transcoder::source::video::{Source, VideoBuilder};
-use crate::{Coord, Event};
+use crate::{Coord, Event, TimeMode};
 use crate::{PlaneSize, SourceCamera};
 use opencv::core::{Mat, Size};
 use opencv::videoio::{VideoCapture, CAP_PROP_FPS, CAP_PROP_FRAME_COUNT, CAP_PROP_POS_FRAMES};
@@ -207,8 +207,11 @@ impl VideoBuilder for Framed {
         mut self,
         output_filename: String,
         source_camera: SourceCamera,
+        time_mode: TimeMode,
     ) -> Result<Box<Self>, Box<dyn Error>> {
-        self.video = self.video.write_out(output_filename, source_camera)?;
+        self.video = self
+            .video
+            .write_out(output_filename, Some(source_camera), Some(time_mode))?;
         Ok(Box::new(self))
     }
 

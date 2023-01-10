@@ -3,7 +3,7 @@ use crate::transcoder::source::video::SourceError::BufferEmpty;
 use crate::transcoder::source::video::{
     integrate_for_px, show_display, Source, SourceError, Video, VideoBuilder,
 };
-use crate::{Codec, DeltaT, Event, PlaneSize, SourceCamera, SourceType};
+use crate::{Codec, DeltaT, Event, PlaneSize, SourceCamera, SourceType, TimeMode};
 use aedat::events_generated::Event as DvsEvent;
 use davis_edi_rs::util::reconstructor::{IterVal, ReconstructionError, Reconstructor};
 use rayon::iter::ParallelIterator;
@@ -642,8 +642,11 @@ impl VideoBuilder for Davis {
         mut self,
         output_filename: String,
         source_camera: SourceCamera,
+        time_mode: TimeMode,
     ) -> Result<Box<Self>, Box<dyn Error>> {
-        self.video = self.video.write_out(output_filename, source_camera)?;
+        self.video = self
+            .video
+            .write_out(output_filename, Some(source_camera), Some(time_mode))?;
         Ok(Box::new(self))
     }
 

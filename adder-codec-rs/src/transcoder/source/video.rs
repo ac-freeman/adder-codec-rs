@@ -7,7 +7,7 @@ use std::path::Path;
 use std::sync::mpsc::{channel, Sender};
 
 use crate::raw::stream::{Error as StreamError, Raw};
-use crate::{raw, Codec, Coord, Event, PlaneSize, SourceType, D};
+use crate::{raw, Codec, Coord, Event, PlaneSize, SourceType, TimeMode, D};
 use opencv::highgui;
 use opencv::imgproc::resize;
 use opencv::prelude::*;
@@ -142,6 +142,7 @@ pub trait VideoBuilder {
         self,
         output_filename: String,
         source_camera: SourceCamera,
+        time_mode: TimeMode,
     ) -> Result<Box<Self>, Box<dyn std::error::Error>>;
 
     fn show_display(self, show_display: bool) -> Self;
@@ -280,7 +281,8 @@ impl Video {
     pub fn write_out(
         mut self,
         output_filename: String,
-        source_camera: SourceCamera,
+        source_camera: Option<SourceCamera>,
+        time_mode: Option<TimeMode>,
     ) -> Result<Self, Box<dyn std::error::Error>> {
         self.state.write_out = true;
 
@@ -293,6 +295,7 @@ impl Video {
             self.state.delta_t_max,
             1,
             source_camera,
+            time_mode,
         )?;
         Ok(self)
     }

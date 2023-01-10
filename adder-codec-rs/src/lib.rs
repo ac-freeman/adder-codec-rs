@@ -1,6 +1,6 @@
 use crate::framer::driver::{EventCoordless, SourceType};
 use crate::header::EventStreamHeader;
-use crate::raw::stream::Error as StreamError;
+use crate::raw::streaem::Error as StreamError;
 use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::fmt::Formatter;
@@ -170,6 +170,14 @@ pub enum SourceCamera {
     DavisU8,
     Atis,
     Asint,
+}
+
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
+pub enum TimeMode {
+    #[default]
+    DeltaT,
+    AbsoluteT,
+    Mixed,
 }
 
 impl std::fmt::Display for SourceCamera {
@@ -451,7 +459,8 @@ pub trait Codec {
         ref_interval: u32,
         delta_t_max: u32,
         codec_version: u8,
-        source_camera: SourceCamera,
+        source_camera: Option<SourceCamera>,
+        time_mode: Option<TimeMode>,
     ) -> Result<(), Box<dyn Error>>;
 
     fn decode_header(&mut self) -> Result<usize, Box<dyn Error>>;
@@ -460,6 +469,7 @@ pub trait Codec {
     fn encode_events(&mut self, events: &[Event]) -> Result<(), StreamError>;
     fn encode_events_events(&mut self, events: &[Vec<Event>]) -> Result<(), StreamError>;
     fn decode_event(&mut self) -> Result<Event, StreamError>;
+    fn decode_header_extension(&mut self) -> Result<usize, Box<dyn std::error::Error>>;
 }
 
 #[cfg(test)]

@@ -2,7 +2,7 @@ use std::error::Error;
 
 use adder_codec_rs::transcoder::source::davis::Davis;
 use adder_codec_rs::transcoder::source::framed::Framed;
-use adder_codec_rs::DeltaT;
+use adder_codec_rs::{DeltaT, TimeMode};
 use bevy::prelude::Image;
 use std::fmt;
 use std::path::{Path, PathBuf};
@@ -76,8 +76,11 @@ impl AdderTranscoder {
                         match output_path_opt {
                             None => {}
                             Some(output_path) => {
-                                framed = *framed
-                                    .write_out(output_path.to_str().unwrap().parse()?, FramedU8)?;
+                                framed = *framed.write_out(
+                                    output_path.to_str().unwrap().parse()?,
+                                    FramedU8,
+                                    TimeMode::DeltaT,
+                                )?;
                                 //     .output_events_filename(match output_path.to_str() {
                                 //     None => {
                                 //         return Err(Box::new(AdderTranscoderError(
@@ -165,7 +168,11 @@ impl AdderTranscoder {
                             .c_thresh_neg(ui_state.adder_tresh as u8);
 
                         if let Some(output_string) = output_string {
-                            davis_source = *davis_source.write_out(output_string, DavisU8)?;
+                            davis_source = *davis_source.write_out(
+                                output_string,
+                                DavisU8,
+                                TimeMode::DeltaT,
+                            )?;
                         }
 
                         Ok(AdderTranscoder {
