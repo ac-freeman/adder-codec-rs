@@ -6,7 +6,7 @@ use crate::framer::scale_intensity::FrameValue;
 use crate::transcoder::source::framed::Framed;
 use crate::transcoder::source::video::Source;
 use crate::SourceCamera::FramedU8;
-use crate::{DeltaT, Event};
+use crate::{DeltaT, Event, TimeMode};
 use clap::Parser;
 use rayon::ThreadPool;
 use serde::Serialize;
@@ -126,7 +126,7 @@ impl SimulProcessor {
 
         let mut framer = thread_pool_framer.install(|| {
             FramerBuilder::new(plane, source.video.state.chunk_rows)
-                .codec_version(1)
+                .codec_version(2, TimeMode::AbsoluteT)
                 .time_parameters(
                     source.video.state.tps,
                     ref_time,

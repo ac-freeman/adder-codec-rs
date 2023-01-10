@@ -71,7 +71,7 @@ impl AdderPlayer {
 
                     let framer_builder: FramerBuilder =
                         FramerBuilder::new(stream.plane.clone(), 260)
-                            .codec_version(stream.codec_version)
+                            .codec_version(stream.codec_version, stream.time_mode)
                             .time_parameters(
                                 stream.tps,
                                 stream.ref_interval,
