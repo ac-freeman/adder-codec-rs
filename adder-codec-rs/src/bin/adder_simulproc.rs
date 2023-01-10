@@ -82,6 +82,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
         args.output_raw_video_filename.as_str(),
         args.frame_count_max as i32,
         num_threads,
+        2,
+        TimeMode::AbsoluteT,
     )?;
 
     let now = std::time::Instant::now();
@@ -178,6 +180,8 @@ mod tests {
             args.output_raw_video_filename.as_str(),
             args.frame_count_max as i32,
             1,
+            1,
+            TimeMode::DeltaT,
         )?;
 
         simul_processor.run().unwrap();

@@ -149,8 +149,7 @@ mod tests {
         output_stream = migrate_v2(stream, output_stream)?;
         output_stream.close_writer()?;
 
-        stream.close_writer().unwrap();
-        fs::remove_file("./TEST_".to_owned() + n.to_string().as_str() + ".addr").unwrap();
+        fs::remove_file("./TEST_".to_owned() + n.to_string().as_str() + ".adder").unwrap();
 
         let mut input_stream = Raw::new();
         input_stream.open_reader("./TEST_".to_owned() + n.to_string().as_str() + "_v2.adder")?;
@@ -175,7 +174,7 @@ mod tests {
         assert_eq!(event.delta_t as u32, 2418);
 
         input_stream.close_writer().unwrap();
-        fs::remove_file("./TEST_".to_owned() + n.to_string().as_str() + "_v2.addr").unwrap();
+        fs::remove_file("./TEST_".to_owned() + n.to_string().as_str() + "_v2.adder").unwrap();
 
         Ok(())
     }

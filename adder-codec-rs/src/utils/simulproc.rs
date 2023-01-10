@@ -96,6 +96,8 @@ impl SimulProcessor {
         output_path: &str,
         frame_max: i32,
         num_threads: usize,
+        codec_version: u8,
+        time_mode: TimeMode,
     ) -> Result<SimulProcessor, Box<dyn Error>>
     where
         T: Clone
@@ -126,7 +128,7 @@ impl SimulProcessor {
 
         let mut framer = thread_pool_framer.install(|| {
             FramerBuilder::new(plane, source.video.state.chunk_rows)
-                .codec_version(2, TimeMode::AbsoluteT)
+                .codec_version(codec_version, time_mode)
                 .time_parameters(
                     source.video.state.tps,
                     ref_time,

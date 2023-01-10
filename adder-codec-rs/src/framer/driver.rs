@@ -368,7 +368,7 @@ impl<
     /// # Examples
     ///
     /// ```
-    /// # use adder_codec_rs::{Coord, Event, PlaneSize};
+    /// # use adder_codec_rs::{Coord, Event, PlaneSize, TimeMode};
     /// # use adder_codec_rs::framer::driver::FramerMode::INSTANTANEOUS;
     /// # use adder_codec_rs::framer::driver::{FrameSequence, Framer, FramerBuilder};
     /// # use adder_codec_rs::framer::driver::SourceType::U8;
@@ -377,7 +377,7 @@ impl<
     /// let mut frame_sequence: FrameSequence<u8> =
     /// FramerBuilder::new(
     ///             PlaneSize::new(10,10,3).unwrap(), 64)
-    ///             .codec_version(1)
+    ///             .codec_version(1, TimeMode::DeltaT)
     ///             .time_parameters(50000, 1000, 1000, 50.0)
     ///             .mode(INSTANTANEOUS)
     ///             .source(U8, FramedU8)
@@ -718,9 +718,6 @@ fn ingest_event_for_chunk<
             if state.codec_version >= 2 && state.time_mode == TimeMode::AbsoluteT {
                 // event.delta_t -= ((*last_filled_frame_ref + 1) * state.ref_interval as i64) as u32;
                 event.delta_t -= prev_running_ts as u32;
-                if event.coord.x == 0 && event.coord.y == 0 && event.coord.c.unwrap() == 0 {
-                    dbg!(event.delta_t);
-                }
             }
 
             *last_frame_intensity_ref = T::get_frame_value(
