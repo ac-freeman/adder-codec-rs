@@ -1,5 +1,5 @@
 use crate::transcoder::event_pixel_tree::Mode::{Continuous, FramePerfect};
-use crate::{Coord, Event, UDshift, D_MAX, D_SHIFT};
+use crate::{Coord, Event, TimeMode, UDshift, D_MAX, D_SHIFT};
 use smallvec::{smallvec, SmallVec};
 use std::cmp::min;
 
@@ -36,13 +36,14 @@ pub struct PixelNode {
     alt: Option<()>,
 
     state: PixelState,
-    pub best_event: Option<Event>, // TODO: make private
+    pub(crate) best_event: Option<Event>,
 }
 
 // Each PixelNode is ~20 bytes. Each PixelArena is at least 20 + (6*20) 140 bytes, but takes at
 // least 144 bytes of space, I think?
 pub struct PixelArena {
     pub coord: Coord,
+    time_mode: TimeMode,
     length: usize,
     pub base_val: u8,
     pub need_to_pop_top: bool,
@@ -57,9 +58,16 @@ impl PixelArena {
         PixelArena {
             coord,
             length: 1,
+            time_mode: TimeMode::default(),
             base_val: 0,
             need_to_pop_top: false,
             arena,
+        }
+    }
+
+    pub(crate) fn time_mode(&mut self, time_mode: Option<TimeMode>) {
+        if let Some(time_mode) = time_mode {
+            self.time_mode = time_mode;
         }
     }
 

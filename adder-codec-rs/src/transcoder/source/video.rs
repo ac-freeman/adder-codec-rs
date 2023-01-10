@@ -297,6 +297,10 @@ impl Video {
             source_camera,
             time_mode,
         )?;
+
+        self.event_pixel_trees.par_map_inplace(|px| {
+            px.time_mode(time_mode);
+        });
         Ok(self)
     }
 

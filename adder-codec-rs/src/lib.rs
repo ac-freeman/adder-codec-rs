@@ -1,6 +1,6 @@
 use crate::framer::driver::{EventCoordless, SourceType};
 use crate::header::EventStreamHeader;
-use crate::raw::streaem::Error as StreamError;
+use crate::raw::stream::Error as StreamError;
 use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::fmt::Formatter;
@@ -172,7 +172,7 @@ pub enum SourceCamera {
     Asint,
 }
 
-#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq)]
 pub enum TimeMode {
     #[default]
     DeltaT,
@@ -330,6 +330,49 @@ pub struct Coord {
     pub c: Option<u8>,
 }
 
+impl Coord {
+    pub fn new(x: PixelAddress, y: PixelAddress, c: Option<u8>) -> Self {
+        Self { x, y, c }
+    }
+    pub fn new_2d(x: PixelAddress, y: PixelAddress) -> Self {
+        Self { x, y, c: None }
+    }
+    pub fn new_3d(x: PixelAddress, y: PixelAddress, c: u8) -> Self {
+        Self { x, y, c: Some(c) }
+    }
+    pub fn x(&self) -> PixelAddress {
+        self.x
+    }
+    pub fn y(&self) -> PixelAddress {
+        self.y
+    }
+    pub fn c(&self) -> Option<u8> {
+        self.c
+    }
+    pub fn x_usize(&self) -> usize {
+        self.x as usize
+    }
+    pub fn y_usize(&self) -> usize {
+        self.y as usize
+    }
+    pub fn c_usize(&self) -> usize {
+        self.c.unwrap_or(0) as usize
+    }
+
+    pub fn is_2d(&self) -> bool {
+        self.c.is_none()
+    }
+    pub fn is_3d(&self) -> bool {
+        self.c.is_some()
+    }
+    pub fn is_valid(&self) -> bool {
+        self.x != EOF_PX_ADDRESS && self.y != EOF_PX_ADDRESS
+    }
+    pub fn is_eof(&self) -> bool {
+        self.x == EOF_PX_ADDRESS && self.y == EOF_PX_ADDRESS
+    }
+}
+
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct CoordSingle {
     pub x: PixelAddress,
@@ -469,7 +512,6 @@ pub trait Codec {
     fn encode_events(&mut self, events: &[Event]) -> Result<(), StreamError>;
     fn encode_events_events(&mut self, events: &[Vec<Event>]) -> Result<(), StreamError>;
     fn decode_event(&mut self) -> Result<Event, StreamError>;
-    fn decode_header_extension(&mut self) -> Result<usize, Box<dyn std::error::Error>>;
 }
 
 #[cfg(test)]

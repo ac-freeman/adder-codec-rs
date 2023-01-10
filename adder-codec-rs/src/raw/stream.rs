@@ -304,40 +304,10 @@ impl Codec for Raw {
                 };
 
                 let header_size =
-                    std::mem::size_of::<EventStreamHeader>() + self.decode_header_extension()?;
+                    std::mem::size_of::<EventStreamHeader>() + decode_header_extension(self)?;
                 self.header_size = header_size;
 
                 Ok(header_size)
-            }
-        }
-    }
-
-    fn decode_header_extension(&mut self) -> Result<usize, Box<dyn std::error::Error>> {
-        match &mut self.input_stream {
-            None => Err(Error::UnitializedStream.into()),
-            Some(stream) => {
-                let mut added_size = 0;
-                if self.codec_version == 0 {
-                    return Ok(added_size);
-                }
-                self.source_camera = self
-                    .bincode
-                    .deserialize_from::<_, EventStreamHeaderExtensionV1>(stream.get_mut())?
-                    .source;
-                added_size += std::mem::size_of::<EventStreamHeaderExtensionV1>();
-                if self.codec_version == 1 {
-                    return Ok(added_size);
-                }
-
-                self.time_mode = self
-                    .bincode
-                    .deserialize_from::<_, EventStreamHeaderExtensionV2>(stream.get_mut())?
-                    .time_mode;
-                added_size += std::mem::size_of::<EventStreamHeaderExtensionV2>();
-                if self.codec_version == 2 {
-                    return Ok(added_size);
-                }
-                return Err(Error::BadFile.into());
             }
         }
     }
@@ -440,6 +410,37 @@ fn encode_header_extension(
                     time_mode: time_mode.expect("time_mode must be set for codec version 2"),
                 },
             )?;
+            added_size += std::mem::size_of::<EventStreamHeaderExtensionV2>();
+            if raw.codec_version == 2 {
+                return Ok(added_size);
+            }
+            return Err(Error::BadFile.into());
+        }
+    }
+}
+
+fn decode_header_extension(raw: &mut Raw) -> Result<usize, Box<dyn std::error::Error>> {
+    match &mut raw.input_stream {
+        None => Err(Error::UnitializedStream.into()),
+        Some(stream) => {
+            let mut added_size = 0;
+            if raw.codec_version == 0 {
+                // Leave source camera the default (FramedU8)
+                return Ok(added_size);
+            }
+            raw.source_camera = raw
+                .bincode
+                .deserialize_from::<_, EventStreamHeaderExtensionV1>(stream.get_mut())?
+                .source;
+            added_size += std::mem::size_of::<EventStreamHeaderExtensionV1>();
+            if raw.codec_version == 1 {
+                return Ok(added_size);
+            }
+
+            raw.time_mode = raw
+                .bincode
+                .deserialize_from::<_, EventStreamHeaderExtensionV2>(stream.get_mut())?
+                .time_mode;
             added_size += std::mem::size_of::<EventStreamHeaderExtensionV2>();
             if raw.codec_version == 2 {
                 return Ok(added_size);
