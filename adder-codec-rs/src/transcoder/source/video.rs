@@ -293,7 +293,7 @@ impl Video {
             self.state.tps,
             self.state.ref_time,
             self.state.delta_t_max,
-            1,
+            2,
             source_camera,
             time_mode,
         )?;

@@ -5,9 +5,9 @@ use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::fmt::Formatter;
 use std::fs::File;
-use std::io;
 use std::io::{BufReader, BufWriter};
 use std::path::Path;
+use std::{fmt, io};
 
 pub mod framer;
 mod header;
@@ -178,6 +178,12 @@ pub enum TimeMode {
     DeltaT,
     AbsoluteT,
     Mixed,
+}
+
+impl fmt::Display for TimeMode {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
 }
 
 impl std::fmt::Display for SourceCamera {

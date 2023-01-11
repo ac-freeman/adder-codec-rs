@@ -1,5 +1,5 @@
 args_filename = ""
-scale = 0.001
+scale = 0.25
 input_filename= "/home/andrew/Downloads/nyc.mp4"
 output_raw_video_filename = "/home/andrew/Downloads/nyc_recon.mp4"
 output_events_filename = "/home/andrew/Downloads/nyc.adder"
@@ -12,3 +12,4 @@ ref_time = 255     # Ticks per input frame
 delta_t_max = 2550
 frame_count_max = 30
 thread_count = 2
+time_mode = "absolute"

@@ -43,6 +43,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     writeln!(handle, "Source camera: {}", stream.source_camera)?;
     writeln!(handle, "ADΔER transcoder parameters")?;
     writeln!(handle, "\tCodec version: {}", stream.codec_version)?;
+    writeln!(handle, "\tTime mode: {}", stream.time_mode)?;
     writeln!(handle, "\tTicks per second: {}", stream.tps)?;
     writeln!(
         handle,
@@ -62,6 +63,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     if args.dynamic_range {
         let divisor = num_events / 100;
         stream.set_input_stream_position(first_event_position)?;
+        dbg!(stream.get_input_stream_position().unwrap());
         let mut max_intensity: Intensity = 0.0;
         let mut min_intensity: Intensity = f64::MAX;
         let mut event_count: u64 = 0;

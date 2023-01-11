@@ -38,7 +38,8 @@ pub enum Error {
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Stream error")
+        // write!(f, "Stream error")
+        write!(f, "{:?}", self)
     }
 }
 
@@ -166,6 +167,7 @@ impl Codec for Raw {
 
     fn set_input_stream_position(&mut self, pos: u64) -> Result<(), Error> {
         if (pos - self.header_size as u64) % u64::from(self.event_size) != 0 {
+            eprintln!("Attempted to seek to bad position in stream: {}", pos);
             return Err(Error::Seek);
         }
         match &mut self.input_stream {
@@ -270,7 +272,8 @@ impl Codec for Raw {
         self.source_camera = source_camera.unwrap_or_default();
         self.time_mode = time_mode.unwrap_or_default();
 
-        self.header_size = encode_header_extension(self, header, source_camera, time_mode)?;
+        self.header_size = std::mem::size_of::<EventStreamHeader>()
+            + encode_header_extension(self, header, source_camera, time_mode)?;
         Ok(())
     }
 
@@ -308,6 +311,9 @@ impl Codec for Raw {
                 let header_size =
                     std::mem::size_of::<EventStreamHeader>() + decode_header_extension(self)?;
                 self.header_size = header_size;
+
+                // Have to ensure that we didn't seek past the actual header
+                self.set_input_stream_position(header_size as u64)?;
 
                 Ok(header_size)
             }
@@ -412,7 +418,8 @@ fn encode_header_extension(
                     time_mode: time_mode.expect("time_mode must be set for codec version 2"),
                 },
             )?;
-            added_size += std::mem::size_of::<EventStreamHeaderExtensionV2>();
+            added_size +=
+                mem_size_word_aligned(std::mem::size_of::<EventStreamHeaderExtensionV2>());
             if raw.codec_version == 2 {
                 return Ok(added_size);
             }
@@ -443,13 +450,22 @@ fn decode_header_extension(raw: &mut Raw) -> Result<usize, Box<dyn std::error::E
                 .bincode
                 .deserialize_from::<_, EventStreamHeaderExtensionV2>(stream.get_mut())?
                 .time_mode;
-            added_size += std::mem::size_of::<EventStreamHeaderExtensionV2>();
+            added_size +=
+                mem_size_word_aligned(std::mem::size_of::<EventStreamHeaderExtensionV2>());
             if raw.codec_version == 2 {
                 return Ok(added_size);
             }
             return Err(Error::BadFile.into());
         }
     }
+}
+
+fn mem_size_word_aligned(size: usize) -> usize {
+    let mut size = size;
+    if size % 4 != 0 {
+        size += 4 - (size % 4);
+    }
+    size
 }
 
 #[cfg(test)]

@@ -81,6 +81,10 @@ pub struct SimulProcArgs {
     /// system.
     #[clap(long, default_value_t = 4)]
     pub thread_count: u8,
+
+    /// Time mode for the v2 file
+    #[clap(long, default_value = "")]
+    pub time_mode: String,
 }
 
 pub struct SimulProcessor {

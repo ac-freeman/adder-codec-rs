@@ -45,6 +45,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
         let content = std::fs::read_to_string(args.args_filename)?;
         args = toml::from_str(&content)?;
     }
+
+    let time_mode = match args.time_mode.to_lowercase().as_str() {
+        "delta_t" => TimeMode::DeltaT,
+        "absolute" => TimeMode::AbsoluteT,
+        "mixed" => TimeMode::Mixed,
+        _ => panic!("Invalid time mode"),
+    };
     println!("c_pos: {}, c_neg: {}", args.c_thresh_pos, args.c_thresh_neg);
 
     //////////////////////////////////////////////////////
@@ -65,7 +72,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     if !args.output_events_filename.is_empty() {
         // source = *source.write_out(args.output_events_filename, FramedU8, TimeMode::AbsoluteT)?;
-        source = *source.write_out(args.output_events_filename, FramedU8, TimeMode::DeltaT)?;
+        source = *source.write_out(args.output_events_filename, FramedU8, time_mode)?;
     }
 
     let source_fps = source.source_fps;
@@ -83,8 +90,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
         args.output_raw_video_filename.as_str(),
         args.frame_count_max as i32,
         num_threads,
-        1,
-        TimeMode::DeltaT,
+        2,
+        time_mode,
     )?;
 
     let now = std::time::Instant::now();
@@ -156,6 +163,7 @@ mod tests {
             c_thresh_pos: 0,
             c_thresh_neg: 0,
             thread_count: 1, // Multithreading causes some issues in testing
+            time_mode: "delta_t".to_string(),
         };
         let mut source = Framed::new(args.input_filename, args.color_input, args.scale)?
             // .chunk_rows(64)
