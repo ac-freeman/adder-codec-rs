@@ -452,7 +452,7 @@ fn decode_header_extension(raw: &mut Raw) -> Result<(), Box<dyn std::error::Erro
     }
 }
 
-fn mem_size_word_aligned(size: usize) -> usize {
+fn _mem_size_word_aligned(size: usize) -> usize {
     let mut size = size;
     if size % 4 != 0 {
         size += 4 - (size % 4);

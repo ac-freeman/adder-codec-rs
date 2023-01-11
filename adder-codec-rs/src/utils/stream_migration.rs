@@ -1,7 +1,12 @@
 use crate::raw::stream::Raw;
-use crate::{Codec, SourceCamera, TimeMode};
+use crate::{Codec, DeltaT, Event, SourceCamera, TimeMode};
 use ndarray::Array3;
 use std::error::Error;
+
+pub fn absolute_event_to_dt_event(mut event: Event, last_t: DeltaT) -> Event {
+    event.delta_t -= last_t;
+    event
+}
 
 pub fn migrate_v2(mut input_stream: Raw, mut output_stream: Raw) -> Result<Raw, Box<dyn Error>> {
     let mut data = Vec::new();
