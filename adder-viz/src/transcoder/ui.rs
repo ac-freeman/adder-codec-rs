@@ -398,7 +398,7 @@ fn side_panel_grid_contents(
         ui,
         &mut ui_state.scale,
         &mut ui_state.scale_slider,
-        0.01..=1.0,
+        0.001..=1.0,
         vec![0.25, 0.5, 0.75],
         0.1,
     );

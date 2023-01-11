@@ -63,8 +63,9 @@ pub fn migrate_v2(mut input_stream: Raw, mut output_stream: Raw) -> Result<Raw, 
 
 #[cfg(test)]
 mod tests {
+    use crate::utils::stream_migration::absolute_event_to_dt_event;
     use crate::SourceCamera::FramedU8;
-    use crate::{Codec, Coord, Event, PlaneSize};
+    use crate::{Coord, Event, PlaneSize};
     use rand::Rng;
     use std::{fs, mem};
 
@@ -154,15 +155,19 @@ mod tests {
         assert_eq!(event.coord.x as i32, 0);
         assert_eq!(event.coord.y as i32, 0);
         assert_eq!(event.coord.c, None);
-        assert_eq!(event.delta_t, 600);
+        let dt = event.delta_t;
+        assert_eq!(dt, 600);
         assert_eq!(event.d, 5);
 
         event = input_stream.decode_event()?;
-        assert_eq!(event.delta_t, 1365);
+        let dt = event.delta_t;
+        assert_eq!(dt, 1365);
         event = input_stream.decode_event()?;
-        assert_eq!(event.delta_t, 2130);
+        let dt = event.delta_t;
+        assert_eq!(dt, 2130);
         event = input_stream.decode_event()?;
-        assert_eq!(event.delta_t, 2418);
+        let dt = event.delta_t;
+        assert_eq!(dt, 2418);
 
         input_stream.close_writer().unwrap();
         fs::remove_file("./TEST_".to_owned() + n.to_string().as_str() + "_v2.adder").unwrap();
@@ -231,12 +236,64 @@ mod tests {
             assert_eq!(event_migrate.coord.x as i32, event_gt.coord.x as i32);
             assert_eq!(event_migrate.coord.y as i32, event_gt.coord.y as i32);
             assert_eq!(event_migrate.coord.c, event_gt.coord.c);
-            assert_eq!(event_migrate.delta_t, event_gt.delta_t);
+            let dt = event_migrate.delta_t;
+            let dt_g = event_gt.delta_t;
+            assert_eq!(dt, dt_g);
             assert_eq!(event_migrate.d, event_gt.d);
         }
         assert_eq!(event_count, 5);
 
         fs::remove_file("./TEST_".to_owned() + n.to_string().as_str() + "_v2.adder").unwrap();
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_migrate_v2_bunny_1px() -> Result<(), Box<dyn std::error::Error>> {
+        use crate::raw::stream::Raw;
+
+        use crate::Codec;
+
+        let mut input_stream_t = Raw::new();
+        input_stream_t.open_reader("./tests/samples/bunny_v2_t.adder")?;
+        input_stream_t.decode_header()?;
+
+        let mut input_stream_dt = Raw::new();
+        input_stream_dt.open_reader("./tests/samples/bunny_v2_dt.adder")?;
+        input_stream_dt.decode_header()?;
+
+        let mut event_count = 0;
+        let mut last_t = 0;
+        loop {
+            let event_t = match input_stream_t.decode_event() {
+                Ok(ev) => ev,
+                Err(_) => {
+                    break;
+                }
+            };
+            let event_dt = match input_stream_dt.decode_event() {
+                Ok(ev) => ev,
+                Err(_) => {
+                    break;
+                }
+            };
+            event_count += 1;
+
+            let event_t_dt = absolute_event_to_dt_event(event_t, last_t);
+            last_t = event_t.delta_t;
+
+            // We already know it's a framed source
+            last_t = ((last_t / input_stream_dt.ref_interval) + 1) * input_stream_dt.ref_interval;
+
+            assert_eq!(event_t_dt.coord.x as i32, event_dt.coord.x as i32);
+            assert_eq!(event_t_dt.coord.y as i32, event_dt.coord.y as i32);
+            assert_eq!(event_t_dt.coord.c, event_dt.coord.c);
+            let dt_mig = event_t_dt.delta_t;
+            let dt_gt = event_dt.delta_t;
+            assert_eq!(dt_mig, dt_gt);
+            assert_eq!(event_t_dt.d, event_dt.d);
+        }
+        assert_eq!(event_count, 87);
 
         Ok(())
     }
