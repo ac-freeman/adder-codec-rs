@@ -64,6 +64,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .auto_time_parameters(args.ref_time, args.delta_t_max)?;
 
     if !args.output_events_filename.is_empty() {
+        // source = *source.write_out(args.output_events_filename, FramedU8, TimeMode::AbsoluteT)?;
         source = *source.write_out(args.output_events_filename, FramedU8, TimeMode::DeltaT)?;
     }
 
@@ -82,8 +83,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
         args.output_raw_video_filename.as_str(),
         args.frame_count_max as i32,
         num_threads,
-        2,
-        TimeMode::AbsoluteT,
+        1,
+        TimeMode::DeltaT,
     )?;
 
     let now = std::time::Instant::now();

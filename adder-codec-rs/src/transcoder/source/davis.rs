@@ -198,18 +198,26 @@ impl Davis {
                                 * delta_t_ticks)
                                 .max(0.0);
                             if px.need_to_pop_top {
-                                buffer.push(px.pop_top_event(first_integration));
+                                buffer.push(px.pop_top_event(
+                                    first_integration,
+                                    Continuous,
+                                    self.video.state.ref_time,
+                                ));
                             }
 
                             px.integrate(
                                 first_integration,
-                                delta_t_ticks,
+                                delta_t_ticks.into(),
                                 Continuous,
                                 self.video.state.delta_t_max,
                                 self.video.state.ref_time,
                             );
                             if px.need_to_pop_top {
-                                buffer.push(px.pop_top_event(first_integration));
+                                buffer.push(px.pop_top_event(
+                                    first_integration,
+                                    Continuous,
+                                    self.video.state.ref_time,
+                                ));
                             }
 
                             ///////////////////////////////////////////////////////
@@ -227,7 +235,11 @@ impl Davis {
                                 || frame_val_u8
                                     > base_val.saturating_add(self.video.state.c_thresh_pos)
                             {
-                                px.pop_best_events(&mut buffer);
+                                px.pop_best_events(
+                                    &mut buffer,
+                                    Continuous,
+                                    self.video.state.ref_time,
+                                );
                                 px.base_val = frame_val_u8;
 
                                 // If continuous mode and the D value needs to be different now
@@ -333,7 +345,11 @@ impl Davis {
                         &self.video.state,
                     );
                     if px.need_to_pop_top {
-                        buffer.push(px.pop_top_event(integration as f32));
+                        buffer.push(px.pop_top_event(
+                            integration as f32,
+                            self.video.state.pixel_tree_mode,
+                            self.video.state.ref_time,
+                        ));
                     }
                 }
                 buffer
@@ -360,7 +376,7 @@ impl Davis {
             let c = idx % self.video.state.plane.c_usize();
             *val = match self.video.event_pixel_trees[[y, x, c]].arena[0].best_event {
                 Some(event) => u8::get_frame_value(
-                    &event,
+                    &event.into(),
                     SourceType::U8,
                     self.video.state.ref_time as DeltaT,
                     practical_d_max,
@@ -453,7 +469,11 @@ impl Source for Davis {
                     .map(|(_chunk_idx, mut chunk)| {
                         let mut buffer: Vec<Event> = Vec::with_capacity(px_per_chunk);
                         for (_, px) in chunk.iter_mut().enumerate() {
-                            px.pop_best_events(&mut buffer);
+                            px.pop_best_events(
+                                &mut buffer,
+                                self.video.state.pixel_tree_mode,
+                                self.video.state.ref_time,
+                            );
                         }
                         buffer
                     })

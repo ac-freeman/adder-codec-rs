@@ -236,6 +236,10 @@ impl SimulProcessor {
                 };
                 now = Instant::now();
             }
+            // // TODO: temp
+            // if video.state.in_interval_count == 30 {
+            //     break;
+            // }
         }
 
         println!("Closing stream...");

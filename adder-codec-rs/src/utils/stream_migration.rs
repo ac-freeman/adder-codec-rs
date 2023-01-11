@@ -64,10 +64,11 @@ pub fn migrate_v2(mut input_stream: Raw, mut output_stream: Raw) -> Result<Raw, 
 
 #[cfg(test)]
 mod tests {
+    use crate::raw::stream::Error;
     use crate::SourceCamera::FramedU8;
     use crate::{Codec, Coord, Event, PlaneSize};
     use rand::Rng;
-    use std::fs;
+    use std::{fs, mem};
 
     /// Test the `migrate_v2` function by making a v1 stream, converting it to v2, and checking the
     /// events
@@ -174,6 +175,83 @@ mod tests {
         assert_eq!(event.delta_t as u32, 2418);
 
         input_stream.close_writer().unwrap();
+        fs::remove_file("./TEST_".to_owned() + n.to_string().as_str() + "_v2.adder").unwrap();
+
+        Ok(())
+    }
+
+    /// Test the `migrate_v2` function by making a v1 stream, converting it to v2, and checking the
+    /// events
+    #[test]
+    fn test_migrate_v2_nyc() -> Result<(), Box<dyn std::error::Error>> {
+        use crate::raw::stream::Error::Eof;
+        use crate::raw::stream::Raw;
+        use crate::transcoder::source::davis::TranscoderMode::{Framed, RawDavis, RawDvs};
+        use crate::utils::stream_migration::migrate_v2;
+        use crate::SourceCamera::DavisU8;
+        use crate::{Codec, DeltaT, SourceCamera, TimeMode};
+        use ndarray::Array3;
+        use std::io::Write;
+        use std::path::Path;
+        use std::time::Instant;
+        use std::{error, io};
+
+        let n: u32 = rand::thread_rng().gen();
+        let mut stream: Raw = Codec::new();
+        stream
+            .open_reader("./tests/samples/nyc_v1_1px.adder".to_owned())
+            .expect("Couldn't open file");
+        stream.decode_header()?;
+
+        let mut output_stream = Raw::new();
+        output_stream.open_writer("./TEST_".to_owned() + n.to_string().as_str() + "_v2.adder")?;
+        output_stream.encode_header(
+            stream.plane.clone(),
+            stream.tps,
+            stream.ref_interval.clone(),
+            stream.delta_t_max,
+            2,
+            Some(stream.source_camera),
+            Some(TimeMode::AbsoluteT),
+        )?;
+
+        output_stream = migrate_v2(stream, output_stream)?;
+        output_stream.close_writer()?;
+
+        let mut input_stream_gt = Raw::new();
+        input_stream_gt.open_reader("./tests/samples/nyc_source_v2_2_1px.adder".to_owned())?;
+        input_stream_gt.decode_header()?;
+
+        let mut input_stream_migrate = Raw::new();
+        input_stream_migrate
+            .open_reader("./TEST_".to_owned() + n.to_string().as_str() + "_v2.adder")?;
+        input_stream_migrate.decode_header()?;
+
+        let tmp = mem::size_of::<Event>();
+
+        let mut event_count = 0;
+        loop {
+            let event_migrate = match input_stream_migrate.decode_event() {
+                Ok(ev) => ev,
+                Err(_) => {
+                    break;
+                }
+            };
+            let event_gt = match input_stream_gt.decode_event() {
+                Ok(ev) => ev,
+                Err(_) => {
+                    break;
+                }
+            };
+            event_count += 1;
+            assert_eq!(event_migrate.coord.x as i32, event_gt.coord.x as i32);
+            assert_eq!(event_migrate.coord.y as i32, event_gt.coord.y as i32);
+            assert_eq!(event_migrate.coord.c, event_gt.coord.c);
+            assert_eq!(event_migrate.delta_t as u32, event_gt.delta_t as u32);
+            assert_eq!(event_migrate.d, event_gt.d);
+        }
+        assert_eq!(event_count, 5);
+
         fs::remove_file("./TEST_".to_owned() + n.to_string().as_str() + "_v2.adder").unwrap();
 
         Ok(())
