@@ -30,6 +30,7 @@ pub struct Framed {
     pub scale: f64,
     color_input: bool,
     pub(crate) video: Video,
+    pub time_mode: TimeMode,
 }
 unsafe impl Sync for Framed {}
 
@@ -81,6 +82,7 @@ impl Framed {
             scale,
             color_input,
             video,
+            time_mode: TimeMode::DeltaT,
         })
     }
 
@@ -98,6 +100,11 @@ impl Framed {
             .set(CAP_PROP_POS_FRAMES, f64::from(frame_idx_start))?;
         self.frame_idx_start = frame_idx_start;
         Ok(self)
+    }
+
+    pub fn time_mode(mut self, time_mode: TimeMode) -> Self {
+        self.time_mode = time_mode;
+        self
     }
 
     pub fn auto_time_parameters(

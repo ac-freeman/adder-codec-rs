@@ -57,7 +57,7 @@ impl AdderPlayer {
     ) -> Result<Self, Box<dyn Error>> {
         match path_buf.extension() {
             None => Err(Box::new(AdderPlayerError("Invalid file type".into()))),
-            Some(ext) => match ext.to_str() {
+            Some(ext) => match ext.to_ascii_lowercase().to_str() {
                 None => Err(Box::new(AdderPlayerError("Invalid file type".into()))),
                 Some("adder") => {
                     let input_path = path_buf.to_str().expect("Invalid string").to_string();

@@ -53,7 +53,8 @@ pub struct Davis {
     pub dvs_last_timestamps: Array3<i64>,
     pub dvs_last_ln_val: Array3<f64>,
     optimize_adder_controller: bool,
-    pub mode: TranscoderMode, // phantom: PhantomData<T>,
+    pub mode: TranscoderMode,
+    pub time_mode: TimeMode,
 }
 
 unsafe impl Sync for Davis {}
@@ -107,6 +108,7 @@ impl Davis {
             dvs_last_ln_val,
             optimize_adder_controller: false,
             mode: TranscoderMode::Framed,
+            time_mode: TimeMode::DeltaT,
         };
 
         Ok(davis_source)
@@ -119,6 +121,11 @@ impl Davis {
 
     pub fn mode(mut self, mode: TranscoderMode) -> Self {
         self.mode = mode;
+        self
+    }
+
+    pub fn time_mode(mut self, time_mode: TimeMode) -> Self {
+        self.time_mode = time_mode;
         self
     }
 
