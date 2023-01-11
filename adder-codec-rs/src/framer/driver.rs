@@ -180,6 +180,7 @@ pub trait Framer {
     /// If [`INTEGRATION`], this function will integrate this [`Event`] value for the corresponding
     /// output frame(s)
     fn ingest_event(&mut self, event: &mut Event) -> bool;
+    fn ingest_event_temp(&mut self, event: &mut Event) -> (bool, BigT);
 
     // fn ingest_event_for_chunk(
     //     &self,
@@ -426,6 +427,39 @@ impl<
         }
         debug_assert!(self.is_frame_0_filled());
         true
+    }
+
+    fn ingest_event_temp(&mut self, event: &mut Event) -> (bool, BigT) {
+        let channel = event.coord.c.unwrap_or(0);
+        let chunk_num = event.coord.y as usize / self.chunk_rows;
+
+        event.coord.y -= (chunk_num * self.chunk_rows) as u16; // Modify the coordinate here, so it gets ingested at the right place
+
+        let frame_chunk = &mut self.frames[chunk_num];
+        let last_filled_frame_ref = &mut self.last_filled_tracker[chunk_num]
+            [[event.coord.y.into(), event.coord.x.into(), channel.into()]];
+        let running_ts_ref = &mut self.pixel_ts_tracker[chunk_num]
+            [[event.coord.y.into(), event.coord.x.into(), channel.into()]];
+        let frame_idx_offset = &mut self.frame_idx_offsets[chunk_num];
+        let last_frame_intensity_ref = &mut self.last_frame_intensity_tracker[chunk_num]
+            [[event.coord.y.into(), event.coord.x.into(), channel.into()]];
+
+        self.chunk_filled_tracker[chunk_num] = ingest_event_for_chunk(
+            event,
+            frame_chunk,
+            running_ts_ref,
+            frame_idx_offset,
+            last_filled_frame_ref,
+            last_frame_intensity_ref,
+            &self.state,
+        );
+        for chunk in &self.chunk_filled_tracker {
+            if !chunk {
+                return (false, *running_ts_ref);
+            }
+        }
+        // debug_assert!(self.is_frame_0_filled());
+        (true, *running_ts_ref)
     }
 
     fn ingest_events_events(&mut self, mut events: Vec<Vec<Event>>) -> bool {

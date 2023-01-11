@@ -304,7 +304,7 @@ mod tests {
         let mut t_frame: Option<Vec<Array3<Option<u8>>>> = None;
         let mut dt_frame;
         loop {
-            let mut event_t = match input_stream_t.decode_event() {
+            let event_t = match input_stream_t.decode_event() {
                 Ok(ev) => ev,
                 Err(_) => {
                     break;
@@ -314,7 +314,7 @@ mod tests {
                 t_frame = frame_sequence_t.pop_next_frame();
             }
 
-            let mut event_dt = match input_stream_dt.decode_event() {
+            let event_dt = match input_stream_dt.decode_event() {
                 Ok(ev) => ev,
                 Err(_) => {
                     break;
@@ -345,6 +345,143 @@ mod tests {
             assert_eq!(event_t_dt.d, event_dt.d);
         }
         assert_eq!(event_count, 333);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_migrate_v2_bunny_8() -> Result<(), Box<dyn std::error::Error>> {
+        use crate::raw::stream::Raw;
+
+        use crate::Codec;
+
+        let mut input_stream_t = Raw::new();
+        input_stream_t.open_reader("./tests/samples/bunny_v2_t_2.adder")?;
+        input_stream_t.decode_header()?;
+
+        let reconstructed_frame_rate = 30.0;
+
+        let mut frame_sequence_t: FrameSequence<u8> =
+            FramerBuilder::new(input_stream_t.plane.clone(), 500)
+                .codec_version(input_stream_t.codec_version, TimeMode::AbsoluteT)
+                .time_parameters(
+                    input_stream_t.tps,
+                    input_stream_t.ref_interval,
+                    input_stream_t.delta_t_max,
+                    reconstructed_frame_rate,
+                )
+                .mode(INSTANTANEOUS)
+                .source(
+                    input_stream_t.get_source_type(),
+                    input_stream_t.source_camera,
+                )
+                .finish();
+
+        let mut input_stream_dt = Raw::new();
+        input_stream_dt.open_reader("./tests/samples/bunny_v2_dt_2.adder")?;
+        input_stream_dt.decode_header()?;
+
+        let mut frame_sequence_dt: FrameSequence<u8> =
+            FramerBuilder::new(input_stream_dt.plane.clone(), 500)
+                .codec_version(input_stream_dt.codec_version, TimeMode::DeltaT)
+                .time_parameters(
+                    input_stream_dt.tps,
+                    input_stream_dt.ref_interval,
+                    input_stream_dt.delta_t_max,
+                    reconstructed_frame_rate,
+                )
+                .mode(INSTANTANEOUS)
+                .source(
+                    input_stream_dt.get_source_type(),
+                    input_stream_dt.source_camera,
+                )
+                .finish();
+
+        let mut event_count = 0;
+        let mut t_tree: Array3<u32> = Array3::from_shape_vec(
+            (
+                input_stream_dt.plane.h_usize(),
+                input_stream_dt.plane.w_usize(),
+                input_stream_dt.plane.c_usize(),
+            ),
+            vec![0_u32; input_stream_dt.plane.volume()],
+        )?;
+        let mut t_frame: Option<Vec<Array3<Option<u8>>>> = None;
+        let mut dt_frame;
+        loop {
+            let event_t = match input_stream_t.decode_event() {
+                Ok(ev) => ev,
+                Err(_) => {
+                    break;
+                }
+            };
+            if event_t.coord.y == 15
+                && event_t.coord.x == 123
+                && event_t.coord.c_usize() == 0
+                && event_count > 540
+            {
+                dbg!(event_t);
+            }
+
+            let (a_t, b_t) = frame_sequence_t.ingest_event_temp(&mut event_t.clone());
+
+            if a_t {
+                t_frame = frame_sequence_t.pop_next_frame();
+            }
+
+            let event_dt = match input_stream_dt.decode_event() {
+                Ok(ev) => ev,
+                Err(_) => {
+                    break;
+                }
+            };
+            let (a_dt, b_dt) = frame_sequence_dt.ingest_event_temp(&mut event_dt.clone());
+
+            assert_eq!(b_t, b_dt);
+
+            if a_dt {
+                dt_frame = frame_sequence_dt.pop_next_frame();
+
+                for c in 0..input_stream_dt.plane.c_usize() {
+                    for y in 0..input_stream_dt.plane.h_usize() {
+                        for x in 0..input_stream_dt.plane.w_usize() {
+                            let dt_val =
+                                dt_frame.clone().unwrap().last().unwrap()[[y, x, c]].unwrap();
+                            let t_val =
+                                t_frame.clone().unwrap().last().unwrap()[[y, x, c]].unwrap();
+                            assert_eq!(dt_val, t_val);
+                        }
+                    }
+                }
+                // assert_eq!(dt_frame.unwrap()[0], t_frame.clone().unwrap()[0]);
+
+                // let dt_val = dt_frame.unwrap()[0][[0, 0, 0]].unwrap();
+                // let t_val = t_frame.clone().unwrap()[0][[0, 0, 0]].unwrap();
+                // assert_eq!(dt_val, t_val);
+            }
+
+            event_count += 1;
+            let mut last_t = &mut t_tree[[
+                event_t.coord.y_usize(),
+                event_t.coord.x_usize(),
+                event_t.coord.c_usize(),
+            ]];
+
+            let event_t_dt = absolute_event_to_dt_event(event_t, *last_t);
+            *last_t = event_t.delta_t;
+
+            // We already know it's a framed source
+            *last_t = ((*last_t / input_stream_dt.ref_interval) + 1) * input_stream_dt.ref_interval;
+
+            assert_eq!(event_t_dt.coord.x as i32, event_dt.coord.x as i32);
+            assert_eq!(event_t_dt.coord.y as i32, event_dt.coord.y as i32);
+            assert_eq!(event_t_dt.coord.c, event_dt.coord.c);
+            let dt_mig = event_t_dt.delta_t;
+            let dt_gt = event_dt.delta_t;
+            assert_eq!(dt_mig, dt_gt);
+            assert_eq!(event_t_dt.d, event_dt.d);
+        }
+        assert_eq!(event_count, 12030);
 
         Ok(())
     }

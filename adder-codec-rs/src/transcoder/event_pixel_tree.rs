@@ -129,8 +129,11 @@ impl PixelArena {
             event.delta_t += self.last_fired_t;
             self.last_fired_t = event.delta_t;
             if mode == FramePerfect {
-                self.last_fired_t =
-                    (((self.last_fired_t as DeltaT / ref_time) + 1) * ref_time).into();
+                self.last_fired_t = if self.last_fired_t as DeltaT % ref_time == 0 {
+                    (self.last_fired_t as DeltaT).into()
+                } else {
+                    (((self.last_fired_t as DeltaT / ref_time) + 1) * ref_time).into()
+                };
             }
         }
         Event {
@@ -186,8 +189,6 @@ impl PixelArena {
                 }
                 self.length -= 1;
                 debug_assert!(self.arena[self.length - 1].alt.is_none());
-
-                
 
                 self.delta_t_to_absolute_t(&mut event, mode, ref_time)
             }
