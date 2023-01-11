@@ -518,6 +518,7 @@ pub trait Codec {
     fn encode_events(&mut self, events: &[Event]) -> Result<(), StreamError>;
     fn encode_events_events(&mut self, events: &[Vec<Event>]) -> Result<(), StreamError>;
     fn decode_event(&mut self) -> Result<Event, StreamError>;
+    fn get_output_stream_position(&mut self) -> Result<u64, Box<dyn std::error::Error>>;
 }
 
 #[cfg(test)]

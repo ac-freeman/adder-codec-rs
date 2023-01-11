@@ -206,6 +206,13 @@ impl Codec for Raw {
         }
     }
 
+    fn get_output_stream_position(&mut self) -> Result<u64, Box<dyn std::error::Error>> {
+        match &mut self.output_stream {
+            None => Err(Error::UnitializedStream.into()),
+            Some(stream) => Ok(stream.stream_position()?),
+        }
+    }
+
     // TODO: return more relevant errors
     fn get_eof_position(&mut self) -> Result<u64, Box<dyn std::error::Error>> {
         match &mut self.input_stream {
@@ -272,8 +279,8 @@ impl Codec for Raw {
         self.source_camera = source_camera.unwrap_or_default();
         self.time_mode = time_mode.unwrap_or_default();
 
-        self.header_size = std::mem::size_of::<EventStreamHeader>()
-            + encode_header_extension(self, header, source_camera, time_mode)?;
+        encode_header_extension(self, header, source_camera, time_mode)?;
+        self.header_size = self.get_output_stream_position()? as usize;
         Ok(())
     }
 
@@ -308,14 +315,10 @@ impl Codec for Raw {
                     _ => return Err(Error::BadFile.into()),
                 };
 
-                let header_size =
-                    std::mem::size_of::<EventStreamHeader>() + decode_header_extension(self)?;
-                self.header_size = header_size;
+                decode_header_extension(self)?;
+                self.header_size = self.get_input_stream_position()? as usize;
 
-                // Have to ensure that we didn't seek past the actual header
-                self.set_input_stream_position(header_size as u64)?;
-
-                Ok(header_size)
+                Ok(self.header_size)
             }
         }
     }
@@ -385,21 +388,17 @@ fn encode_header_extension(
     header: EventStreamHeader,
     source_camera: Option<SourceCamera>,
     time_mode: Option<TimeMode>,
-) -> Result<usize, Box<dyn std::error::Error>> {
+) -> Result<(), Box<dyn std::error::Error>> {
     match &mut raw.output_stream {
         None => Err(Error::UnitializedStream.into()),
         Some(stream) => {
-            let mut added_size = 0;
-
             raw.bincode.serialize_into(&mut *stream, &header)?;
-            added_size += std::mem::size_of::<EventStreamHeader>();
 
             raw.bincode
                 .serialize_into(&mut *stream, &EventStreamHeaderExtensionV0 {})?;
-            added_size += std::mem::size_of::<EventStreamHeaderExtensionV0>();
 
             if raw.codec_version == 0 {
-                return Ok(added_size);
+                return Ok(());
             }
             raw.bincode.serialize_into(
                 &mut *stream,
@@ -407,9 +406,8 @@ fn encode_header_extension(
                     source: source_camera.expect("source_camera must be set for codec version 1"),
                 },
             )?;
-            added_size += std::mem::size_of::<EventStreamHeaderExtensionV1>();
             if raw.codec_version == 1 {
-                return Ok(added_size);
+                return Ok(());
             }
 
             raw.bincode.serialize_into(
@@ -418,42 +416,36 @@ fn encode_header_extension(
                     time_mode: time_mode.expect("time_mode must be set for codec version 2"),
                 },
             )?;
-            added_size +=
-                mem_size_word_aligned(std::mem::size_of::<EventStreamHeaderExtensionV2>());
             if raw.codec_version == 2 {
-                return Ok(added_size);
+                return Ok(());
             }
             return Err(Error::BadFile.into());
         }
     }
 }
 
-fn decode_header_extension(raw: &mut Raw) -> Result<usize, Box<dyn std::error::Error>> {
+fn decode_header_extension(raw: &mut Raw) -> Result<(), Box<dyn std::error::Error>> {
     match &mut raw.input_stream {
         None => Err(Error::UnitializedStream.into()),
         Some(stream) => {
-            let mut added_size = 0;
             if raw.codec_version == 0 {
                 // Leave source camera the default (FramedU8)
-                return Ok(added_size);
+                return Ok(());
             }
             raw.source_camera = raw
                 .bincode
                 .deserialize_from::<_, EventStreamHeaderExtensionV1>(stream.get_mut())?
                 .source;
-            added_size += std::mem::size_of::<EventStreamHeaderExtensionV1>();
             if raw.codec_version == 1 {
-                return Ok(added_size);
+                return Ok(());
             }
 
             raw.time_mode = raw
                 .bincode
                 .deserialize_from::<_, EventStreamHeaderExtensionV2>(stream.get_mut())?
                 .time_mode;
-            added_size +=
-                mem_size_word_aligned(std::mem::size_of::<EventStreamHeaderExtensionV2>());
             if raw.codec_version == 2 {
-                return Ok(added_size);
+                return Ok(());
             }
             return Err(Error::BadFile.into());
         }

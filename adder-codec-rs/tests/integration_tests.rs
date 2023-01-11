@@ -226,7 +226,7 @@ fn test_encode_header_v2() {
     let n: u32 = rand::thread_rng().gen();
     let mut stream = setup_raw_writer_v2(n);
     stream.flush_writer().unwrap();
-    assert_eq!(stream.header_size, 30);
+    assert_eq!(stream.header_size, 33);
     assert_eq!(
         fs::metadata("./TEST_".to_owned() + n.to_string().as_str() + ".addr")
             .unwrap()
