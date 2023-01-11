@@ -69,7 +69,6 @@ pub fn migrate_v2(mut input_stream: Raw, mut output_stream: Raw) -> Result<Raw, 
 
 #[cfg(test)]
 mod tests {
-    use crate::raw::stream::Error;
     use crate::SourceCamera::FramedU8;
     use crate::{Codec, Coord, Event, PlaneSize};
     use rand::Rng;
@@ -79,16 +78,9 @@ mod tests {
     /// events
     #[test]
     fn test_migrate_v2() -> Result<(), Box<dyn std::error::Error>> {
-        use crate::raw::stream::Error::Eof;
         use crate::raw::stream::Raw;
-        use crate::transcoder::source::davis::TranscoderMode::{Framed, RawDavis, RawDvs};
         use crate::utils::stream_migration::migrate_v2;
-        use crate::SourceCamera::DavisU8;
         use crate::{Codec, DeltaT, SourceCamera, TimeMode};
-        use ndarray::Array3;
-        use std::io::Write;
-        use std::path::Path;
-        use std::time::Instant;
         use std::{error, io};
 
         let n: u32 = rand::thread_rng().gen();

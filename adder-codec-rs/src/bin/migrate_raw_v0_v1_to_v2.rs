@@ -1,9 +1,6 @@
 use adder_codec_rs::transcoder::source::davis::Davis;
 use adder_codec_rs::transcoder::source::video::{Source, VideoBuilder};
-use aedat::base::ioheader_generated::Compression;
 use clap::Parser;
-use davis_edi_rs::util::reconstructor::Reconstructor;
-use davis_edi_rs::Args as EdiArgs;
 
 use serde::Deserialize;
 
@@ -35,7 +32,7 @@ pub struct Args {
 }
 
 fn main() -> Result<(), Box<dyn error::Error>> {
-    let mut args: Args = Args::parse();
+    let args: Args = Args::parse();
 
     let time_mode = match args.time_mode.to_lowercase().as_str() {
         "delta_t" => TimeMode::DeltaT,
