@@ -187,9 +187,9 @@ impl PixelArena {
                 self.length -= 1;
                 debug_assert!(self.arena[self.length - 1].alt.is_none());
 
-                let event = self.delta_t_to_absolute_t(&mut event, mode, ref_time);
+                
 
-                event
+                self.delta_t_to_absolute_t(&mut event, mode, ref_time)
             }
         }
     }

@@ -10,10 +10,7 @@ pub fn absolute_event_to_dt_event(mut event: Event, last_t: DeltaT) -> Event {
 
 pub fn migrate_v2(mut input_stream: Raw, mut output_stream: Raw) -> Result<Raw, Box<dyn Error>> {
     let mut data = Vec::new();
-    for _ in 0..input_stream.plane.volume() {
-        let t = 0_u32;
-        data.push(t);
-    }
+    vec![0_u32; input_stream.plane.volume()];
     let mut t_tree: Array3<u32> = Array3::from_shape_vec(
         (
             input_stream.plane.h_usize(),
@@ -55,10 +52,9 @@ pub fn migrate_v2(mut input_stream: Raw, mut output_stream: Raw) -> Result<Raw, 
                     | SourceCamera::Atis
                     | SourceCamera::Asint => false,
                 }
-                && *t % u32::from(input_stream.ref_interval) > 0
+                && *t % input_stream.ref_interval > 0
             {
-                *t = ((*t / u32::from(input_stream.ref_interval)) + 1)
-                    * u32::from(input_stream.ref_interval);
+                *t = ((*t / input_stream.ref_interval) + 1) * input_stream.ref_interval;
             }
         }
 
@@ -80,8 +76,7 @@ mod tests {
     fn test_migrate_v2() -> Result<(), Box<dyn std::error::Error>> {
         use crate::raw::stream::Raw;
         use crate::utils::stream_migration::migrate_v2;
-        use crate::{Codec, DeltaT, SourceCamera, TimeMode};
-        use std::{error, io};
+        use crate::{Codec, TimeMode};
 
         let n: u32 = rand::thread_rng().gen();
         let mut stream: Raw = Codec::new();
@@ -137,7 +132,7 @@ mod tests {
         output_stream.encode_header(
             stream.plane.clone(),
             stream.tps,
-            stream.ref_interval.clone(),
+            stream.ref_interval,
             stream.delta_t_max,
             2,
             Some(stream.source_camera),
@@ -161,15 +156,15 @@ mod tests {
         assert_eq!(event.coord.x as i32, 0);
         assert_eq!(event.coord.y as i32, 0);
         assert_eq!(event.coord.c, None);
-        assert_eq!(event.delta_t as u32, 600);
+        assert_eq!(event.delta_t, 600);
         assert_eq!(event.d, 5);
 
         event = input_stream.decode_event()?;
-        assert_eq!(event.delta_t as u32, 1365);
+        assert_eq!(event.delta_t, 1365);
         event = input_stream.decode_event()?;
-        assert_eq!(event.delta_t as u32, 2130);
+        assert_eq!(event.delta_t, 2130);
         event = input_stream.decode_event()?;
-        assert_eq!(event.delta_t as u32, 2418);
+        assert_eq!(event.delta_t, 2418);
 
         input_stream.close_writer().unwrap();
         fs::remove_file("./TEST_".to_owned() + n.to_string().as_str() + "_v2.adder").unwrap();
@@ -181,22 +176,16 @@ mod tests {
     /// events
     #[test]
     fn test_migrate_v2_nyc() -> Result<(), Box<dyn std::error::Error>> {
-        use crate::raw::stream::Error::Eof;
         use crate::raw::stream::Raw;
-        use crate::transcoder::source::davis::TranscoderMode::{Framed, RawDavis, RawDvs};
+
         use crate::utils::stream_migration::migrate_v2;
-        use crate::SourceCamera::DavisU8;
-        use crate::{Codec, DeltaT, SourceCamera, TimeMode};
-        use ndarray::Array3;
-        use std::io::Write;
-        use std::path::Path;
-        use std::time::Instant;
-        use std::{error, io};
+
+        use crate::{Codec, TimeMode};
 
         let n: u32 = rand::thread_rng().gen();
         let mut stream: Raw = Codec::new();
         stream
-            .open_reader("./tests/samples/nyc_v1_1px.adder".to_owned())
+            .open_reader("./tests/samples/nyc_v1_1px.adder")
             .expect("Couldn't open file");
         stream.decode_header()?;
 
@@ -205,7 +194,7 @@ mod tests {
         output_stream.encode_header(
             stream.plane.clone(),
             stream.tps,
-            stream.ref_interval.clone(),
+            stream.ref_interval,
             stream.delta_t_max,
             2,
             Some(stream.source_camera),
@@ -216,7 +205,7 @@ mod tests {
         output_stream.close_writer()?;
 
         let mut input_stream_gt = Raw::new();
-        input_stream_gt.open_reader("./tests/samples/nyc_source_v2_2_1px.adder".to_owned())?;
+        input_stream_gt.open_reader("./tests/samples/nyc_source_v2_2_1px.adder")?;
         input_stream_gt.decode_header()?;
 
         let mut input_stream_migrate = Raw::new();
@@ -224,7 +213,7 @@ mod tests {
             .open_reader("./TEST_".to_owned() + n.to_string().as_str() + "_v2.adder")?;
         input_stream_migrate.decode_header()?;
 
-        let tmp = mem::size_of::<Event>();
+        let _tmp = mem::size_of::<Event>();
 
         let mut event_count = 0;
         loop {
@@ -244,7 +233,7 @@ mod tests {
             assert_eq!(event_migrate.coord.x as i32, event_gt.coord.x as i32);
             assert_eq!(event_migrate.coord.y as i32, event_gt.coord.y as i32);
             assert_eq!(event_migrate.coord.c, event_gt.coord.c);
-            assert_eq!(event_migrate.delta_t as u32, event_gt.delta_t as u32);
+            assert_eq!(event_migrate.delta_t, event_gt.delta_t);
             assert_eq!(event_migrate.d, event_gt.d);
         }
         assert_eq!(event_count, 5);

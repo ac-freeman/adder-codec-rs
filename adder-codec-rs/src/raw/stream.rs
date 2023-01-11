@@ -419,7 +419,7 @@ fn encode_header_extension(
             if raw.codec_version == 2 {
                 return Ok(());
             }
-            return Err(Error::BadFile.into());
+            Err(Error::BadFile.into())
         }
     }
 }
@@ -447,7 +447,7 @@ fn decode_header_extension(raw: &mut Raw) -> Result<(), Box<dyn std::error::Erro
             if raw.codec_version == 2 {
                 return Ok(());
             }
-            return Err(Error::BadFile.into());
+            Err(Error::BadFile.into())
         }
     }
 }
