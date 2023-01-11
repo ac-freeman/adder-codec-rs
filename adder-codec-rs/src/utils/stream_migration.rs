@@ -63,9 +63,12 @@ pub fn migrate_v2(mut input_stream: Raw, mut output_stream: Raw) -> Result<Raw, 
 
 #[cfg(test)]
 mod tests {
+    use crate::framer::driver::FramerMode::INSTANTANEOUS;
+    use crate::framer::driver::{FrameSequence, Framer, FramerBuilder};
     use crate::utils::stream_migration::absolute_event_to_dt_event;
     use crate::SourceCamera::FramedU8;
-    use crate::{Coord, Event, PlaneSize};
+    use crate::{Coord, Event, PlaneSize, TimeMode};
+    use ndarray::Array3;
     use rand::Rng;
     use std::{fs, mem};
 
@@ -258,25 +261,73 @@ mod tests {
         input_stream_t.open_reader("./tests/samples/bunny_v2_t.adder")?;
         input_stream_t.decode_header()?;
 
+        let reconstructed_frame_rate = 30.0;
+
+        let mut frame_sequence_t: FrameSequence<u8> =
+            FramerBuilder::new(input_stream_t.plane.clone(), 64)
+                .codec_version(input_stream_t.codec_version, TimeMode::AbsoluteT)
+                .time_parameters(
+                    input_stream_t.tps,
+                    input_stream_t.ref_interval,
+                    input_stream_t.delta_t_max,
+                    reconstructed_frame_rate,
+                )
+                .mode(INSTANTANEOUS)
+                .source(
+                    input_stream_t.get_source_type(),
+                    input_stream_t.source_camera,
+                )
+                .finish();
+
         let mut input_stream_dt = Raw::new();
         input_stream_dt.open_reader("./tests/samples/bunny_v2_dt.adder")?;
         input_stream_dt.decode_header()?;
 
+        let mut frame_sequence_dt: FrameSequence<u8> =
+            FramerBuilder::new(input_stream_dt.plane.clone(), 64)
+                .codec_version(input_stream_dt.codec_version, TimeMode::DeltaT)
+                .time_parameters(
+                    input_stream_dt.tps,
+                    input_stream_dt.ref_interval,
+                    input_stream_dt.delta_t_max,
+                    reconstructed_frame_rate,
+                )
+                .mode(INSTANTANEOUS)
+                .source(
+                    input_stream_dt.get_source_type(),
+                    input_stream_dt.source_camera,
+                )
+                .finish();
+
         let mut event_count = 0;
         let mut last_t = 0;
+        let mut t_frame: Option<Vec<Array3<Option<u8>>>> = None;
+        let mut dt_frame;
         loop {
-            let event_t = match input_stream_t.decode_event() {
+            let mut event_t = match input_stream_t.decode_event() {
                 Ok(ev) => ev,
                 Err(_) => {
                     break;
                 }
             };
-            let event_dt = match input_stream_dt.decode_event() {
+            if frame_sequence_t.ingest_event(&mut event_t.clone()) {
+                t_frame = frame_sequence_t.pop_next_frame();
+            }
+
+            let mut event_dt = match input_stream_dt.decode_event() {
                 Ok(ev) => ev,
                 Err(_) => {
                     break;
                 }
             };
+            if frame_sequence_dt.ingest_event(&mut event_dt.clone()) {
+                dt_frame = frame_sequence_dt.pop_next_frame();
+
+                let dt_val = dt_frame.unwrap()[0][[0, 0, 0]].unwrap();
+                let t_val = t_frame.clone().unwrap()[0][[0, 0, 0]].unwrap();
+                assert_eq!(dt_val, t_val);
+            }
+
             event_count += 1;
 
             let event_t_dt = absolute_event_to_dt_event(event_t, last_t);
@@ -293,7 +344,7 @@ mod tests {
             assert_eq!(dt_mig, dt_gt);
             assert_eq!(event_t_dt.d, event_dt.d);
         }
-        assert_eq!(event_count, 87);
+        assert_eq!(event_count, 333);
 
         Ok(())
     }
