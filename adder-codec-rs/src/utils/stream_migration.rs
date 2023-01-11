@@ -356,7 +356,7 @@ mod tests {
         use crate::Codec;
 
         let mut input_stream_t = Raw::new();
-        input_stream_t.open_reader("./tests/samples/bunny_v2_t_2.adder")?;
+        input_stream_t.open_reader("./tests/samples/bunny_v2_t_3.adder")?;
         input_stream_t.decode_header()?;
 
         let reconstructed_frame_rate = 30.0;
@@ -378,7 +378,7 @@ mod tests {
                 .finish();
 
         let mut input_stream_dt = Raw::new();
-        input_stream_dt.open_reader("./tests/samples/bunny_v2_dt_2.adder")?;
+        input_stream_dt.open_reader("./tests/samples/bunny_v2_dt_3.adder")?;
         input_stream_dt.decode_header()?;
 
         let mut frame_sequence_dt: FrameSequence<u8> =
@@ -423,7 +423,7 @@ mod tests {
                 dbg!(event_t);
             }
 
-            let (a_t, b_t) = frame_sequence_t.ingest_event_temp(&mut event_t.clone());
+            let a_t = frame_sequence_t.ingest_event(&mut event_t.clone());
 
             if a_t {
                 t_frame = frame_sequence_t.pop_next_frame();
@@ -435,9 +435,7 @@ mod tests {
                     break;
                 }
             };
-            let (a_dt, b_dt) = frame_sequence_dt.ingest_event_temp(&mut event_dt.clone());
-
-            assert_eq!(b_t, b_dt);
+            let a_dt = frame_sequence_dt.ingest_event(&mut event_dt.clone());
 
             if a_dt {
                 dt_frame = frame_sequence_dt.pop_next_frame();
@@ -461,7 +459,7 @@ mod tests {
             }
 
             event_count += 1;
-            let mut last_t = &mut t_tree[[
+            let last_t = &mut t_tree[[
                 event_t.coord.y_usize(),
                 event_t.coord.x_usize(),
                 event_t.coord.c_usize(),
@@ -471,7 +469,10 @@ mod tests {
             *last_t = event_t.delta_t;
 
             // We already know it's a framed source
-            *last_t = ((*last_t / input_stream_dt.ref_interval) + 1) * input_stream_dt.ref_interval;
+            if *last_t % input_stream_dt.ref_interval != 0 {
+                *last_t =
+                    ((*last_t / input_stream_dt.ref_interval) + 1) * input_stream_dt.ref_interval;
+            }
 
             assert_eq!(event_t_dt.coord.x as i32, event_dt.coord.x as i32);
             assert_eq!(event_t_dt.coord.y as i32, event_dt.coord.y as i32);
@@ -481,7 +482,7 @@ mod tests {
             assert_eq!(dt_mig, dt_gt);
             assert_eq!(event_t_dt.d, event_dt.d);
         }
-        assert_eq!(event_count, 12030);
+        assert_eq!(event_count, 675693);
 
         Ok(())
     }
