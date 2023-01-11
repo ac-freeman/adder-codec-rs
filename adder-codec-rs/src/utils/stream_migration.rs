@@ -9,15 +9,13 @@ pub fn absolute_event_to_dt_event(mut event: Event, last_t: DeltaT) -> Event {
 }
 
 pub fn migrate_v2(mut input_stream: Raw, mut output_stream: Raw) -> Result<Raw, Box<dyn Error>> {
-    let mut data = Vec::new();
-    vec![0_u32; input_stream.plane.volume()];
     let mut t_tree: Array3<u32> = Array3::from_shape_vec(
         (
             input_stream.plane.h_usize(),
             input_stream.plane.w_usize(),
             input_stream.plane.c_usize(),
         ),
-        data,
+        vec![0_u32; input_stream.plane.volume()],
     )?;
 
     loop {
