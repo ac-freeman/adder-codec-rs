@@ -2,7 +2,7 @@ use std::error::Error;
 
 use adder_codec_rs::transcoder::source::davis::Davis;
 use adder_codec_rs::transcoder::source::framed::Framed;
-use adder_codec_rs::DeltaT;
+use adder_codec_rs::{DeltaT, TimeMode};
 use bevy::prelude::Image;
 use std::fmt;
 use std::path::{Path, PathBuf};
@@ -46,7 +46,7 @@ impl AdderTranscoder {
         match input_path_buf.extension() {
             None => Err(Box::new(AdderTranscoderError("Invalid file type".into()))),
             Some(ext) => {
-                match ext.to_str() {
+                match ext.to_ascii_lowercase().to_str() {
                     None => Err(Box::new(AdderTranscoderError("Invalid file type".into()))),
                     Some("mp4") => {
                         let mut framed = Framed::new(
@@ -69,6 +69,7 @@ impl AdderTranscoder {
                             ui_state.delta_t_ref as u32,
                             ui_state.delta_t_max_mult * ui_state.delta_t_ref as u32,
                         )?
+                        .time_mode(ui_state.time_mode)
                         .show_display(false);
 
                         // TODO: Change the builder to take in a pathbuf directly, not a string,
@@ -76,8 +77,11 @@ impl AdderTranscoder {
                         match output_path_opt {
                             None => {}
                             Some(output_path) => {
-                                framed = *framed
-                                    .write_out(output_path.to_str().unwrap().parse()?, FramedU8)?;
+                                framed = *framed.write_out(
+                                    output_path.to_str().unwrap().parse()?,
+                                    FramedU8,
+                                    ui_state.time_mode,
+                                )?;
                                 //     .output_events_filename(match output_path.to_str() {
                                 //     None => {
                                 //         return Err(Box::new(AdderTranscoderError(
@@ -156,6 +160,7 @@ impl AdderTranscoder {
                         let mut davis_source = Davis::new(reconstructor, rt)?
                             .optimize_adder_controller(false) // TODO
                             .mode(ui_state.davis_mode_radio_state)
+                            .time_mode(ui_state.time_mode)
                             .time_parameters(
                                 1000000_u32, // TODO
                                 (1_000_000.0 / ui_state.davis_output_fps) as DeltaT,
@@ -165,7 +170,11 @@ impl AdderTranscoder {
                             .c_thresh_neg(ui_state.adder_tresh as u8);
 
                         if let Some(output_string) = output_string {
-                            davis_source = *davis_source.write_out(output_string, DavisU8)?;
+                            davis_source = *davis_source.write_out(
+                                output_string,
+                                DavisU8,
+                                TimeMode::DeltaT,
+                            )?;
                         }
 
                         Ok(AdderTranscoder {

@@ -4,7 +4,7 @@ use crate::transcoder::source::video::SourceError;
 use crate::transcoder::source::video::SourceError::BufferEmpty;
 use crate::transcoder::source::video::Video;
 use crate::transcoder::source::video::{Source, VideoBuilder};
-use crate::{Coord, Event};
+use crate::{Coord, Event, TimeMode};
 use crate::{PlaneSize, SourceCamera};
 use opencv::core::{Mat, Size};
 use opencv::videoio::{VideoCapture, CAP_PROP_FPS, CAP_PROP_FRAME_COUNT, CAP_PROP_POS_FRAMES};
@@ -30,6 +30,7 @@ pub struct Framed {
     pub scale: f64,
     color_input: bool,
     pub(crate) video: Video,
+    pub time_mode: TimeMode,
 }
 unsafe impl Sync for Framed {}
 
@@ -81,6 +82,7 @@ impl Framed {
             scale,
             color_input,
             video,
+            time_mode: TimeMode::DeltaT,
         })
     }
 
@@ -98,6 +100,11 @@ impl Framed {
             .set(CAP_PROP_POS_FRAMES, f64::from(frame_idx_start))?;
         self.frame_idx_start = frame_idx_start;
         Ok(self)
+    }
+
+    pub fn time_mode(mut self, time_mode: TimeMode) -> Self {
+        self.time_mode = time_mode;
+        self
     }
 
     pub fn auto_time_parameters(
@@ -207,8 +214,11 @@ impl VideoBuilder for Framed {
         mut self,
         output_filename: String,
         source_camera: SourceCamera,
+        time_mode: TimeMode,
     ) -> Result<Box<Self>, Box<dyn Error>> {
-        self.video = self.video.write_out(output_filename, source_camera)?;
+        self.video = self
+            .video
+            .write_out(output_filename, Some(source_camera), Some(time_mode))?;
         Ok(Box::new(self))
     }
 

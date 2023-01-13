@@ -3,6 +3,7 @@ extern crate core;
 use adder_codec_rs::transcoder::source::video::{Source, VideoBuilder};
 use adder_codec_rs::utils::simulproc::{SimulProcArgs, SimulProcessor};
 use adder_codec_rs::SourceCamera::FramedU8;
+use adder_codec_rs::TimeMode;
 
 use clap::Parser;
 use rayon::current_num_threads;
@@ -44,6 +45,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
         let content = std::fs::read_to_string(args.args_filename)?;
         args = toml::from_str(&content)?;
     }
+
+    let time_mode = match args.time_mode.to_lowercase().as_str() {
+        "delta_t" => TimeMode::DeltaT,
+        "absolute" => TimeMode::AbsoluteT,
+        "mixed" => TimeMode::Mixed,
+        _ => panic!("Invalid time mode"),
+    };
     println!("c_pos: {}, c_neg: {}", args.c_thresh_pos, args.c_thresh_neg);
 
     //////////////////////////////////////////////////////
@@ -63,7 +71,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .auto_time_parameters(args.ref_time, args.delta_t_max)?;
 
     if !args.output_events_filename.is_empty() {
-        source = *source.write_out(args.output_events_filename, FramedU8)?;
+        // source = *source.write_out(args.output_events_filename, FramedU8, TimeMode::AbsoluteT)?;
+        source = *source.write_out(args.output_events_filename, FramedU8, time_mode)?;
     }
 
     let source_fps = source.source_fps;
@@ -81,6 +90,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
         args.output_raw_video_filename.as_str(),
         args.frame_count_max as i32,
         num_threads,
+        2,
+        time_mode,
     )?;
 
     let now = std::time::Instant::now();
@@ -121,8 +132,8 @@ mod tests {
     use adder_codec_rs::transcoder::source::framed::Framed;
     use adder_codec_rs::transcoder::source::video::{Source, VideoBuilder};
     use adder_codec_rs::utils::simulproc::{SimulProcArgs, SimulProcessor};
-    use adder_codec_rs::DeltaT;
     use adder_codec_rs::SourceCamera::FramedU8;
+    use adder_codec_rs::{DeltaT, TimeMode};
     use std::error::Error;
     use std::fs;
     use std::path::PathBuf;
@@ -152,6 +163,7 @@ mod tests {
             c_thresh_pos: 0,
             c_thresh_neg: 0,
             thread_count: 1, // Multithreading causes some issues in testing
+            time_mode: "delta_t".to_string(),
         };
         let mut source = Framed::new(args.input_filename, args.color_input, args.scale)?
             // .chunk_rows(64)
@@ -167,7 +179,7 @@ mod tests {
             args.delta_t_max,
         )?;
         if !args.output_events_filename.is_empty() {
-            source = *source.write_out(args.output_events_filename, FramedU8)?;
+            source = *source.write_out(args.output_events_filename, FramedU8, TimeMode::DeltaT)?;
         }
         let ref_time = source.get_ref_time();
 
@@ -177,6 +189,8 @@ mod tests {
             args.output_raw_video_filename.as_str(),
             args.frame_count_max as i32,
             1,
+            1,
+            TimeMode::DeltaT,
         )?;
 
         simul_processor.run().unwrap();

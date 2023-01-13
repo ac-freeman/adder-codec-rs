@@ -5,9 +5,9 @@ use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::fmt::Formatter;
 use std::fs::File;
-use std::io;
 use std::io::{BufReader, BufWriter};
 use std::path::Path;
+use std::{fmt, io};
 
 pub mod framer;
 mod header;
@@ -172,6 +172,20 @@ pub enum SourceCamera {
     Asint,
 }
 
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq)]
+pub enum TimeMode {
+    #[default]
+    DeltaT,
+    AbsoluteT,
+    Mixed,
+}
+
+impl fmt::Display for TimeMode {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
 impl std::fmt::Display for SourceCamera {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let text = match self {
@@ -322,6 +336,49 @@ pub struct Coord {
     pub c: Option<u8>,
 }
 
+impl Coord {
+    pub fn new(x: PixelAddress, y: PixelAddress, c: Option<u8>) -> Self {
+        Self { x, y, c }
+    }
+    pub fn new_2d(x: PixelAddress, y: PixelAddress) -> Self {
+        Self { x, y, c: None }
+    }
+    pub fn new_3d(x: PixelAddress, y: PixelAddress, c: u8) -> Self {
+        Self { x, y, c: Some(c) }
+    }
+    pub fn x(&self) -> PixelAddress {
+        self.x
+    }
+    pub fn y(&self) -> PixelAddress {
+        self.y
+    }
+    pub fn c(&self) -> Option<u8> {
+        self.c
+    }
+    pub fn x_usize(&self) -> usize {
+        self.x as usize
+    }
+    pub fn y_usize(&self) -> usize {
+        self.y as usize
+    }
+    pub fn c_usize(&self) -> usize {
+        self.c.unwrap_or(0) as usize
+    }
+
+    pub fn is_2d(&self) -> bool {
+        self.c.is_none()
+    }
+    pub fn is_3d(&self) -> bool {
+        self.c.is_some()
+    }
+    pub fn is_valid(&self) -> bool {
+        self.x != EOF_PX_ADDRESS && self.y != EOF_PX_ADDRESS
+    }
+    pub fn is_eof(&self) -> bool {
+        self.x == EOF_PX_ADDRESS && self.y == EOF_PX_ADDRESS
+    }
+}
+
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct CoordSingle {
     pub x: PixelAddress,
@@ -451,7 +508,8 @@ pub trait Codec {
         ref_interval: u32,
         delta_t_max: u32,
         codec_version: u8,
-        source_camera: SourceCamera,
+        source_camera: Option<SourceCamera>,
+        time_mode: Option<TimeMode>,
     ) -> Result<(), Box<dyn Error>>;
 
     fn decode_header(&mut self) -> Result<usize, Box<dyn Error>>;
@@ -460,6 +518,7 @@ pub trait Codec {
     fn encode_events(&mut self, events: &[Event]) -> Result<(), StreamError>;
     fn encode_events_events(&mut self, events: &[Vec<Event>]) -> Result<(), StreamError>;
     fn decode_event(&mut self) -> Result<Event, StreamError>;
+    fn get_output_stream_position(&mut self) -> Result<u64, Box<dyn std::error::Error>>;
 }
 
 #[cfg(test)]

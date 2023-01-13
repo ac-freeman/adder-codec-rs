@@ -1,6 +1,6 @@
 <component name="ProjectRunConfigurationManager">
   <configuration default="false" name="Run simul release" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
-    <option name="command" value="run --release --bin adder_simulproc -- --args-filename &quot;./src/bin/args/framed_to_adder_args.toml&quot;" />
+    <option name="command" value="run --release --bin adder_simulproc -- --args-filename &quot;./adder-codec-rs/src/bin/args/framed_to_adder_args.toml&quot;" />
     <option name="workingDirectory" value="file://$PROJECT_DIR$" />
     <option name="channel" value="DEFAULT" />
     <option name="requiredFeatures" value="true" />

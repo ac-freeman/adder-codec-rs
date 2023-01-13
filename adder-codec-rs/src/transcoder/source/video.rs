@@ -7,7 +7,7 @@ use std::path::Path;
 use std::sync::mpsc::{channel, Sender};
 
 use crate::raw::stream::{Error as StreamError, Raw};
-use crate::{raw, Codec, Coord, Event, PlaneSize, SourceType, D};
+use crate::{raw, Codec, Coord, Event, PlaneSize, SourceType, TimeMode, D};
 use opencv::highgui;
 use opencv::imgproc::resize;
 use opencv::prelude::*;
@@ -86,7 +86,7 @@ pub enum FramedViewMode {
 
 pub struct VideoState {
     pub plane: PlaneSize,
-    pixel_tree_mode: Mode,
+    pub(crate) pixel_tree_mode: Mode,
     pub chunk_rows: usize,
     pub in_interval_count: u32,
     pub(crate) c_thresh_pos: u8,
@@ -142,6 +142,7 @@ pub trait VideoBuilder {
         self,
         output_filename: String,
         source_camera: SourceCamera,
+        time_mode: TimeMode,
     ) -> Result<Box<Self>, Box<dyn std::error::Error>>;
 
     fn show_display(self, show_display: bool) -> Self;
@@ -280,7 +281,8 @@ impl Video {
     pub fn write_out(
         mut self,
         output_filename: String,
-        source_camera: SourceCamera,
+        source_camera: Option<SourceCamera>,
+        time_mode: Option<TimeMode>,
     ) -> Result<Self, Box<dyn std::error::Error>> {
         self.state.write_out = true;
 
@@ -291,9 +293,14 @@ impl Video {
             self.state.tps,
             self.state.ref_time,
             self.state.delta_t_max,
-            1,
+            2,
             source_camera,
+            time_mode,
         )?;
+
+        self.event_pixel_trees.par_map_inplace(|px| {
+            px.time_mode(time_mode);
+        });
         Ok(self)
     }
 
@@ -393,7 +400,7 @@ impl Video {
             let c = idx % self.state.plane.c_usize();
             *val = match self.event_pixel_trees[[y, x, c]].arena[0].best_event {
                 Some(event) => u8::get_frame_value(
-                    &event,
+                    &event.into(),
                     SourceType::U8,
                     self.state.ref_time as DeltaT,
                     practical_d_max,
@@ -465,7 +472,7 @@ pub fn integrate_for_px(
     state: &VideoState,
 ) {
     if px.need_to_pop_top {
-        buffer.push(px.pop_top_event(intensity));
+        buffer.push(px.pop_top_event(intensity, state.pixel_tree_mode, state.ref_time));
     }
 
     *base_val = px.base_val;
@@ -473,7 +480,7 @@ pub fn integrate_for_px(
     if *frame_val < base_val.saturating_sub(state.c_thresh_neg)
         || *frame_val > base_val.saturating_add(state.c_thresh_pos)
     {
-        px.pop_best_events(buffer);
+        px.pop_best_events(buffer, state.pixel_tree_mode, state.ref_time);
         px.base_val = *frame_val;
 
         // If continuous mode and the D value needs to be different now
@@ -487,14 +494,14 @@ pub fn integrate_for_px(
 
     px.integrate(
         intensity,
-        time_spanned,
+        time_spanned.into(),
         state.pixel_tree_mode,
         state.delta_t_max,
         state.ref_time,
     );
 
     if px.need_to_pop_top {
-        buffer.push(px.pop_top_event(intensity));
+        buffer.push(px.pop_top_event(intensity, state.pixel_tree_mode, state.ref_time));
     }
 }
 

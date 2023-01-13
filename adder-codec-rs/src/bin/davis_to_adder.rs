@@ -8,8 +8,8 @@ use davis_edi_rs::Args as EdiArgs;
 use serde::Deserialize;
 
 use adder_codec_rs::transcoder::source::davis::TranscoderMode::{Framed, RawDavis, RawDvs};
-use adder_codec_rs::DeltaT;
 use adder_codec_rs::SourceCamera::DavisU8;
+use adder_codec_rs::{DeltaT, TimeMode};
 use std::io::Write;
 use std::time::Instant;
 use std::{error, io};
@@ -141,7 +141,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         )? // TODO
         .c_thresh_pos(args.adder_c_thresh_pos)
         .c_thresh_neg(args.adder_c_thresh_neg)
-        .write_out(args.output_events_filename, DavisU8)?;
+        .write_out(args.output_events_filename, DavisU8, TimeMode::DeltaT)?;
 
     let mut now = Instant::now();
     let start_time = std::time::Instant::now();

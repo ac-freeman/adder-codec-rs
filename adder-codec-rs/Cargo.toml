@@ -1,6 +1,6 @@
 [package]
 name = "adder-codec-rs"
-version = "0.2.4"
+version = "0.2.5"
 edition = "2021"
 authors = ["Andrew C. Freeman"]
 description = """Encoder/transcoder/decoder for ADΔER (Address, Decimation, Δt Event Representation) streams.
@@ -12,7 +12,7 @@ repository = "https://github.com/ac-freeman/adder-codec-rs"
 readme = "../README.md"
 license = "MIT OR Apache-2.0"
 keywords = ["neuromorphic", "decoding", "event", "asynchronous", "video"]
-categories = ["multimedia::encoding", "science"]
+categories = ["multimedia::encoding", "multimedia::video", "science"]
 exclude = [
     "tests/samples/*",
 ]
@@ -35,6 +35,7 @@ optional = true
 rand = "0.8.5"
 itertools = "0.10.3"
 duplicate = "0.4.1"
+float-cmp = "0.9.0"
 serde = {version = "1.0.140", features = ["derive"]}
 serde_json = "1.0"
 serde_bytes = "0.11.6"

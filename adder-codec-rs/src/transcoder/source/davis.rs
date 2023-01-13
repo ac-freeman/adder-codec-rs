@@ -3,7 +3,7 @@ use crate::transcoder::source::video::SourceError::BufferEmpty;
 use crate::transcoder::source::video::{
     integrate_for_px, show_display, Source, SourceError, Video, VideoBuilder,
 };
-use crate::{Codec, DeltaT, Event, PlaneSize, SourceCamera, SourceType};
+use crate::{Codec, DeltaT, Event, PlaneSize, SourceCamera, SourceType, TimeMode};
 use aedat::events_generated::Event as DvsEvent;
 use davis_edi_rs::util::reconstructor::{IterVal, ReconstructionError, Reconstructor};
 use rayon::iter::ParallelIterator;
@@ -53,7 +53,8 @@ pub struct Davis {
     pub dvs_last_timestamps: Array3<i64>,
     pub dvs_last_ln_val: Array3<f64>,
     optimize_adder_controller: bool,
-    pub mode: TranscoderMode, // phantom: PhantomData<T>,
+    pub mode: TranscoderMode,
+    pub time_mode: TimeMode,
 }
 
 unsafe impl Sync for Davis {}
@@ -107,6 +108,7 @@ impl Davis {
             dvs_last_ln_val,
             optimize_adder_controller: false,
             mode: TranscoderMode::Framed,
+            time_mode: TimeMode::DeltaT,
         };
 
         Ok(davis_source)
@@ -119,6 +121,11 @@ impl Davis {
 
     pub fn mode(mut self, mode: TranscoderMode) -> Self {
         self.mode = mode;
+        self
+    }
+
+    pub fn time_mode(mut self, time_mode: TimeMode) -> Self {
+        self.time_mode = time_mode;
         self
     }
 
@@ -198,18 +205,26 @@ impl Davis {
                                 * delta_t_ticks)
                                 .max(0.0);
                             if px.need_to_pop_top {
-                                buffer.push(px.pop_top_event(first_integration));
+                                buffer.push(px.pop_top_event(
+                                    first_integration,
+                                    Continuous,
+                                    self.video.state.ref_time,
+                                ));
                             }
 
                             px.integrate(
                                 first_integration,
-                                delta_t_ticks,
+                                delta_t_ticks.into(),
                                 Continuous,
                                 self.video.state.delta_t_max,
                                 self.video.state.ref_time,
                             );
                             if px.need_to_pop_top {
-                                buffer.push(px.pop_top_event(first_integration));
+                                buffer.push(px.pop_top_event(
+                                    first_integration,
+                                    Continuous,
+                                    self.video.state.ref_time,
+                                ));
                             }
 
                             ///////////////////////////////////////////////////////
@@ -227,7 +242,11 @@ impl Davis {
                                 || frame_val_u8
                                     > base_val.saturating_add(self.video.state.c_thresh_pos)
                             {
-                                px.pop_best_events(&mut buffer);
+                                px.pop_best_events(
+                                    &mut buffer,
+                                    Continuous,
+                                    self.video.state.ref_time,
+                                );
                                 px.base_val = frame_val_u8;
 
                                 // If continuous mode and the D value needs to be different now
@@ -333,7 +352,11 @@ impl Davis {
                         &self.video.state,
                     );
                     if px.need_to_pop_top {
-                        buffer.push(px.pop_top_event(integration as f32));
+                        buffer.push(px.pop_top_event(
+                            integration as f32,
+                            self.video.state.pixel_tree_mode,
+                            self.video.state.ref_time,
+                        ));
                     }
                 }
                 buffer
@@ -360,7 +383,7 @@ impl Davis {
             let c = idx % self.video.state.plane.c_usize();
             *val = match self.video.event_pixel_trees[[y, x, c]].arena[0].best_event {
                 Some(event) => u8::get_frame_value(
-                    &event,
+                    &event.into(),
                     SourceType::U8,
                     self.video.state.ref_time as DeltaT,
                     practical_d_max,
@@ -453,7 +476,11 @@ impl Source for Davis {
                     .map(|(_chunk_idx, mut chunk)| {
                         let mut buffer: Vec<Event> = Vec::with_capacity(px_per_chunk);
                         for (_, px) in chunk.iter_mut().enumerate() {
-                            px.pop_best_events(&mut buffer);
+                            px.pop_best_events(
+                                &mut buffer,
+                                self.video.state.pixel_tree_mode,
+                                self.video.state.ref_time,
+                            );
                         }
                         buffer
                     })
@@ -642,8 +669,11 @@ impl VideoBuilder for Davis {
         mut self,
         output_filename: String,
         source_camera: SourceCamera,
+        time_mode: TimeMode,
     ) -> Result<Box<Self>, Box<dyn Error>> {
-        self.video = self.video.write_out(output_filename, source_camera)?;
+        self.video = self
+            .video
+            .write_out(output_filename, Some(source_camera), Some(time_mode))?;
         Ok(Box::new(self))
     }
 

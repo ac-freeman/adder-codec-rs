@@ -1,6 +1,6 @@
 [package]
 name = "adder-info"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
 authors = ["Andrew C. Freeman"]
 description = """
@@ -11,13 +11,14 @@ repository = "https://github.com/ac-freeman/adder-codec-rs/tree/main/adder-info"
 readme = "README.md"
 license = "MIT OR Apache-2.0"
 keywords = ["neuromorphic", "decoding", "event", "asynchronous", "video"]
-categories = ["multimedia::encoding", "science"]
+categories = ["multimedia::encoding", "multimedia::video", "science"]
 
 [dependencies]
-adder-codec-rs = { version = "0.2.3", path = "../adder-codec-rs", features = [
+adder-codec-rs = { version = "0.2.5", path = "../adder-codec-rs", features = [
     "transcoder",
 ] }
 clap = { version = "4.0.17", features = ["derive"] }
+ndarray = {version = "0.15.6"}
 
 [dev-dependencies]
 assert_cmd = "2.0.7"

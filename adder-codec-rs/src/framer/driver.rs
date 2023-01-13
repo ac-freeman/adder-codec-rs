@@ -1,5 +1,5 @@
 use crate::framer::scale_intensity::FrameValue;
-use crate::{BigT, DeltaT, Event, PlaneSize, SourceCamera, D};
+use crate::{BigT, DeltaT, Event, PlaneSize, SourceCamera, TimeMode, D};
 use bincode::config::{BigEndian, FixintEncoding, WithOtherEndian, WithOtherIntEncoding};
 use bincode::{DefaultOptions, Options};
 use rayon::iter::ParallelIterator;
@@ -86,6 +86,7 @@ pub struct FramerBuilder {
     source: SourceType,
     codec_version: u8,
     source_camera: SourceCamera,
+    time_mode: TimeMode,
     ref_interval: DeltaT,
     delta_t_max: DeltaT,
     pub chunk_rows: usize,
@@ -104,6 +105,7 @@ impl FramerBuilder {
             source: SourceType::U8,
             codec_version: 1,
             source_camera: SourceCamera::default(),
+            time_mode: TimeMode::DeltaT,
             ref_interval: 5000,
             delta_t_max: 5000,
         }
@@ -143,8 +145,9 @@ impl FramerBuilder {
     }
 
     #[must_use]
-    pub fn codec_version(mut self, codec_version: u8) -> FramerBuilder {
+    pub fn codec_version(mut self, codec_version: u8, time_mode: TimeMode) -> FramerBuilder {
         self.codec_version = codec_version;
+        self.time_mode = time_mode;
         self
     }
 
@@ -244,6 +247,7 @@ pub struct FrameSequenceState {
     ref_interval: DeltaT,
     source_dtm: DeltaT,
     view_mode: FramedViewMode,
+    time_mode: TimeMode,
 }
 
 #[allow(dead_code)]
@@ -343,6 +347,7 @@ impl<
                 source_camera: builder.source_camera,
                 ref_interval: builder.ref_interval,
                 source_dtm: builder.delta_t_max,
+                time_mode: builder.time_mode,
             },
             frames,
             frame_idx_offsets: vec![0; num_chunks],
@@ -363,7 +368,7 @@ impl<
     /// # Examples
     ///
     /// ```
-    /// # use adder_codec_rs::{Coord, Event, PlaneSize};
+    /// # use adder_codec_rs::{Coord, Event, PlaneSize, TimeMode};
     /// # use adder_codec_rs::framer::driver::FramerMode::INSTANTANEOUS;
     /// # use adder_codec_rs::framer::driver::{FrameSequence, Framer, FramerBuilder};
     /// # use adder_codec_rs::framer::driver::SourceType::U8;
@@ -372,7 +377,7 @@ impl<
     /// let mut frame_sequence: FrameSequence<u8> =
     /// FramerBuilder::new(
     ///             PlaneSize::new(10,10,3).unwrap(), 64)
-    ///             .codec_version(1)
+    ///             .codec_version(1, TimeMode::DeltaT)
     ///             .time_parameters(50000, 1000, 1000, 50.0)
     ///             .mode(INSTANTANEOUS)
     ///             .source(U8, FramedU8)
@@ -683,7 +688,7 @@ impl<T: Clone + Default + FrameValue<Output = T> + Serialize> FrameSequence<T> {
 fn ingest_event_for_chunk<
     T: Clone + Default + FrameValue<Output = T> + Copy + Serialize + Send + Sync,
 >(
-    event: &Event,
+    event: &mut Event,
     frame_chunk: &mut VecDeque<Frame<Option<T>>>,
     running_ts_ref: &mut BigT,
     frame_idx_offset: &mut i64,
@@ -694,8 +699,13 @@ fn ingest_event_for_chunk<
     let channel = event.coord.c.unwrap_or(0);
 
     let prev_last_filled_frame = *last_filled_frame_ref;
+    let prev_running_ts = *running_ts_ref;
 
-    *running_ts_ref += u64::from(event.delta_t);
+    if state.codec_version >= 2 && state.time_mode == TimeMode::AbsoluteT {
+        *running_ts_ref = event.delta_t as BigT;
+    } else {
+        *running_ts_ref += u64::from(event.delta_t);
+    }
 
     if ((*running_ts_ref - 1) as i64 / i64::from(state.tpf)) > *last_filled_frame_ref {
         // Set the frame's value from the event
@@ -705,6 +715,11 @@ fn ingest_event_for_chunk<
             // event's intensity. Else we reset the intensity here.
             let practical_d_max =
                 fast_math::log2_raw(T::max_f32() * (state.source_dtm / state.ref_interval) as f32);
+            if state.codec_version >= 2 && state.time_mode == TimeMode::AbsoluteT {
+                // event.delta_t -= ((*last_filled_frame_ref + 1) * state.ref_interval as i64) as u32;
+                event.delta_t -= prev_running_ts as u32;
+            }
+
             *last_frame_intensity_ref = T::get_frame_value(
                 event,
                 state.source,
@@ -763,7 +778,8 @@ fn ingest_event_for_chunk<
     }
 
     // If framed video source, we can take advantage of scheme that reduces event rate by half
-    if state.codec_version > 0
+    if state.codec_version >= 1
+        // && state.time_mode == TimeMode::DeltaT
         && match state.source_camera {
             SourceCamera::FramedU8
             | SourceCamera::FramedU16

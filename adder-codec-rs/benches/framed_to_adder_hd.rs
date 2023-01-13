@@ -12,6 +12,7 @@ use std::path::PathBuf;
 use adder_codec_rs::transcoder::source::framed::Framed;
 use adder_codec_rs::transcoder::source::video::VideoBuilder;
 use adder_codec_rs::utils::viz::download_file;
+use adder_codec_rs::TimeMode;
 use std::thread::sleep;
 use std::time::Duration;
 
@@ -34,6 +35,7 @@ fn simul_proc(video_path: &str, scale: f64, thread_count: u8, _chunk_rows: usize
         c_thresh_pos: 0,
         c_thresh_neg: 0,
         thread_count, // Multithreading causes some issues in testing
+        time_mode: "delta_t".to_string(),
     };
     let source = Framed::new(args.input_filename, args.color_input, args.scale)
         .unwrap()
@@ -42,7 +44,7 @@ fn simul_proc(video_path: &str, scale: f64, thread_count: u8, _chunk_rows: usize
         .unwrap()
         .contrast_thresholds(args.c_thresh_pos, args.c_thresh_neg)
         .show_display(args.show_display)
-        .auto_time_parameters(args.ref_time, args.delta_t_max);
+        .auto_time_parameters(args.ref_time, args.delta_t_max)?;
 
     let ref_time = source.get_ref_time();
 
@@ -52,6 +54,8 @@ fn simul_proc(video_path: &str, scale: f64, thread_count: u8, _chunk_rows: usize
         args.output_raw_video_filename.as_str(),
         args.frame_count_max as i32,
         thread_count as usize,
+        1,
+        TimeMode::DeltaT,
     )
     .unwrap();
 

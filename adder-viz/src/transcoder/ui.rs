@@ -12,6 +12,7 @@ use opencv::imgproc;
 use rayon::current_num_threads;
 use std::error::Error;
 
+use adder_codec_rs::TimeMode;
 use std::default::Default;
 use std::path::PathBuf;
 
@@ -33,6 +34,7 @@ pub struct ParamsUiState {
     pub(crate) davis_output_fps: f64,
     davis_output_fps_slider: f64,
     pub(crate) optimize_c: bool,
+    pub(crate) time_mode: TimeMode,
 }
 
 impl Default for ParamsUiState {
@@ -55,6 +57,7 @@ impl Default for ParamsUiState {
             davis_output_fps: 500.0,
             davis_output_fps_slider: 500.0,
             optimize_c: true,
+            time_mode: TimeMode::DeltaT,
         }
     }
 }
@@ -201,6 +204,7 @@ impl TranscoderState {
                             if source.mode != self.ui_state.davis_mode_radio_state
                                 || source.get_reconstructor().output_fps
                                     != self.ui_state.davis_output_fps
+                                || source.time_mode != self.ui_state.time_mode
                             {
                                 replace_adder_transcoder(
                                     self,
@@ -220,6 +224,7 @@ impl TranscoderState {
                 Some(source) => {
                     if source.scale != self.ui_state.scale
                         || source.get_ref_time() != self.ui_state.delta_t_ref as u32
+                        || source.time_mode != self.ui_state.time_mode
                         || match source.get_video_ref().state.plane.c() {
                             1 => {
                                 // True if the transcoder is gray, but the user wants color
@@ -393,7 +398,7 @@ fn side_panel_grid_contents(
         ui,
         &mut ui_state.scale,
         &mut ui_state.scale_slider,
-        0.01..=1.0,
+        0.001..=1.0,
         vec![0.25, 0.5, 0.75],
         0.1,
     );
@@ -416,6 +421,23 @@ fn side_panel_grid_contents(
             FramedViewMode::DeltaT,
             "Δt",
         );
+    });
+    ui.end_row();
+
+    ui.label("Time mode:");
+    ui.add_enabled_ui(true, |ui| {
+        ui.horizontal(|ui| {
+            ui.radio_value(
+                &mut ui_state.time_mode,
+                TimeMode::DeltaT,
+                "Δt (time change)",
+            );
+            ui.radio_value(
+                &mut ui_state.time_mode,
+                TimeMode::AbsoluteT,
+                "t (absolute time)",
+            );
+        });
     });
     ui.end_row();
 

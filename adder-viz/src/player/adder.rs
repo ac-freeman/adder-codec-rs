@@ -57,7 +57,7 @@ impl AdderPlayer {
     ) -> Result<Self, Box<dyn Error>> {
         match path_buf.extension() {
             None => Err(Box::new(AdderPlayerError("Invalid file type".into()))),
-            Some(ext) => match ext.to_str() {
+            Some(ext) => match ext.to_ascii_lowercase().to_str() {
                 None => Err(Box::new(AdderPlayerError("Invalid file type".into()))),
                 Some("adder") => {
                     let input_path = path_buf.to_str().expect("Invalid string").to_string();
@@ -71,7 +71,7 @@ impl AdderPlayer {
 
                     let framer_builder: FramerBuilder =
                         FramerBuilder::new(stream.plane.clone(), 260)
-                            .codec_version(stream.codec_version)
+                            .codec_version(stream.codec_version, stream.time_mode)
                             .time_parameters(
                                 stream.tps,
                                 stream.ref_interval,

@@ -1,6 +1,6 @@
 [package]
 name = "adder-viz"
-version = "0.1.7"
+version = "0.1.8"
 edition = "2021"
 resolver = "2"
 authors = ["Andrew C. Freeman"]
@@ -12,6 +12,7 @@ repository = "https://github.com/ac-freeman/adder-codec-rs/tree/main/adder-viz"
 readme = "README.md"
 license = "MIT OR Apache-2.0"
 keywords = ["neuromorphic", "visualization", "video", "asynchronous", "event"]
+categories = ["multimedia::encoding", "multimedia::video", "science"]
 default-run = "adder-viz"
 
 [dependencies.opencv]
@@ -22,7 +23,7 @@ features = ['videoio', 'imgproc', 'highgui']
 optional = false
 
 [dependencies]
-adder-codec-rs = { version = "0.2.3", path = "../adder-codec-rs", features = [
+adder-codec-rs = { version = "0.2.5", path = "../adder-codec-rs", features = [
     "transcoder",
 ] }
 bevy = "0.9.0"

@@ -1,7 +1,10 @@
 use adder_codec_rs::framer::scale_intensity::event_to_intensity;
 use adder_codec_rs::raw::stream::Raw;
-use adder_codec_rs::{Codec, Intensity, D_SHIFT};
+use adder_codec_rs::utils::stream_migration::absolute_event_to_dt_event;
+use adder_codec_rs::TimeMode::AbsoluteT;
+use adder_codec_rs::{Codec, DeltaT, Intensity, D_SHIFT};
 use clap::Parser;
+use ndarray::Array3;
 use std::io::Write;
 use std::path::Path;
 use std::{error, io};
@@ -43,6 +46,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     writeln!(handle, "Source camera: {}", stream.source_camera)?;
     writeln!(handle, "ADΔER transcoder parameters")?;
     writeln!(handle, "\tCodec version: {}", stream.codec_version)?;
+    writeln!(handle, "\tTime mode: {}", stream.time_mode)?;
     writeln!(handle, "\tTicks per second: {}", stream.tps)?;
     writeln!(
         handle,
@@ -65,7 +69,34 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         let mut max_intensity: Intensity = 0.0;
         let mut min_intensity: Intensity = f64::MAX;
         let mut event_count: u64 = 0;
-        while let Ok(event) = stream.decode_event() {
+
+        // Setup time tracker for AbsoluteT mode
+        let mut data = Vec::new();
+        for _ in 0..stream.plane.volume() {
+            let t = 0_u32;
+            data.push(t);
+        }
+        let mut t_tree: Array3<DeltaT> = Array3::from_shape_vec(
+            (
+                stream.plane.h_usize(),
+                stream.plane.w_usize(),
+                stream.plane.c_usize(),
+            ),
+            data,
+        )?;
+
+        while let Ok(mut event) = stream.decode_event() {
+            if stream.codec_version >= 2 && stream.time_mode == AbsoluteT {
+                let last_t = &mut t_tree[[
+                    event.coord.y_usize(),
+                    event.coord.x_usize(),
+                    event.coord.c_usize(),
+                ]];
+                let new_t = event.delta_t;
+                event = absolute_event_to_dt_event(event, *last_t);
+                *last_t = new_t;
+            }
+
             match event_to_intensity(&event) {
                 _ if event.d == 0xFF => {
                     // ignore empty events

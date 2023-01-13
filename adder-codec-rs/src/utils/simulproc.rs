@@ -6,7 +6,7 @@ use crate::framer::scale_intensity::FrameValue;
 use crate::transcoder::source::framed::Framed;
 use crate::transcoder::source::video::Source;
 use crate::SourceCamera::FramedU8;
-use crate::{DeltaT, Event};
+use crate::{DeltaT, Event, TimeMode};
 use clap::Parser;
 use rayon::ThreadPool;
 use serde::Serialize;
@@ -81,6 +81,10 @@ pub struct SimulProcArgs {
     /// system.
     #[clap(long, default_value_t = 4)]
     pub thread_count: u8,
+
+    /// Time mode for the v2 file
+    #[clap(long, default_value = "")]
+    pub time_mode: String,
 }
 
 pub struct SimulProcessor {
@@ -96,6 +100,8 @@ impl SimulProcessor {
         output_path: &str,
         frame_max: i32,
         num_threads: usize,
+        codec_version: u8,
+        time_mode: TimeMode,
     ) -> Result<SimulProcessor, Box<dyn Error>>
     where
         T: Clone
@@ -126,7 +132,7 @@ impl SimulProcessor {
 
         let mut framer = thread_pool_framer.install(|| {
             FramerBuilder::new(plane, source.video.state.chunk_rows)
-                .codec_version(1)
+                .codec_version(codec_version, time_mode)
                 .time_parameters(
                     source.video.state.tps,
                     ref_time,
@@ -234,6 +240,10 @@ impl SimulProcessor {
                 };
                 now = Instant::now();
             }
+            // // TODO: temp
+            // if video.state.in_interval_count == 30 {
+            //     break;
+            // }
         }
 
         println!("Closing stream...");

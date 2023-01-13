@@ -1,4 +1,4 @@
-use crate::{PlaneSize, SourceCamera};
+use crate::{PlaneSize, SourceCamera, TimeMode};
 use serde::{Deserialize, Serialize};
 
 pub(crate) type Magic = [u8; 5];
@@ -33,10 +33,11 @@ pub(crate) struct EventStreamHeaderExtensionV1 {
 }
 impl HeaderExtension for EventStreamHeaderExtensionV1 {}
 
-// pub(crate) struct EventStreamHeaderExtensionV2 {
-//     pub(crate) v1: EventStreamHeaderExtensionV1,
-//     pub(crate) other: other field to add,
-// }
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub(crate) struct EventStreamHeaderExtensionV2 {
+    pub(crate) time_mode: TimeMode,
+}
+impl HeaderExtension for EventStreamHeaderExtensionV2 {}
 
 impl EventStreamHeader {
     pub(crate) fn new(

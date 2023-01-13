@@ -14,7 +14,7 @@ use adder_codec_rs::raw::stream::Raw;
 use adder_codec_rs::transcoder::source::framed::Framed;
 use adder_codec_rs::transcoder::source::video::Source;
 use adder_codec_rs::SourceCamera::FramedU8;
-use adder_codec_rs::{Codec, Coord, Event, PlaneSize};
+use adder_codec_rs::{Codec, Coord, Event, PlaneSize, TimeMode};
 use rand::Rng;
 use rayon::current_num_threads;
 
@@ -56,7 +56,7 @@ fn test_sample_perfect_dt() {
     );
 
     let mut frame_sequence: FrameSequence<u8> = FramerBuilder::new(stream.plane.clone(), 64)
-        .codec_version(stream.codec_version)
+        .codec_version(stream.codec_version, TimeMode::DeltaT)
         .time_parameters(
             stream.tps,
             stream.ref_interval,
@@ -127,7 +127,7 @@ fn test_sample_perfect_dt_color() {
     );
 
     let mut frame_sequence: FrameSequence<u8> = FramerBuilder::new(stream.plane.clone(), 64)
-        .codec_version(stream.codec_version)
+        .codec_version(stream.codec_version, TimeMode::DeltaT)
         .time_parameters(
             stream.tps,
             stream.ref_interval,
@@ -184,7 +184,7 @@ fn test_encode_header_non_init() {
     let mut stream: Raw = Codec::new();
     let plane = PlaneSize::new(50, 100, 1).unwrap();
     stream
-        .encode_header(plane, 53000, 4000, 50000, 1, FramedU8)
+        .encode_header(plane, 53000, 4000, 50000, 1, Some(FramedU8), None)
         .unwrap();
     // stream = RawStream::new();
 }
@@ -192,7 +192,7 @@ fn test_encode_header_non_init() {
 #[test]
 fn test_encode_header_v0() {
     let n = rand_u32();
-    let mut stream = setup_raw_writer(n);
+    let mut stream = setup_raw_writer_v0(n);
     stream.close_writer().unwrap();
     assert_eq!(
         fs::metadata("./TEST_".to_owned() + n.to_string().as_str() + ".addr")
@@ -208,6 +208,8 @@ fn test_encode_header_v0() {
 fn test_encode_header_v1() {
     let n = rand_u32();
     let mut stream = setup_raw_writer_v1(n);
+    stream.flush_writer().unwrap();
+    assert_eq!(stream.header_size, 29);
     stream.close_writer().unwrap();
     assert_eq!(
         fs::metadata("./TEST_".to_owned() + n.to_string().as_str() + ".addr")
@@ -219,14 +221,29 @@ fn test_encode_header_v1() {
     // Don't check the error
 }
 
-fn setup_raw_writer(rand_num: u32) -> Raw {
+#[test]
+fn test_encode_header_v2() {
+    let n: u32 = rand::thread_rng().gen();
+    let mut stream = setup_raw_writer_v2(n);
+    stream.flush_writer().unwrap();
+    assert_eq!(stream.header_size, 33);
+    assert_eq!(
+        fs::metadata("./TEST_".to_owned() + n.to_string().as_str() + ".addr")
+            .unwrap()
+            .len(),
+        33
+    );
+    fs::remove_file("./TEST_".to_owned() + n.to_string().as_str() + ".addr").unwrap();
+}
+
+fn setup_raw_writer_v0(rand_num: u32) -> Raw {
     let mut stream: Raw = Codec::new();
     stream
         .open_writer("./TEST_".to_owned() + rand_num.to_string().as_str() + ".addr")
         .expect("Couldn't open file");
     let plane = PlaneSize::new(50, 100, 1).unwrap();
     stream
-        .encode_header(plane, 53000, 4000, 50000, 0, FramedU8)
+        .encode_header(plane, 53000, 4000, 50000, 0, None, None)
         .unwrap();
     stream
 }
@@ -238,7 +255,27 @@ fn setup_raw_writer_v1(rand_num: u32) -> Raw {
         .expect("Couldn't open file");
     let plane = PlaneSize::new(50, 100, 1).unwrap();
     stream
-        .encode_header(plane, 53000, 4000, 50000, 1, FramedU8)
+        .encode_header(plane, 53000, 4000, 50000, 1, Some(FramedU8), None)
+        .unwrap();
+    stream
+}
+
+fn setup_raw_writer_v2(rand_num: u32) -> Raw {
+    let mut stream: Raw = Codec::new();
+    stream
+        .open_writer("./TEST_".to_owned() + rand_num.to_string().as_str() + ".addr")
+        .expect("Couldn't open file");
+    let plane = PlaneSize::new(50, 100, 1).unwrap();
+    stream
+        .encode_header(
+            plane,
+            53000,
+            4000,
+            50000,
+            2,
+            Some(FramedU8),
+            Some(TimeMode::DeltaT),
+        )
         .unwrap();
     stream
 }
@@ -252,7 +289,7 @@ fn cleanup_raw_writer(rand_num: u32, stream: &mut Raw) {
 #[test]
 fn test_encode_event() {
     let n = rand_u32();
-    let mut stream = setup_raw_writer(n);
+    let mut stream = setup_raw_writer_v0(n);
     let event: Event = Event {
         coord: Coord {
             x: 10,
@@ -269,7 +306,7 @@ fn test_encode_event() {
 #[test]
 fn test_encode_events() {
     let n = rand_u32();
-    let mut stream = setup_raw_writer(n);
+    let mut stream = setup_raw_writer_v0(n);
     let event: Event = Event {
         coord: Coord {
             x: 10,
@@ -299,7 +336,7 @@ fn rand_u32() -> u32 {
 #[test]
 fn read_header() {
     let n: u32 = rand::thread_rng().gen();
-    let mut stream = setup_raw_writer(n);
+    let mut stream = setup_raw_writer_v0(n);
     stream.flush_writer().unwrap();
     setup_raw_reader(n, &mut stream);
     cleanup_raw_writer(n, &mut stream);
@@ -308,7 +345,7 @@ fn read_header() {
 #[test]
 fn read_event() {
     let n: u32 = rand::thread_rng().gen();
-    let mut stream = setup_raw_writer(n);
+    let mut stream = setup_raw_writer_v0(n);
     let event: Event = Event {
         coord: Coord {
             x: 10,
@@ -343,7 +380,7 @@ fn test_event_framer_ingest() {
 
     let plane = PlaneSize::new(10, 10, 3).unwrap();
     let mut frame_sequence: FrameSequence<EventCoordless> = FramerBuilder::new(plane, 64)
-        .codec_version(1)
+        .codec_version(1, TimeMode::DeltaT)
         .time_parameters(50000, 1000, 1000, 50.0)
         .mode(INSTANTANEOUS)
         .source(U8, FramedU8)
@@ -379,7 +416,7 @@ fn test_event_framer_ingest_get_filled() {
     use adder_codec_rs::{Coord, Event};
     let plane = PlaneSize::new(5, 5, 1).unwrap();
     let mut frame_sequence: FrameSequence<EventCoordless> = FramerBuilder::new(plane, 64)
-        .codec_version(1)
+        .codec_version(1, TimeMode::DeltaT)
         .time_parameters(50000, 1000, 1000, 50.0)
         .mode(INSTANTANEOUS)
         .source(U8, FramedU8)
@@ -419,7 +456,7 @@ fn get_frame_bytes_eventcoordless() {
     use adder_codec_rs::{Coord, Event};
     let plane = PlaneSize::new(5, 5, 1).unwrap();
     let mut frame_sequence: FrameSequence<EventCoordless> = FramerBuilder::new(plane, 64)
-        .codec_version(1)
+        .codec_version(1, TimeMode::DeltaT)
         .time_parameters(50000, 1000, 1000, 50.0)
         .mode(INSTANTANEOUS)
         .source(U8, FramedU8)
@@ -479,7 +516,7 @@ fn get_frame_bytes_u8() {
     use adder_codec_rs::{Coord, Event};
     let plane = PlaneSize::new(5, 5, 1).unwrap();
     let mut frame_sequence: FrameSequence<u8> = FramerBuilder::new(plane, 64)
-        .codec_version(1)
+        .codec_version(1, TimeMode::DeltaT)
         .time_parameters(50000, 1000, 1000, 50.0)
         .mode(INSTANTANEOUS)
         .source(U8, FramedU8)
@@ -538,7 +575,7 @@ fn get_frame_bytes_u16() {
     use adder_codec_rs::{Coord, Event};
     let plane = PlaneSize::new(5, 5, 1).unwrap();
     let mut frame_sequence: FrameSequence<u16> = FramerBuilder::new(plane, 64)
-        .codec_version(1)
+        .codec_version(1, TimeMode::DeltaT)
         .time_parameters(50000, 1000, 1000, 50.0)
         .mode(INSTANTANEOUS)
         .source(U8, FramedU8)
@@ -596,7 +633,7 @@ fn get_frame_bytes_u32() {
     use adder_codec_rs::{Coord, Event};
     let plane = PlaneSize::new(5, 5, 1).unwrap();
     let mut frame_sequence: FrameSequence<u32> = FramerBuilder::new(plane, 46)
-        .codec_version(1)
+        .codec_version(1, TimeMode::DeltaT)
         .time_parameters(50000, 1000, 1000, 50.0)
         .mode(INSTANTANEOUS)
         .source(U8, FramedU8)
@@ -654,7 +691,7 @@ fn get_frame_bytes_u64() {
     use adder_codec_rs::{Coord, Event};
     let plane = PlaneSize::new(5, 5, 1).unwrap();
     let mut frame_sequence: FrameSequence<u64> = FramerBuilder::new(plane, 64)
-        .codec_version(1)
+        .codec_version(1, TimeMode::DeltaT)
         .time_parameters(50000, 1000, 1000, 50.0)
         .mode(INSTANTANEOUS)
         .source(U8, FramedU8)
@@ -712,7 +749,7 @@ fn test_get_empty_frame() {
     use adder_codec_rs::{Coord, Event};
     let plane = PlaneSize::new(5, 5, 1).unwrap();
     let mut frame_sequence: FrameSequence<u8> = FramerBuilder::new(plane, 64)
-        .codec_version(1)
+        .codec_version(1, TimeMode::DeltaT)
         .time_parameters(50000, 1000, 1000, 50.0)
         .mode(INSTANTANEOUS)
         .source(U8, FramedU8)
@@ -762,7 +799,7 @@ fn test_sample_unordered() {
     );
 
     let mut frame_sequence: FrameSequence<u8> = FramerBuilder::new(stream.plane.clone(), 64)
-        .codec_version(stream.codec_version)
+        .codec_version(stream.codec_version, TimeMode::DeltaT)
         .time_parameters(
             stream.tps,
             stream.ref_interval,
@@ -832,7 +869,7 @@ fn test_sample_ordered() {
     );
 
     let mut frame_sequence: FrameSequence<u8> = FramerBuilder::new(stream.plane.clone(), 64)
-        .codec_version(stream.codec_version)
+        .codec_version(stream.codec_version, TimeMode::DeltaT)
         .time_parameters(
             stream.tps,
             stream.ref_interval,
