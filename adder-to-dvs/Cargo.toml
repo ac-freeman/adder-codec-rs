@@ -1,6 +1,6 @@
 [package]
 name = "adder-to-dvs"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
 authors = ["Andrew C. Freeman"]
 description = """
@@ -13,7 +13,7 @@ repository = "https://github.com/ac-freeman/adder-codec-rs/tree/main/adder-to-dv
 readme = "README.md"
 license = "MIT OR Apache-2.0"
 keywords = ["neuromorphic", "decoding", "event", "asynchronous", "video"]
-categories = ["multimedia::encoding", "science"]
+categories = ["multimedia::encoding", "multimedia::video", "science"]
 
 [dependencies.opencv]
 version = '0.66.0'
