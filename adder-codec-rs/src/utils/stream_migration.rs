@@ -64,6 +64,8 @@ pub fn migrate_v2(mut input_stream: Raw, mut output_stream: Raw) -> Result<Raw, 
 
 #[cfg(test)]
 mod tests {
+    use crate::codec::raw::stream::Raw;
+    use crate::codec::Codec;
     use crate::framer::driver::FramerMode::INSTANTANEOUS;
     use crate::framer::driver::{FrameSequence, Framer, FramerBuilder};
     use crate::utils::stream_migration::absolute_event_to_dt_event;
@@ -77,9 +79,8 @@ mod tests {
     /// events
     #[test]
     fn test_migrate_v2() -> Result<(), Box<dyn std::error::Error>> {
-        use crate::raw::stream::Raw;
         use crate::utils::stream_migration::migrate_v2;
-        use crate::{Codec, TimeMode};
+        use crate::TimeMode;
 
         let n: u32 = rand::thread_rng().gen();
         let mut stream: Raw = Codec::new();
@@ -183,11 +184,11 @@ mod tests {
     /// events
     #[test]
     fn test_migrate_v2_nyc() -> Result<(), Box<dyn std::error::Error>> {
-        use crate::raw::stream::Raw;
+        use crate::codec::raw::stream::Raw;
 
         use crate::utils::stream_migration::migrate_v2;
 
-        use crate::{Codec, TimeMode};
+        use crate::TimeMode;
 
         let n: u32 = rand::thread_rng().gen();
         let mut stream: Raw = Codec::new();
@@ -254,9 +255,7 @@ mod tests {
 
     #[test]
     fn test_migrate_v2_bunny_1px() -> Result<(), Box<dyn std::error::Error>> {
-        use crate::raw::stream::Raw;
-
-        use crate::Codec;
+        use crate::codec::raw::stream::Raw;
 
         let mut input_stream_t = Raw::new();
         input_stream_t.open_reader("./tests/samples/bunny_v2_t.adder")?;
@@ -352,9 +351,7 @@ mod tests {
 
     #[test]
     fn test_migrate_v2_bunny_8() -> Result<(), Box<dyn std::error::Error>> {
-        use crate::raw::stream::Raw;
-
-        use crate::Codec;
+        use crate::codec::raw::stream::Raw;
 
         let mut input_stream_t = Raw::new();
         input_stream_t.open_reader("./tests/samples/bunny_v2_t_3.adder")?;

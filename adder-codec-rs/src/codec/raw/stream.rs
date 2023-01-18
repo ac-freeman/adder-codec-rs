@@ -498,10 +498,10 @@ fn _mem_size_word_aligned(size: usize) -> usize {
 
 #[cfg(test)]
 mod tests {
+    use crate::codec::raw::stream::Raw;
     use crate::codec::Codec;
-    use crate::raw::stream::Raw;
     use crate::SourceCamera::FramedU8;
-    use crate::{Codec, Coord, Event, PlaneSize, TimeMode};
+    use crate::{Coord, Event, PlaneSize, TimeMode};
     use rand::Rng;
     use std::fs;
 

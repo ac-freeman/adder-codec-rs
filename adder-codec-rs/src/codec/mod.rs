@@ -7,7 +7,7 @@ use std::io;
 use std::io::{BufReader, BufWriter};
 use std::path::Path;
 
-mod compressed;
+pub mod compressed;
 pub mod raw;
 mod units;
 
