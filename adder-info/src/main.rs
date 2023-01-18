@@ -1,8 +1,9 @@
+use adder_codec_rs::codec::raw::stream::Raw;
+use adder_codec_rs::codec::Codec;
 use adder_codec_rs::framer::scale_intensity::event_to_intensity;
-use adder_codec_rs::raw::stream::Raw;
 use adder_codec_rs::utils::stream_migration::absolute_event_to_dt_event;
 use adder_codec_rs::TimeMode::AbsoluteT;
-use adder_codec_rs::{Codec, DeltaT, Intensity, D_SHIFT};
+use adder_codec_rs::{DeltaT, Intensity, D_EMPTY, D_SHIFT, D_ZERO_INTEGRATION};
 use clap::Parser;
 use ndarray::Array3;
 use std::io::Write;
@@ -98,7 +99,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             }
 
             match event_to_intensity(&event) {
-                _ if event.d == 0xFF => {
+                _ if event.d == D_EMPTY => {
                     // ignore empty events
                 }
                 a if a.is_infinite() => {
@@ -106,7 +107,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                     dbg!(event);
                 }
                 a if a < min_intensity => {
-                    if event.d == 0xFE {
+                    if event.d == D_ZERO_INTEGRATION {
                         min_intensity = 1.0 / event.delta_t as f64;
                     } else {
                         min_intensity = a;

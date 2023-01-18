@@ -3,7 +3,7 @@ use crate::transcoder::source::video::SourceError::BufferEmpty;
 use crate::transcoder::source::video::{
     integrate_for_px, show_display, Source, SourceError, Video, VideoBuilder,
 };
-use crate::{Codec, DeltaT, Event, PlaneSize, SourceCamera, SourceType, TimeMode};
+use crate::{DeltaT, Event, PlaneSize, SourceCamera, SourceType, TimeMode};
 use aedat::events_generated::Event as DvsEvent;
 use davis_edi_rs::util::reconstructor::{IterVal, ReconstructionError, Reconstructor};
 use rayon::iter::ParallelIterator;
@@ -22,8 +22,9 @@ use std::error::Error;
 
 use std::time::Instant;
 
+use crate::codec::raw::stream::Error as StreamError;
+use crate::codec::Codec;
 use crate::framer::scale_intensity::FrameValue;
-use crate::raw::stream::Error as StreamError;
 use crate::transcoder::event_pixel_tree::Intensity32;
 use tokio::runtime::Runtime;
 

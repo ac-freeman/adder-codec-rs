@@ -1,5 +1,5 @@
 use crate::framer::scale_intensity::FrameValue;
-use crate::{BigT, DeltaT, Event, PlaneSize, SourceCamera, TimeMode, D};
+use crate::{BigT, DeltaT, Event, PlaneSize, SourceCamera, TimeMode, D, D_EMPTY};
 use bincode::config::{BigEndian, FixintEncoding, WithOtherEndian, WithOtherIntEncoding};
 use bincode::{DefaultOptions, Options};
 use rayon::iter::ParallelIterator;
@@ -103,7 +103,7 @@ impl FramerBuilder {
             mode: FramerMode::INSTANTANEOUS,
             view_mode: FramedViewMode::Intensity,
             source: SourceType::U8,
-            codec_version: 1,
+            codec_version: 3,
             source_camera: SourceCamera::default(),
             time_mode: TimeMode::DeltaT,
             ref_interval: 5000,
@@ -710,7 +710,7 @@ fn ingest_event_for_chunk<
     if ((*running_ts_ref - 1) as i64 / i64::from(state.tpf)) > *last_filled_frame_ref {
         // Set the frame's value from the event
 
-        if event.d != 0xFF {
+        if event.d != D_EMPTY {
             // If d == 0xFF, then the event was empty, and we simply repeat the last non-empty
             // event's intensity. Else we reset the intensity here.
             let practical_d_max =

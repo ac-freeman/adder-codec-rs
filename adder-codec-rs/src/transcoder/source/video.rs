@@ -6,12 +6,13 @@ use bumpalo::Bump;
 use std::path::Path;
 use std::sync::mpsc::{channel, Sender};
 
-use crate::raw::stream::{Error as StreamError, Raw};
-use crate::{raw, Codec, Coord, Event, PlaneSize, SourceType, TimeMode, D};
+use crate::codec::raw::stream::{Error as StreamError, Raw, LATEST_CODEC_VERSION};
+use crate::{codec::raw, Coord, Event, PlaneSize, SourceType, TimeMode, D};
 use opencv::highgui;
 use opencv::imgproc::resize;
 use opencv::prelude::*;
 
+use crate::codec::Codec;
 use crate::framer::scale_intensity::FrameValue;
 use crate::transcoder::event_pixel_tree::Mode::Continuous;
 use crate::transcoder::event_pixel_tree::{DeltaT, Intensity32, Mode, PixelArena};
@@ -293,7 +294,7 @@ impl Video {
             self.state.tps,
             self.state.ref_time,
             self.state.delta_t_max,
-            2,
+            LATEST_CODEC_VERSION,
             source_camera,
             time_mode,
         )?;

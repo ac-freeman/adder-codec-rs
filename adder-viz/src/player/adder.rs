@@ -1,10 +1,11 @@
 use crate::player::ui::ReconstructionMethod;
+use adder_codec_rs::codec::raw::stream::Raw;
+use adder_codec_rs::codec::Codec;
 use adder_codec_rs::framer::driver::FramerMode::INSTANTANEOUS;
 use adder_codec_rs::framer::driver::{FrameSequence, Framer, FramerBuilder};
 use adder_codec_rs::framer::scale_intensity::event_to_intensity;
-use adder_codec_rs::raw::stream::Raw;
 use adder_codec_rs::transcoder::source::video::FramedViewMode;
-use adder_codec_rs::{Codec, DeltaT, SourceCamera};
+use adder_codec_rs::{DeltaT, SourceCamera, D_ZERO_INTEGRATION};
 use bevy::prelude::Image;
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
 use opencv::core::{create_continuous, Mat, MatTraitConstManual, MatTraitManual, CV_8UC1, CV_8UC3};
@@ -241,7 +242,7 @@ impl AdderPlayer {
             }
 
             match stream.decode_event() {
-                Ok(event) if event.d <= 0xFE => {
+                Ok(event) if event.d <= D_ZERO_INTEGRATION => {
                     event_count += 1;
                     let y = event.coord.y as i32;
                     let x = event.coord.x as i32;

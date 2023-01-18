@@ -1,5 +1,6 @@
-use crate::raw::stream::Raw;
-use crate::{Codec, DeltaT, Event, SourceCamera, TimeMode};
+use crate::codec::raw::stream::Raw;
+use crate::codec::Codec;
+use crate::{DeltaT, Event, SourceCamera, TimeMode};
 use ndarray::Array3;
 use std::error::Error;
 

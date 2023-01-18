@@ -1,5 +1,5 @@
 use crate::transcoder::event_pixel_tree::Mode::{Continuous, FramePerfect};
-use crate::{Coord, Event, TimeMode, UDshift, D_MAX, D_SHIFT};
+use crate::{Coord, Event, TimeMode, UDshift, D_EMPTY, D_MAX, D_SHIFT, D_ZERO_INTEGRATION};
 use smallvec::{smallvec, SmallVec};
 use std::cmp::min;
 
@@ -103,7 +103,7 @@ impl PixelArena {
         let mut node = &mut self.arena[idx];
         let mut ret_event = Event64 {
             coord: self.coord,
-            d: 0xFE, // 254_u8
+            d: D_ZERO_INTEGRATION, // 254_u8
             delta_t: node.state.delta_t,
         };
         node.state.delta_t = 0.0;
@@ -239,7 +239,7 @@ impl PixelArena {
         let ret = if next_d < head.state.d && head.state.delta_t > 0.0 {
             let ret = Some(Event {
                 coord: self.coord,
-                d: 0xFF,
+                d: D_EMPTY,
                 delta_t: (head.state.delta_t) as DeltaT,
             });
             head.state.delta_t = 0.0;

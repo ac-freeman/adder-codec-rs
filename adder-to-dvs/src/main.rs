@@ -1,5 +1,5 @@
-use adder_codec_rs::raw::stream::Raw;
-use adder_codec_rs::{Codec, Event, D_SHIFT};
+use adder_codec_rs::codec::raw::stream::Raw;
+use adder_codec_rs::{Event, D_SHIFT, D_ZERO_INTEGRATION};
 use std::cmp::max;
 use std::collections::VecDeque;
 use std::error::Error;
@@ -8,6 +8,7 @@ use std::io::{BufWriter, Write};
 use std::path::Path;
 use std::{error, io};
 
+use adder_codec_rs::codec::Codec;
 use adder_codec_rs::transcoder::source::video::show_display_force;
 use adder_codec_rs::utils::viz::{encode_video_ffmpeg, write_frame_to_video};
 use clap::Parser;
@@ -197,7 +198,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
                 match &mut pixels[[y, x, c]] {
                     None => match event.d {
-                        d if d <= 0xFE => {
+                        d if d <= D_ZERO_INTEGRATION => {
                             pixels[[y, x, c]] = Some(DvsPixel {
                                 d: event.d,
                                 frame_intensity_ln: event_to_frame_intensity(&event, frame_length),
@@ -372,7 +373,7 @@ fn set_instant_dvs_pixel(
 }
 
 fn event_to_frame_intensity(event: &Event, frame_length: u128) -> f64 {
-    if event.d == 0xFE {
+    if event.d == D_ZERO_INTEGRATION {
         return 0.0;
     }
     match event.delta_t {

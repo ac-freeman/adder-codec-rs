@@ -4,16 +4,20 @@ use crate::header::{
 };
 use crate::SourceType::{F32, F64, U16, U32, U64, U8};
 
-use crate::raw::stream::Error::{Deserialize, Eof};
+use crate::codec::raw::stream::Error::{Deserialize, Eof};
+use crate::codec::units::avu::{Avu, Type};
+use crate::codec::Codec;
 use crate::{
-    Codec, Coord, DeltaT, Event, EventSingle, EventStreamHeader, PlaneSize, SourceCamera,
-    SourceType, TimeMode, EOF_PX_ADDRESS,
+    Coord, DeltaT, Event, EventSingle, EventStreamHeader, PlaneSize, SourceCamera, SourceType,
+    TimeMode, EOF_PX_ADDRESS,
 };
 use bincode::config::{BigEndian, FixintEncoding, WithOtherEndian, WithOtherIntEncoding};
 use bincode::{DefaultOptions, Options};
 use std::fs::File;
 use std::io::{BufReader, BufWriter, Seek, SeekFrom, Write};
 use std::{fmt, io, mem};
+
+pub const LATEST_CODEC_VERSION: u8 = 2;
 
 #[derive(Debug)]
 pub enum Error {
@@ -67,6 +71,7 @@ pub struct Raw {
     pub delta_t_max: DeltaT,
     pub event_size: u8,
     pub source_camera: SourceCamera,
+    avu: Avu,
     bincode: WithOtherEndian<WithOtherIntEncoding<DefaultOptions, FixintEncoding>, BigEndian>,
 }
 
@@ -75,7 +80,7 @@ impl Codec for Raw {
         Raw {
             output_stream: None,
             input_stream: None,
-            codec_version: 2,
+            codec_version: LATEST_CODEC_VERSION,
             header_size: 0,
             time_mode: TimeMode::DeltaT,
             plane: PlaneSize::default(),
@@ -84,6 +89,7 @@ impl Codec for Raw {
             delta_t_max: 0,
             event_size: 0,
             source_camera: SourceCamera::default(),
+            avu: Default::default(),
             bincode: DefaultOptions::new()
                 .with_fixint_encoding()
                 .with_big_endian(),
@@ -324,11 +330,15 @@ impl Codec for Raw {
     }
 
     fn encode_event(&mut self, event: &Event) -> Result<(), Error> {
+        if self.codec_version >= 3 {
+            return self.encode_event_v3(event);
+        }
+
         match &mut self.output_stream {
             None => Err(Error::UnitializedStream),
             Some(stream) => {
                 // NOTE: for speed, the following checks only run in debug builds. It's entirely
-                // possibly to encode non-sensical events if you want to.
+                // possibly to encode nonsensical events if you want to.
                 debug_assert!(event.coord.x < self.plane.width || event.coord.x == EOF_PX_ADDRESS);
                 debug_assert!(event.coord.y < self.plane.height || event.coord.y == EOF_PX_ADDRESS);
                 let output_event: EventSingle;
@@ -342,6 +352,22 @@ impl Codec for Raw {
                 Ok(())
             }
         }
+    }
+
+    fn encode_event_v3(&mut self, event: &Event) -> Result<(), Error> {
+        if self.avu.header.size == 0 {
+            self.avu.header.time = event.delta_t as u64;
+            self.avu.header.avu_type = Type::AbsEvents
+        }
+
+        self.avu.data.append(&mut bincode::serialize(&event)?);
+        self.avu.header.size += mem::size_of::<Event>() as u64;
+
+        if self.avu.data.len() >= 4000 {
+            // TODO: temporary fixed value
+            self.flush_avu()?;
+        }
+        Ok(())
     }
 
     fn encode_events(&mut self, events: &[Event]) -> Result<(), Error> {
@@ -380,6 +406,16 @@ impl Codec for Raw {
             return Err(Eof);
         }
         Ok(event)
+    }
+
+    fn flush_avu(&mut self) -> Result<(), Error> {
+        match &mut self.output_stream {
+            None => Err(Error::UnitializedStream),
+            Some(stream) => {
+                self.bincode.serialize_into(&mut *stream, &self.avu)?;
+                Ok(())
+            }
+        }
     }
 }
 
@@ -462,6 +498,7 @@ fn _mem_size_word_aligned(size: usize) -> usize {
 
 #[cfg(test)]
 mod tests {
+    use crate::codec::Codec;
     use crate::raw::stream::Raw;
     use crate::SourceCamera::FramedU8;
     use crate::{Codec, Coord, Event, PlaneSize, TimeMode};

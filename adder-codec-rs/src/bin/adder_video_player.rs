@@ -1,7 +1,8 @@
+use adder_codec_rs::codec::raw::stream::Raw;
+use adder_codec_rs::codec::Codec;
 use adder_codec_rs::framer::scale_intensity::event_to_intensity;
-use adder_codec_rs::raw::stream::Raw;
 use adder_codec_rs::transcoder::source::video::show_display_force;
-use adder_codec_rs::{Codec, SourceCamera};
+use adder_codec_rs::{SourceCamera, D_ZERO_INTEGRATION};
 use clap::Parser;
 use opencv::core::{create_continuous, Mat, MatTraitManual, CV_64F, CV_64FC3};
 use std::cmp::max;
@@ -112,7 +113,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
 
         match stream.decode_event() {
-            Ok(event) if event.d <= 0xFE => {
+            Ok(event) if event.d <= D_ZERO_INTEGRATION => {
                 event_count += 1;
                 let y = i32::from(event.coord.y);
                 let x = i32::from(event.coord.x);

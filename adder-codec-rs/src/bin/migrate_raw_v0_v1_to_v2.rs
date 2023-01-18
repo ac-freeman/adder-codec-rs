@@ -1,20 +1,17 @@
-
-
 use clap::Parser;
 
 use serde::Deserialize;
 
-use adder_codec_rs::raw::stream;
-
+use adder_codec_rs::codec::raw::stream;
 
 use adder_codec_rs::utils::stream_migration::migrate_v2;
 
-use adder_codec_rs::{Codec, TimeMode};
-
+use adder_codec_rs::TimeMode;
 
 use std::path::Path;
 
-use std::{error};
+use adder_codec_rs::codec::Codec;
+use std::error;
 
 #[derive(Parser, Debug, Deserialize, Default)]
 pub struct Args {
