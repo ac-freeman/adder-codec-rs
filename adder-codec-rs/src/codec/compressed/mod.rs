@@ -1,6 +1,8 @@
 use crate::{DeltaT, Event, D};
 use bitvec::prelude::*;
+use bitvec::slice::Iter;
 use ndarray::Array2;
+use std::iter::Enumerate;
 
 /// Sketch of idea for compressed AVU format
 ///
@@ -34,12 +36,12 @@ const BLOCK_SIZE: usize = 64;
 
 pub type Block = [Event; BLOCK_SIZE * BLOCK_SIZE];
 
-#[derive(Default)]
+#[derive(Default, PartialEq, Debug)]
 struct Cube {
-    a: Option<Box<Cube>>,
-    b: Option<Box<Cube>>,
-    c: Option<Box<Cube>>,
-    d: Option<Box<Cube>>,
+    pub(crate) a: Option<Box<Cube>>,
+    pub(crate) b: Option<Box<Cube>>,
+    pub(crate) c: Option<Box<Cube>>,
+    pub(crate) d: Option<Box<Cube>>,
     d_val: D,
     t: DeltaT,
 }
@@ -133,6 +135,336 @@ impl CubeHead {
     }
 }
 
+impl Cube {
+    fn decode_from_tree(mut iter: &mut Iter<u8, Msb0>, level: usize) -> Self {
+        // let mut iter = bv.iter();
+        let mut cube = Cube::default();
+
+        let mut iter_clone = iter.clone();
+
+        println!("Level {}", level);
+        loop {
+            match iter_clone.next() {
+                Some(bit) => {
+                    print!("{} ", bit);
+                }
+                None => {
+                    break;
+                }
+            }
+        }
+        println!("");
+        // panic!();
+
+        let a = iter.next().unwrap();
+        let b = iter.next().unwrap();
+        let c = iter.next().unwrap();
+        let d = iter.next().unwrap();
+        println!("{} {} {} {}", a, b, c, d);
+
+        cube.a = Some(Box::new(Cube::default()));
+        if !a {
+            if level > 4 {
+                println!("Following a");
+                cube.a = Some(Box::new(Self::decode_from_tree(iter, level / 2)));
+            }
+        }
+
+        cube.b = Some(Box::new(Cube::default()));
+        if !b {
+            if level > 4 {
+                println!("Following b");
+                cube.b = Some(Box::new(Self::decode_from_tree(iter, level / 2)));
+            }
+        }
+
+        cube.c = Some(Box::new(Cube::default()));
+        if !c {
+            if level > 4 {
+                println!("Following c");
+                cube.c = Some(Box::new(Self::decode_from_tree(iter, level / 2)));
+            }
+        }
+
+        cube.d = Some(Box::new(Cube::default()));
+        if !d {
+            if level > 4 {
+                println!("Following d");
+                cube.d = Some(Box::new(Self::decode_from_tree(iter, level / 2)));
+            }
+        }
+
+        cube
+    }
+}
+
+// start with level = 64
+fn encode_block(
+    mut iter: &mut Iter<u8, Msb0>,
+    block: &Block,
+    level: usize,
+    mut x_offset: usize,
+    mut y_offset: usize,
+    mut output: &mut BitVec<u8, Msb0>,
+    mut output_test: &mut Vec<DeltaT>,
+) {
+    let a = iter.next().unwrap();
+    let b = iter.next().unwrap();
+    let c = iter.next().unwrap();
+    let d = iter.next().unwrap();
+
+    if level == 2 {
+        for y in y_offset..y_offset + (level) {
+            for x in x_offset..x_offset + (level) {
+                assert_eq!(block[3].d, 0);
+                output.append(&mut BitVec::<u8, Msb0>::from_slice(
+                    &block[raw_block_idx(y, x)].d.to_be_bytes(),
+                ));
+                output.append(&mut BitVec::<u8, Msb0>::from_slice(
+                    &block[raw_block_idx(y, x)].delta_t.to_be_bytes(),
+                ));
+                output_test.push(block[raw_block_idx(y, x)].delta_t);
+            }
+        }
+        return;
+    }
+
+    if *a {
+        output.append(&mut BitVec::<u8, Msb0>::from_slice(
+            &block[raw_block_idx(y_offset, x_offset)].d.to_be_bytes(),
+        ));
+        for y in y_offset..y_offset + (level / 2) {
+            for x in x_offset..x_offset + (level / 2) {
+                output.append(&mut BitVec::<u8, Msb0>::from_slice(
+                    &block[raw_block_idx(y, x)].delta_t.to_be_bytes(),
+                ));
+                output_test.push(block[raw_block_idx(y, x)].delta_t);
+            }
+        }
+    } else {
+        encode_block(
+            iter,
+            block,
+            level / 2,
+            x_offset,
+            y_offset,
+            &mut output,
+            &mut output_test,
+        );
+    }
+    x_offset += (level / 2);
+    if *b {
+        output.append(&mut BitVec::<u8, Msb0>::from_slice(
+            &block[raw_block_idx(y_offset, x_offset)].d.to_be_bytes(),
+        ));
+        for y in y_offset..y_offset + (level / 2) {
+            for x in x_offset..x_offset + (level / 2) {
+                output.append(&mut BitVec::<u8, Msb0>::from_slice(
+                    &block[raw_block_idx(y, x)].delta_t.to_be_bytes(),
+                ));
+                output_test.push(block[raw_block_idx(y, x)].delta_t);
+            }
+        }
+    } else {
+        encode_block(
+            iter,
+            block,
+            level / 2,
+            x_offset,
+            y_offset,
+            &mut output,
+            &mut output_test,
+        );
+    }
+    y_offset += (level / 2);
+    x_offset -= (level / 2);
+    if *c {
+        output.append(&mut BitVec::<u8, Msb0>::from_slice(
+            &block[raw_block_idx(y_offset, x_offset)].d.to_be_bytes(),
+        ));
+        for y in y_offset..y_offset + (level / 2) {
+            for x in x_offset..x_offset + (level / 2) {
+                output.append(&mut BitVec::<u8, Msb0>::from_slice(
+                    &block[raw_block_idx(y, x)].delta_t.to_be_bytes(),
+                ));
+                output_test.push(block[raw_block_idx(y, x)].delta_t);
+            }
+        }
+    } else {
+        encode_block(
+            iter,
+            block,
+            level / 2,
+            x_offset,
+            y_offset,
+            &mut output,
+            &mut output_test,
+        );
+    }
+    x_offset += (level / 2);
+    if *d {
+        output.append(&mut BitVec::<u8, Msb0>::from_slice(
+            &block[raw_block_idx(y_offset, x_offset)].d.to_be_bytes(),
+        ));
+        for y in y_offset..y_offset + (level / 2) {
+            for x in x_offset..x_offset + (level / 2) {
+                output.append(&mut BitVec::<u8, Msb0>::from_slice(
+                    &block[raw_block_idx(y, x)].delta_t.to_be_bytes(),
+                ));
+                output_test.push(block[raw_block_idx(y, x)].delta_t);
+            }
+        }
+    } else {
+        encode_block(
+            iter,
+            block,
+            level / 2,
+            x_offset,
+            y_offset,
+            &mut output,
+            &mut output_test,
+        );
+    }
+    // dbg!(output_test);
+}
+
+fn decode_block(
+    mut iter_tree: &mut Iter<u8, Msb0>,
+    mut events: &mut BitVec<u8, Msb0>,
+    mut events_pos: &mut usize,
+    block: &mut Block,
+    level: usize,
+    mut x_offset: usize,
+    mut y_offset: usize,
+) {
+    let a = iter_tree.next().unwrap();
+    let b = iter_tree.next().unwrap();
+    let c = iter_tree.next().unwrap();
+    let d = iter_tree.next().unwrap();
+
+    if level == 2 {
+        for y in y_offset..y_offset + (level) {
+            for x in x_offset..x_offset + (level) {
+                let mut d: D = events[*events_pos..*events_pos + 8].load_be();
+                *events_pos += 8;
+                let delta_t: DeltaT = events[*events_pos..*events_pos + 32].load_be();
+                *events_pos += 32;
+                block[raw_block_idx(y, x)] = Event {
+                    coord: Default::default(),
+                    d,
+                    delta_t,
+                };
+            }
+        }
+        return;
+    }
+
+    if *a {
+        let mut d: D = events[*events_pos..*events_pos + 8].load_be();
+        *events_pos += 8;
+        for y in y_offset..y_offset + (level / 2) {
+            for x in x_offset..x_offset + (level / 2) {
+                let delta_t: DeltaT = events[*events_pos..*events_pos + 32].load_be();
+                *events_pos += 32;
+                block[raw_block_idx(y, x)] = Event {
+                    coord: Default::default(),
+                    d,
+                    delta_t,
+                };
+            }
+        }
+    } else {
+        decode_block(
+            iter_tree,
+            events,
+            events_pos,
+            block,
+            level / 2,
+            x_offset,
+            y_offset,
+        );
+    }
+    x_offset += (level / 2);
+    if *b {
+        let mut d: D = events[*events_pos..*events_pos + 8].load_be();
+        *events_pos += 8;
+        for y in y_offset..y_offset + (level / 2) {
+            for x in x_offset..x_offset + (level / 2) {
+                let delta_t: DeltaT = events[*events_pos..*events_pos + 32].load_be();
+                *events_pos += 32;
+                block[raw_block_idx(y, x)] = Event {
+                    coord: Default::default(),
+                    d,
+                    delta_t,
+                };
+            }
+        }
+    } else {
+        decode_block(
+            iter_tree,
+            events,
+            events_pos,
+            block,
+            level / 2,
+            x_offset,
+            y_offset,
+        );
+    }
+    y_offset += (level / 2);
+    x_offset -= (level / 2);
+    if *c {
+        let mut d: D = events[*events_pos..*events_pos + 8].load_be();
+        *events_pos += 8;
+        for y in y_offset..y_offset + (level / 2) {
+            for x in x_offset..x_offset + (level / 2) {
+                let delta_t: DeltaT = events[*events_pos..*events_pos + 32].load_be();
+                *events_pos += 32;
+                block[raw_block_idx(y, x)] = Event {
+                    coord: Default::default(),
+                    d,
+                    delta_t,
+                };
+            }
+        }
+    } else {
+        decode_block(
+            iter_tree,
+            events,
+            events_pos,
+            block,
+            level / 2,
+            x_offset,
+            y_offset,
+        );
+    }
+    x_offset += (level / 2);
+    if *d {
+        let mut d: D = events[*events_pos..*events_pos + 8].load_be();
+        *events_pos += 8;
+        for y in y_offset..y_offset + (level / 2) {
+            for x in x_offset..x_offset + (level / 2) {
+                let delta_t: DeltaT = events[*events_pos..*events_pos + 32].load_be();
+                *events_pos += 32;
+                block[raw_block_idx(y, x)] = Event {
+                    coord: Default::default(),
+                    d,
+                    delta_t,
+                };
+            }
+        }
+    } else {
+        decode_block(
+            iter_tree,
+            events,
+            events_pos,
+            block,
+            level / 2,
+            x_offset,
+            y_offset,
+        );
+    }
+}
+
 ///
 /// ```
 ///
@@ -204,8 +536,10 @@ fn raw_block_idx(y: usize, x: usize) -> usize {
 
 #[cfg(test)]
 mod tests {
-    use crate::codec::compressed::{by_2_2, raw_block_idx};
-    use crate::Event;
+    use crate::codec::compressed::{
+        by_2_2, decode_block, encode_block, raw_block_idx, Block, Cube, BLOCK_SIZE,
+    };
+    use crate::{DeltaT, Event};
     use bitvec::prelude::*;
     use std::error::Error;
     use std::fs;
@@ -214,8 +548,8 @@ mod tests {
     use std::thread::sleep;
     use std::time::Duration;
 
-    fn setup_by_2_2() -> BitVec<u8, Msb0> {
-        let mut block = [Event::default(); 64 * 64];
+    fn setup_by_2_2() -> (BitVec<u8, Msb0>, Block) {
+        let mut block = [Event::default(); BLOCK_SIZE * BLOCK_SIZE];
         let mut dummy_event = Event::default();
 
         dummy_event.d = 7;
@@ -227,13 +561,17 @@ mod tests {
         block[raw_block_idx(0, 2)] = dummy_event;
         block[raw_block_idx(1, 2)] = dummy_event;
 
+        for (idx, event) in block.iter_mut().enumerate() {
+            event.delta_t = idx as DeltaT;
+        }
+
         let bv = by_2_2(&block);
-        bv
+        (bv, block)
     }
 
     #[test]
     fn test_by_2_2() {
-        let bv = setup_by_2_2();
+        let (bv, _) = setup_by_2_2();
         assert!(bv[0]);
         assert!(bv[1]);
         assert!(bv[2]);
@@ -245,7 +583,7 @@ mod tests {
 
     #[test]
     fn test_by_4_4() {
-        let bv = setup_by_2_2();
+        let (bv, _) = setup_by_2_2();
 
         let bv = super::by_n_n(bv, 2);
 
@@ -259,7 +597,7 @@ mod tests {
 
     #[test]
     fn test_by_8_8() {
-        let bv = setup_by_2_2();
+        let (bv, _) = setup_by_2_2();
 
         let bv = super::by_n_n(bv, 2);
 
@@ -280,7 +618,7 @@ mod tests {
 
     #[test]
     fn test_by_16_16() {
-        let bv = setup_by_2_2();
+        let (bv, _) = setup_by_2_2();
 
         let bv = super::by_n_n(bv, 2);
 
@@ -309,7 +647,7 @@ mod tests {
 
     #[test]
     fn test_by_32_32() {
-        let bv = setup_by_2_2();
+        let (bv, _) = setup_by_2_2();
 
         let bv = super::by_n_n(bv, 2);
 
@@ -345,7 +683,7 @@ mod tests {
 
     #[test]
     fn test_by_64_64() {
-        let bv = setup_by_2_2();
+        let (bv, _) = setup_by_2_2();
 
         let bv = super::by_n_n(bv, 2);
 
@@ -384,5 +722,65 @@ mod tests {
         assert!(!bv[21]);
         assert!(bv[22]);
         assert!(!bv[23]);
+    }
+
+    #[test]
+    fn test_encode_decode_block() {
+        let (bv, block) = setup_by_2_2();
+        assert_eq!(block[2].d, 7);
+
+        let bv = super::by_n_n(bv, 2);
+
+        let bv = super::by_n_n(bv, 4);
+
+        let bv = super::by_n_n(bv, 8);
+
+        let bv = super::by_n_n(bv, 16);
+
+        let bv = super::by_n_n(bv, 32);
+
+        let mut iter = bv.iter();
+
+        let mut output = BitVec::new();
+        let mut output_test = Vec::new();
+
+        encode_block(
+            &mut iter,
+            &block,
+            BLOCK_SIZE,
+            0,
+            0,
+            &mut output,
+            &mut output_test,
+        );
+
+        output_test.sort();
+        output_test.dedup();
+        assert_eq!(output_test.len(), BLOCK_SIZE * BLOCK_SIZE);
+
+        let mut iter_tree = bv.iter();
+        let mut events = output;
+        let mut output_block = [Event::default(); BLOCK_SIZE * BLOCK_SIZE];
+        let mut events_pos = 0;
+        decode_block(
+            &mut iter_tree,
+            &mut events,
+            &mut 0,
+            &mut output_block,
+            BLOCK_SIZE,
+            0,
+            0,
+        );
+
+        for y in 0..BLOCK_SIZE {
+            for x in 0..BLOCK_SIZE {
+                assert_eq!(
+                    output_block[raw_block_idx(y, x)],
+                    block[raw_block_idx(y, x)]
+                );
+            }
+        }
+
+        assert_eq!(output_block, block);
     }
 }
