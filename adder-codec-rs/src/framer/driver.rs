@@ -18,7 +18,7 @@ use std::ops::Add;
 // Want ability to get full integration frames at a fixed interval, or at api-spec'd times
 
 /// An ADΔER event representation
-#[derive(Debug, Copy, Clone, Default, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Copy, Clone, Default, serde::Serialize, serde::Deserialize, PartialEq)]
 pub struct EventCoordless {
     pub d: D,
     pub delta_t: DeltaT,
