@@ -149,7 +149,9 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
     loop {
         match davis_source.consume(1, &thread_pool_integration) {
-            Ok(_events) => {}
+            Ok(events) => {
+                print!("ev");
+            }
             Err(e) => {
                 println!("Err: {e:?}");
                 break;
