@@ -16,7 +16,7 @@ use std::path::Path;
 pub type PlayerArtifact = (u64, Option<Image>);
 pub type PlayerStreamArtifact = (u64, StreamState, Option<Image>);
 
-#[derive(Default, Copy, Clone)]
+#[derive(Default, Copy, Clone, Debug)]
 pub struct StreamState {
     pub(crate) current_t_ticks: DeltaT,
     pub(crate) tps: DeltaT,
@@ -164,7 +164,9 @@ impl AdderPlayer {
         if let Ok(pos) = stream.get_input_stream_position() {
             if pos == stream.header_size as u64 {
                 match &mut self.frame_sequence {
-                    None => { // TODO: error
+                    None => {
+                        // TODO: error
+                        eprintln!("TODO Error");
                     }
                     Some(frame_sequence) => {
                         frame_sequence.state.frames_written = 0;
@@ -280,7 +282,8 @@ impl AdderPlayer {
                         + x as usize * stream.plane.c_usize()
                         + c as usize)] = frame_intensity as u8;
                 }
-                Err(_e) => {
+                Err(e) => {
+                    dbg!(e);
                     match stream.set_input_stream_position(stream.header_size as u64) {
                         Ok(_) => {}
                         Err(ee) => {
@@ -296,7 +299,9 @@ impl AdderPlayer {
 
                     break None;
                 }
-                _ => {}
+                _ => {
+                    eprintln!("???");
+                }
             }
         };
 
@@ -372,7 +377,8 @@ impl AdderPlayer {
                         return Ok((event_count, image_bevy));
                     }
                 }
-                Err(_e) => {
+                Err(e) => {
+                    eprintln!("{}", e);
                     // Loop back to the beginning
                     stream.set_input_stream_position(stream.header_size as u64)?;
 

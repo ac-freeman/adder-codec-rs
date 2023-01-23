@@ -1,6 +1,6 @@
 <component name="ProjectRunConfigurationManager">
   <configuration default="false" name="adder video player release" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
-    <option name="command" value="run --bin adder_video_player --release -- -i $USER_HOME$/Downloads/bunny4.adder --playback-fps 24.0" />
+    <option name="command" value="run --bin adder_video_player --release -- -i $USER_HOME$/Downloads/temp.adder --playback-fps 240.0" />
     <option name="workingDirectory" value="file://$PROJECT_DIR$" />
     <option name="channel" value="DEFAULT" />
     <option name="requiredFeatures" value="true" />

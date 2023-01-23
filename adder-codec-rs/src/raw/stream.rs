@@ -15,6 +15,8 @@ use std::fs::File;
 use std::io::{BufReader, BufWriter, Seek, SeekFrom, Write};
 use std::{fmt, io, mem};
 
+pub const LATEST_CODEC_VERSION: u8 = 2;
+
 #[derive(Debug)]
 pub enum Error {
     /// Stream has not been initialized
@@ -31,6 +33,9 @@ pub enum Error {
 
     /// Attempted to seek to a bad position in the stream
     Seek,
+
+    /// Codec version is invalid
+    UnsupportedVersion,
 
     /// Bincode error
     BincodeError(bincode::Error),
@@ -296,6 +301,10 @@ impl Codec for Raw {
                     Err(_) => return Err(Deserialize.into()),
                 };
 
+                if header.version > LATEST_CODEC_VERSION {
+                    return Err(Error::UnsupportedVersion.into());
+                }
+
                 self.codec_version = header.version;
 
                 self.plane = match PlaneSize::new(header.width, header.height, header.channels) {
@@ -317,6 +326,9 @@ impl Codec for Raw {
 
                 decode_header_extension(self)?;
                 self.header_size = self.get_input_stream_position()? as usize;
+                // self.header_size += 3;
+                // self.set_input_stream_position(self.header_size as u64);
+                // let test_event = self.decode_event().unwrap();
 
                 Ok(self.header_size)
             }

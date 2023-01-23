@@ -1,13 +1,13 @@
 args_filename = ""
-edi_args = "./src/bin/args/edi_args.toml"
+edi_args = "./adder-codec-rs/src/bin/args/edi_args.toml"
 #edi_args = "base_path = \"/media/andrew/ExternalM2/DynamicVision\""
 #output_events_filename = "/mnt/tmp/tmp_events.adder"
 output_events_filename = "/home/andrew/Downloads/tmp_events.adder"
-adder_c_thresh_pos = 40
-adder_c_thresh_neg = 40
+adder_c_thresh_pos = 10
+adder_c_thresh_neg = 10
 delta_t_max_multiplier = 10.0
 transcode_from = "raw-davis"
 #transcode_from = "framed"
-show_display = false
+show_display = true
 write_out = true
 optimize_adder_controller = false
