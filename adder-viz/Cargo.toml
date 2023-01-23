@@ -1,6 +1,6 @@
 [package]
 name = "adder-viz"
-version = "0.1.8"
+version = "0.1.9"
 edition = "2021"
 resolver = "2"
 authors = ["Andrew C. Freeman"]
@@ -23,7 +23,7 @@ features = ['videoio', 'imgproc', 'highgui']
 optional = false
 
 [dependencies]
-adder-codec-rs = { version = "0.2.5", path = "../adder-codec-rs", features = [
+adder-codec-rs = { version = "0.2.6", path = "../adder-codec-rs", features = [
     "transcoder",
 ] }
 bevy = "0.9.0"
