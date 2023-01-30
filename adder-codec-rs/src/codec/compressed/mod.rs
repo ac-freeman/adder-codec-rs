@@ -1,3 +1,6 @@
+mod mod2;
+mod mod3;
+
 use crate::framer::driver::EventCoordless;
 use crate::{DeltaT, Event, D};
 use bitvec::prelude::*;
@@ -33,7 +36,7 @@ fn void() {
     let mut bv = bitvec![u8, Msb0;];
 }
 
-const BLOCK_SIZE: usize = 64;
+const BLOCK_SIZE: usize = 16;
 
 pub type Block = [Option<EventCoordless>; BLOCK_SIZE * BLOCK_SIZE];
 
@@ -490,6 +493,19 @@ fn by_n_n(bv_2_2: BitVec<u8, Msb0>, divisor: usize) -> BitVec<u8, Msb0> {
     let mut iter = bv_2_2.iter();
 
     let mut bv_end = bitvec![u8, Msb0;];
+
+    // for y in (0..BLOCK_SIZE / (divisor * 2)) {
+    //     for x in (0..BLOCK_SIZE / (divisor * 2)) {
+    //         for local_y in y..y + 2 {
+    //             for local_x in x..x + 2 {}
+    //         }
+    //         let a = bv_2_2[raw_block_idx(y, x)].unwrap();
+    //         let b = block[raw_block_idx(y, x + 1)].unwrap();
+    //         let c = block[raw_block_idx(y + 1, x)].unwrap();
+    //         let d = block[raw_block_idx(y + 1, x + 1)].unwrap();
+    //     }
+    // }
+
     for i in 0..(BLOCK_SIZE / divisor) * (BLOCK_SIZE / divisor) {
         let a = iter.next().unwrap();
         let b = iter.next().unwrap();
@@ -502,6 +518,8 @@ fn by_n_n(bv_2_2: BitVec<u8, Msb0>, divisor: usize) -> BitVec<u8, Msb0> {
             }
             false => {
                 bv_n_n.push(false);
+
+                // Push the difference information to the very end
                 bv_end.push(*a);
                 bv_end.push(*b);
                 bv_end.push(*c);
@@ -560,6 +578,10 @@ mod tests {
         block[raw_block_idx(0, 2)].as_mut().unwrap().d = dummy_event.d;
         block[raw_block_idx(1, 2)].as_mut().unwrap().d = dummy_event.d;
 
+        dummy_event.d = 4;
+        block[raw_block_idx(2, 3)].as_mut().unwrap().d = dummy_event.d;
+        block[raw_block_idx(3, 3)].as_mut().unwrap().d = dummy_event.d;
+
         let bv = by_2_2(&block);
         (bv, block)
     }
@@ -567,13 +589,29 @@ mod tests {
     #[test]
     fn test_by_2_2() {
         let (bv, _) = setup_by_2_2();
-        assert!(bv[0]);
-        assert!(bv[1]);
-        assert!(bv[2]);
-        assert!(!bv[3]);
-        assert!(bv[4]);
-        assert!(!bv[5]);
-        assert!(bv[6]);
+        // In first 4x4 sub-block. TL
+        assert!(bv[0]); // TL always true
+        assert!(bv[1]); // TR same here
+        assert!(bv[2]); // BL same here
+        assert!(bv[3]); // BR same here
+
+        // In second 4x4 sub-block. TR
+        assert!(bv[4]); // TL always true
+        assert!(!bv[5]); // TR different here
+        assert!(bv[6]); // BL same here
+        assert!(!bv[7]); // BR different here
+
+        // In third 4x4 sub-block. BL
+        assert!(bv[128]); // TL always true
+        assert!(bv[129]); // TR same here
+        assert!(bv[130]); // BL same here
+        assert!(bv[131]); // BR same here
+
+        // In fourth 4x4 sub-block. BR
+        assert!(bv[132]); // TL always true
+        assert!(!bv[133]); // TR different here
+        assert!(bv[134]); // BL same here
+        assert!(!bv[135]); // BR different here
     }
 
     #[test]
@@ -582,12 +620,21 @@ mod tests {
 
         let bv = super::by_n_n(bv, 2);
 
-        assert_eq!(bv.len(), 1028); // 4 extra bits from the 2nd (2x2) block not being uniform
+        assert_eq!(bv.len(), 1032); // 8 extra bits from the 2nd and 4th (2x2) block not being uniform
 
+        // 2nd 2x2 in first 4x4. TR. 1010
         assert!(bv[1024]);
         assert!(!bv[1025]);
         assert!(bv[1026]);
         assert!(!bv[1027]);
+
+        // 4th 2x2 in first 4x4. BR. 1010
+        assert!(bv[1028]);
+        assert!(!bv[1029]);
+        assert!(bv[1030]);
+        assert!(!bv[1031]);
+
+        // The first 4x4 block is represented now by 1010
     }
 
     #[test]
@@ -598,9 +645,15 @@ mod tests {
 
         let bv = super::by_n_n(bv, 4);
 
-        assert_eq!(bv.len(), 264); // 8 extra bits from the 2nd (2x2) block not being uniform
+        // First 8x8 represented by 0111, plus the difference bits at the end
 
-        assert!(!bv[0]);
+        assert_eq!(bv.len(), 272); // 16 extra bits from the 2nd (2x2) block not being uniform
+
+        assert!(!bv[0]); // First
+        assert!(bv[1]);
+        assert!(bv[2]);
+        assert!(bv[3]);
+
         assert!(bv[256]);
         assert!(!bv[257]);
         assert!(bv[258]);
@@ -733,6 +786,7 @@ mod tests {
         let bv = super::by_n_n(bv, 16);
 
         let bv = super::by_n_n(bv, 32);
+        let tmp = bv.len();
 
         let mut iter = bv.iter();
 
