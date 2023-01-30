@@ -70,7 +70,7 @@ pub struct InfoUiState {
     pub source_name: RichText,
     pub output_name: OutputName,
     pub(crate) input_path: Option<PathBuf>,
-    output_path: Option<PathBuf>,
+    pub(crate) output_path: Option<PathBuf>,
     pub view_mode_radio_state: FramedViewMode, // TODO: Move to different struct
 }
 
@@ -147,7 +147,12 @@ impl TranscoderState {
                     .pick_file()
                 {
                     self.ui_info_state.input_path = Some(path.clone());
-                    replace_adder_transcoder(self, Some(path), None, 0);
+                    replace_adder_transcoder(
+                        self,
+                        Some(path),
+                        self.ui_info_state.output_path.clone(),
+                        0,
+                    );
                 }
             }
 
@@ -165,6 +170,9 @@ impl TranscoderState {
                     path = path.with_extension("adder");
                 };
                 self.ui_info_state.output_path = Some(path.clone());
+                self.ui_info_state.output_name = OutputName {
+                    text: RichText::new(path.to_str().unwrap_or("Error: invalid output string")),
+                };
                 replace_adder_transcoder(
                     self,
                     self.ui_info_state.input_path.clone(),
