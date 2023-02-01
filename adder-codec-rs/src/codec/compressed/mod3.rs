@@ -12,7 +12,7 @@ use bitvec::prelude::{BitVec, Msb0};
 
 pub type Block2 = [Option<EventCoordless>; BLOCK_SIZE * BLOCK_SIZE];
 
-pub type BlockTreeReferences<'a> = [&'a Option<EventCoordless>; BLOCK_SIZE * BLOCK_SIZE];
+type BlockTreeReferences<'a> = [&'a Option<EventCoordless>; BLOCK_SIZE * BLOCK_SIZE];
 
 fn block_tree_references<'a>(b: &'a Block2) -> BlockTreeReferences<'a> {
     let mut r = [&None; BLOCK_SIZE * BLOCK_SIZE];
@@ -362,6 +362,11 @@ fn by_n_n(
         let c = iter.next().unwrap();
         let d = iter.next().unwrap();
 
+        if bv_n_n.len() >= 63 {
+            let l = bv_n_n.len();
+            dbg!(bv_n_n.clone());
+        }
+
         match *a && *b && *c && *d {
             true => {
                 bv_n_n.push(true);
@@ -411,8 +416,10 @@ fn encode_events<'a>(
     let b = iter.next().unwrap();
     let c = iter.next().unwrap();
     let d = iter.next().unwrap();
+    dbg!("read 4");
 
     if divisor == 2 {
+        assert!(*a);
         for i in *ref_offset..*ref_offset + (divisor) * (divisor) {
             output.append(&mut BitVec::<u8, Msb0>::from_slice(
                 &r[i].unwrap().d.to_be_bytes(),
@@ -624,6 +631,7 @@ mod tests {
     use crate::framer::driver::EventCoordless;
     use crate::{DeltaT, Event};
     use bitvec::prelude::*;
+    use rand::Rng;
     use std::error::Error;
     use std::fs;
     use std::path::PathBuf;
@@ -738,6 +746,10 @@ mod tests {
 
         let mut iter_tree = bv.iter();
         let mut events = output;
+
+        dbg!(iter_tree.len());
+        dbg!(events.len());
+
         let mut output_block: [Option<EventCoordless>; 256] = [None; BLOCK_SIZE * BLOCK_SIZE];
         let mut events_pos = 0;
         let mut ref_offset = 0;
@@ -755,5 +767,171 @@ mod tests {
         }
 
         // assert_eq!(output_block, block);
+    }
+
+    #[test]
+    fn test_block_case_1() {
+        let mut block = [None; BLOCK_SIZE * BLOCK_SIZE];
+
+        let mut d_vals: Vec<u8> = vec![
+            81, 224, 28, 88, 96, 194, 230, 58, /**/ 187, 20, 215, 232, 126, 76, 225, 183,
+            /**/
+            191, 48, 125, 249, 25, 10, 53, 193, /**/ 1, 172, 207, 189, 182, 168, 103,
+            191, /**/
+            143, 0, 199, 78, 121, 98, 79, 158, /**/ 237, 147, 182, 252, 91, 159, 48,
+            1, /**/
+            100, 197, 174, 177, 175, 180, 162, 71, /**/ 30, 69, 173, 185, 231, 38, 16,
+            7, /**/
+            97, 112, 85, 139, 113, 224, 7, 194, /**/ 152, 153, 35, 61, 108, 227, 197,
+            144, /**/
+            21, 83, 150, 222, 197, 110, 62, 20, 175, 80, 168, 235, 29, 2, 30, 33, 112, 117, 183,
+            99, 179, 90, 43, 96, 128, 207, 173, 237, 174, 47, 24, 115, 234, 151, 200, 203, 148,
+            104, 14, 15, 85, 38, 141, 217, 93, 151, 193, 50, 227, 39, 162, 216, 103, 13, 79, 132,
+            216, 62, 179, 26, 123, 103, 145, 204, 200, 92, 143, 64, 140, 242, 65, 51, 43, 227, 16,
+            0, 205, 142, 141, 162, 14, 222, 237, 249, 190, 210, 177, 104, 132, 13, 25, 140, 141,
+            165, 207, 190, 245, 5, 122, 252, 31, 217, 253, 125, 147, 238, 76, 42, 24, 115, 176, 50,
+            235, 64, 30, 176, 55, 172, 112, 145, 85, 184, 152, 125, 54, 164, 68, 229, 51, 66, 0,
+            29, 90, 78, 121, 226, 62, 205, 100, 151, 39, 137, 77, 60, 232, 96, 47, 251, 195, 232,
+            30, 20, 39, 249, 95, 180, 11, 118, 44, 84, 148, 167, 186, 146, 26, 184, 107, 31, 232,
+            244, 76, 161, 139, 219, 14, 182,
+        ];
+
+        let dt_vals: Vec<DeltaT> = vec![rand::thread_rng().gen(); BLOCK_SIZE * BLOCK_SIZE];
+        for (idx, event) in block.iter_mut().enumerate() {
+            *event = Some(EventCoordless {
+                d: d_vals[idx],
+                delta_t: idx as DeltaT,
+            });
+        }
+
+        let tree_references = block_tree_references(&block);
+        let bv = block_tree_references_to_bitvec(&tree_references);
+
+        assert_eq!(bv.len(), 340);
+
+        // The 8x8 sections have all non-uniform 2x2 blocks
+        assert!(!bv[0]);
+        assert!(!bv[1]);
+        assert!(!bv[2]);
+        assert!(!bv[3]);
+
+        // The 4x4 sections have all non-uniform 2x2 blocks
+        for i in 4..20 {
+            assert!(!bv[i]);
+        }
+
+        // The 2x2 sections have all uniform 2x2 blocks
+        for i in 20..84 {
+            assert!(!bv[i]);
+        }
+
+        // Here we have the uniformity encoded for each 2x2 block (TL pixel always true, following
+        // three pixels differ)
+        for i in (84..bv.len()).step_by(4) {
+            assert!(bv[i]);
+            assert!(!bv[i + 1]);
+            assert!(!bv[i + 2]);
+            assert!(!bv[i + 3]);
+        }
+
+        let mut iter = bv.iter();
+
+        let mut output = BitVec::new();
+
+        let mut ref_offset = 0;
+
+        encode_events(
+            &mut iter,
+            &tree_references,
+            BLOCK_SIZE / 2,
+            &mut output,
+            &mut ref_offset,
+        );
+
+        let mut block_decoded = [None; BLOCK_SIZE * BLOCK_SIZE];
+        let mut tree_references_decoded = block_tree_references(&block_decoded);
+
+        let mut iter_tree = bv.iter();
+        let mut events = output;
+
+        dbg!(iter_tree.len());
+        dbg!(events.len());
+
+        let mut output_block: [Option<EventCoordless>; 256] = [None; BLOCK_SIZE * BLOCK_SIZE];
+        let mut events_pos = 0;
+        let mut ref_offset = 0;
+        decode_events(
+            &mut iter_tree,
+            &mut events,
+            &mut events_pos,
+            &mut block_decoded,
+            BLOCK_SIZE,
+            &mut ref_offset,
+        );
+
+        for i in 0..BLOCK_SIZE * BLOCK_SIZE {
+            assert_eq!(block_decoded[i], *tree_references[i]);
+        }
+    }
+
+    #[test]
+    fn test_block_random() {
+        let mut block = [None; BLOCK_SIZE * BLOCK_SIZE];
+
+        let mut d_vals: Vec<u8> = vec![0; BLOCK_SIZE * BLOCK_SIZE];
+        for val in d_vals.iter_mut() {
+            *val = rand::thread_rng().gen();
+        }
+
+        let dt_vals: Vec<DeltaT> = vec![rand::thread_rng().gen(); BLOCK_SIZE * BLOCK_SIZE];
+        for (idx, event) in block.iter_mut().enumerate() {
+            *event = Some(EventCoordless {
+                d: d_vals[idx],
+                delta_t: idx as DeltaT,
+            });
+        }
+        dbg!(d_vals);
+
+        let tree_references = block_tree_references(&block);
+        let bv = block_tree_references_to_bitvec(&tree_references);
+
+        let mut iter = bv.iter();
+
+        let mut output = BitVec::new();
+
+        let mut ref_offset = 0;
+
+        encode_events(
+            &mut iter,
+            &tree_references,
+            BLOCK_SIZE,
+            &mut output,
+            &mut ref_offset,
+        );
+
+        let mut block_decoded = [None; BLOCK_SIZE * BLOCK_SIZE];
+        let mut tree_references_decoded = block_tree_references(&block_decoded);
+
+        let mut iter_tree = bv.iter();
+        let mut events = output;
+
+        dbg!(iter_tree.len());
+        dbg!(events.len());
+
+        let mut output_block: [Option<EventCoordless>; 256] = [None; BLOCK_SIZE * BLOCK_SIZE];
+        let mut events_pos = 0;
+        let mut ref_offset = 0;
+        decode_events(
+            &mut iter_tree,
+            &mut events,
+            &mut events_pos,
+            &mut block_decoded,
+            BLOCK_SIZE,
+            &mut ref_offset,
+        );
+
+        for i in 0..BLOCK_SIZE * BLOCK_SIZE {
+            assert_eq!(block_decoded[i], *tree_references[i]);
+        }
     }
 }

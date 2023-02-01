@@ -24,6 +24,15 @@ pub struct EventCoordless {
     pub delta_t: DeltaT,
 }
 
+impl From<Event> for EventCoordless {
+    fn from(event: Event) -> Self {
+        Self {
+            d: event.d,
+            delta_t: event.delta_t,
+        }
+    }
+}
+
 impl Add<EventCoordless> for EventCoordless {
     type Output = EventCoordless;
 

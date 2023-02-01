@@ -1,5 +1,6 @@
 mod mod2;
 mod mod3;
+mod mod4;
 
 use crate::framer::driver::EventCoordless;
 use crate::{DeltaT, Event, D};
@@ -37,6 +38,7 @@ fn void() {
 }
 
 const BLOCK_SIZE: usize = 16;
+const BLOCK_SIZE_BIG: usize = 64;
 
 pub type Block = [Option<EventCoordless>; BLOCK_SIZE * BLOCK_SIZE];
 

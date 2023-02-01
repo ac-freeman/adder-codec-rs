@@ -25,6 +25,7 @@ pub(crate) struct AvuHeader {
     pub(crate) size: u64,
 }
 
+/// Asynchronous Video Unit
 #[derive(Default, Serialize, Deserialize)]
 pub(crate) struct Avu {
     pub(crate) header: AvuHeader,
