@@ -16,6 +16,7 @@ pub type BlockEvents = [Option<EventCoordless>; BLOCK_SIZE_BIG * BLOCK_SIZE_BIG]
 
 pub struct Block3 {
     events: BlockEvents,
+    fill_count: u16,
     // block_idx_y: usize,
     // block_idx_x: usize,
     // block_idx_c: usize,
@@ -28,14 +29,22 @@ impl Block3 {
             // block_idx_y,
             // block_idx_x,
             // block_idx_c,
+            fill_count: 0,
         }
     }
 
+    #[inline(always)]
+    fn is_filled(&self) -> bool {
+        self.fill_count == (BLOCK_SIZE_BIG * BLOCK_SIZE_BIG) as u16
+    }
+
+    #[inline(always)]
     fn set_event(&mut self, event: &Event, idx: usize) -> Result<(), BlockError> {
         match self.events[idx] {
             Some(ref mut e) => return Err(BlockError::AlreadyExists { idx }),
             None => {
                 self.events[idx] = Some(EventCoordless::from(*event));
+                self.fill_count += 1;
             }
         }
         Ok(())
@@ -101,7 +110,7 @@ fn set_event_for_channel(
     event: Event,
     idx: usize,
 ) -> Result<(), BlockError> {
-    if block_idx_map[idx] > block_vec.len() {
+    if block_idx_map[idx] >= block_vec.len() {
         block_vec.push(Block3::new(0, 0, 0));
     }
     match block_vec[block_idx_map[idx]].set_event(&event, idx) {
@@ -116,14 +125,60 @@ fn set_event_for_channel(
 #[cfg(test)]
 mod tests {
     use crate::codec::compressed::mod4::Cube3;
+    use crate::codec::compressed::BLOCK_SIZE_BIG;
     use crate::{Coord, Event};
 
     struct Setup {
         cube: Cube3,
         event: Event,
+        events_for_block_r: Vec<Event>,
+        events_for_block_g: Vec<Event>,
+        events_for_block_b: Vec<Event>,
     }
     impl Setup {
         fn new() -> Self {
+            let mut events_for_block_r = Vec::new();
+            for y in 0..BLOCK_SIZE_BIG {
+                for x in 0..BLOCK_SIZE_BIG {
+                    events_for_block_r.push(Event {
+                        coord: Coord {
+                            y: y as u16,
+                            x: x as u16,
+                            c: Some(0),
+                        },
+                        ..Default::default()
+                    });
+                }
+            }
+
+            let mut events_for_block_g = Vec::new();
+            for y in 0..BLOCK_SIZE_BIG {
+                for x in 0..BLOCK_SIZE_BIG {
+                    events_for_block_g.push(Event {
+                        coord: Coord {
+                            y: y as u16,
+                            x: x as u16,
+                            c: Some(1),
+                        },
+                        ..Default::default()
+                    });
+                }
+            }
+
+            let mut events_for_block_b = Vec::new();
+            for y in 0..BLOCK_SIZE_BIG {
+                for x in 0..BLOCK_SIZE_BIG {
+                    events_for_block_b.push(Event {
+                        coord: Coord {
+                            y: y as u16,
+                            x: x as u16,
+                            c: Some(2),
+                        },
+                        ..Default::default()
+                    });
+                }
+            }
+
             Self {
                 cube: Cube3::new(0, 0, 0),
                 event: Event {
@@ -135,6 +190,9 @@ mod tests {
                     d: 7,
                     delta_t: 100,
                 },
+                events_for_block_r,
+                events_for_block_g,
+                events_for_block_b,
             }
         }
     }
@@ -155,5 +213,56 @@ mod tests {
 
         assert!(cube.set_event(event).is_ok());
         assert_eq!(cube.block_idx_map_r[0], 1);
+        assert_eq!(cube.blocks_r[0].fill_count, 1);
+        assert!(!cube.blocks_r[0].is_filled());
+    }
+
+    #[test]
+    fn test_set_many_events() {
+        let mut setup = Setup::new();
+        let mut cube = setup.cube;
+        let mut events = setup.events_for_block_r;
+
+        for event in events.iter() {
+            assert!(cube.set_event(event.clone()).is_ok());
+        }
+        assert_eq!(cube.block_idx_map_r[0], 1);
+        assert_eq!(
+            cube.blocks_r[0].fill_count as usize,
+            BLOCK_SIZE_BIG * BLOCK_SIZE_BIG
+        );
+
+        assert!(cube.blocks_r[0].is_filled());
+        assert!(!cube.blocks_g[0].is_filled());
+        assert!(!cube.blocks_b[0].is_filled());
+
+        let mut events = setup.events_for_block_g;
+
+        for event in events.iter() {
+            assert!(cube.set_event(event.clone()).is_ok());
+        }
+        assert!(cube.blocks_r[0].is_filled());
+        assert!(cube.blocks_g[0].is_filled());
+        assert!(!cube.blocks_b[0].is_filled());
+
+        let mut events = setup.events_for_block_b;
+
+        for event in events.iter() {
+            assert!(cube.set_event(event.clone()).is_ok());
+        }
+
+        assert!(cube.blocks_r[0].is_filled());
+        assert!(cube.blocks_g[0].is_filled());
+        assert!(cube.blocks_b[0].is_filled());
+
+        assert_eq!(cube.blocks_r.len(), 1);
+        assert_eq!(cube.blocks_g.len(), 1);
+        assert_eq!(cube.blocks_b.len(), 1);
+
+        assert!(cube.set_event(setup.event).is_ok());
+
+        assert_eq!(cube.blocks_r.len(), 2);
+        assert_eq!(cube.blocks_g.len(), 1);
+        assert_eq!(cube.blocks_b.len(), 1);
     }
 }
