@@ -14,7 +14,7 @@ pub enum BlockError {
 // With color sources, have 3 blocks at each idx. One for each color.
 pub type BlockEvents = [Option<EventCoordless>; BLOCK_SIZE_BIG * BLOCK_SIZE_BIG];
 
-pub struct Block3 {
+pub struct Block {
     events: BlockEvents,
     fill_count: u16,
     // block_idx_y: usize,
@@ -22,7 +22,7 @@ pub struct Block3 {
     // block_idx_c: usize,
 }
 
-impl Block3 {
+impl Block {
     fn new(block_idx_y: usize, block_idx_x: usize, block_idx_c: usize) -> Self {
         Self {
             events: [None; BLOCK_SIZE_BIG * BLOCK_SIZE_BIG],
@@ -52,10 +52,10 @@ impl Block3 {
 }
 
 // TODO: use arenas to avoid allocations
-pub struct Cube3 {
-    blocks_r: Vec<Block3>,
-    blocks_g: Vec<Block3>,
-    blocks_b: Vec<Block3>,
+pub struct Cube {
+    blocks_r: Vec<Block>,
+    blocks_g: Vec<Block>,
+    blocks_b: Vec<Block>,
     cube_idx_y: usize,
     cube_idx_x: usize,
     cube_idx_c: usize,
@@ -66,12 +66,12 @@ pub struct Cube3 {
     block_idx_map_b: [usize; BLOCK_SIZE_BIG * BLOCK_SIZE_BIG],
 }
 
-impl Cube3 {
+impl Cube {
     fn new(cube_idx_y: usize, cube_idx_x: usize, cube_idx_c: usize) -> Self {
         Self {
-            blocks_r: vec![Block3::new(0, 0, 0)],
-            blocks_g: vec![Block3::new(0, 0, 0)],
-            blocks_b: vec![Block3::new(0, 0, 0)],
+            blocks_r: vec![Block::new(0, 0, 0)],
+            blocks_g: vec![Block::new(0, 0, 0)],
+            blocks_b: vec![Block::new(0, 0, 0)],
             cube_idx_y,
             cube_idx_x,
             cube_idx_c,
@@ -105,13 +105,13 @@ impl Cube3 {
 }
 
 fn set_event_for_channel(
-    block_vec: &mut Vec<Block3>,
+    block_vec: &mut Vec<Block>,
     block_idx_map: &mut [usize; BLOCK_SIZE_BIG * BLOCK_SIZE_BIG],
     event: Event,
     idx: usize,
 ) -> Result<(), BlockError> {
     if block_idx_map[idx] >= block_vec.len() {
-        block_vec.push(Block3::new(0, 0, 0));
+        block_vec.push(Block::new(0, 0, 0));
     }
     match block_vec[block_idx_map[idx]].set_event(&event, idx) {
         Ok(_) => {
@@ -124,12 +124,12 @@ fn set_event_for_channel(
 
 #[cfg(test)]
 mod tests {
-    use crate::codec::compressed::blocks::Cube3;
+    use crate::codec::compressed::blocks::Cube;
     use crate::codec::compressed::BLOCK_SIZE_BIG;
     use crate::{Coord, Event};
 
     struct Setup {
-        cube: Cube3,
+        cube: Cube,
         event: Event,
         events_for_block_r: Vec<Event>,
         events_for_block_g: Vec<Event>,
@@ -180,7 +180,7 @@ mod tests {
             }
 
             Self {
-                cube: Cube3::new(0, 0, 0),
+                cube: Cube::new(0, 0, 0),
                 event: Event {
                     coord: Coord {
                         x: 0,

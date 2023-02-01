@@ -10,6 +10,7 @@ use std::path::Path;
 pub mod compressed;
 pub mod raw;
 mod units;
+mod utils;
 
 pub trait Codec {
     fn new() -> Self;
