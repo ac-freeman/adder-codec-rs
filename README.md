@@ -28,6 +28,20 @@ Read the [wiki](https://github.com/ac-freeman/adder-codec-rs/wiki/) for backgrou
 
 If you write a paper which references this software, we ask that you reference the following papers on which it is based. Citations are given in the BibTeX format.
 
+[An Asynchronous Intensity Representation for Framed and Event Video Sources](https://arxiv.org/abs/2301.08783)
+```
+@misc{https://doi.org/10.48550/arxiv.2301.08783,
+  doi = {10.48550/ARXIV.2301.08783},
+  url = {https://arxiv.org/abs/2301.08783},
+  author = {Freeman, Andrew C. and Singh, Montek and Mayer-Patel, Ketan},
+  keywords = {Computer Vision and Pattern Recognition (cs.CV), Multimedia (cs.MM), FOS: Computer and information sciences, FOS: Computer and information sciences},
+  title = {An Asynchronous Intensity Representation for Framed and Event Video Sources},
+  publisher = {arXiv},
+  year = {2023},
+  copyright = {arXiv.org perpetual, non-exclusive license}
+}
+```
+
 [Motion segmentation and tracking for integrating event cameras](https://dl.acm.org/doi/abs/10.1145/3458305.3463373)
 ```
 @inproceedings{10.1145/3458305.3463373,
