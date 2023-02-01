@@ -16,26 +16,26 @@ pub type BlockEvents = [Option<EventCoordless>; BLOCK_SIZE_BIG * BLOCK_SIZE_BIG]
 
 pub struct Block3 {
     events: BlockEvents,
-    block_idx_y: usize,
-    block_idx_x: usize,
-    block_idx_c: usize,
+    // block_idx_y: usize,
+    // block_idx_x: usize,
+    // block_idx_c: usize,
 }
 
 impl Block3 {
     fn new(block_idx_y: usize, block_idx_x: usize, block_idx_c: usize) -> Self {
         Self {
             events: [None; BLOCK_SIZE_BIG * BLOCK_SIZE_BIG],
-            block_idx_y,
-            block_idx_x,
-            block_idx_c,
+            // block_idx_y,
+            // block_idx_x,
+            // block_idx_c,
         }
     }
 
-    fn set_event(&mut self, event: Event, idx: usize) -> Result<(), BlockError> {
+    fn set_event(&mut self, event: &Event, idx: usize) -> Result<(), BlockError> {
         match self.events[idx] {
             Some(ref mut e) => return Err(BlockError::AlreadyExists { idx }),
             None => {
-                self.events[idx] = Some(EventCoordless::from(event));
+                self.events[idx] = Some(EventCoordless::from(*event));
             }
         }
         Ok(())
@@ -50,34 +50,36 @@ pub struct Cube3 {
     cube_idx_y: usize,
     cube_idx_x: usize,
     cube_idx_c: usize,
+
+    /// Keeps track of the block vec index that is currently being written to for each coordinate.
+    block_idx_map_r: [usize; BLOCK_SIZE_BIG * BLOCK_SIZE_BIG],
+    block_idx_map_g: [usize; BLOCK_SIZE_BIG * BLOCK_SIZE_BIG],
+    block_idx_map_b: [usize; BLOCK_SIZE_BIG * BLOCK_SIZE_BIG],
 }
 
 impl Cube3 {
     fn new(cube_idx_y: usize, cube_idx_x: usize, cube_idx_c: usize) -> Self {
         Self {
-            blocks_r: Vec::new(),
-            blocks_g: Vec::new(),
-            blocks_b: Vec::new(),
+            blocks_r: vec![Block3::new(0, 0, 0)],
+            blocks_g: vec![Block3::new(0, 0, 0)],
+            blocks_b: vec![Block3::new(0, 0, 0)],
             cube_idx_y,
             cube_idx_x,
             cube_idx_c,
+            block_idx_map_r: [0; BLOCK_SIZE_BIG * BLOCK_SIZE_BIG],
+            block_idx_map_g: [0; BLOCK_SIZE_BIG * BLOCK_SIZE_BIG],
+            block_idx_map_b: [0; BLOCK_SIZE_BIG * BLOCK_SIZE_BIG],
         }
     }
 
-    fn set_event(&mut self, event: Event) {
+    fn set_event(&mut self, event: Event) -> Result<(), BlockError> {
         let (idx, c) = self.event_coord_to_block_idx(&event);
-        let event_coordless = EventCoordless::from(event);
 
-        let mut block_num = 0;
-        loop {
-            if let Ok(()) = match c {
-                0 => self.blocks_r[block_num].set_event(event, idx),
-                1 => self.blocks_g[block_num].set_event(event, idx),
-                2 => self.blocks_b[block_num].set_event(event, idx),
-                _ => panic!("Invalid color"),
-            } {
-                break;
-            }
+        match c {
+            0 => set_event_for_channel(&mut self.blocks_r, &mut self.block_idx_map_r, event, idx),
+            1 => set_event_for_channel(&mut self.blocks_g, &mut self.block_idx_map_g, event, idx),
+            2 => set_event_for_channel(&mut self.blocks_b, &mut self.block_idx_map_b, event, idx),
+            _ => panic!("Invalid color"),
         }
     }
 
@@ -93,8 +95,65 @@ impl Cube3 {
     }
 }
 
+fn set_event_for_channel(
+    block_vec: &mut Vec<Block3>,
+    block_idx_map: &mut [usize; BLOCK_SIZE_BIG * BLOCK_SIZE_BIG],
+    event: Event,
+    idx: usize,
+) -> Result<(), BlockError> {
+    if block_idx_map[idx] > block_vec.len() {
+        block_vec.push(Block3::new(0, 0, 0));
+    }
+    match block_vec[block_idx_map[idx]].set_event(&event, idx) {
+        Ok(_) => {
+            block_idx_map[idx] += 1;
+            Ok(())
+        }
+        Err(e) => Err(e),
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use crate::codec::compressed::mod4::Cube3;
+    use crate::{Coord, Event};
+
+    struct Setup {
+        cube: Cube3,
+        event: Event,
+    }
+    impl Setup {
+        fn new() -> Self {
+            Self {
+                cube: Cube3::new(0, 0, 0),
+                event: Event {
+                    coord: Coord {
+                        x: 0,
+                        y: 0,
+                        c: Some(0),
+                    },
+                    d: 7,
+                    delta_t: 100,
+                },
+            }
+        }
+    }
+
     #[test]
-    fn test_setup_64_block() {}
+    fn test_create_cube() {
+        let cube = Setup::new().cube;
+        assert_eq!(cube.blocks_r.len(), 1);
+        assert_eq!(cube.blocks_g.len(), 1);
+        assert_eq!(cube.blocks_b.len(), 1);
+    }
+
+    #[test]
+    fn test_set_event() {
+        let mut setup = Setup::new();
+        let mut cube = setup.cube;
+        let mut event = setup.event;
+
+        assert!(cube.set_event(event).is_ok());
+        assert_eq!(cube.block_idx_map_r[0], 1);
+    }
 }
