@@ -1,6 +1,13 @@
 use crate::codec::compressed::BLOCK_SIZE_BIG;
 use crate::framer::driver::EventCoordless;
 use crate::Event;
+use thiserror::Error;
+
+#[derive(Error, Debug)]
+pub enum BlockError {
+    #[error("event at idx {idx:?} already exists for this block")]
+    AlreadyExists { idx: usize },
+}
 
 // Simpler approach. Don't build a complex tree. Just group events into fixed block sizes and
 // differentially encode the D-values. Choose between a block being intra- or inter-coded.
@@ -24,10 +31,14 @@ impl Block3 {
         }
     }
 
-    fn set_event(&mut self, event: Event) {
-        let idx = self.event_coord_to_block_idx(&event);
-        let event_coordless = EventCoordless::from(event);
-        self.events[idx] = Some(event_coordless);
+    fn set_event(&mut self, event: Event, idx: usize) -> Result<(), BlockError> {
+        match self.events[idx] {
+            Some(ref mut e) => return Err(BlockError::AlreadyExists { idx }),
+            None => {
+                self.events[idx] = Some(EventCoordless::from(event));
+            }
+        }
+        Ok(())
     }
 }
 
@@ -56,15 +67,18 @@ impl Cube3 {
     fn set_event(&mut self, event: Event) {
         let (idx, c) = self.event_coord_to_block_idx(&event);
         let event_coordless = EventCoordless::from(event);
+
+        let mut block_num = 0;
         loop {
-            match c {
-                0 => self.blocks_r[idx].events[idx] = Some(event_coordless),
-                1 => self.blocks_g[idx].events[idx] = Some(event_coordless),
-                2 => self.blocks_b[idx].events[idx] = Some(event_coordless),
+            if let Ok(()) = match c {
+                0 => self.blocks_r[block_num].set_event(event, idx),
+                1 => self.blocks_g[block_num].set_event(event, idx),
+                2 => self.blocks_b[block_num].set_event(event, idx),
                 _ => panic!("Invalid color"),
+            } {
+                break;
             }
         }
-        self.events[idx] = Some(event_coordless);
     }
 
     #[inline(always)]
@@ -75,6 +89,12 @@ impl Cube3 {
         (
             idx_y * BLOCK_SIZE_BIG + idx_x,
             event.coord.c.unwrap_or(0) as usize,
-        );
+        )
     }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn test_setup_64_block() {}
 }

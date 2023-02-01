@@ -15,16 +15,16 @@ license = "MIT OR Apache-2.0"
 keywords = ["neuromorphic", "decoding", "event", "asynchronous", "video"]
 categories = ["multimedia::encoding", "multimedia::video", "science"]
 
+[dependencies]
+adder-codec-rs = { version = "0.2.5", path = "../adder-codec-rs", features = [
+    "transcoder",
+] }
+clap = { version = "4.0.17", features = ["derive"] }
+ndarray = { version = "0.15.6", features = ["rayon", "serde"] }
+
 [dependencies.opencv]
 version = '0.66.0'
 package = 'opencv'
 default-features = false
 features = ['videoio', 'imgproc', 'highgui']
 optional = false
-
-[dependencies]
-adder-codec-rs = { version = "0.2.5", path = "../adder-codec-rs", features = [
-    "transcoder",
-] }
-clap = { version = "4.0.17", features = ["derive"] }
-ndarray = {version = "0.15.6", features = ["rayon", "serde"]}
