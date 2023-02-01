@@ -1,4 +1,6 @@
 mod blocks;
+mod compression;
+mod fenwick;
 
 use crate::framer::driver::EventCoordless;
 use crate::{DeltaT, Event, D};
