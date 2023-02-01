@@ -251,6 +251,7 @@ pub const EOF_PX_ADDRESS: PixelAddress = u16::MAX;
 
 pub extern crate aedat;
 
+extern crate core;
 pub extern crate davis_edi_rs;
 
 /// The size of the image plane in pixels
