@@ -8,13 +8,14 @@ use std::io::{BufWriter, Write};
 use std::path::Path;
 use std::process::Command;
 
+use adder_codec_rs::codec::raw::stream::Raw;
+use adder_codec_rs::codec::Codec;
 use adder_codec_rs::framer::driver::FramerMode::INSTANTANEOUS;
 use adder_codec_rs::framer::driver::{FrameSequence, Framer, FramerBuilder};
-use adder_codec_rs::raw::stream::Raw;
 use adder_codec_rs::transcoder::source::framed::Framed;
 use adder_codec_rs::transcoder::source::video::Source;
 use adder_codec_rs::SourceCamera::FramedU8;
-use adder_codec_rs::{Codec, Coord, Event, PlaneSize, TimeMode};
+use adder_codec_rs::{Coord, Event, PlaneSize, TimeMode};
 use rand::Rng;
 use rayon::current_num_threads;
 

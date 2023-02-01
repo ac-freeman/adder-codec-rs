@@ -124,7 +124,7 @@ fn set_event_for_channel(
 
 #[cfg(test)]
 mod tests {
-    use crate::codec::compressed::mod4::Cube3;
+    use crate::codec::compressed::blocks::Cube3;
     use crate::codec::compressed::BLOCK_SIZE_BIG;
     use crate::{Coord, Event};
 
