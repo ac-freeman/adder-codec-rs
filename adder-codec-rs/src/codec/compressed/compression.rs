@@ -15,7 +15,7 @@ use std::ops::Range;
 // Get the residual between the pixel's current delta_t and the expected delta_t. Encode that
 
 use crate::codec::compressed::fenwick::{simple::FenwickModel, ValueError};
-use crate::D;
+use crate::{DeltaT, D};
 
 #[derive(Clone)]
 pub struct BlockDResidualModel {
@@ -44,9 +44,9 @@ impl BlockDResidualModel {
 pub struct Error(D);
 
 impl Model for BlockDResidualModel {
-    type B = u64;
     type Symbol = DResidual;
     type ValueError = ValueError;
+    type B = u64;
 
     fn probability(
         &self,
@@ -59,22 +59,89 @@ impl Model for BlockDResidualModel {
         self.fenwick_model.probability(fenwick_symbol.as_ref())
     }
 
-    fn symbol(&self, value: Self::B) -> Option<Self::Symbol> {
-        let index = self.fenwick_model.symbol(value)?;
-        self.alphabet.get(index).copied()
+    fn denominator(&self) -> Self::B {
+        self.fenwick_model.denominator()
     }
 
     fn max_denominator(&self) -> Self::B {
         self.fenwick_model.max_denominator()
     }
 
-    fn denominator(&self) -> Self::B {
-        self.fenwick_model.denominator()
+    fn symbol(&self, value: Self::B) -> Option<Self::Symbol> {
+        let index = self.fenwick_model.symbol(value)?;
+        self.alphabet.get(index).copied()
     }
 
     fn update(&mut self, symbol: Option<&Self::Symbol>) {
         let fenwick_symbol = match symbol {
             Some(c) if *c >= -255 && *c <= 255 => Some((*c + 255) as usize),
+            _ => None,
+        };
+        self.fenwick_model.update(fenwick_symbol.as_ref());
+    }
+}
+
+#[derive(Clone)]
+pub struct BlockDeltaTResidualModel {
+    alphabet: Vec<DeltaTResidual>,
+    fenwick_model: FenwickModel,
+    delta_t_max: i64,
+}
+
+pub type DeltaTResidual = i64;
+
+impl BlockDeltaTResidualModel {
+    #[must_use]
+    pub fn new(delta_t_max: DeltaT) -> Self {
+        let alphabet: Vec<DeltaTResidual> = (-(delta_t_max as i64)..delta_t_max as i64).collect();
+        let fenwick_model =
+            FenwickModel::builder(delta_t_max as usize * 2 + 1, 1 << (delta_t_max.ilog2() + 3))
+                .panic_on_saturation()
+                .build();
+        Self {
+            alphabet,
+            fenwick_model,
+            delta_t_max: delta_t_max.into(),
+        }
+    }
+}
+
+impl Model for BlockDeltaTResidualModel {
+    type Symbol = DeltaTResidual;
+    type ValueError = ValueError;
+    type B = u64;
+
+    fn probability(
+        &self,
+        symbol: Option<&Self::Symbol>,
+    ) -> Result<Range<Self::B>, Self::ValueError> {
+        let fenwick_symbol = match symbol {
+            Some(c) if *c >= -self.delta_t_max && *c <= self.delta_t_max => {
+                Some((*c + self.delta_t_max) as usize)
+            }
+            _ => None,
+        };
+        self.fenwick_model.probability(fenwick_symbol.as_ref())
+    }
+
+    fn denominator(&self) -> Self::B {
+        self.fenwick_model.denominator()
+    }
+
+    fn max_denominator(&self) -> Self::B {
+        self.fenwick_model.max_denominator()
+    }
+
+    fn symbol(&self, value: Self::B) -> Option<Self::Symbol> {
+        let index = self.fenwick_model.symbol(value)?;
+        self.alphabet.get(index).copied()
+    }
+
+    fn update(&mut self, symbol: Option<&Self::Symbol>) {
+        let fenwick_symbol = match symbol {
+            Some(c) if *c >= -self.delta_t_max && *c <= self.delta_t_max => {
+                Some((*c + self.delta_t_max) as usize)
+            }
             _ => None,
         };
         self.fenwick_model.update(fenwick_symbol.as_ref());
@@ -113,7 +180,9 @@ impl Model for BlockDResidualModel {
 
 #[cfg(test)]
 mod tests {
-    use crate::codec::compressed::compression::BlockDResidualModel;
+    use crate::codec::compressed::compression::{
+        BlockDResidualModel, BlockDeltaTResidualModel, DResidual, DeltaTResidual,
+    };
     use arithmetic_coding::{Decoder, Encoder, Model};
     use bitstream_io::{BigEndian, BitReader, BitWrite, BitWriter};
     use rand::Rng;
@@ -125,7 +194,7 @@ mod tests {
         let mut bitwriter = BitWriter::endian(Vec::new(), BigEndian);
         let mut encoder = Encoder::new(model.clone(), &mut bitwriter);
 
-        let input: Vec<i16> = vec![
+        let input: Vec<DResidual> = vec![
             0, 1, 2, 3, 4, 5, 6, 7, 8, 8, 8, 1, 2, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9,
         ];
 
@@ -150,7 +219,7 @@ mod tests {
         let buff: &[u8] = &buffer;
         let bitreader = BitReader::endian(buff, BigEndian);
         let mut decoder = Decoder::new(model, bitreader);
-        let output: Vec<i16> = decoder.decode_all().map(Result::unwrap).collect();
+        let output: Vec<DResidual> = decoder.decode_all().map(Result::unwrap).collect();
         println!("{:?}", output);
         assert_eq!(output, input);
     }
@@ -162,7 +231,7 @@ mod tests {
         let mut encoder = Encoder::new(model.clone(), &mut bitwriter);
 
         let mut rng = rand::thread_rng();
-        let input: Vec<i16> = (0..1000).map(|_| rng.gen_range(-255..255)).collect();
+        let input: Vec<DResidual> = (0..1000).map(|_| rng.gen_range(-255..255)).collect();
 
         let input_len = input.len() * 2;
 
@@ -187,7 +256,79 @@ mod tests {
         let buff: &[u8] = &buffer;
         let bitreader = BitReader::endian(buff, BigEndian);
         let mut decoder = Decoder::new(model, bitreader);
-        let output: Vec<i16> = decoder.decode_all().map(Result::unwrap).collect();
+        let output: Vec<DResidual> = decoder.decode_all().map(Result::unwrap).collect();
+        assert_eq!(output, input);
+    }
+
+    #[test]
+    fn test_delta_t_compression() {
+        let model = BlockDeltaTResidualModel::new(255 * 10);
+        let mut bitwriter = BitWriter::endian(Vec::new(), BigEndian);
+        let mut encoder = Encoder::new(model.clone(), &mut bitwriter);
+
+        let input: Vec<DeltaTResidual> = vec![100, -250, 89, 87, 86, 105, -30, 20, -28, 120];
+
+        let input_len = input.len() * 4;
+
+        encoder.encode_all(input.clone()).unwrap();
+        bitwriter.byte_align().unwrap();
+
+        let buffer = bitwriter.into_writer();
+
+        let output_len = buffer.len();
+        println!("{:?}", &buffer);
+
+        println!("input bytes: {input_len}");
+        println!("output bytes: {output_len}");
+
+        println!(
+            "compression ratio: {}",
+            input_len as f32 / output_len as f32
+        );
+
+        let buff: &[u8] = &buffer;
+        let bitreader = BitReader::endian(buff, BigEndian);
+        let mut decoder = Decoder::new(model, bitreader);
+        let output: Vec<DeltaTResidual> = decoder.decode_all().map(Result::unwrap).collect();
+        println!("{:?}", output);
+        assert_eq!(output, input);
+    }
+
+    #[test]
+    fn test_delta_t_rand_compression() {
+        let delta_t_max = 255 * 10;
+        let model = BlockDeltaTResidualModel::new(delta_t_max);
+        let mut bitwriter = BitWriter::endian(Vec::new(), BigEndian);
+        let mut encoder = Encoder::new(model.clone(), &mut bitwriter);
+
+        let mut rng = rand::thread_rng();
+        let input: Vec<DeltaTResidual> = (0..1000)
+            .map(|_| rng.gen_range(-(delta_t_max as DeltaTResidual)..delta_t_max as DeltaTResidual))
+            .collect();
+
+        let input_len = input.len() * 4;
+
+        encoder.encode_all(input.clone()).unwrap();
+        bitwriter.byte_align().unwrap();
+
+        let buffer = bitwriter.into_writer();
+
+        let output_len = buffer.len();
+        println!("{:?}", &buffer);
+
+        println!("input bytes: {input_len}");
+        println!("output bytes: {output_len}");
+
+        println!(
+            "compression ratio: {}",
+            input_len as f32 / output_len as f32
+        );
+
+        let buff: &[u8] = &buffer;
+        let bitreader = BitReader::endian(buff, BigEndian);
+        let mut decoder = Decoder::new(model, bitreader);
+        let output: Vec<DeltaTResidual> = decoder.decode_all().map(Result::unwrap).collect();
+        println!("{:?}", output);
         assert_eq!(output, input);
     }
 }
