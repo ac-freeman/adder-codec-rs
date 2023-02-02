@@ -29,7 +29,7 @@ impl BlockDResidualModel {
     #[must_use]
     pub fn new() -> Self {
         let alphabet: Vec<DResidual> = (-255..255).collect();
-        let fenwick_model = FenwickModel::builder(u8::MAX as usize * 2 + 1, 1 << 20)
+        let fenwick_model = FenwickModel::builder(u8::MAX as usize * 2 + 1, 1 << 11)
             .panic_on_saturation()
             .build();
         Self {
@@ -70,7 +70,10 @@ impl Model for BlockDResidualModel {
     }
 
     fn update(&mut self, symbol: Option<&Self::Symbol>) {
-        let fenwick_symbol = symbol.map(|c| self.alphabet.iter().position(|x| x == c).unwrap());
+        let fenwick_symbol = match symbol {
+            Some(c) if *c >= -255 && *c <= 255 => Some((*c + 255) as usize),
+            _ => None,
+        };
         self.fenwick_model.update(fenwick_symbol.as_ref());
     }
 }
