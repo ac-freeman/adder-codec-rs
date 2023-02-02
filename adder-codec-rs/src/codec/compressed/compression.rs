@@ -52,7 +52,10 @@ impl Model for BlockDResidualModel {
         &self,
         symbol: Option<&Self::Symbol>,
     ) -> Result<Range<Self::B>, Self::ValueError> {
-        let fenwick_symbol = symbol.map(|c| self.alphabet.iter().position(|x| x == c).unwrap());
+        let fenwick_symbol = match symbol {
+            Some(c) if *c >= -255 && *c <= 255 => Some((*c + 255) as usize),
+            _ => None,
+        };
         self.fenwick_model.probability(fenwick_symbol.as_ref())
     }
 
