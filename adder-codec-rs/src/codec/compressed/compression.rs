@@ -110,19 +110,22 @@ mod tests {
     use crate::codec::compressed::compression::BlockDResidualModel;
     use arithmetic_coding::{Decoder, Encoder, Model};
     use bitstream_io::{BigEndian, BitReader, BitWrite, BitWriter};
+    use rand::Rng;
     use std::io::Read;
 
     #[test]
-    fn test() {
+    fn test_i16_compression() {
         let model = BlockDResidualModel::new();
         let mut bitwriter = BitWriter::endian(Vec::new(), BigEndian);
         let mut encoder = Encoder::new(model.clone(), &mut bitwriter);
 
-        let input: Vec<i16> = vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 9, 9, 9, 9, 9, 9];
+        let input: Vec<i16> = vec![
+            0, 1, 2, 3, 4, 5, 6, 7, 8, 8, 8, 1, 2, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9,
+        ];
 
         let input_len = input.len() * 2;
 
-        encoder.encode_all(input).unwrap();
+        encoder.encode_all(input.clone()).unwrap();
         bitwriter.byte_align().unwrap();
 
         let buffer = bitwriter.into_writer();
@@ -143,5 +146,42 @@ mod tests {
         let mut decoder = Decoder::new(model, bitreader);
         let output: Vec<i16> = decoder.decode_all().map(Result::unwrap).collect();
         println!("{:?}", output);
+        assert_eq!(output, input);
+    }
+
+    #[test]
+    fn test_i16_rand_compression() {
+        let model = BlockDResidualModel::new();
+        let mut bitwriter = BitWriter::endian(Vec::new(), BigEndian);
+        let mut encoder = Encoder::new(model.clone(), &mut bitwriter);
+
+        let mut rng = rand::thread_rng();
+        let input: Vec<i16> = (0..1000).map(|_| rng.gen_range(-255..255)).collect();
+
+        let input_len = input.len() * 2;
+
+        encoder.encode_all(input.clone()).unwrap();
+        bitwriter.byte_align().unwrap();
+
+        let buffer = bitwriter.into_writer();
+
+        let output_len = buffer.len();
+
+        println!("input bytes: {input_len}");
+        println!("output bytes: {output_len}");
+
+        println!(
+            "compression ratio: {}",
+            input_len as f32 / output_len as f32
+        );
+
+        // Should always be the case, since we can represent any number in [-255, 255] with 9 bits
+        assert!(input_len as f32 / output_len as f32 > 1.6);
+
+        let buff: &[u8] = &buffer;
+        let bitreader = BitReader::endian(buff, BigEndian);
+        let mut decoder = Decoder::new(model, bitreader);
+        let output: Vec<i16> = decoder.decode_all().map(Result::unwrap).collect();
+        assert_eq!(output, input);
     }
 }
