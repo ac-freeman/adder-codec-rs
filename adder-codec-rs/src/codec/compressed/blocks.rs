@@ -208,9 +208,10 @@ fn set_event_for_channel(
 
 #[cfg(test)]
 mod tests {
-    use crate::codec::compressed::blocks::Cube;
+    use crate::codec::compressed::blocks::{Cube, ZigZag};
     use crate::codec::compressed::BLOCK_SIZE_BIG;
     use crate::{Coord, Event};
+    use itertools::Itertools;
 
     struct Setup {
         cube: Cube,
@@ -348,5 +349,45 @@ mod tests {
         assert_eq!(cube.blocks_r.len(), 2);
         assert_eq!(cube.blocks_g.len(), 1);
         assert_eq!(cube.blocks_b.len(), 1);
+    }
+
+    #[test]
+    fn test_zig_zag_iter() {
+        let mut setup = Setup::new();
+        let mut cube = setup.cube;
+        let mut events = setup.events_for_block_r;
+
+        for event in events.iter() {
+            assert!(cube.set_event(event.clone()).is_ok());
+        }
+
+        let mut zigzag_events = Vec::new();
+        let zigzag = ZigZag::new(&cube.blocks_r[0]);
+        let mut iter = zigzag.into_iter();
+        for y in 0..BLOCK_SIZE_BIG {
+            for x in 0..BLOCK_SIZE_BIG {
+                let event = iter.next().unwrap().unwrap();
+                zigzag_events.push(event);
+            }
+        }
+
+        assert_eq!(zigzag_events.len(), BLOCK_SIZE_BIG * BLOCK_SIZE_BIG);
+        assert_eq!(zigzag_events[0].d, events[0].d);
+        let delta_t_0 = zigzag_events[0].delta_t;
+        let delta_t_1 = events[0].delta_t;
+        assert_eq!(delta_t_0, delta_t_1);
+
+        assert_eq!(zigzag_events[1].d, events[1].d);
+        let delta_t_0 = zigzag_events[1].delta_t;
+        let delta_t_1 = events[1].delta_t;
+        assert_eq!(delta_t_0, delta_t_1);
+
+        assert_eq!(
+            zigzag_events[BLOCK_SIZE_BIG * BLOCK_SIZE_BIG - 1].d,
+            events[BLOCK_SIZE_BIG * BLOCK_SIZE_BIG - 1].d
+        );
+        let delta_t_0 = zigzag_events[BLOCK_SIZE_BIG * BLOCK_SIZE_BIG - 1].delta_t;
+        let delta_t_1 = events[BLOCK_SIZE_BIG * BLOCK_SIZE_BIG - 1].delta_t;
+        assert_eq!(delta_t_0, delta_t_1);
     }
 }
