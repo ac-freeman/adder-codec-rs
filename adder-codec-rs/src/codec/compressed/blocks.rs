@@ -15,11 +15,95 @@ pub enum BlockError {
 pub type BlockEvents = [Option<EventCoordless>; BLOCK_SIZE_BIG * BLOCK_SIZE_BIG];
 
 pub struct Block {
+    /// Events organized in row-major order.
     events: BlockEvents,
     fill_count: u16,
     // block_idx_y: usize,
     // block_idx_x: usize,
     // block_idx_c: usize,
+}
+
+/// Compile-time function to compute the zig-zag order for traversing a block. See https://en.wikipedia.org/wiki/File:JPEG_ZigZag.svg
+pub const fn zigzag_order() -> [usize; BLOCK_SIZE_BIG * BLOCK_SIZE_BIG] {
+    let mut order = [0; BLOCK_SIZE_BIG * BLOCK_SIZE_BIG];
+    let mut idx = 0;
+    let mut up = true;
+    let (mut y, mut x) = (0, 0);
+
+    loop {
+        order[idx] = y * BLOCK_SIZE_BIG + x;
+        idx += 1;
+
+        if idx == BLOCK_SIZE_BIG * BLOCK_SIZE_BIG {
+            break;
+        }
+
+        if up {
+            if x == BLOCK_SIZE_BIG - 1 {
+                y += 1;
+                up = false;
+            } else if y == 0 {
+                x += 1;
+                up = false;
+            } else {
+                x += 1;
+                y -= 1;
+            }
+        } else {
+            if y == BLOCK_SIZE_BIG - 1 {
+                x += 1;
+                up = true;
+            } else if x == 0 {
+                y += 1;
+                up = true;
+            } else {
+                x -= 1;
+                y += 1;
+            }
+        }
+    }
+    order
+}
+
+#[cfg(test)]
+mod test_zig_zag {
+    use crate::codec::compressed::BLOCK_SIZE_BIG;
+    use itertools::Itertools;
+
+    #[test]
+    fn test_zig_zag() {
+        use super::zigzag_order;
+        let mut order = zigzag_order();
+        order.sort_unstable();
+        let unique: Vec<_> = order.into_iter().unique().collect();
+        assert_eq!(unique.len(), order.len());
+        assert_eq!(unique[0], 0);
+        assert_eq!(
+            unique[unique.len() - 1],
+            BLOCK_SIZE_BIG * BLOCK_SIZE_BIG - 1
+        );
+    }
+}
+
+pub struct ZigZag<'a> {
+    block: &'a Block,
+    idx: usize,
+}
+
+impl<'a> ZigZag<'a> {
+    pub fn new(block: &'a Block) -> Self {
+        Self { block, idx: 0 }
+    }
+}
+
+/// Zig-Zag iterator for a block.
+impl<'a> Iterator for ZigZag<'a> {
+    type Item = Option<&'a EventCoordless>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.idx += 1;
+        Some(self.block.events[zigzag_order()[self.idx - 1]].as_ref())
+    }
 }
 
 impl Block {

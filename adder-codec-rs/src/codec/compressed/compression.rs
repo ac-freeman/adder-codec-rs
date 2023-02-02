@@ -15,7 +15,8 @@ use std::ops::Range;
 // Get the residual between the pixel's current delta_t and the expected delta_t. Encode that
 
 use crate::codec::compressed::fenwick::{simple::FenwickModel, ValueError};
-use crate::{DeltaT, D};
+use crate::framer::driver::EventCoordless;
+use crate::{DeltaT, Event, TimeMode, D};
 
 #[derive(Clone)]
 pub struct BlockDResidualModel {
@@ -147,6 +148,88 @@ impl Model for BlockDeltaTResidualModel {
         self.fenwick_model.update(fenwick_symbol.as_ref());
     }
 }
+
+// #[derive(Clone)]
+// pub struct BlockEventResidualModel {
+//     d_model: BlockDResidualModel,
+//     delta_t_model: BlockDeltaTResidualModel,
+// }
+//
+// pub type EventResidual = (DResidual, DeltaTResidual);
+
+// impl BlockEventResidualModel {
+//     // type Symbol = EventResidual;
+//     // type ValueError = ValueError;
+//     // type B = u64;
+//
+//     #[must_use]
+//     pub fn new(delta_t_max: DeltaT) -> Self {
+//         let d_model = BlockDResidualModel::new();
+//         let delta_t_model = BlockDeltaTResidualModel::new(delta_t_max);
+//         Self {
+//             d_model,
+//             delta_t_model,
+//         }
+//     }
+//
+//     pub fn encode_all(
+//         &mut self,
+//         symbols: impl IntoIterator<Item = EventResidual>,
+//     ) -> Result<(), Error> {
+//         for symbol in symbols {
+//
+//             self.encode(Some(&symbol))?;
+//         }
+//         self.encode(None)?;
+//         self.flush()?;
+//
+//         let mut residuals = Vec::with_capacity(events.len());
+//         for event in events {
+//             residuals.push(self.encode(event));
+//         }
+//         residuals
+//     }
+// }
+
+/// Setup the context-adaptive intra-prediction model for an event block.
+/// For now, just do a naive model that only looks at the previous 1 coded event.
+/// Note: will have to work differently with delta-t vs absolute-t modes...
+/// TODO: encode all the D-vals first, then the dt values?
+/// TODO: use a more sophisticated model.
+struct BlockIntraPredictionContext {
+    prev_coded_event: Option<EventCoordless>,
+    prediction_mode: TimeMode,
+}
+
+// impl BlockIntraPredictionContext {
+//     fn new() -> Self {
+//         Self {
+//             prev_coded_event: None,
+//             prediction_mode: TimeMode::AbsoluteT,
+//         }
+//     }
+//
+//     fn encode_block(&mut self, block: &mut Block) {
+//
+//     }
+//
+//     }
+//
+//     /// Encode the prediction residual for an event based on the previous coded event
+//     fn encode_event(&mut self, event: &EventCoordless) -> DeltaTResidual {
+//         // match self.prediction_mode {
+//         //     TimeMode::AbsoluteT => {
+//         //         let delta_t = event.t - self.prev_coded_event.unwrap().t;
+//         //         delta_t
+//         //     }
+//         //     TimeMode::DeltaT => {
+//         //         let delta_t = event.t - self.prev_coded_event.unwrap().t;
+//         //         delta_t
+//         //     }
+//         //     _ => {}
+//         // }
+//     }
+// }
 
 // pub trait Compression {}
 // impl Model for Block {
