@@ -326,6 +326,9 @@ impl BlockIntraPredictionContextModel {
         // Set up the delta_t decoder
         let bitreader = BitReader::endian(&input[2 + d_len as usize..], BigEndian);
         let mut dt_decoder = Decoder::new(self.delta_t_model.clone(), bitreader);
+
+        let mut zigzag = ZigZag::new(block, &ZIGZAG_ORDER);
+        for event in zigzag {}
     }
 }
 

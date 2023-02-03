@@ -87,6 +87,11 @@ pub struct ZigZag<'a> {
     order: &'a [u16; BLOCK_SIZE_BIG_AREA],
     idx: usize,
 }
+pub struct ZigZagMut<'a> {
+    block: &'a mut Block,
+    order: &'a [u16; BLOCK_SIZE_BIG_AREA],
+    idx: usize,
+}
 
 /// Construct iterator for a `Block` with zigzag traversal. `order` is the zigzag order to use. You
 /// can use `zigzag_order()` to store the order locally on the stack, and then pass that in. That
@@ -122,6 +127,44 @@ impl<'a> Iterator for ZigZag<'a> {
         })
     }
 }
+
+// // https://stackoverflow.com/questions/30422177/how-do-i-write-an-iterator-that-returns-references-to-itself
+// pub struct ZigZagIterator<'a, T> {
+//     vs: Vec<&'a [T]>,
+//     is: Vec<usize>,
+// }
+//
+// impl<'a, T> ZigZagIterator<'a, T> {
+//     pub fn new(vs: Vec<&'a [T]>) -> Self {
+//         Self {
+//             vs,
+//             is: (0..BLOCK_SIZE_BIG_AREA).collect(),
+//         }
+//     }
+// }
+//
+// impl<'a, T> Iterator for ZigZagIterator<'a, T> {
+//     type Item = Vec<&'a T>;
+//
+//     fn next(&mut self) -> Option<Vec<&'a T>> {}
+// }
+//
+// impl<'a> Iterator for ZigZagMut<'a> {
+//     type Item = &'a mut Option<EventCoordless>;
+//
+//     fn next(&mut self) -> Option<Self::Item> {
+//         self.idx += 1;
+//         if self.idx > BLOCK_SIZE_BIG_AREA {
+//             return None;
+//         }
+//         unsafe {
+//             Some(self.block.events.get_unchecked_mut(
+//                 // *zigzag_order().get_unchecked(self.idx - 1) as usize
+//                 *self.order.get_unchecked(self.idx - 1) as usize,
+//             ))
+//         }
+//     }
+// }
 
 impl Block {
     fn new(_block_idx_y: usize, _block_idx_x: usize, _block_idx_c: usize) -> Self {
