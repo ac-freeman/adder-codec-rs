@@ -119,10 +119,31 @@ fn regular_iter<'a>() {
     }
 }
 
+// fn regular_iter_zigzag_insert<'a>() {
+//     let mut setup = Setup::new();
+//     let mut cube = setup.cube;
+//     let mut events = setup.events_for_block_r;
+//
+//     for event in events.iter() {
+//         assert!(cube.set_event(event.clone()).is_ok());
+//     }
+//
+//     let mut out_events = Vec::new();
+//     let mut iter = cube.blocks_r[0].events.iter();
+//     for event in &cube.blocks_r[0].events[..] {
+//         out_events.push(event);
+//     }
+// }
+
 fn bench_regular_iter(c: &mut Criterion) {
     println!("IN BENCH");
     c.bench_function("regular iter", |b| b.iter(|| regular_iter()));
 }
 
-criterion_group!(block, bench_zigzag_iter, bench_regular_iter);
+criterion_group!(
+    block,
+    bench_zigzag_iter,
+    bench_regular_iter,
+    // regular_iter_zigzag_insert
+);
 criterion_main!(block);

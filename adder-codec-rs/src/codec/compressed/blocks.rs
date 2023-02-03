@@ -186,8 +186,10 @@ impl Cube {
         // debug_assert!(event.coord.c.unwrap_or(0) as usize == self.block_idx_c);
         let idx_y = event.coord.y as usize - (self.cube_idx_y / BLOCK_SIZE_BIG);
         let idx_x = event.coord.x as usize - (self.cube_idx_x / BLOCK_SIZE_BIG);
+
+        // returns the y,x index and the color channel
         (
-            idx_y * BLOCK_SIZE_BIG + idx_x,
+            unsafe { *zigzag_order().get_unchecked(idx_y * BLOCK_SIZE_BIG + idx_x) as usize },
             event.coord.c.unwrap_or(0) as usize,
         )
     }
