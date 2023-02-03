@@ -376,7 +376,6 @@ mod tests {
         for event in events.iter() {
             assert!(cube.set_event(event.clone()).is_ok());
         }
-        // let block_ref = &cube.blocks_r[0];
 
         let mut zigzag_events = Vec::new();
         let zigzag = ZigZag::new(&cube.blocks_r[0], &ZIGZAG_ORDER);

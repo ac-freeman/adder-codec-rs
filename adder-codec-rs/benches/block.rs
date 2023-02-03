@@ -120,13 +120,20 @@ fn bench_zigzag_iter(c: &mut Criterion) {
         b.iter(|| zig_zag_iter(&mut cube, events.clone(), &zigzag_order))
     });
 
+    c.bench_function("zigzag iter 2", |b| {
+        b.iter(|| zig_zag_iter2(&mut cube, events.clone()))
+    });
+}
+
+fn bench_zigzag_iter_alloc(c: &mut Criterion) {
+    println!("IN BENCH");
+    let setup = Setup::new();
+    let mut cube = setup.cube;
+    let events = setup.events_for_block_r;
+
     c.bench_function("zigzag iter with alloc", |b| {
         let zigzag_order = gen_zigzag_order();
         b.iter(|| zig_zag_iter(&mut cube, events.clone(), &zigzag_order))
-    });
-
-    c.bench_function("zigzag iter 2", |b| {
-        b.iter(|| zig_zag_iter2(&mut cube, events.clone()))
     });
 }
 
@@ -155,6 +162,6 @@ criterion_group!(
     block,
     bench_zigzag_iter,
     bench_regular_iter,
-    // regular_iter_zigzag_insert
+    bench_zigzag_iter_alloc
 );
 criterion_main!(block);
