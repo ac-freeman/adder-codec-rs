@@ -93,6 +93,11 @@ pub struct ZigZag<'a> {
     idx: usize,
 }
 
+/// Construct iterator for a `Block` with zigzag traversal. `order` is the zigzag order to use. You
+/// can use `zigzag_order()` to store the order locally on the stack, and then pass that in. That
+/// might be fastest if you're only iterating one block. If you're iterating lots of blocks (in
+/// parallel), you might find more speed by referencing the static `ZIGZAG_ORDER` array, stored on
+/// the heap.
 impl<'a> ZigZag<'a> {
     pub fn new(block: &'a Block, order: &'a [u16; BLOCK_SIZE_BIG * BLOCK_SIZE_BIG]) -> Self {
         Self {
@@ -103,7 +108,6 @@ impl<'a> ZigZag<'a> {
     }
 }
 
-/// Zig-Zag iterator for a block.
 impl<'a> Iterator for ZigZag<'a> {
     type Item = Option<&'a EventCoordless>;
 
