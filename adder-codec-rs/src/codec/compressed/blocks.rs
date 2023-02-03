@@ -87,12 +87,17 @@ mod test_zig_zag {
 
 pub struct ZigZag<'a> {
     block: &'a Block,
+    order: &'a [u16; BLOCK_SIZE_BIG * BLOCK_SIZE_BIG],
     idx: usize,
 }
 
 impl<'a> ZigZag<'a> {
-    pub fn new(block: &'a Block) -> Self {
-        Self { block, idx: 0 }
+    pub fn new(block: &'a Block, order: &'a [u16; BLOCK_SIZE_BIG * BLOCK_SIZE_BIG]) -> Self {
+        Self {
+            block,
+            order,
+            idx: 0,
+        }
     }
 }
 
@@ -105,7 +110,10 @@ impl<'a> Iterator for ZigZag<'a> {
         Some(unsafe {
             self.block
                 .events
-                .get_unchecked(*zigzag_order().get_unchecked(self.idx - 1) as usize)
+                .get_unchecked(
+                    // *zigzag_order().get_unchecked(self.idx - 1) as usize
+                    *self.order.get_unchecked(self.idx - 1) as usize,
+                )
                 .as_ref()
         })
     }
@@ -189,7 +197,8 @@ impl Cube {
 
         // returns the y,x index and the color channel
         (
-            unsafe { *zigzag_order().get_unchecked(idx_y * BLOCK_SIZE_BIG + idx_x) as usize },
+            // unsafe { *zigzag_order().get_unchecked(idx_y * BLOCK_SIZE_BIG + idx_x) as usize },
+            idx_y * BLOCK_SIZE_BIG + idx_x,
             event.coord.c.unwrap_or(0) as usize,
         )
     }
