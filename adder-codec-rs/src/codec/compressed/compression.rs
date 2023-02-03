@@ -1,5 +1,6 @@
-
-use arithmetic_coding::Model;
+use arithmetic_coding::{Encoder, Model};
+use bitstream_io::{BigEndian, BitWrite, BitWriter};
+use std::fs::File;
 use std::ops::Range;
 
 // Intra-coding a block:
@@ -14,7 +15,8 @@ use std::ops::Range;
 // Calculate what the EXPECTED delta_t is based on the previous delta_t and the NEW D.
 // Get the residual between the pixel's current delta_t and the expected delta_t. Encode that
 
-use crate::codec::compressed::fenwick::{simple::FenwickModel, ValueError};
+use crate::codec::compressed::blocks::{Block, ZigZag, ZIGZAG_ORDER};
+use crate::codec::compressed::fenwick::{context_switching::FenwickModel, ValueError};
 use crate::framer::driver::EventCoordless;
 use crate::{DeltaT, TimeMode, D};
 
@@ -30,9 +32,7 @@ impl BlockDResidualModel {
     #[must_use]
     pub fn new() -> Self {
         let alphabet: Vec<DResidual> = (-255..255).collect();
-        let fenwick_model = FenwickModel::builder(u8::MAX as usize * 2 + 1, 1 << 11)
-            .panic_on_saturation()
-            .build();
+        let fenwick_model = FenwickModel::with_symbols(u8::MAX as usize * 2 + 1, 1 << 11);
         Self {
             alphabet,
             fenwick_model,
@@ -95,10 +95,10 @@ impl BlockDeltaTResidualModel {
     #[must_use]
     pub fn new(delta_t_max: DeltaT) -> Self {
         let alphabet: Vec<DeltaTResidual> = (-(delta_t_max as i64)..delta_t_max as i64).collect();
-        let fenwick_model =
-            FenwickModel::builder(delta_t_max as usize * 2 + 1, 1 << (delta_t_max.ilog2() + 3))
-                .panic_on_saturation()
-                .build();
+        let fenwick_model = FenwickModel::with_symbols(
+            delta_t_max as usize * 2 + 1,
+            1 << (delta_t_max.ilog2() + 3),
+        );
         Self {
             alphabet,
             fenwick_model,
@@ -196,38 +196,120 @@ impl Model for BlockDeltaTResidualModel {
 /// Note: will have to work differently with delta-t vs absolute-t modes...
 /// TODO: encode all the D-vals first, then the dt values?
 /// TODO: use a more sophisticated model.
-struct BlockIntraPredictionContext {
+struct BlockIntraPredictionContextModel {
     prev_coded_event: Option<EventCoordless>,
     prediction_mode: TimeMode,
+    d_model: BlockDResidualModel,
+    delta_t_model: BlockDeltaTResidualModel,
+    // d_encoder: Option<Encoder<'a, BlockDResidualModel, BitWriter<Vec<u8>, BigEndian>>>,
+    // d_writer: BitWriter<Vec<u8>, BigEndian>,
 }
 
-// impl BlockIntraPredictionContext {
-//     fn new() -> Self {
-//         Self {
-//             prev_coded_event: None,
-//             prediction_mode: TimeMode::AbsoluteT,
-//         }
+pub const D_RESIDUAL_NO_EVENT: DResidual = DResidual::MAX;
+pub const DELTA_T_RESIDUAL_NO_EVENT: DeltaTResidual = DeltaTResidual::MAX;
+
+impl BlockIntraPredictionContextModel {
+    fn new(delta_t_max: DeltaT) -> Self {
+        let mut d_writer = BitWriter::endian(Vec::new(), BigEndian);
+        let mut ret = Self {
+            prev_coded_event: None,
+            prediction_mode: TimeMode::AbsoluteT,
+            d_model: BlockDResidualModel::new(),
+            delta_t_model: BlockDeltaTResidualModel::new(delta_t_max),
+            // d_encoder: Encoder::new(BlockDResidualModel::new(), &mut d_writer),
+            // d_encoder: None,
+            // d_writer,
+        };
+        // ret.d_encoder = Some(Encoder::new(BlockDResidualModel::new(), &mut ret.d_writer));
+
+        ret
+    }
+
+    // Encode each event in the block in zigzag order. Context looks at the previous encoded event
+    // to determine the residual.
+    fn encode_block(&mut self, block: &mut Block, file_writer: &mut BitWriter<File, BigEndian>) {
+        let mut d_writer = BitWriter::endian(Vec::new(), BigEndian);
+        let mut d_encoder = Encoder::new(self.d_model.clone(), &mut d_writer); // Todo: shouldn't clone models unless at new AVU time point, ideally...
+        let mut dt_writer = BitWriter::endian(Vec::new(), BigEndian);
+        let mut dt_encoder = Encoder::new(self.delta_t_model.clone(), &mut dt_writer);
+
+        let zigzag = ZigZag::new(block, &ZIGZAG_ORDER);
+        for event in zigzag {
+            self.encode_event(event, &mut d_encoder, &mut dt_encoder);
+        }
+
+        d_encoder.encode(None).unwrap();
+        dt_encoder.encode(None).unwrap();
+        file_writer.write_bytes(&d_writer.into_writer()).unwrap();
+        file_writer.write_bytes(&dt_writer.into_writer()).unwrap();
+    }
+
+    // Encode the prediction residual for an event based on the previous coded event
+    fn encode_event(
+        &mut self,
+        event: Option<&EventCoordless>,
+        d_encoder: &mut Encoder<BlockDResidualModel, BitWriter<Vec<u8>, BigEndian>>,
+        dt_encoder: &mut Encoder<BlockDeltaTResidualModel, BitWriter<Vec<u8>, BigEndian>>,
+    ) {
+        // If this is the first event in the block, encode it directly
+        let (d_resid, dt_resid) = match self.prev_coded_event {
+            None => match event {
+                None => (D_RESIDUAL_NO_EVENT, DELTA_T_RESIDUAL_NO_EVENT), // TODO: test this. Need to expand alphabet
+                Some(ev) => {
+                    self.prev_coded_event = Some(*ev);
+                    (ev.d as DResidual, ev.delta_t as DeltaTResidual)
+                }
+            },
+            Some(prev_event) => match event {
+                None => (D_RESIDUAL_NO_EVENT, DELTA_T_RESIDUAL_NO_EVENT),
+                Some(ev) => {
+                    let d_resid = ev.d as DResidual - prev_event.d as DResidual;
+
+                    // Get the prediction error for delta_t based on the change in D
+                    let dt_resid = ev.delta_t as DeltaTResidual
+                        - match d_resid {
+                            0 => prev_event.delta_t as DeltaTResidual,
+                            1_i16..=i16::MAX => (prev_event.delta_t << d_resid).into(),
+                            i16::MIN..=-1_i16 => (prev_event.delta_t >> -d_resid).into(),
+                        };
+
+                    self.prev_coded_event = Some(*ev);
+                    (d_resid, dt_resid)
+                }
+            },
+        };
+
+        d_encoder.encode(Some(&d_resid)).unwrap();
+        dt_encoder.encode(Some(&dt_resid)).unwrap();
+    }
+}
+
+// impl Model for BlockIntraPredictionContextModel {
+//     type Symbol = ();
+//     type ValueError = ();
+//     type B = ();
+//
+//     fn probability(
+//         &self,
+//         symbol: Option<&Self::Symbol>,
+//     ) -> Result<Range<Self::B>, Self::ValueError> {
+//         todo!()
 //     }
 //
-//     fn encode_block(&mut self, block: &mut Block) {
-//
+//     fn denominator(&self) -> Self::B {
+//         todo!()
 //     }
 //
+//     fn max_denominator(&self) -> Self::B {
+//         todo!()
 //     }
 //
-//     /// Encode the prediction residual for an event based on the previous coded event
-//     fn encode_event(&mut self, event: &EventCoordless) -> DeltaTResidual {
-//         // match self.prediction_mode {
-//         //     TimeMode::AbsoluteT => {
-//         //         let delta_t = event.t - self.prev_coded_event.unwrap().t;
-//         //         delta_t
-//         //     }
-//         //     TimeMode::DeltaT => {
-//         //         let delta_t = event.t - self.prev_coded_event.unwrap().t;
-//         //         delta_t
-//         //     }
-//         //     _ => {}
-//         // }
+//     fn symbol(&self, value: Self::B) -> Option<Self::Symbol> {
+//         todo!()
+//     }
+//
+//     fn update(&mut self, _symbol: Option<&Self::Symbol>) {
+//         todo!()
 //     }
 // }
 
@@ -269,10 +351,12 @@ mod tests {
     use arithmetic_coding::{Decoder, Encoder};
     use bitstream_io::{BigEndian, BitReader, BitWrite, BitWriter};
     use rand::Rng;
-    
+    use std::fs::File;
 
     #[test]
     fn test_i16_compression() {
+        let w = File::create("somefile").unwrap();
+        let mut bw = BitWriter::new(w);
         let model = BlockDResidualModel::new();
         let mut bitwriter = BitWriter::endian(Vec::new(), BigEndian);
         let mut encoder = Encoder::new(model.clone(), &mut bitwriter);
