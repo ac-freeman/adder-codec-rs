@@ -1,5 +1,6 @@
 use arithmetic_coding::{Encoder, Model};
 use bitstream_io::{BigEndian, BitWrite, BitWriter};
+use std::cmp::{max, min};
 use std::fs::File;
 use std::ops::Range;
 
@@ -32,7 +33,7 @@ impl BlockDResidualModel {
     #[must_use]
     pub fn new() -> Self {
         let alphabet: Vec<DResidual> = (-255..255).collect();
-        let fenwick_model = FenwickModel::with_symbols(u8::MAX as usize * 2 + 1, 1 << 11);
+        let fenwick_model = FenwickModel::with_symbols(u8::MAX as usize * 2 + 1, 1 << 20);
         Self {
             alphabet,
             fenwick_model,
@@ -97,7 +98,7 @@ impl BlockDeltaTResidualModel {
         let alphabet: Vec<DeltaTResidual> = (-(delta_t_max as i64)..delta_t_max as i64).collect();
         let fenwick_model = FenwickModel::with_symbols(
             delta_t_max as usize * 2 + 1,
-            1 << (delta_t_max.ilog2() + 3),
+            1 << (delta_t_max.ilog2() + 10),
         );
         Self {
             alphabet,
@@ -210,7 +211,6 @@ pub const DELTA_T_RESIDUAL_NO_EVENT: DeltaTResidual = DeltaTResidual::MAX;
 
 impl BlockIntraPredictionContextModel {
     fn new(delta_t_max: DeltaT) -> Self {
-        let mut d_writer = BitWriter::endian(Vec::new(), BigEndian);
         let mut ret = Self {
             prev_coded_event: None,
             prediction_mode: TimeMode::AbsoluteT,
@@ -220,14 +220,16 @@ impl BlockIntraPredictionContextModel {
             // d_encoder: None,
             // d_writer,
         };
-        // ret.d_encoder = Some(Encoder::new(BlockDResidualModel::new(), &mut ret.d_writer));
 
         ret
     }
 
     // Encode each event in the block in zigzag order. Context looks at the previous encoded event
     // to determine the residual.
-    fn encode_block(&mut self, block: &mut Block, file_writer: &mut BitWriter<File, BigEndian>) {
+    fn encode_block<'a, W>(&mut self, block: &mut Block, file_writer: &'a mut W)
+    where
+        W: BitWrite,
+    {
         let mut d_writer = BitWriter::endian(Vec::new(), BigEndian);
         let mut d_encoder = Encoder::new(self.d_model.clone(), &mut d_writer); // Todo: shouldn't clone models unless at new AVU time point, ideally...
         let mut dt_writer = BitWriter::endian(Vec::new(), BigEndian);
@@ -269,8 +271,26 @@ impl BlockIntraPredictionContextModel {
                     let dt_resid = ev.delta_t as DeltaTResidual
                         - match d_resid {
                             0 => prev_event.delta_t as DeltaTResidual,
-                            1_i16..=i16::MAX => (prev_event.delta_t << d_resid).into(),
-                            i16::MIN..=-1_i16 => (prev_event.delta_t >> -d_resid).into(),
+                            1_i16..=i16::MAX => {
+                                if d_resid as u32 <= prev_event.delta_t.leading_zeros() / 2 {
+                                    min(
+                                        (prev_event.delta_t << d_resid).into(),
+                                        self.delta_t_model.delta_t_max,
+                                    )
+                                } else {
+                                    prev_event.delta_t.into()
+                                }
+                            }
+                            i16::MIN..=-1_i16 => {
+                                if -d_resid as u32 <= 32 - prev_event.delta_t.leading_zeros() {
+                                    max(
+                                        (prev_event.delta_t >> -d_resid).into(),
+                                        prev_event.delta_t.into(),
+                                    )
+                                } else {
+                                    prev_event.delta_t.into()
+                                }
+                            }
                         };
 
                     self.prev_coded_event = Some(*ev);
@@ -345,9 +365,13 @@ impl BlockIntraPredictionContextModel {
 
 #[cfg(test)]
 mod tests {
+    use crate::codec::compressed::blocks::Cube;
     use crate::codec::compressed::compression::{
-        BlockDResidualModel, BlockDeltaTResidualModel, DResidual, DeltaTResidual,
+        BlockDResidualModel, BlockDeltaTResidualModel, BlockIntraPredictionContextModel, DResidual,
+        DeltaTResidual,
     };
+    use crate::codec::compressed::BLOCK_SIZE_BIG;
+    use crate::{Coord, Event};
     use arithmetic_coding::{Decoder, Encoder};
     use bitstream_io::{BigEndian, BitReader, BitWrite, BitWriter};
     use rand::Rng;
@@ -355,8 +379,6 @@ mod tests {
 
     #[test]
     fn test_i16_compression() {
-        let w = File::create("somefile").unwrap();
-        let mut bw = BitWriter::new(w);
         let model = BlockDResidualModel::new();
         let mut bitwriter = BitWriter::endian(Vec::new(), BigEndian);
         let mut encoder = Encoder::new(model.clone(), &mut bitwriter);
@@ -497,5 +519,93 @@ mod tests {
         let output: Vec<DeltaTResidual> = decoder.decode_all().map(Result::unwrap).collect();
         println!("{output:?}");
         assert_eq!(output, input);
+    }
+
+    struct Setup {
+        cube: Cube,
+        event: Event,
+        events_for_block_r: Vec<Event>,
+        events_for_block_g: Vec<Event>,
+        events_for_block_b: Vec<Event>,
+    }
+    impl Setup {
+        fn new() -> Self {
+            let mut rng = rand::thread_rng();
+            let mut events_for_block_r = Vec::new();
+            for y in 0..BLOCK_SIZE_BIG {
+                for x in 0..BLOCK_SIZE_BIG {
+                    events_for_block_r.push(Event {
+                        coord: Coord {
+                            y: y as u16,
+                            x: x as u16,
+                            c: Some(0),
+                        },
+
+                        d: rng.gen_range(0..20),
+                        delta_t: rng.gen_range(1..2550),
+                    });
+                }
+            }
+
+            let mut events_for_block_g = Vec::new();
+            for y in 0..BLOCK_SIZE_BIG {
+                for x in 0..BLOCK_SIZE_BIG {
+                    events_for_block_g.push(Event {
+                        coord: Coord {
+                            y: y as u16,
+                            x: x as u16,
+                            c: Some(1),
+                        },
+                        ..Default::default()
+                    });
+                }
+            }
+
+            let mut events_for_block_b = Vec::new();
+            for y in 0..BLOCK_SIZE_BIG {
+                for x in 0..BLOCK_SIZE_BIG {
+                    events_for_block_b.push(Event {
+                        coord: Coord {
+                            y: y as u16,
+                            x: x as u16,
+                            c: Some(2),
+                        },
+                        ..Default::default()
+                    });
+                }
+            }
+
+            Self {
+                cube: Cube::new(0, 0, 0),
+                event: Event {
+                    coord: Coord {
+                        x: 0,
+                        y: 0,
+                        c: Some(0),
+                    },
+                    d: 7,
+                    delta_t: 100,
+                },
+                events_for_block_r,
+                events_for_block_g,
+                events_for_block_b,
+            }
+        }
+    }
+
+    #[test]
+    fn test_encode_block() {
+        let mut context_model = BlockIntraPredictionContextModel::new(2550);
+        let setup = Setup::new();
+        let mut cube = setup.cube;
+        let events = setup.events_for_block_r;
+
+        for event in events.iter() {
+            assert!(cube.set_event(*event).is_ok());
+        }
+
+        let mut out_writer = BitWriter::endian(Vec::new(), BigEndian);
+
+        context_model.encode_block(&mut cube.blocks_r[0], &mut out_writer);
     }
 }

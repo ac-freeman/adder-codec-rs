@@ -111,6 +111,9 @@ impl<'a> Iterator for ZigZag<'a> {
 
     fn next(&mut self) -> Option<Self::Item> {
         self.idx += 1;
+        if self.idx > BLOCK_SIZE_BIG * BLOCK_SIZE_BIG {
+            return None;
+        }
         Some(unsafe {
             self.block
                 .events
@@ -232,7 +235,6 @@ mod tests {
     use crate::codec::compressed::BLOCK_SIZE_BIG;
     use crate::framer::driver::EventCoordless;
     use crate::{Coord, Event};
-    
 
     struct Setup {
         cube: Cube,
@@ -415,5 +417,12 @@ mod tests {
         let delta_t_0 = zigzag_events[BLOCK_SIZE_BIG * BLOCK_SIZE_BIG - 1].delta_t;
         let delta_t_1 = events[BLOCK_SIZE_BIG * BLOCK_SIZE_BIG - 1].delta_t;
         assert_eq!(delta_t_0, delta_t_1);
+
+        let zigzag = ZigZag::new(&cube.blocks_r[0], &ZIGZAG_ORDER);
+        let mut idx = 0;
+        for event in zigzag.into_iter() {
+            idx += 1;
+        }
+        assert_eq!(idx, BLOCK_SIZE_BIG * BLOCK_SIZE_BIG);
     }
 }
