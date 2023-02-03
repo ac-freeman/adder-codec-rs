@@ -1,4 +1,4 @@
-use crate::codec::compressed::BLOCK_SIZE_BIG;
+use crate::codec::compressed::{BLOCK_SIZE_BIG, BLOCK_SIZE_BIG_AREA};
 use crate::framer::driver::EventCoordless;
 use crate::Event;
 use thiserror::Error;
@@ -12,7 +12,7 @@ pub enum BlockError {
 // Simpler approach. Don't build a complex tree. Just group events into fixed block sizes and
 // differentially encode the D-values. Choose between a block being intra- or inter-coded.
 // With color sources, have 3 blocks at each idx. One for each color.
-pub type BlockEvents = [Option<EventCoordless>; BLOCK_SIZE_BIG * BLOCK_SIZE_BIG];
+pub type BlockEvents = [Option<EventCoordless>; BLOCK_SIZE_BIG_AREA];
 
 pub struct Block {
     /// Events organized in row-major order.
@@ -23,11 +23,11 @@ pub struct Block {
     // block_idx_c: usize,
 }
 
-pub static ZIGZAG_ORDER: [u16; BLOCK_SIZE_BIG * BLOCK_SIZE_BIG] = gen_zigzag_order();
+pub static ZIGZAG_ORDER: [u16; BLOCK_SIZE_BIG_AREA] = gen_zigzag_order();
 
 /// Compile-time function to compute the zig-zag order for traversing a block. See https://en.wikipedia.org/wiki/File:JPEG_ZigZag.svg
-pub const fn gen_zigzag_order() -> [u16; BLOCK_SIZE_BIG * BLOCK_SIZE_BIG] {
-    let mut order: [u16; BLOCK_SIZE_BIG * BLOCK_SIZE_BIG] = [0; BLOCK_SIZE_BIG * BLOCK_SIZE_BIG];
+pub const fn gen_zigzag_order() -> [u16; BLOCK_SIZE_BIG_AREA] {
+    let mut order: [u16; BLOCK_SIZE_BIG_AREA] = [0; BLOCK_SIZE_BIG_AREA];
     let mut idx = 0;
     let mut up = true;
     let (mut y, mut x) = (0, 0);
@@ -36,7 +36,7 @@ pub const fn gen_zigzag_order() -> [u16; BLOCK_SIZE_BIG * BLOCK_SIZE_BIG] {
         order[idx] = (y * BLOCK_SIZE_BIG + x) as u16;
         idx += 1;
 
-        if idx == BLOCK_SIZE_BIG * BLOCK_SIZE_BIG {
+        if idx == BLOCK_SIZE_BIG_AREA {
             break;
         }
 
@@ -68,7 +68,7 @@ pub const fn gen_zigzag_order() -> [u16; BLOCK_SIZE_BIG * BLOCK_SIZE_BIG] {
 #[cfg(test)]
 mod test_zig_zag {
     use crate::codec::compressed::blocks::gen_zigzag_order;
-    use crate::codec::compressed::BLOCK_SIZE_BIG;
+    use crate::codec::compressed::{BLOCK_SIZE_BIG, BLOCK_SIZE_BIG_AREA};
     use itertools::Itertools;
 
     #[test]
@@ -78,16 +78,13 @@ mod test_zig_zag {
         let unique: Vec<_> = order.into_iter().unique().collect();
         assert_eq!(unique.len(), order.len());
         assert_eq!(unique[0], 0);
-        assert_eq!(
-            unique[unique.len() - 1],
-            (BLOCK_SIZE_BIG * BLOCK_SIZE_BIG - 1) as u16
-        );
+        assert_eq!(unique[unique.len() - 1], (BLOCK_SIZE_BIG_AREA - 1) as u16);
     }
 }
 
 pub struct ZigZag<'a> {
     block: &'a Block,
-    order: &'a [u16; BLOCK_SIZE_BIG * BLOCK_SIZE_BIG],
+    order: &'a [u16; BLOCK_SIZE_BIG_AREA],
     idx: usize,
 }
 
@@ -97,7 +94,7 @@ pub struct ZigZag<'a> {
 /// parallel), you might find more speed by referencing the static `ZIGZAG_ORDER` array, stored on
 /// the heap.
 impl<'a> ZigZag<'a> {
-    pub fn new(block: &'a Block, order: &'a [u16; BLOCK_SIZE_BIG * BLOCK_SIZE_BIG]) -> Self {
+    pub fn new(block: &'a Block, order: &'a [u16; BLOCK_SIZE_BIG_AREA]) -> Self {
         Self {
             block,
             order,
@@ -111,7 +108,7 @@ impl<'a> Iterator for ZigZag<'a> {
 
     fn next(&mut self) -> Option<Self::Item> {
         self.idx += 1;
-        if self.idx > BLOCK_SIZE_BIG * BLOCK_SIZE_BIG {
+        if self.idx > BLOCK_SIZE_BIG_AREA {
             return None;
         }
         Some(unsafe {
@@ -129,7 +126,7 @@ impl<'a> Iterator for ZigZag<'a> {
 impl Block {
     fn new(_block_idx_y: usize, _block_idx_x: usize, _block_idx_c: usize) -> Self {
         Self {
-            events: [None; BLOCK_SIZE_BIG * BLOCK_SIZE_BIG],
+            events: [None; BLOCK_SIZE_BIG_AREA],
             // block_idx_y,
             // block_idx_x,
             // block_idx_c,
@@ -139,7 +136,7 @@ impl Block {
 
     #[inline(always)]
     fn is_filled(&self) -> bool {
-        self.fill_count == (BLOCK_SIZE_BIG * BLOCK_SIZE_BIG) as u16
+        self.fill_count == (BLOCK_SIZE_BIG_AREA) as u16
     }
 
     #[inline(always)]
@@ -165,9 +162,9 @@ pub struct Cube {
     cube_idx_c: usize,
 
     /// Keeps track of the block vec index that is currently being written to for each coordinate.
-    block_idx_map_r: [usize; BLOCK_SIZE_BIG * BLOCK_SIZE_BIG],
-    block_idx_map_g: [usize; BLOCK_SIZE_BIG * BLOCK_SIZE_BIG],
-    block_idx_map_b: [usize; BLOCK_SIZE_BIG * BLOCK_SIZE_BIG],
+    block_idx_map_r: [usize; BLOCK_SIZE_BIG_AREA],
+    block_idx_map_g: [usize; BLOCK_SIZE_BIG_AREA],
+    block_idx_map_b: [usize; BLOCK_SIZE_BIG_AREA],
 }
 
 impl Cube {
@@ -179,9 +176,9 @@ impl Cube {
             cube_idx_y,
             cube_idx_x,
             cube_idx_c,
-            block_idx_map_r: [0; BLOCK_SIZE_BIG * BLOCK_SIZE_BIG],
-            block_idx_map_g: [0; BLOCK_SIZE_BIG * BLOCK_SIZE_BIG],
-            block_idx_map_b: [0; BLOCK_SIZE_BIG * BLOCK_SIZE_BIG],
+            block_idx_map_r: [0; BLOCK_SIZE_BIG_AREA],
+            block_idx_map_g: [0; BLOCK_SIZE_BIG_AREA],
+            block_idx_map_b: [0; BLOCK_SIZE_BIG_AREA],
         }
     }
 
@@ -213,7 +210,7 @@ impl Cube {
 
 fn set_event_for_channel(
     block_vec: &mut Vec<Block>,
-    block_idx_map: &mut [usize; BLOCK_SIZE_BIG * BLOCK_SIZE_BIG],
+    block_idx_map: &mut [usize; BLOCK_SIZE_BIG_AREA],
     event: Event,
     idx: usize,
 ) -> Result<(), BlockError> {
@@ -232,7 +229,7 @@ fn set_event_for_channel(
 #[cfg(test)]
 mod tests {
     use crate::codec::compressed::blocks::{Cube, ZigZag, ZIGZAG_ORDER};
-    use crate::codec::compressed::BLOCK_SIZE_BIG;
+    use crate::codec::compressed::{BLOCK_SIZE_BIG, BLOCK_SIZE_BIG_AREA};
     use crate::framer::driver::EventCoordless;
     use crate::{Coord, Event};
 
@@ -335,10 +332,7 @@ mod tests {
             assert!(cube.set_event(*event).is_ok());
         }
         assert_eq!(cube.block_idx_map_r[0], 1);
-        assert_eq!(
-            cube.blocks_r[0].fill_count as usize,
-            BLOCK_SIZE_BIG * BLOCK_SIZE_BIG
-        );
+        assert_eq!(cube.blocks_r[0].fill_count as usize, BLOCK_SIZE_BIG_AREA);
 
         assert!(cube.blocks_r[0].is_filled());
         assert!(!cube.blocks_g[0].is_filled());
@@ -399,7 +393,7 @@ mod tests {
         let events = setup.events_for_block_r;
 
         let zigzag_events = zig_zag_iter(&mut cube, events.clone());
-        assert_eq!(zigzag_events.len(), BLOCK_SIZE_BIG * BLOCK_SIZE_BIG);
+        assert_eq!(zigzag_events.len(), BLOCK_SIZE_BIG_AREA);
         assert_eq!(zigzag_events[0].d, events[0].d);
         let delta_t_0 = zigzag_events[0].delta_t;
         let delta_t_1 = events[0].delta_t;
@@ -411,11 +405,11 @@ mod tests {
         assert_eq!(delta_t_0, delta_t_1);
 
         assert_eq!(
-            zigzag_events[BLOCK_SIZE_BIG * BLOCK_SIZE_BIG - 1].d,
-            events[BLOCK_SIZE_BIG * BLOCK_SIZE_BIG - 1].d
+            zigzag_events[BLOCK_SIZE_BIG_AREA - 1].d,
+            events[BLOCK_SIZE_BIG_AREA - 1].d
         );
-        let delta_t_0 = zigzag_events[BLOCK_SIZE_BIG * BLOCK_SIZE_BIG - 1].delta_t;
-        let delta_t_1 = events[BLOCK_SIZE_BIG * BLOCK_SIZE_BIG - 1].delta_t;
+        let delta_t_0 = zigzag_events[BLOCK_SIZE_BIG_AREA - 1].delta_t;
+        let delta_t_1 = events[BLOCK_SIZE_BIG_AREA - 1].delta_t;
         assert_eq!(delta_t_0, delta_t_1);
 
         let zigzag = ZigZag::new(&cube.blocks_r[0], &ZIGZAG_ORDER);
@@ -423,6 +417,6 @@ mod tests {
         for event in zigzag.into_iter() {
             idx += 1;
         }
-        assert_eq!(idx, BLOCK_SIZE_BIG * BLOCK_SIZE_BIG);
+        assert_eq!(idx, BLOCK_SIZE_BIG_AREA);
     }
 }

@@ -73,11 +73,7 @@ impl Setup {
     }
 }
 
-fn zig_zag_iter(
-    cube: &mut Cube,
-    events: Vec<Event>,
-    order: &[u16; BLOCK_SIZE_BIG * BLOCK_SIZE_BIG],
-) {
+fn zig_zag_iter(cube: &mut Cube, events: Vec<Event>, order: &[u16; BLOCK_SIZE_BIG_AREA]) {
     for event in events.iter() {
         assert!(cube.set_event(*event).is_ok());
     }

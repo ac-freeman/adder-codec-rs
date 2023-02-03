@@ -1,5 +1,5 @@
-use arithmetic_coding::{Encoder, Model};
-use bitstream_io::{BigEndian, BitWrite, BitWriter};
+use arithmetic_coding::{Decoder, Encoder, Model};
+use bitstream_io::{BigEndian, BitRead, BitReader, BitWrite, BitWriter};
 use std::cmp::{max, min};
 use std::fs::File;
 use std::ops::Range;
@@ -18,6 +18,7 @@ use std::ops::Range;
 
 use crate::codec::compressed::blocks::{Block, ZigZag, ZIGZAG_ORDER};
 use crate::codec::compressed::fenwick::{context_switching::FenwickModel, ValueError};
+use crate::codec::compressed::{BLOCK_SIZE_BIG, BLOCK_SIZE_BIG_AREA};
 use crate::framer::driver::EventCoordless;
 use crate::{DeltaT, TimeMode, D};
 
@@ -240,9 +241,18 @@ impl BlockIntraPredictionContextModel {
             self.encode_event(event, &mut d_encoder, &mut dt_encoder);
         }
 
-        d_encoder.encode(None).unwrap();
-        dt_encoder.encode(None).unwrap();
-        file_writer.write_bytes(&d_writer.into_writer()).unwrap();
+        d_encoder.flush().unwrap();
+        d_writer.byte_align().unwrap();
+        dt_encoder.flush().unwrap();
+        dt_writer.byte_align().unwrap();
+
+        let d = d_writer.into_writer();
+        /* The compressed length of the d residuals
+        should always be representable in 2 bytes. Write that signifier as a u16.
+         */
+        let d_len_bytes = (d.len() as u16).to_be_bytes();
+        file_writer.write_bytes(&d_len_bytes).unwrap();
+        file_writer.write_bytes(&d).unwrap();
         file_writer.write_bytes(&dt_writer.into_writer()).unwrap();
     }
 
@@ -301,6 +311,21 @@ impl BlockIntraPredictionContextModel {
 
         d_encoder.encode(Some(&d_resid)).unwrap();
         dt_encoder.encode(Some(&dt_resid)).unwrap();
+    }
+
+    /// TODO
+    /// Takes in a char array so we can slice it into the d and delta_t residual streams
+    fn decode_block(&mut self, block: &mut Block, input: &[u8]) {
+        // First, read the u16 to see how many bytes the d residuals are
+        let d_len = u16::from_be_bytes([input[0], input[1]]);
+
+        // Set up the d decoder
+        let bitreader = BitReader::endian(&input[2..], BigEndian);
+        let mut d_decoder = Decoder::new(self.d_model.clone(), bitreader);
+
+        // Set up the delta_t decoder
+        let bitreader = BitReader::endian(&input[2 + d_len as usize..], BigEndian);
+        let mut dt_decoder = Decoder::new(self.delta_t_model.clone(), bitreader);
     }
 }
 
@@ -370,7 +395,7 @@ mod tests {
         BlockDResidualModel, BlockDeltaTResidualModel, BlockIntraPredictionContextModel, DResidual,
         DeltaTResidual,
     };
-    use crate::codec::compressed::BLOCK_SIZE_BIG;
+    use crate::codec::compressed::{BLOCK_SIZE_BIG, BLOCK_SIZE_BIG_AREA};
     use crate::{Coord, Event};
     use arithmetic_coding::{Decoder, Encoder};
     use bitstream_io::{BigEndian, BitReader, BitWrite, BitWriter};
@@ -609,7 +634,30 @@ mod tests {
         context_model.encode_block(&mut cube.blocks_r[0], &mut out_writer);
 
         let len = out_writer.into_writer().len();
-        assert!(len < BLOCK_SIZE_BIG * BLOCK_SIZE_BIG * 5); // 5 bytes per raw event when just encoding D and Dt
+        assert!(len < BLOCK_SIZE_BIG_AREA * 5); // 5 bytes per raw event when just encoding D and Dt
+        println!("{len}");
+    }
+
+    #[test]
+    fn test_encode_empty_event() {
+        let mut context_model = BlockIntraPredictionContextModel::new(2550);
+        let setup = Setup::new();
+        let mut cube = setup.cube;
+        let events = setup.events_for_block_r;
+
+        for event in events.iter() {
+            assert!(cube.set_event(*event).is_ok());
+        }
+
+        // Set the first event to None
+        cube.blocks_r[0].events[0] = None;
+
+        let mut out_writer = BitWriter::endian(Vec::new(), BigEndian);
+
+        context_model.encode_block(&mut cube.blocks_r[0], &mut out_writer);
+
+        let len = out_writer.into_writer().len();
+        assert!(len < BLOCK_SIZE_BIG_AREA * 5); // 5 bytes per raw event when just encoding D and Dt
         println!("{len}");
     }
 }

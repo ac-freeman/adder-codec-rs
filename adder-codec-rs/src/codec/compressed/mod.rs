@@ -34,3 +34,5 @@ fn _void() {
 
 // const BLOCK_SIZE: usize = 16;
 pub const BLOCK_SIZE_BIG: usize = 64;
+
+pub const BLOCK_SIZE_BIG_AREA: usize = BLOCK_SIZE_BIG * BLOCK_SIZE_BIG;
