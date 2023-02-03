@@ -607,5 +607,9 @@ mod tests {
         let mut out_writer = BitWriter::endian(Vec::new(), BigEndian);
 
         context_model.encode_block(&mut cube.blocks_r[0], &mut out_writer);
+
+        let len = out_writer.into_writer().len();
+        assert!(len < BLOCK_SIZE_BIG * BLOCK_SIZE_BIG * 5); // 5 bytes per raw event when just encoding D and Dt
+        println!("{len}");
     }
 }
