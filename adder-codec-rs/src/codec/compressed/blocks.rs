@@ -102,7 +102,12 @@ impl<'a> Iterator for ZigZag<'a> {
 
     fn next(&mut self) -> Option<Self::Item> {
         self.idx += 1;
-        Some(self.block.events[zigzag_order()[self.idx - 1] as usize].as_ref())
+        Some(unsafe {
+            self.block
+                .events
+                .get_unchecked(*zigzag_order().get_unchecked(self.idx - 1) as usize)
+                .as_ref()
+        })
     }
 }
 
