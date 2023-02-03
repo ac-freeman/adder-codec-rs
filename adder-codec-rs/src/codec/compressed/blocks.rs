@@ -23,8 +23,10 @@ pub struct Block {
     // block_idx_c: usize,
 }
 
+pub static ZIGZAG_ORDER: [u16; BLOCK_SIZE_BIG * BLOCK_SIZE_BIG] = gen_zigzag_order();
+
 /// Compile-time function to compute the zig-zag order for traversing a block. See https://en.wikipedia.org/wiki/File:JPEG_ZigZag.svg
-pub const fn zigzag_order() -> [u16; BLOCK_SIZE_BIG * BLOCK_SIZE_BIG] {
+pub const fn gen_zigzag_order() -> [u16; BLOCK_SIZE_BIG * BLOCK_SIZE_BIG] {
     let mut order: [u16; BLOCK_SIZE_BIG * BLOCK_SIZE_BIG] = [0; BLOCK_SIZE_BIG * BLOCK_SIZE_BIG];
     let mut idx = 0;
     let mut up = true;
