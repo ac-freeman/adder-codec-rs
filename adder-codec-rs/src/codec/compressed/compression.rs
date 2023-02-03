@@ -266,10 +266,10 @@ mod tests {
     use crate::codec::compressed::compression::{
         BlockDResidualModel, BlockDeltaTResidualModel, DResidual, DeltaTResidual,
     };
-    use arithmetic_coding::{Decoder, Encoder, Model};
+    use arithmetic_coding::{Decoder, Encoder};
     use bitstream_io::{BigEndian, BitReader, BitWrite, BitWriter};
     use rand::Rng;
-    use std::io::Read;
+    
 
     #[test]
     fn test_i16_compression() {
@@ -303,7 +303,7 @@ mod tests {
         let bitreader = BitReader::endian(buff, BigEndian);
         let mut decoder = Decoder::new(model, bitreader);
         let output: Vec<DResidual> = decoder.decode_all().map(Result::unwrap).collect();
-        println!("{:?}", output);
+        println!("{output:?}");
         assert_eq!(output, input);
     }
 
@@ -373,7 +373,7 @@ mod tests {
         let bitreader = BitReader::endian(buff, BigEndian);
         let mut decoder = Decoder::new(model, bitreader);
         let output: Vec<DeltaTResidual> = decoder.decode_all().map(Result::unwrap).collect();
-        println!("{:?}", output);
+        println!("{output:?}");
         assert_eq!(output, input);
     }
 
@@ -411,7 +411,7 @@ mod tests {
         let bitreader = BitReader::endian(buff, BigEndian);
         let mut decoder = Decoder::new(model, bitreader);
         let output: Vec<DeltaTResidual> = decoder.decode_all().map(Result::unwrap).collect();
-        println!("{:?}", output);
+        println!("{output:?}");
         assert_eq!(output, input);
     }
 }

@@ -285,7 +285,7 @@ impl AdderPlayer {
                     match stream.set_input_stream_position(stream.header_size as u64) {
                         Ok(_) => {}
                         Err(ee) => {
-                            eprintln!("{}", ee)
+                            eprintln!("{ee}")
                         }
                     };
                     self.frame_sequence =
@@ -340,7 +340,7 @@ impl AdderPlayer {
                         }
                     }
                     None => {
-                        println!("Couldn't pop chunk {}!", chunk_num)
+                        println!("Couldn't pop chunk {chunk_num}!")
                     }
                 }
             }

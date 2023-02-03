@@ -279,7 +279,7 @@ fn consume_source(
             if e.is::<std::sync::mpsc::TryRecvError>() {
                 main_ui_state.error_msg = Some("Loading file...".to_string());
             } else {
-                main_ui_state.error_msg = Some(format!("{}", e));
+                main_ui_state.error_msg = Some(format!("{e}"));
             }
         }
     }

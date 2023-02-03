@@ -133,7 +133,7 @@ impl AdderTranscoder {
                             .to_str()
                             .expect("Bad filename")
                             .to_string();
-                        eprintln!("{}", filename);
+                        eprintln!("{filename}");
                         let reconstructor = rt.block_on(Reconstructor::new(
                             dir + "/",
                             filename,

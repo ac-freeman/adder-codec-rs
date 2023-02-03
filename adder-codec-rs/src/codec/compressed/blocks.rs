@@ -232,7 +232,7 @@ mod tests {
     use crate::codec::compressed::BLOCK_SIZE_BIG;
     use crate::framer::driver::EventCoordless;
     use crate::{Coord, Event};
-    use itertools::Itertools;
+    
 
     struct Setup {
         cube: Cube,
@@ -313,9 +313,9 @@ mod tests {
 
     #[test]
     fn test_set_event() {
-        let mut setup = Setup::new();
+        let setup = Setup::new();
         let mut cube = setup.cube;
-        let mut event = setup.event;
+        let event = setup.event;
 
         assert!(cube.set_event(event).is_ok());
         assert_eq!(cube.block_idx_map_r[0], 1);
@@ -325,12 +325,12 @@ mod tests {
 
     #[test]
     fn test_set_many_events() {
-        let mut setup = Setup::new();
+        let setup = Setup::new();
         let mut cube = setup.cube;
-        let mut events = setup.events_for_block_r;
+        let events = setup.events_for_block_r;
 
         for event in events.iter() {
-            assert!(cube.set_event(event.clone()).is_ok());
+            assert!(cube.set_event(*event).is_ok());
         }
         assert_eq!(cube.block_idx_map_r[0], 1);
         assert_eq!(
@@ -342,19 +342,19 @@ mod tests {
         assert!(!cube.blocks_g[0].is_filled());
         assert!(!cube.blocks_b[0].is_filled());
 
-        let mut events = setup.events_for_block_g;
+        let events = setup.events_for_block_g;
 
         for event in events.iter() {
-            assert!(cube.set_event(event.clone()).is_ok());
+            assert!(cube.set_event(*event).is_ok());
         }
         assert!(cube.blocks_r[0].is_filled());
         assert!(cube.blocks_g[0].is_filled());
         assert!(!cube.blocks_b[0].is_filled());
 
-        let mut events = setup.events_for_block_b;
+        let events = setup.events_for_block_b;
 
         for event in events.iter() {
-            assert!(cube.set_event(event.clone()).is_ok());
+            assert!(cube.set_event(*event).is_ok());
         }
 
         assert!(cube.blocks_r[0].is_filled());
@@ -372,22 +372,22 @@ mod tests {
         assert_eq!(cube.blocks_b.len(), 1);
     }
 
-    fn zig_zag_iter<'a>(cube: &'a mut Cube, events: Vec<Event>) -> (Vec<&'a EventCoordless>) {
+    fn zig_zag_iter<'a>(cube: &'a mut Cube, events: Vec<Event>) -> Vec<&'a EventCoordless> {
         for event in events.iter() {
-            assert!(cube.set_event(event.clone()).is_ok());
+            assert!(cube.set_event(*event).is_ok());
         }
 
         let mut zigzag_events = Vec::new();
         let zigzag = ZigZag::new(&cube.blocks_r[0], &ZIGZAG_ORDER);
-        let mut iter = zigzag.into_iter();
-        for y in 0..BLOCK_SIZE_BIG {
-            for x in 0..BLOCK_SIZE_BIG {
+        let mut iter = zigzag;
+        for _y in 0..BLOCK_SIZE_BIG {
+            for _x in 0..BLOCK_SIZE_BIG {
                 let event = iter.next().unwrap().unwrap();
                 zigzag_events.push(event);
             }
         }
 
-        (zigzag_events)
+        zigzag_events
     }
 
     #[test]
@@ -396,7 +396,7 @@ mod tests {
         let mut cube = setup.cube;
         let events = setup.events_for_block_r;
 
-        let (zigzag_events) = zig_zag_iter(&mut cube, events.clone());
+        let zigzag_events = zig_zag_iter(&mut cube, events.clone());
         assert_eq!(zigzag_events.len(), BLOCK_SIZE_BIG * BLOCK_SIZE_BIG);
         assert_eq!(zigzag_events[0].d, events[0].d);
         let delta_t_0 = zigzag_events[0].delta_t;

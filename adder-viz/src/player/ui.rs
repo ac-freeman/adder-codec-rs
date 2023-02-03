@@ -388,5 +388,5 @@ fn _to_string(duration: Duration) -> String {
     let mins = (duration.as_secs() % 3600) / 60;
     let secs = duration.as_secs() % 60;
     let nanos = duration.subsec_nanos();
-    format!("{}:{}:{}.{:09}", hours, mins, secs, nanos)
+    format!("{hours}:{mins}:{secs}.{nanos:09}")
 }
