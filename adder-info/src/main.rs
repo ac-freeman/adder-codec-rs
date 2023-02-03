@@ -56,10 +56,10 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     )?;
     writeln!(handle, "\tΔt_max: {}", stream.delta_t_max)?;
     writeln!(handle, "File metadata")?;
-    writeln!(handle, "\tFile size: {}", file_size)?;
-    writeln!(handle, "\tHeader size: {}", header_bytes)?;
-    writeln!(handle, "\tADΔER event count: {}", num_events)?;
-    writeln!(handle, "\tEvents per pixel channel: {}", events_per_px)?;
+    writeln!(handle, "\tFile size: {file_size}")?;
+    writeln!(handle, "\tHeader size: {header_bytes}")?;
+    writeln!(handle, "\tADΔER event count: {num_events}")?;
+    writeln!(handle, "\tEvents per pixel channel: {events_per_px}")?;
     handle.flush()?;
 
     // Calculate the dynamic range of the events. That is, what is the highest intensity
@@ -135,15 +135,15 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         let theory_dr_bits = theory_dr_ratio.log2();
         writeln!(handle, "\rDynamic range                       ")?;
         writeln!(handle, "\tTheoretical range:")?;
-        writeln!(handle, "\t\t{:.4} dB (power)", theory_dr_db)?;
-        writeln!(handle, "\t\t{:.4} bits", theory_dr_bits)?;
+        writeln!(handle, "\t\t{theory_dr_db:.4} dB (power)")?;
+        writeln!(handle, "\t\t{theory_dr_bits:.4} bits")?;
 
         let real_dr_ratio = max_intensity / min_intensity;
         let real_dr_db = 10.0 * real_dr_ratio.log10();
         let real_dr_bits = real_dr_ratio.log2();
         writeln!(handle, "\tRealized range:")?;
-        writeln!(handle, "\t\t{:.4} dB (power)", real_dr_db)?;
-        writeln!(handle, "\t\t{:.4} bits", real_dr_bits)?;
+        writeln!(handle, "\t\t{real_dr_db:.4} dB (power)")?;
+        writeln!(handle, "\t\t{real_dr_bits:.4} bits")?;
     }
 
     handle.flush()?;

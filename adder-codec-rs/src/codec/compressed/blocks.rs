@@ -51,17 +51,15 @@ pub const fn gen_zigzag_order() -> [u16; BLOCK_SIZE_BIG * BLOCK_SIZE_BIG] {
                 x += 1;
                 y -= 1;
             }
+        } else if y == BLOCK_SIZE_BIG - 1 {
+            x += 1;
+            up = true;
+        } else if x == 0 {
+            y += 1;
+            up = true;
         } else {
-            if y == BLOCK_SIZE_BIG - 1 {
-                x += 1;
-                up = true;
-            } else if x == 0 {
-                y += 1;
-                up = true;
-            } else {
-                x -= 1;
-                y += 1;
-            }
+            x -= 1;
+            y += 1;
         }
     }
     order
@@ -69,13 +67,13 @@ pub const fn gen_zigzag_order() -> [u16; BLOCK_SIZE_BIG * BLOCK_SIZE_BIG] {
 
 #[cfg(test)]
 mod test_zig_zag {
+    use crate::codec::compressed::blocks::gen_zigzag_order;
     use crate::codec::compressed::BLOCK_SIZE_BIG;
     use itertools::Itertools;
 
     #[test]
     fn test_zig_zag() {
-        use super::zigzag_order;
-        let mut order = zigzag_order();
+        let mut order = gen_zigzag_order();
         order.sort_unstable();
         let unique: Vec<_> = order.into_iter().unique().collect();
         assert_eq!(unique.len(), order.len());
@@ -126,7 +124,7 @@ impl<'a> Iterator for ZigZag<'a> {
 }
 
 impl Block {
-    fn new(block_idx_y: usize, block_idx_x: usize, block_idx_c: usize) -> Self {
+    fn new(_block_idx_y: usize, _block_idx_x: usize, _block_idx_c: usize) -> Self {
         Self {
             events: [None; BLOCK_SIZE_BIG * BLOCK_SIZE_BIG],
             // block_idx_y,
@@ -144,7 +142,7 @@ impl Block {
     #[inline(always)]
     fn set_event(&mut self, event: &Event, idx: usize) -> Result<(), BlockError> {
         match self.events[idx] {
-            Some(ref mut e) => return Err(BlockError::AlreadyExists { idx }),
+            Some(ref mut _e) => return Err(BlockError::AlreadyExists { idx }),
             None => {
                 self.events[idx] = Some(EventCoordless::from(*event));
                 self.fill_count += 1;
@@ -230,12 +228,10 @@ fn set_event_for_channel(
 
 #[cfg(test)]
 mod tests {
-    use crate::codec::compressed::blocks::{Block, Cube, ZigZag};
+    use crate::codec::compressed::blocks::{Cube, ZigZag, ZIGZAG_ORDER};
     use crate::codec::compressed::BLOCK_SIZE_BIG;
     use crate::framer::driver::EventCoordless;
     use crate::{Coord, Event};
-    use criterion::Bencher;
-    use criterion::{black_box, criterion_group, criterion_main, Criterion};
     use itertools::Itertools;
 
     struct Setup {
@@ -383,7 +379,7 @@ mod tests {
         // let block_ref = &cube.blocks_r[0];
 
         let mut zigzag_events = Vec::new();
-        let zigzag = ZigZag::new(&cube.blocks_r[0]);
+        let zigzag = ZigZag::new(&cube.blocks_r[0], &ZIGZAG_ORDER);
         let mut iter = zigzag.into_iter();
         for y in 0..BLOCK_SIZE_BIG {
             for x in 0..BLOCK_SIZE_BIG {
@@ -397,9 +393,9 @@ mod tests {
 
     #[test]
     fn test_zigzag_iter() {
-        let mut setup = Setup::new();
+        let setup = Setup::new();
         let mut cube = setup.cube;
-        let mut events = setup.events_for_block_r;
+        let events = setup.events_for_block_r;
 
         let (zigzag_events) = zig_zag_iter(&mut cube, events.clone());
         assert_eq!(zigzag_events.len(), BLOCK_SIZE_BIG * BLOCK_SIZE_BIG);

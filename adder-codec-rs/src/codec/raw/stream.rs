@@ -43,7 +43,7 @@ pub enum Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         // write!(f, "Stream error")
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }
 
@@ -173,7 +173,7 @@ impl Codec for Raw {
 
     fn set_input_stream_position(&mut self, pos: u64) -> Result<(), Error> {
         if (pos - self.header_size as u64) % u64::from(self.event_size) != 0 {
-            eprintln!("Attempted to seek to bad position in stream: {}", pos);
+            eprintln!("Attempted to seek to bad position in stream: {pos}");
             return Err(Error::Seek);
         }
         match &mut self.input_stream {

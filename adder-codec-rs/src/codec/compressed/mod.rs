@@ -2,12 +2,7 @@ pub mod blocks;
 mod compression;
 mod fenwick;
 
-use crate::framer::driver::EventCoordless;
-use crate::{DeltaT, Event, D};
 use bitvec::prelude::*;
-use bitvec::slice::Iter;
-use ndarray::Array2;
-use std::iter::Enumerate;
 
 /// Sketch of idea for compressed AVU format
 ///
@@ -33,9 +28,9 @@ use std::iter::Enumerate;
 /// pixels have different D values (0000). We then bubble up to 64x64 block and look at the BR block
 /// (1101)... and so on.
 ///
-fn void() {
-    let mut bv = bitvec![u8, Msb0;];
+fn _void() {
+    let _bv = bitvec![u8, Msb0;];
 }
 
-const BLOCK_SIZE: usize = 16;
+// const BLOCK_SIZE: usize = 16;
 pub const BLOCK_SIZE_BIG: usize = 64;

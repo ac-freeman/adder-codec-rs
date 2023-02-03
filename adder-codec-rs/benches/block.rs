@@ -1,11 +1,8 @@
 use adder_codec_rs::codec::compressed::blocks::{gen_zigzag_order, Cube, ZigZag, ZIGZAG_ORDER};
 use adder_codec_rs::codec::compressed::BLOCK_SIZE_BIG;
-use adder_codec_rs::framer::driver::EventCoordless;
+
 use adder_codec_rs::{Coord, Event};
-use criterion::{criterion_group, criterion_main, Bencher, BenchmarkId, Criterion};
-use criterion_perf_events::Perf;
-use perfcnt::linux::HardwareEventType as Hardware;
-use perfcnt::linux::PerfCounterBuilderLinux as Builder;
+use criterion::{criterion_group, criterion_main, Criterion};
 
 struct Setup {
     cube: Cube,
@@ -82,14 +79,14 @@ fn zig_zag_iter(
     order: &[u16; BLOCK_SIZE_BIG * BLOCK_SIZE_BIG],
 ) {
     for event in events.iter() {
-        assert!(cube.set_event(event.clone()).is_ok());
+        assert!(cube.set_event(*event).is_ok());
     }
 
     let mut zigzag_events = Vec::new();
     let zigzag = ZigZag::new(&cube.blocks_r[0], order);
-    let mut iter = zigzag.into_iter();
-    for y in 0..BLOCK_SIZE_BIG {
-        for x in 0..BLOCK_SIZE_BIG {
+    let mut iter = zigzag;
+    for _y in 0..BLOCK_SIZE_BIG {
+        for _x in 0..BLOCK_SIZE_BIG {
             let event = iter.next().unwrap().unwrap();
             zigzag_events.push(event);
         }
@@ -98,14 +95,14 @@ fn zig_zag_iter(
 
 fn zig_zag_iter2(cube: &mut Cube, events: Vec<Event>) {
     for event in events.iter() {
-        assert!(cube.set_event(event.clone()).is_ok());
+        assert!(cube.set_event(*event).is_ok());
     }
 
     let mut zigzag_events = Vec::new();
     let zigzag = ZigZag::new(&cube.blocks_r[0], &ZIGZAG_ORDER);
-    let mut iter = zigzag.into_iter();
-    for y in 0..BLOCK_SIZE_BIG {
-        for x in 0..BLOCK_SIZE_BIG {
+    let mut iter = zigzag;
+    for _y in 0..BLOCK_SIZE_BIG {
+        for _x in 0..BLOCK_SIZE_BIG {
             let event = iter.next().unwrap().unwrap();
             zigzag_events.push(event);
         }
@@ -114,12 +111,17 @@ fn zig_zag_iter2(cube: &mut Cube, events: Vec<Event>) {
 
 fn bench_zigzag_iter(c: &mut Criterion) {
     println!("IN BENCH");
-    let mut setup = Setup::new();
+    let setup = Setup::new();
     let mut cube = setup.cube;
-    let mut events = setup.events_for_block_r;
+    let events = setup.events_for_block_r;
     let zigzag_order = gen_zigzag_order();
 
     c.bench_function("zigzag iter", |b| {
+        b.iter(|| zig_zag_iter(&mut cube, events.clone(), &zigzag_order))
+    });
+
+    c.bench_function("zigzag iter with alloc", |b| {
+        let zigzag_order = gen_zigzag_order();
         b.iter(|| zig_zag_iter(&mut cube, events.clone(), &zigzag_order))
     });
 
@@ -129,16 +131,16 @@ fn bench_zigzag_iter(c: &mut Criterion) {
 }
 
 fn regular_iter<'a>() {
-    let mut setup = Setup::new();
+    let setup = Setup::new();
     let mut cube = setup.cube;
-    let mut events = setup.events_for_block_r;
+    let events = setup.events_for_block_r;
 
     for event in events.iter() {
-        assert!(cube.set_event(event.clone()).is_ok());
+        assert!(cube.set_event(*event).is_ok());
     }
 
     let mut out_events = Vec::new();
-    let mut iter = cube.blocks_r[0].events.iter();
+    let _iter = cube.blocks_r[0].events.iter();
     for event in &cube.blocks_r[0].events[..] {
         out_events.push(event);
     }
@@ -146,7 +148,7 @@ fn regular_iter<'a>() {
 
 fn bench_regular_iter(c: &mut Criterion) {
     println!("IN BENCH");
-    c.bench_function("regular iter", |b| b.iter(|| regular_iter()));
+    c.bench_function("regular iter", |b| b.iter(regular_iter));
 }
 
 criterion_group!(

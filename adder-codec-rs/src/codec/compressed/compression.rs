@@ -1,4 +1,4 @@
-use crate::codec::compressed::blocks::Block;
+
 use arithmetic_coding::Model;
 use std::ops::Range;
 
@@ -16,7 +16,7 @@ use std::ops::Range;
 
 use crate::codec::compressed::fenwick::{simple::FenwickModel, ValueError};
 use crate::framer::driver::EventCoordless;
-use crate::{DeltaT, Event, TimeMode, D};
+use crate::{DeltaT, TimeMode, D};
 
 #[derive(Clone)]
 pub struct BlockDResidualModel {
