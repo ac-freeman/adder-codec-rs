@@ -76,15 +76,14 @@ impl Setup {
     }
 }
 
-fn zig_zag_iter<'a>(
-    cube: &'a mut Cube,
+fn zig_zag_iter(
+    cube: &mut Cube,
     events: Vec<Event>,
     order: &[u16; BLOCK_SIZE_BIG * BLOCK_SIZE_BIG],
 ) {
     for event in events.iter() {
         assert!(cube.set_event(event.clone()).is_ok());
     }
-    // let block_ref = &cube.blocks_r[0];
 
     let mut zigzag_events = Vec::new();
     let zigzag = ZigZag::new(&cube.blocks_r[0], order);
@@ -97,11 +96,10 @@ fn zig_zag_iter<'a>(
     }
 }
 
-fn zig_zag_iter2<'a>(cube: &'a mut Cube, events: Vec<Event>) {
+fn zig_zag_iter2(cube: &mut Cube, events: Vec<Event>) {
     for event in events.iter() {
         assert!(cube.set_event(event.clone()).is_ok());
     }
-    // let block_ref = &cube.blocks_r[0];
 
     let mut zigzag_events = Vec::new();
     let zigzag = ZigZag::new(&cube.blocks_r[0], &ZIGZAG_ORDER);
@@ -126,7 +124,7 @@ fn bench_zigzag_iter(c: &mut Criterion) {
     });
 
     c.bench_function("zigzag iter 2", |b| {
-        b.iter(|| zig_zag_iter(&mut cube, events.clone(), &zigzag_order))
+        b.iter(|| zig_zag_iter2(&mut cube, events.clone()))
     });
 }
 
