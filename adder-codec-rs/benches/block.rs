@@ -76,7 +76,7 @@ impl Setup {
     }
 }
 
-fn zig_zag_iter<'a>(cube: &'a mut Cube, events: Vec<Event>) -> (Vec<&'a EventCoordless>) {
+fn zig_zag_iter<'a>(cube: &'a mut Cube, events: Vec<Event>) {
     for event in events.iter() {
         assert!(cube.set_event(event.clone()).is_ok());
     }
@@ -91,8 +91,6 @@ fn zig_zag_iter<'a>(cube: &'a mut Cube, events: Vec<Event>) -> (Vec<&'a EventCoo
             zigzag_events.push(event);
         }
     }
-
-    (zigzag_events)
 }
 fn bench_zigzag_iter(c: &mut Criterion) {
     println!("IN BENCH");
@@ -101,7 +99,7 @@ fn bench_zigzag_iter(c: &mut Criterion) {
     let mut events = setup.events_for_block_r;
 
     c.bench_function("zigzag iter", |b| {
-        b.iter(|| drop(zig_zag_iter(&mut cube, events.clone())))
+        b.iter(|| zig_zag_iter(&mut cube, events.clone()))
     });
 }
 
