@@ -16,7 +16,7 @@ pub type BlockEvents = [Option<EventCoordless>; BLOCK_SIZE_BIG * BLOCK_SIZE_BIG]
 
 pub struct Block {
     /// Events organized in row-major order.
-    events: BlockEvents,
+    pub events: BlockEvents,
     fill_count: u16,
     // block_idx_y: usize,
     // block_idx_x: usize,
@@ -24,14 +24,14 @@ pub struct Block {
 }
 
 /// Compile-time function to compute the zig-zag order for traversing a block. See https://en.wikipedia.org/wiki/File:JPEG_ZigZag.svg
-pub const fn zigzag_order() -> [usize; BLOCK_SIZE_BIG * BLOCK_SIZE_BIG] {
-    let mut order = [0; BLOCK_SIZE_BIG * BLOCK_SIZE_BIG];
+pub const fn zigzag_order() -> [u16; BLOCK_SIZE_BIG * BLOCK_SIZE_BIG] {
+    let mut order: [u16; BLOCK_SIZE_BIG * BLOCK_SIZE_BIG] = [0; BLOCK_SIZE_BIG * BLOCK_SIZE_BIG];
     let mut idx = 0;
     let mut up = true;
     let (mut y, mut x) = (0, 0);
 
     loop {
-        order[idx] = y * BLOCK_SIZE_BIG + x;
+        order[idx] = (y * BLOCK_SIZE_BIG + x) as u16;
         idx += 1;
 
         if idx == BLOCK_SIZE_BIG * BLOCK_SIZE_BIG {
@@ -80,7 +80,7 @@ mod test_zig_zag {
         assert_eq!(unique[0], 0);
         assert_eq!(
             unique[unique.len() - 1],
-            BLOCK_SIZE_BIG * BLOCK_SIZE_BIG - 1
+            (BLOCK_SIZE_BIG * BLOCK_SIZE_BIG - 1) as u16
         );
     }
 }
@@ -102,7 +102,7 @@ impl<'a> Iterator for ZigZag<'a> {
 
     fn next(&mut self) -> Option<Self::Item> {
         self.idx += 1;
-        Some(self.block.events[zigzag_order()[self.idx - 1]].as_ref())
+        Some(self.block.events[zigzag_order()[self.idx - 1] as usize].as_ref())
     }
 }
 
@@ -137,7 +137,7 @@ impl Block {
 
 // TODO: use arenas to avoid allocations
 pub struct Cube {
-    blocks_r: Vec<Block>,
+    pub blocks_r: Vec<Block>,
     blocks_g: Vec<Block>,
     blocks_b: Vec<Block>,
     cube_idx_y: usize,
@@ -151,7 +151,7 @@ pub struct Cube {
 }
 
 impl Cube {
-    fn new(cube_idx_y: usize, cube_idx_x: usize, cube_idx_c: usize) -> Self {
+    pub fn new(cube_idx_y: usize, cube_idx_x: usize, cube_idx_c: usize) -> Self {
         Self {
             blocks_r: vec![Block::new(0, 0, 0)],
             blocks_g: vec![Block::new(0, 0, 0)],
@@ -165,7 +165,7 @@ impl Cube {
         }
     }
 
-    fn set_event(&mut self, event: Event) -> Result<(), BlockError> {
+    pub fn set_event(&mut self, event: Event) -> Result<(), BlockError> {
         let (idx, c) = self.event_coord_to_block_idx(&event);
 
         match c {
@@ -208,9 +208,12 @@ fn set_event_for_channel(
 
 #[cfg(test)]
 mod tests {
-    use crate::codec::compressed::blocks::{Cube, ZigZag};
+    use crate::codec::compressed::blocks::{Block, Cube, ZigZag};
     use crate::codec::compressed::BLOCK_SIZE_BIG;
+    use crate::framer::driver::EventCoordless;
     use crate::{Coord, Event};
+    use criterion::Bencher;
+    use criterion::{black_box, criterion_group, criterion_main, Criterion};
     use itertools::Itertools;
 
     struct Setup {
@@ -351,15 +354,11 @@ mod tests {
         assert_eq!(cube.blocks_b.len(), 1);
     }
 
-    #[test]
-    fn test_zig_zag_iter() {
-        let mut setup = Setup::new();
-        let mut cube = setup.cube;
-        let mut events = setup.events_for_block_r;
-
+    fn zig_zag_iter<'a>(cube: &'a mut Cube, events: Vec<Event>) -> (Vec<&'a EventCoordless>) {
         for event in events.iter() {
             assert!(cube.set_event(event.clone()).is_ok());
         }
+        // let block_ref = &cube.blocks_r[0];
 
         let mut zigzag_events = Vec::new();
         let zigzag = ZigZag::new(&cube.blocks_r[0]);
@@ -371,6 +370,16 @@ mod tests {
             }
         }
 
+        (zigzag_events)
+    }
+
+    #[test]
+    fn test_zigzag_iter() {
+        let mut setup = Setup::new();
+        let mut cube = setup.cube;
+        let mut events = setup.events_for_block_r;
+
+        let (zigzag_events) = zig_zag_iter(&mut cube, events.clone());
         assert_eq!(zigzag_events.len(), BLOCK_SIZE_BIG * BLOCK_SIZE_BIG);
         assert_eq!(zigzag_events[0].d, events[0].d);
         let delta_t_0 = zigzag_events[0].delta_t;
