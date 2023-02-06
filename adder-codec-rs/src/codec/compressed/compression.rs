@@ -199,7 +199,7 @@ impl Model for BlockDeltaTResidualModel {
 /// Note: will have to work differently with delta-t vs absolute-t modes...
 /// TODO: encode all the D-vals first, then the dt values?
 /// TODO: use a more sophisticated model.
-pub struct BlockIntraPredictionContextModel {
+pub struct BlockIntraPredictionContextModel<'r> {
     prev_coded_event: Option<EventCoordless>,
     prediction_mode: TimeMode,
     pub d_model: BlockDResidualModel,
@@ -208,20 +208,27 @@ pub struct BlockIntraPredictionContextModel {
     d_encoder: Encoder<BlockDResidualModel, BitWriter<Vec<u8>, BigEndian>>,
     dt_writer: BitWriter<Vec<u8>, BigEndian>,
     dt_encoder: Encoder<BlockDeltaTResidualModel, BitWriter<Vec<u8>, BigEndian>>,
+    d_reader: BitReader<&'r [u8], BigEndian>,
+    d_decoder: Decoder<BlockDResidualModel, BitReader<&'r [u8], BigEndian>>,
+    dt_reader: BitReader<&'r [u8], BigEndian>,
+    dt_decoder: Decoder<BlockDeltaTResidualModel, BitReader<&'r [u8], BigEndian>>,
 }
 
 pub const D_RESIDUAL_NO_EVENT: DResidual = DResidual::MAX;
 pub const DELTA_T_RESIDUAL_NO_EVENT: DeltaTResidual = DeltaTResidual::MAX;
 
-impl BlockIntraPredictionContextModel {
+impl<'r> BlockIntraPredictionContextModel<'r> {
     pub fn new(delta_t_max: DeltaT) -> Self {
         let d_model = BlockDResidualModel::new();
         let delta_t_model = BlockDeltaTResidualModel::new(delta_t_max);
 
         let mut d_writer = BitWriter::endian(Vec::new(), BigEndian);
-        let mut d_encoder = Encoder::new(d_model); // Todo: shouldn't clone models unless at new AVU time point, ideally...
+        let mut d_encoder = Encoder::new(d_model.clone()); // Todo: shouldn't clone models unless at new AVU time point, ideally...
         let mut dt_writer = BitWriter::endian(Vec::new(), BigEndian);
-        let mut dt_encoder = Encoder::new(delta_t_model);
+        let mut dt_encoder = Encoder::new(delta_t_model.clone());
+
+        let mut d_decoder = Decoder::new(d_model.clone());
+        let mut dt_decoder = Decoder::new(delta_t_model.clone());
 
         let mut ret = Self {
             prev_coded_event: None,
@@ -232,6 +239,10 @@ impl BlockIntraPredictionContextModel {
             d_encoder,
             dt_writer,
             dt_encoder,
+            d_reader: BitReader::endian(&[], BigEndian),
+            d_decoder,
+            dt_reader: BitReader::endian(&[], BigEndian),
+            dt_decoder,
             // d_encoder: None,
             // d_writer,
         };
@@ -239,6 +250,7 @@ impl BlockIntraPredictionContextModel {
         ret
     }
 
+    #[inline(always)]
     pub fn consume_writers(&mut self) -> (Vec<u8>, Vec<u8>) {
         self.dt_encoder.flush(&mut self.d_writer).unwrap();
         self.d_writer.byte_align().unwrap();
@@ -333,19 +345,17 @@ impl BlockIntraPredictionContextModel {
 
     /// TODO
     /// Takes in a char array so we can slice it into the d and delta_t residual streams
-    pub fn decode_block(&mut self, block: &mut Block, input: &[u8]) {
+    pub fn decode_block(&mut self, block: &mut Block, input: &'r [u8]) {
         self.prev_coded_event = None;
 
         // First, read the u16 to see how many bytes the d residuals are
         let d_len = u16::from_be_bytes([input[0], input[1]]);
 
         // Set up the d decoder
-        let bitreader = BitReader::endian(&input[2..], BigEndian);
-        let mut d_decoder = Decoder::new(self.d_model.clone(), bitreader);
+        self.d_reader = BitReader::endian(&input[2..], BigEndian);
 
         // Set up the delta_t decoder
-        let bitreader = BitReader::endian(&input[2 + d_len as usize..], BigEndian);
-        let mut dt_decoder = Decoder::new(self.delta_t_model.clone(), bitreader);
+        self.dt_reader = BitReader::endian(&input[2 + d_len as usize..], BigEndian);
 
         // let mut zigzag = ZigZag::new(block, &ZIGZAG_ORDER);
         // for event in zigzag {}
@@ -353,7 +363,7 @@ impl BlockIntraPredictionContextModel {
         let block_ref = block.events.as_mut();
 
         for idx in ZIGZAG_ORDER {
-            self.decode_event(block_ref, idx, &mut d_decoder, &mut dt_decoder);
+            self.decode_event(block_ref, idx);
         }
     }
 
@@ -362,18 +372,26 @@ impl BlockIntraPredictionContextModel {
         &mut self,
         block_ref: &mut [Option<EventCoordless>],
         idx: u16,
-        d_decoder: &mut Decoder<BlockDResidualModel, BitReader<&[u8], BigEndian>>,
-        dt_decoder: &mut Decoder<BlockDeltaTResidualModel, BitReader<&[u8], BigEndian>>,
+        // d_reader: &'r mut BitReader<&[u8], BigEndian>,
+        // dt_reader: &'r mut BitReader<&[u8], BigEndian>,
     ) {
         let (d, dt) = match self.prev_coded_event {
             None => {
-                let d_resid = d_decoder.decode().unwrap().unwrap();
-                let dt_resid = dt_decoder.decode().unwrap().unwrap();
+                let d_resid = self.d_decoder.decode(&mut self.d_reader).unwrap().unwrap();
+                let dt_resid = self
+                    .dt_decoder
+                    .decode(&mut self.dt_reader)
+                    .unwrap()
+                    .unwrap();
                 (d_resid, dt_resid)
             }
             Some(prev_event) => {
-                let d_resid = d_decoder.decode().unwrap().unwrap();
-                let dt_resid = dt_decoder.decode().unwrap().unwrap();
+                let d_resid = self.d_decoder.decode(&mut self.d_reader).unwrap().unwrap();
+                let dt_resid = self
+                    .dt_decoder
+                    .decode(&mut self.dt_reader)
+                    .unwrap()
+                    .unwrap();
 
                 let dt_pred = match d_resid {
                     0 => prev_event.delta_t as DeltaTResidual,
@@ -521,9 +539,12 @@ mod tests {
         );
 
         let buff: &[u8] = &buffer;
-        let bitreader = BitReader::endian(buff, BigEndian);
-        let mut decoder = Decoder::new(model, bitreader);
-        let output: Vec<DResidual> = decoder.decode_all().map(Result::unwrap).collect();
+        let mut bitreader = BitReader::endian(buff, BigEndian);
+        let mut decoder = Decoder::new(model);
+        let output: Vec<DResidual> = decoder
+            .decode_all(&mut bitreader)
+            .map(Result::unwrap)
+            .collect();
         println!("{output:?}");
         assert_eq!(output, input);
     }
@@ -558,9 +579,12 @@ mod tests {
         assert!(input_len as f32 / output_len as f32 > 1.6);
 
         let buff: &[u8] = &buffer;
-        let bitreader = BitReader::endian(buff, BigEndian);
-        let mut decoder = Decoder::new(model, bitreader);
-        let output: Vec<DResidual> = decoder.decode_all().map(Result::unwrap).collect();
+        let mut bitreader = BitReader::endian(buff, BigEndian);
+        let mut decoder = Decoder::new(model);
+        let output: Vec<DResidual> = decoder
+            .decode_all(&mut bitreader)
+            .map(Result::unwrap)
+            .collect();
         assert_eq!(output, input);
     }
 
@@ -591,9 +615,12 @@ mod tests {
         );
 
         let buff: &[u8] = &buffer;
-        let bitreader = BitReader::endian(buff, BigEndian);
-        let mut decoder = Decoder::new(model, bitreader);
-        let output: Vec<DeltaTResidual> = decoder.decode_all().map(Result::unwrap).collect();
+        let mut bitreader = BitReader::endian(buff, BigEndian);
+        let mut decoder = Decoder::new(model);
+        let output: Vec<DeltaTResidual> = decoder
+            .decode_all(&mut bitreader)
+            .map(Result::unwrap)
+            .collect();
         println!("{output:?}");
         assert_eq!(output, input);
     }
@@ -629,9 +656,12 @@ mod tests {
         );
 
         let buff: &[u8] = &buffer;
-        let bitreader = BitReader::endian(buff, BigEndian);
-        let mut decoder = Decoder::new(model, bitreader);
-        let output: Vec<DeltaTResidual> = decoder.decode_all().map(Result::unwrap).collect();
+        let mut bitreader = BitReader::endian(buff, BigEndian);
+        let mut decoder = Decoder::new(model);
+        let output: Vec<DeltaTResidual> = decoder
+            .decode_all(&mut bitreader)
+            .map(Result::unwrap)
+            .collect();
         println!("{output:?}");
         assert_eq!(output, input);
     }

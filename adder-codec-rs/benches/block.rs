@@ -181,9 +181,19 @@ fn bench_encode_block(c: &mut Criterion) {
         b.iter(|| context_model.encode_block(&mut cube.blocks_r[0], &mut out_writer))
     });
 
+    let mut group = c.benchmark_group("block");
+    group.significance_level(0.05).sample_size(50);
+    group.bench_function("encode MANY blocks", |b| {
+        b.iter(|| {
+            for _ in 0..100 {
+                context_model.encode_block(&mut cube.blocks_r[0], &mut out_writer)
+            }
+        })
+    });
+
     let writer: &[u8] = &*out_writer.into_writer();
 
-    c.bench_function("decode block", |b| {
+    group.bench_function("decode block", |b| {
         b.iter(|| context_model.decode_block(&mut cube.blocks_r[0], writer))
     });
 }
