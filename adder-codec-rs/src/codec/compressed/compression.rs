@@ -97,10 +97,7 @@ impl BlockDeltaTResidualModel {
     #[must_use]
     pub fn new(delta_t_max: DeltaT) -> Self {
         let alphabet: Vec<DeltaTResidual> = (-(delta_t_max as i64)..delta_t_max as i64).collect();
-        let fenwick_model = FenwickModel::with_symbols(
-            delta_t_max as usize * 2 + 1,
-            1 << (delta_t_max.ilog2() + 10),
-        );
+        let fenwick_model = FenwickModel::with_symbols(delta_t_max as usize * 2 + 1, 1 << 20);
         Self {
             alphabet,
             fenwick_model,
@@ -237,7 +234,8 @@ impl BlockIntraPredictionContextModel {
         let mut dt_encoder = Encoder::new(self.delta_t_model.clone(), &mut dt_writer);
 
         let zigzag = ZigZag::new(block, &ZIGZAG_ORDER);
-        for event in zigzag {
+        for (idx, event) in zigzag.enumerate() {
+            eprintln!("idx: {}", ZIGZAG_ORDER[idx]);
             self.encode_event(event, &mut d_encoder, &mut dt_encoder);
         }
 
@@ -251,9 +249,12 @@ impl BlockIntraPredictionContextModel {
         should always be representable in 2 bytes. Write that signifier as a u16.
          */
         let d_len_bytes = (d.len() as u16).to_be_bytes();
+        eprintln!("d_len: {:?}", d.len());
         file_writer.write_bytes(&d_len_bytes).unwrap();
         file_writer.write_bytes(&d).unwrap();
-        file_writer.write_bytes(&dt_writer.into_writer()).unwrap();
+        let dt = dt_writer.into_writer();
+        dbg!(dt.clone());
+        file_writer.write_bytes(&dt).unwrap();
     }
 
     // Encode the prediction residual for an event based on the previous coded event
@@ -309,13 +310,21 @@ impl BlockIntraPredictionContextModel {
             },
         };
 
+        eprintln!("d_resid: {}, dt_resid: {}", d_resid, dt_resid);
+
         d_encoder.encode(Some(&d_resid)).unwrap();
+        // d_encoder.flush().unwrap();
+
+        // dt encoded = (actual dt) - (predicted dt, based on d change)
         dt_encoder.encode(Some(&dt_resid)).unwrap();
+        // dt_encoder.flush().unwrap();
     }
 
     /// TODO
     /// Takes in a char array so we can slice it into the d and delta_t residual streams
     fn decode_block(&mut self, block: &mut Block, input: &[u8]) {
+        self.prev_coded_event = None;
+
         // First, read the u16 to see how many bytes the d residuals are
         let d_len = u16::from_be_bytes([input[0], input[1]]);
 
@@ -325,10 +334,72 @@ impl BlockIntraPredictionContextModel {
 
         // Set up the delta_t decoder
         let bitreader = BitReader::endian(&input[2 + d_len as usize..], BigEndian);
+        dbg!(&input[2 + d_len as usize..]);
         let mut dt_decoder = Decoder::new(self.delta_t_model.clone(), bitreader);
 
-        let mut zigzag = ZigZag::new(block, &ZIGZAG_ORDER);
-        for event in zigzag {}
+        // let mut zigzag = ZigZag::new(block, &ZIGZAG_ORDER);
+        // for event in zigzag {}
+
+        let block_ref = block.events.as_mut();
+
+        for idx in ZIGZAG_ORDER {
+            let (d, dt) = match self.prev_coded_event {
+                None => {
+                    let d_resid = d_decoder.decode().unwrap().unwrap();
+                    let dt_resid = dt_decoder.decode().unwrap().unwrap();
+                    eprintln!(
+                        "idx: {}, NONE d_resid: {}, dt_resid: {}",
+                        idx, d_resid, dt_resid
+                    );
+                    (d_resid, dt_resid)
+                }
+                Some(prev_event) => {
+                    let d_resid = d_decoder.decode().unwrap().unwrap();
+                    let dt_resid = dt_decoder.decode().unwrap().unwrap();
+
+                    eprintln!("idx: {}, d_resid: {}, dt_resid: {}", idx, d_resid, dt_resid);
+
+                    let dt_pred = match d_resid {
+                        0 => prev_event.delta_t as DeltaTResidual,
+                        1_i16..=i16::MAX => {
+                            if d_resid as u32 <= prev_event.delta_t.leading_zeros() / 2 {
+                                min(
+                                    (prev_event.delta_t << d_resid).into(),
+                                    self.delta_t_model.delta_t_max,
+                                )
+                            } else {
+                                prev_event.delta_t.into()
+                            }
+                        }
+                        i16::MIN..=-1_i16 => {
+                            if -d_resid as u32 <= 32 - prev_event.delta_t.leading_zeros() {
+                                max(
+                                    (prev_event.delta_t >> -d_resid).into(),
+                                    prev_event.delta_t.into(),
+                                )
+                            } else {
+                                prev_event.delta_t.into()
+                            }
+                        }
+                    };
+                    (d_resid + prev_event.d as i16, dt_pred + dt_resid)
+                }
+            };
+
+            let event = match d {
+                D_RESIDUAL_NO_EVENT => None,
+                _ => {
+                    let event = EventCoordless {
+                        d: d as D,
+                        delta_t: dt as DeltaT,
+                    };
+                    self.prev_coded_event = Some(event);
+                    Some(event)
+                }
+            };
+
+            block_ref[idx as usize] = event;
+        }
     }
 }
 
@@ -402,7 +473,8 @@ mod tests {
     use crate::{Coord, Event};
     use arithmetic_coding::{Decoder, Encoder};
     use bitstream_io::{BigEndian, BitReader, BitWrite, BitWriter};
-    use rand::Rng;
+    use rand::prelude::StdRng;
+    use rand::{Rng, SeedableRng};
     use std::fs::File;
 
     #[test]
@@ -557,8 +629,12 @@ mod tests {
         events_for_block_b: Vec<Event>,
     }
     impl Setup {
-        fn new() -> Self {
-            let mut rng = rand::thread_rng();
+        fn new(seed: Option<u64>) -> Self {
+            let mut rng = match seed {
+                None => StdRng::from_rng(rand::thread_rng()).unwrap(),
+                Some(num) => StdRng::seed_from_u64(42),
+            };
+            //
             let mut events_for_block_r = Vec::new();
             for y in 0..BLOCK_SIZE_BIG {
                 for x in 0..BLOCK_SIZE_BIG {
@@ -622,9 +698,9 @@ mod tests {
     }
 
     #[test]
-    fn test_encode_block() {
+    fn test_encode_decode_block() {
         let mut context_model = BlockIntraPredictionContextModel::new(2550);
-        let setup = Setup::new();
+        let setup = Setup::new(Some(473829479));
         let mut cube = setup.cube;
         let events = setup.events_for_block_r;
 
@@ -636,15 +712,32 @@ mod tests {
 
         context_model.encode_block(&mut cube.blocks_r[0], &mut out_writer);
 
-        let len = out_writer.into_writer().len();
+        let writer: &[u8] = &*out_writer.into_writer();
+
+        let len = writer.len();
         assert!(len < BLOCK_SIZE_BIG_AREA * 5); // 5 bytes per raw event when just encoding D and Dt
         println!("{len}");
+
+        let mut context_model = BlockIntraPredictionContextModel::new(2550);
+
+        context_model.decode_block(&mut cube.blocks_r[0], writer);
+
+        for idx in 0..BLOCK_SIZE_BIG_AREA {
+            let source_d = events[idx].d;
+            let source_dt = events[idx].delta_t;
+
+            let decoded_d = cube.blocks_r[0].events[idx].unwrap().d;
+            let decoded_dt = cube.blocks_r[0].events[idx].unwrap().delta_t;
+
+            assert_eq!(source_d, decoded_d);
+            assert_eq!(source_dt, decoded_dt);
+        }
     }
 
     #[test]
     fn test_encode_empty_event() {
         let mut context_model = BlockIntraPredictionContextModel::new(2550);
-        let setup = Setup::new();
+        let setup = Setup::new(None);
         let mut cube = setup.cube;
         let events = setup.events_for_block_r;
 
