@@ -201,8 +201,8 @@ impl Model for BlockDeltaTResidualModel {
 pub struct BlockIntraPredictionContextModel {
     prev_coded_event: Option<EventCoordless>,
     prediction_mode: TimeMode,
-    d_model: BlockDResidualModel,
-    delta_t_model: BlockDeltaTResidualModel,
+    pub d_model: BlockDResidualModel,
+    pub delta_t_model: BlockDeltaTResidualModel,
     // d_encoder: Option<Encoder<'a, BlockDResidualModel, BitWriter<Vec<u8>, BigEndian>>>,
     // d_writer: BitWriter<Vec<u8>, BigEndian>,
 }
@@ -258,7 +258,7 @@ impl BlockIntraPredictionContextModel {
 
     // Encode the prediction residual for an event based on the previous coded event
     #[inline(always)]
-    fn encode_event(
+    pub fn encode_event(
         &mut self,
         event: Option<&EventCoordless>,
         d_encoder: &mut Encoder<BlockDResidualModel, BitWriter<Vec<u8>, BigEndian>>,
