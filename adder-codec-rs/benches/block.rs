@@ -1,8 +1,12 @@
 use adder_codec_rs::codec::compressed::blocks::{gen_zigzag_order, Cube, ZigZag, ZIGZAG_ORDER};
-use adder_codec_rs::codec::compressed::BLOCK_SIZE_BIG;
+use adder_codec_rs::codec::compressed::{BLOCK_SIZE_BIG, BLOCK_SIZE_BIG_AREA};
+use bitstream_io::{BigEndian, BitWriter};
 
+use adder_codec_rs::codec::compressed::compression::BlockIntraPredictionContextModel;
 use adder_codec_rs::{Coord, Event};
 use criterion::{criterion_group, criterion_main, Criterion};
+use rand::prelude::StdRng;
+use rand::{Rng, SeedableRng};
 
 struct Setup {
     cube: Cube,
@@ -12,7 +16,12 @@ struct Setup {
     events_for_block_b: Vec<Event>,
 }
 impl Setup {
-    fn new() -> Self {
+    fn new(seed: Option<u64>) -> Self {
+        let mut rng = match seed {
+            None => StdRng::from_rng(rand::thread_rng()).unwrap(),
+            Some(num) => StdRng::seed_from_u64(42),
+        };
+        //
         let mut events_for_block_r = Vec::new();
         for y in 0..BLOCK_SIZE_BIG {
             for x in 0..BLOCK_SIZE_BIG {
@@ -22,7 +31,9 @@ impl Setup {
                         x: x as u16,
                         c: Some(0),
                     },
-                    ..Default::default()
+
+                    d: rng.gen_range(0..20),
+                    delta_t: rng.gen_range(1..2550),
                 });
             }
         }
@@ -107,7 +118,7 @@ fn zig_zag_iter2(cube: &mut Cube, events: Vec<Event>) {
 
 fn bench_zigzag_iter(c: &mut Criterion) {
     println!("IN BENCH");
-    let setup = Setup::new();
+    let setup = Setup::new(None);
     let mut cube = setup.cube;
     let events = setup.events_for_block_r;
     let zigzag_order = gen_zigzag_order();
@@ -123,7 +134,7 @@ fn bench_zigzag_iter(c: &mut Criterion) {
 
 fn bench_zigzag_iter_alloc(c: &mut Criterion) {
     println!("IN BENCH");
-    let setup = Setup::new();
+    let setup = Setup::new(None);
     let mut cube = setup.cube;
     let events = setup.events_for_block_r;
 
@@ -134,7 +145,7 @@ fn bench_zigzag_iter_alloc(c: &mut Criterion) {
 }
 
 fn regular_iter<'a>() {
-    let setup = Setup::new();
+    let setup = Setup::new(None);
     let mut cube = setup.cube;
     let events = setup.events_for_block_r;
 
@@ -150,14 +161,37 @@ fn regular_iter<'a>() {
 }
 
 fn bench_regular_iter(c: &mut Criterion) {
-    println!("IN BENCH");
     c.bench_function("regular iter", |b| b.iter(regular_iter));
+}
+
+fn bench_encode_block(c: &mut Criterion) {
+    let mut context_model = BlockIntraPredictionContextModel::new(2550);
+    let setup = Setup::new(Some(473829479));
+    let mut cube = setup.cube;
+    let events = setup.events_for_block_r;
+
+    for event in events.iter() {
+        assert!(cube.set_event(*event).is_ok());
+    }
+
+    let mut out_writer = BitWriter::endian(Vec::new(), BigEndian);
+
+    c.bench_function("encode block", |b| {
+        b.iter(|| context_model.encode_block(&mut cube.blocks_r[0], &mut out_writer))
+    });
+
+    let writer: &[u8] = &*out_writer.into_writer();
+
+    c.bench_function("decode block", |b| {
+        b.iter(|| context_model.decode_block(&mut cube.blocks_r[0], writer))
+    });
 }
 
 criterion_group!(
     block,
     bench_zigzag_iter,
     bench_regular_iter,
-    bench_zigzag_iter_alloc
+    bench_zigzag_iter_alloc,
+    bench_encode_block
 );
 criterion_main!(block);

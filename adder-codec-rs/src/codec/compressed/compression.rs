@@ -198,7 +198,7 @@ impl Model for BlockDeltaTResidualModel {
 /// Note: will have to work differently with delta-t vs absolute-t modes...
 /// TODO: encode all the D-vals first, then the dt values?
 /// TODO: use a more sophisticated model.
-struct BlockIntraPredictionContextModel {
+pub struct BlockIntraPredictionContextModel {
     prev_coded_event: Option<EventCoordless>,
     prediction_mode: TimeMode,
     d_model: BlockDResidualModel,
@@ -211,7 +211,7 @@ pub const D_RESIDUAL_NO_EVENT: DResidual = DResidual::MAX;
 pub const DELTA_T_RESIDUAL_NO_EVENT: DeltaTResidual = DeltaTResidual::MAX;
 
 impl BlockIntraPredictionContextModel {
-    fn new(delta_t_max: DeltaT) -> Self {
+    pub fn new(delta_t_max: DeltaT) -> Self {
         let mut ret = Self {
             prev_coded_event: None,
             prediction_mode: TimeMode::AbsoluteT,
@@ -227,7 +227,7 @@ impl BlockIntraPredictionContextModel {
 
     // Encode each event in the block in zigzag order. Context looks at the previous encoded event
     // to determine the residual.
-    fn encode_block<'a, W>(&mut self, block: &mut Block, file_writer: &'a mut W)
+    pub fn encode_block<'a, W>(&mut self, block: &mut Block, file_writer: &'a mut W)
     where
         W: BitWrite,
     {
@@ -316,7 +316,7 @@ impl BlockIntraPredictionContextModel {
 
     /// TODO
     /// Takes in a char array so we can slice it into the d and delta_t residual streams
-    fn decode_block(&mut self, block: &mut Block, input: &[u8]) {
+    pub fn decode_block(&mut self, block: &mut Block, input: &[u8]) {
         self.prev_coded_event = None;
 
         // First, read the u16 to see how many bytes the d residuals are
@@ -397,7 +397,7 @@ impl BlockIntraPredictionContextModel {
             }
         };
 
-        block_ref[idx as usize] = event;
+        unsafe { *block_ref.get_unchecked_mut(idx as usize) = event };
     }
 }
 
