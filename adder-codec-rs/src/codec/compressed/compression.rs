@@ -97,7 +97,10 @@ impl BlockDeltaTResidualModel {
     #[must_use]
     pub fn new(delta_t_max: DeltaT) -> Self {
         let alphabet: Vec<DeltaTResidual> = (-(delta_t_max as i64)..delta_t_max as i64).collect();
-        let fenwick_model = FenwickModel::with_symbols(delta_t_max as usize * 2 + 1, 1 << 20);
+        let fenwick_model = FenwickModel::with_symbols(
+            delta_t_max as usize * 2 + 1,
+            1 << (delta_t_max.ilog2() + 10),
+        );
         Self {
             alphabet,
             fenwick_model,
@@ -234,8 +237,7 @@ impl BlockIntraPredictionContextModel {
         let mut dt_encoder = Encoder::new(self.delta_t_model.clone(), &mut dt_writer);
 
         let zigzag = ZigZag::new(block, &ZIGZAG_ORDER);
-        for (idx, event) in zigzag.enumerate() {
-            eprintln!("idx: {}", ZIGZAG_ORDER[idx]);
+        for event in zigzag {
             self.encode_event(event, &mut d_encoder, &mut dt_encoder);
         }
 
@@ -249,12 +251,9 @@ impl BlockIntraPredictionContextModel {
         should always be representable in 2 bytes. Write that signifier as a u16.
          */
         let d_len_bytes = (d.len() as u16).to_be_bytes();
-        eprintln!("d_len: {:?}", d.len());
         file_writer.write_bytes(&d_len_bytes).unwrap();
         file_writer.write_bytes(&d).unwrap();
-        let dt = dt_writer.into_writer();
-        dbg!(dt.clone());
-        file_writer.write_bytes(&dt).unwrap();
+        file_writer.write_bytes(&dt_writer.into_writer()).unwrap();
     }
 
     // Encode the prediction residual for an event based on the previous coded event
@@ -310,14 +309,8 @@ impl BlockIntraPredictionContextModel {
             },
         };
 
-        eprintln!("d_resid: {}, dt_resid: {}", d_resid, dt_resid);
-
         d_encoder.encode(Some(&d_resid)).unwrap();
-        // d_encoder.flush().unwrap();
-
-        // dt encoded = (actual dt) - (predicted dt, based on d change)
         dt_encoder.encode(Some(&dt_resid)).unwrap();
-        // dt_encoder.flush().unwrap();
     }
 
     /// TODO
@@ -334,7 +327,6 @@ impl BlockIntraPredictionContextModel {
 
         // Set up the delta_t decoder
         let bitreader = BitReader::endian(&input[2 + d_len as usize..], BigEndian);
-        dbg!(&input[2 + d_len as usize..]);
         let mut dt_decoder = Decoder::new(self.delta_t_model.clone(), bitreader);
 
         // let mut zigzag = ZigZag::new(block, &ZIGZAG_ORDER);
@@ -347,17 +339,11 @@ impl BlockIntraPredictionContextModel {
                 None => {
                     let d_resid = d_decoder.decode().unwrap().unwrap();
                     let dt_resid = dt_decoder.decode().unwrap().unwrap();
-                    eprintln!(
-                        "idx: {}, NONE d_resid: {}, dt_resid: {}",
-                        idx, d_resid, dt_resid
-                    );
                     (d_resid, dt_resid)
                 }
                 Some(prev_event) => {
                     let d_resid = d_decoder.decode().unwrap().unwrap();
                     let dt_resid = dt_decoder.decode().unwrap().unwrap();
-
-                    eprintln!("idx: {}, d_resid: {}, dt_resid: {}", idx, d_resid, dt_resid);
 
                     let dt_pred = match d_resid {
                         0 => prev_event.delta_t as DeltaTResidual,
