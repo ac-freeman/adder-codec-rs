@@ -2,7 +2,7 @@ use arithmetic_coding::{Decoder, Encoder, Model};
 use bitstream_io::{BigEndian, BitRead, BitReader, BitWrite, BitWriter};
 use std::cmp::{max, min};
 use std::fs::File;
-use std::io::{BufReader, BufWriter, Read};
+use std::io::{BufReader, BufWriter, Read, Seek, SeekFrom};
 use std::mem::swap;
 use std::ops::Range;
 
@@ -313,14 +313,31 @@ impl<'r, R: std::io::Read, W: std::io::Write + std::fmt::Debug>
         }
 
         self.d_bitwriter.as_mut().unwrap().byte_align().unwrap();
+        // self.d_encoder
+        //     .encode(None, &mut self.d_bitwriter.as_mut().unwrap())
+        //     .unwrap();
         self.d_bitwriter.as_mut().unwrap().flush().unwrap();
 
         self.dt_bitwriter.as_mut().unwrap().byte_align().unwrap();
+        // self.dt_encoder
+        //     .encode(None, &mut self.dt_bitwriter.as_mut().unwrap())
+        //     .unwrap();
         self.dt_bitwriter.as_mut().unwrap().flush().unwrap();
 
         let d_bitwriter = self.d_bitwriter.take().unwrap().into_writer();
         self.d_bitwriter = Some(BitWriter::endian(BufWriter::new(Vec::new()), BigEndian));
         let written = d_bitwriter.into_inner().unwrap();
+
+        /* The compressed length of the d residuals
+        should always be representable in 2 bytes. Write that signifier as a u16.
+         */
+        // let d_len_bytes = (written.len() as u16).to_be_bytes();
+        // self.bitwriter
+        //     .as_mut()
+        //     .unwrap()
+        //     .write_bytes(&d_len_bytes)
+        //     .unwrap();
+
         self.bitwriter
             .as_mut()
             .unwrap()
@@ -421,6 +438,22 @@ impl<'r, R: std::io::Read, W: std::io::Write + std::fmt::Debug>
         //     .read_bytes(&mut d_len_buf)
         //     .unwrap();
         // let d_len = u16::from_be_bytes(d_len_buf);
+        // let reader = self.bitreader.as_mut().unwrap();
+
+        let d_resid = self.decode_d();
+        // let current_pos = self.bitreader.as_mut().unwrap().seek (SeekFrom::Current (0)).expect ("Could not get current position!");
+        let dt_resid = self.decode_dt();
+
+        dbg!(d_resid.len());
+        dbg!(dt_resid.len());
+
+        // let dt_resid = self.dt_decoder.decode_all(reader);
+
+        let block_ref = block.events.as_mut();
+        for (idx, (d_resid, dt_resid)) in d_resid.into_iter().zip(dt_resid).enumerate() {
+            self.decode_event(block_ref, idx as u16, d_resid.unwrap(), dt_resid.unwrap());
+        }
+
         //
         // let mut d_slice = vec![0_u8; d_len as usize];
         // input.read_exact(&mut d_slice).unwrap();
@@ -435,12 +468,44 @@ impl<'r, R: std::io::Read, W: std::io::Write + std::fmt::Debug>
         // let mut zigzag = ZigZag::new(block, &ZIGZAG_ORDER);
         // for event in zigzag {}
 
-        let block_ref = block.events.as_mut();
+        // for idx in ZIGZAG_ORDER {
+        //     self.decode_event(block_ref, idx, d_resid[idx], dt_resid[idx]);
+        // }
+        // self.dt_reader.byte_align();
+    }
 
-        for idx in ZIGZAG_ORDER {
-            self.decode_event(block_ref, idx);
+    fn decode_d(&mut self) -> Vec<Option<DResidual>> {
+        let mut d_resids = Vec::with_capacity(BLOCK_SIZE_BIG_AREA);
+        for _ in 0..BLOCK_SIZE_BIG_AREA {
+            d_resids.push(
+                self.d_decoder
+                    .decode(self.bitreader.as_mut().unwrap())
+                    .unwrap(),
+            );
         }
-        self.dt_reader.byte_align();
+
+        // let d_resid: Vec<Result<DResidual, _>> = self
+        //     .d_decoder
+        //     .decode_all(self.bitreader.as_mut().unwrap())
+        //     .collect();
+        d_resids
+    }
+
+    fn decode_dt(&mut self) -> Vec<Option<DeltaTResidual>> {
+        let mut dt_resids = Vec::with_capacity(BLOCK_SIZE_BIG_AREA);
+        for i in 0..BLOCK_SIZE_BIG_AREA {
+            dt_resids.push(
+                self.dt_decoder
+                    .decode(self.bitreader.as_mut().unwrap())
+                    .unwrap(),
+            );
+            eprintln!("dt_resid: {}", dt_resids[i].unwrap());
+        }
+        // let dt_resid: Vec<Result<DeltaTResidual, _>> = self
+        //     .dt_decoder
+        //     .decode_all(self.bitreader.as_mut().unwrap())
+        //     .collect();
+        dt_resids
     }
 
     #[inline(always)]
@@ -448,36 +513,41 @@ impl<'r, R: std::io::Read, W: std::io::Write + std::fmt::Debug>
         &mut self,
         block_ref: &mut [Option<EventCoordless>],
         idx: u16,
-        // d_reader: &'r mut BitReader<&[u8], BigEndian>,
-        // dt_reader: &'r mut BitReader<&[u8], BigEndian>,
+        d_resid: DResidual,
+        dt_resid: DeltaTResidual,
     ) {
+        if d_resid == D_RESIDUAL_NO_EVENT {
+            unsafe { *block_ref.get_unchecked_mut(idx as usize) = None };
+            return;
+        }
+
         let (d, dt) = match self.prev_coded_event {
             None => {
-                let d_resid = self
-                    .d_decoder
-                    .decode(self.bitreader.as_mut().unwrap())
-                    .unwrap()
-                    .unwrap();
-                let dt_resid = self
-                    .dt_decoder
-                    .decode(self.bitreader.as_mut().unwrap())
-                    .unwrap()
-                    .unwrap();
+                // let d_resid = self
+                //     .d_decoder
+                //     .decode(self.bitreader.as_mut().unwrap())
+                //     .unwrap()
+                //     .unwrap();
+                // let dt_resid = self
+                //     .dt_decoder
+                //     .decode(self.bitreader.as_mut().unwrap())
+                //     .unwrap()
+                //     .unwrap();
 
                 eprintln!("idx: {}, d_resid: {}, dt_resid: {}", idx, d_resid, dt_resid);
                 (d_resid, dt_resid)
             }
             Some(prev_event) => {
-                let d_resid = self
-                    .d_decoder
-                    .decode(self.bitreader.as_mut().unwrap())
-                    .unwrap()
-                    .unwrap();
-                let dt_resid = self
-                    .dt_decoder
-                    .decode(self.bitreader.as_mut().unwrap())
-                    .unwrap()
-                    .unwrap();
+                // let d_resid = self
+                //     .d_decoder
+                //     .decode(self.bitreader.as_mut().unwrap())
+                //     .unwrap()
+                //     .unwrap();
+                // let dt_resid = self
+                //     .dt_decoder
+                //     .decode(self.bitreader.as_mut().unwrap())
+                //     .unwrap()
+                //     .unwrap();
 
                 let dt_pred = match d_resid {
                     0 => prev_event.delta_t as DeltaTResidual,
