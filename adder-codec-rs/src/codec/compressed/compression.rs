@@ -200,28 +200,36 @@ impl Model for BlockDeltaTResidualModel {
 /// Note: will have to work differently with delta-t vs absolute-t modes...
 /// TODO: encode all the D-vals first, then the dt values?
 /// TODO: use a more sophisticated model.
-pub struct BlockIntraPredictionContextModel<'r, R: std::io::Read, W: std::io::Write> {
+pub struct BlockIntraPredictionContextModel<
+    'r,
+    R: std::io::Read,
+    W: std::io::Write + std::fmt::Debug,
+> {
     prev_coded_event: Option<EventCoordless>,
     prediction_mode: TimeMode,
     pub d_model: BlockDResidualModel,
     pub delta_t_model: BlockDeltaTResidualModel,
     d_writer: BitWriter<Vec<u8>, BigEndian>,
-    d_encoder: Encoder<BlockDResidualModel, BitWriter<BufWriter<W>, BigEndian>>,
+    d_encoder: Encoder<BlockDResidualModel, BitWriter<BufWriter<Vec<u8>>, BigEndian>>,
     dt_writer: BitWriter<Vec<u8>, BigEndian>,
-    dt_encoder: Encoder<BlockDeltaTResidualModel, BitWriter<BufWriter<W>, BigEndian>>,
+    dt_encoder: Encoder<BlockDeltaTResidualModel, BitWriter<BufWriter<Vec<u8>>, BigEndian>>,
     d_reader: BitReader<&'r [u8], BigEndian>,
     d_decoder: Decoder<BlockDResidualModel, BitReader<BufReader<R>, BigEndian>>,
     dt_reader: BitReader<&'r [u8], BigEndian>,
     dt_decoder: Decoder<BlockDeltaTResidualModel, BitReader<BufReader<R>, BigEndian>>,
     // reader: Option<BufReader<R>>,
     pub bitwriter: Option<BitWriter<BufWriter<W>, BigEndian>>,
+    d_bitwriter: Option<BitWriter<BufWriter<Vec<u8>>, BigEndian>>,
+    dt_bitwriter: Option<BitWriter<BufWriter<Vec<u8>>, BigEndian>>,
     bitreader: Option<BitReader<BufReader<R>, BigEndian>>,
 }
 
 pub const D_RESIDUAL_NO_EVENT: DResidual = DResidual::MAX;
 pub const DELTA_T_RESIDUAL_NO_EVENT: DeltaTResidual = DeltaTResidual::MAX;
 
-impl<'r, R: std::io::Read, W: std::io::Write> BlockIntraPredictionContextModel<'r, R, W> {
+impl<'r, R: std::io::Read, W: std::io::Write + std::fmt::Debug>
+    BlockIntraPredictionContextModel<'r, R, W>
+{
     pub fn new(
         delta_t_max: DeltaT,
         reader: Option<BufReader<R>>,
@@ -234,6 +242,14 @@ impl<'r, R: std::io::Read, W: std::io::Write> BlockIntraPredictionContextModel<'
 
         let bitwriter = match writer {
             Some(writer) => Some(BitWriter::endian(writer, BigEndian)),
+            None => None,
+        };
+        let d_bitwriter = match &bitwriter {
+            Some(_) => Some(BitWriter::endian(BufWriter::new(Vec::new()), BigEndian)),
+            None => None,
+        };
+        let dt_bitwriter = match &bitwriter {
+            Some(_) => Some(BitWriter::endian(BufWriter::new(Vec::new()), BigEndian)),
             None => None,
         };
 
@@ -264,6 +280,8 @@ impl<'r, R: std::io::Read, W: std::io::Write> BlockIntraPredictionContextModel<'
             // reader,
             bitreader,
             bitwriter,
+            d_bitwriter,
+            dt_bitwriter,
             // d_encoder: None,
             // d_writer,
         };
@@ -294,8 +312,29 @@ impl<'r, R: std::io::Read, W: std::io::Write> BlockIntraPredictionContextModel<'
             self.encode_event(event);
         }
 
-        self.bitwriter.as_mut().unwrap().byte_align().unwrap();
-        self.bitwriter.as_mut().unwrap().flush().unwrap();
+        self.d_bitwriter.as_mut().unwrap().byte_align().unwrap();
+        self.d_bitwriter.as_mut().unwrap().flush().unwrap();
+
+        self.dt_bitwriter.as_mut().unwrap().byte_align().unwrap();
+        self.dt_bitwriter.as_mut().unwrap().flush().unwrap();
+
+        let d_bitwriter = self.d_bitwriter.take().unwrap().into_writer();
+        self.d_bitwriter = Some(BitWriter::endian(BufWriter::new(Vec::new()), BigEndian));
+        let written = d_bitwriter.into_inner().unwrap();
+        self.bitwriter
+            .as_mut()
+            .unwrap()
+            .write_bytes(&written)
+            .unwrap();
+
+        let dt_bitwriter = self.dt_bitwriter.take().unwrap().into_writer();
+        self.dt_bitwriter = Some(BitWriter::endian(BufWriter::new(Vec::new()), BigEndian));
+        let written = dt_bitwriter.into_inner().unwrap();
+        self.bitwriter
+            .as_mut()
+            .unwrap()
+            .write_bytes(&written)
+            .unwrap();
 
         // let (d, dt) = self.consume_writers();
 
@@ -360,10 +399,10 @@ impl<'r, R: std::io::Read, W: std::io::Write> BlockIntraPredictionContextModel<'
         };
 
         self.d_encoder
-            .encode(Some(&d_resid), &mut self.bitwriter.as_mut().unwrap())
+            .encode(Some(&d_resid), &mut self.d_bitwriter.as_mut().unwrap())
             .unwrap();
         self.dt_encoder
-            .encode(Some(&dt_resid), &mut self.bitwriter.as_mut().unwrap())
+            .encode(Some(&dt_resid), &mut self.dt_bitwriter.as_mut().unwrap())
             .unwrap();
     }
 
