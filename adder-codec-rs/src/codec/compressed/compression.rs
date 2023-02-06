@@ -2,6 +2,7 @@ use arithmetic_coding::{Decoder, Encoder, Model};
 use bitstream_io::{BigEndian, BitRead, BitReader, BitWrite, BitWriter};
 use std::cmp::{max, min};
 use std::fs::File;
+use std::mem::swap;
 use std::ops::Range;
 
 // Intra-coding a block:
@@ -203,8 +204,10 @@ pub struct BlockIntraPredictionContextModel {
     prediction_mode: TimeMode,
     pub d_model: BlockDResidualModel,
     pub delta_t_model: BlockDeltaTResidualModel,
-    // d_encoder: Option<Encoder<'a, BlockDResidualModel, BitWriter<Vec<u8>, BigEndian>>>,
-    // d_writer: BitWriter<Vec<u8>, BigEndian>,
+    d_writer: BitWriter<Vec<u8>, BigEndian>,
+    d_encoder: Encoder<BlockDResidualModel, BitWriter<Vec<u8>, BigEndian>>,
+    dt_writer: BitWriter<Vec<u8>, BigEndian>,
+    dt_encoder: Encoder<BlockDeltaTResidualModel, BitWriter<Vec<u8>, BigEndian>>,
 }
 
 pub const D_RESIDUAL_NO_EVENT: DResidual = DResidual::MAX;
@@ -212,17 +215,38 @@ pub const DELTA_T_RESIDUAL_NO_EVENT: DeltaTResidual = DeltaTResidual::MAX;
 
 impl BlockIntraPredictionContextModel {
     pub fn new(delta_t_max: DeltaT) -> Self {
+        let d_model = BlockDResidualModel::new();
+        let delta_t_model = BlockDeltaTResidualModel::new(delta_t_max);
+
+        let mut d_writer = BitWriter::endian(Vec::new(), BigEndian);
+        let mut d_encoder = Encoder::new(d_model); // Todo: shouldn't clone models unless at new AVU time point, ideally...
+        let mut dt_writer = BitWriter::endian(Vec::new(), BigEndian);
+        let mut dt_encoder = Encoder::new(delta_t_model);
+
         let mut ret = Self {
             prev_coded_event: None,
             prediction_mode: TimeMode::AbsoluteT,
             d_model: BlockDResidualModel::new(),
             delta_t_model: BlockDeltaTResidualModel::new(delta_t_max),
-            // d_encoder: Encoder::new(BlockDResidualModel::new(), &mut d_writer),
+            d_writer,
+            d_encoder,
+            dt_writer,
+            dt_encoder,
             // d_encoder: None,
             // d_writer,
         };
 
         ret
+    }
+
+    fn consume_writers(&mut self) -> (Vec<u8>, Vec<u8>) {
+        let mut new_d_writer = BitWriter::endian(Vec::new(), BigEndian);
+        swap(&mut new_d_writer, &mut self.d_writer);
+
+        let mut new_dt_writer = BitWriter::endian(Vec::new(), BigEndian);
+        swap(&mut new_dt_writer, &mut self.dt_writer);
+
+        (new_d_writer.into_writer(), new_dt_writer.into_writer())
     }
 
     // Encode each event in the block in zigzag order. Context looks at the previous encoded event
@@ -231,39 +255,29 @@ impl BlockIntraPredictionContextModel {
     where
         W: BitWrite,
     {
-        let mut d_writer = BitWriter::endian(Vec::new(), BigEndian);
-        let mut d_encoder = Encoder::new(self.d_model.clone(), &mut d_writer); // Todo: shouldn't clone models unless at new AVU time point, ideally...
-        let mut dt_writer = BitWriter::endian(Vec::new(), BigEndian);
-        let mut dt_encoder = Encoder::new(self.delta_t_model.clone(), &mut dt_writer);
-
         let zigzag = ZigZag::new(block, &ZIGZAG_ORDER);
         for event in zigzag {
-            self.encode_event(event, &mut d_encoder, &mut dt_encoder);
+            self.encode_event(event);
         }
 
-        d_encoder.flush().unwrap();
-        d_writer.byte_align().unwrap();
-        dt_encoder.flush().unwrap();
-        dt_writer.byte_align().unwrap();
+        self.d_encoder.flush(&mut self.d_writer).unwrap();
+        self.d_writer.byte_align().unwrap();
+        self.dt_encoder.flush(&mut self.dt_writer).unwrap();
+        self.dt_writer.byte_align().unwrap();
 
-        let d = d_writer.into_writer();
+        let (d, dt) = self.consume_writers();
         /* The compressed length of the d residuals
         should always be representable in 2 bytes. Write that signifier as a u16.
          */
         let d_len_bytes = (d.len() as u16).to_be_bytes();
         file_writer.write_bytes(&d_len_bytes).unwrap();
         file_writer.write_bytes(&d).unwrap();
-        file_writer.write_bytes(&dt_writer.into_writer()).unwrap();
+        file_writer.write_bytes(&dt).unwrap();
     }
 
     // Encode the prediction residual for an event based on the previous coded event
     #[inline(always)]
-    pub fn encode_event(
-        &mut self,
-        event: Option<&EventCoordless>,
-        d_encoder: &mut Encoder<BlockDResidualModel, BitWriter<Vec<u8>, BigEndian>>,
-        dt_encoder: &mut Encoder<BlockDeltaTResidualModel, BitWriter<Vec<u8>, BigEndian>>,
-    ) {
+    pub fn encode_event(&mut self, event: Option<&EventCoordless>) {
         // If this is the first event in the block, encode it directly
         let (d_resid, dt_resid) = match self.prev_coded_event {
             None => match event {
@@ -310,8 +324,12 @@ impl BlockIntraPredictionContextModel {
             },
         };
 
-        d_encoder.encode(Some(&d_resid)).unwrap();
-        dt_encoder.encode(Some(&dt_resid)).unwrap();
+        self.d_encoder
+            .encode(Some(&d_resid), &mut self.d_writer)
+            .unwrap();
+        self.dt_encoder
+            .encode(Some(&dt_resid), &mut self.dt_writer)
+            .unwrap();
     }
 
     /// TODO
