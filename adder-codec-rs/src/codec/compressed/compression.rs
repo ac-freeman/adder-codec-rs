@@ -497,7 +497,7 @@ mod tests {
     fn test_i16_compression() {
         let model = BlockDResidualModel::new();
         let mut bitwriter = BitWriter::endian(Vec::new(), BigEndian);
-        let mut encoder = Encoder::new(model.clone(), &mut bitwriter);
+        let mut encoder = Encoder::new(model.clone());
 
         let input: Vec<DResidual> = vec![
             0, 1, 2, 3, 4, 5, 6, 7, 8, 8, 8, 1, 2, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9,
@@ -505,7 +505,7 @@ mod tests {
 
         let input_len = input.len() * 2;
 
-        encoder.encode_all(input.clone()).unwrap();
+        encoder.encode_all(input.clone(), &mut bitwriter).unwrap();
         bitwriter.byte_align().unwrap();
 
         let buffer = bitwriter.into_writer();
@@ -533,14 +533,14 @@ mod tests {
     fn test_i16_rand_compression() {
         let model = BlockDResidualModel::new();
         let mut bitwriter = BitWriter::endian(Vec::new(), BigEndian);
-        let mut encoder = Encoder::new(model.clone(), &mut bitwriter);
+        let mut encoder = Encoder::new(model.clone());
 
         let mut rng = rand::thread_rng();
         let input: Vec<DResidual> = (0..1000).map(|_| rng.gen_range(-255..255)).collect();
 
         let input_len = input.len() * 2;
 
-        encoder.encode_all(input.clone()).unwrap();
+        encoder.encode_all(input.clone(), &mut bitwriter).unwrap();
         bitwriter.byte_align().unwrap();
 
         let buffer = bitwriter.into_writer();
@@ -569,13 +569,13 @@ mod tests {
     fn test_delta_t_compression() {
         let model = BlockDeltaTResidualModel::new(255 * 10);
         let mut bitwriter = BitWriter::endian(Vec::new(), BigEndian);
-        let mut encoder = Encoder::new(model.clone(), &mut bitwriter);
+        let mut encoder = Encoder::new(model.clone());
 
         let input: Vec<DeltaTResidual> = vec![100, -250, 89, 87, 86, 105, -30, 20, -28, 120];
 
         let input_len = input.len() * 4;
 
-        encoder.encode_all(input.clone()).unwrap();
+        encoder.encode_all(input.clone(), &mut bitwriter).unwrap();
         bitwriter.byte_align().unwrap();
 
         let buffer = bitwriter.into_writer();
@@ -604,7 +604,7 @@ mod tests {
         let delta_t_max = 255 * 10;
         let model = BlockDeltaTResidualModel::new(delta_t_max);
         let mut bitwriter = BitWriter::endian(Vec::new(), BigEndian);
-        let mut encoder = Encoder::new(model.clone(), &mut bitwriter);
+        let mut encoder = Encoder::new(model.clone());
 
         let mut rng = rand::thread_rng();
         let input: Vec<DeltaTResidual> = (0..1000)
@@ -613,7 +613,7 @@ mod tests {
 
         let input_len = input.len() * 4;
 
-        encoder.encode_all(input.clone()).unwrap();
+        encoder.encode_all(input.clone(), &mut bitwriter).unwrap();
         bitwriter.byte_align().unwrap();
 
         let buffer = bitwriter.into_writer();
