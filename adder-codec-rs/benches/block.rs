@@ -2,12 +2,14 @@ use adder_codec_rs::codec::compressed::blocks::{gen_zigzag_order, Cube, ZigZag, 
 use adder_codec_rs::codec::compressed::{BLOCK_SIZE_BIG, BLOCK_SIZE_BIG_AREA};
 use arithmetic_coding::Encoder;
 use bitstream_io::{BigEndian, BitWrite, BitWriter};
+use std::io::BufReader;
 
 use adder_codec_rs::codec::compressed::compression::BlockIntraPredictionContextModel;
 use adder_codec_rs::{Coord, Event};
 use criterion::{criterion_group, criterion_main, Criterion};
 use rand::prelude::StdRng;
 use rand::{Rng, SeedableRng};
+use tokio::io::AsyncReadExt;
 
 struct Setup {
     cube: Cube,
@@ -193,8 +195,16 @@ fn bench_encode_block(c: &mut Criterion) {
 
     let writer: &[u8] = &*out_writer.into_writer();
 
+    let mut buf_reader = BufReader::new(writer);
+
     group.bench_function("decode block", |b| {
-        b.iter(|| context_model.decode_block(&mut cube.blocks_r[0], writer))
+        b.iter(|| context_model.decode_block(&mut cube.blocks_r[0], &mut buf_reader))
+    });
+
+    group.bench_function("decode MANY blocks", |b| {
+        for _ in 0..99 {
+            b.iter(|| context_model.decode_block(&mut cube.blocks_r[0], writer))
+        }
     });
 }
 
