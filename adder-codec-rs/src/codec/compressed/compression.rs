@@ -704,6 +704,14 @@ mod tests {
         assert!(len < BLOCK_SIZE_BIG_AREA * 5); // 5 bytes per raw event when just encoding D and Dt
         println!("{len}");
 
+        println!("input bytes: {}", BLOCK_SIZE_BIG_AREA * 5);
+        println!("output bytes: {len}");
+
+        println!(
+            "compression ratio: {}",
+            (BLOCK_SIZE_BIG_AREA * 5) as f32 / len as f32
+        );
+
         let mut context_model = BlockIntraPredictionContextModel::new(2550);
 
         context_model.decode_block(&mut cube.blocks_r[0], writer);
