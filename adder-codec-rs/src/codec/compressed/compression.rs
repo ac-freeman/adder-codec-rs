@@ -239,10 +239,14 @@ impl BlockIntraPredictionContextModel {
         ret
     }
 
-    fn consume_writers(&mut self) -> (Vec<u8>, Vec<u8>) {
+    pub fn consume_writers(&mut self) -> (Vec<u8>, Vec<u8>) {
+        self.dt_encoder.flush(&mut self.d_writer).unwrap();
+        self.d_writer.byte_align().unwrap();
         let mut new_d_writer = BitWriter::endian(Vec::new(), BigEndian);
         swap(&mut new_d_writer, &mut self.d_writer);
 
+        self.dt_encoder.flush(&mut self.dt_writer).unwrap();
+        self.dt_writer.byte_align().unwrap();
         let mut new_dt_writer = BitWriter::endian(Vec::new(), BigEndian);
         swap(&mut new_dt_writer, &mut self.dt_writer);
 
@@ -259,11 +263,6 @@ impl BlockIntraPredictionContextModel {
         for event in zigzag {
             self.encode_event(event);
         }
-
-        self.d_encoder.flush(&mut self.d_writer).unwrap();
-        self.d_writer.byte_align().unwrap();
-        self.dt_encoder.flush(&mut self.dt_writer).unwrap();
-        self.dt_writer.byte_align().unwrap();
 
         let (d, dt) = self.consume_writers();
         /* The compressed length of the d residuals

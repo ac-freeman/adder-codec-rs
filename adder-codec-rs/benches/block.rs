@@ -198,30 +198,24 @@ fn bench_encode_event(c: &mut Criterion) {
         assert!(cube.set_event(*event).is_ok());
     }
 
-    let mut d_writer = BitWriter::endian(Vec::new(), BigEndian);
-    let mut d_encoder = Encoder::new(context_model.d_model.clone(), &mut d_writer); // Todo: shouldn't clone models unless at new AVU time point, ideally...
-    let mut dt_writer = BitWriter::endian(Vec::new(), BigEndian);
-    let mut dt_encoder = Encoder::new(context_model.delta_t_model.clone(), &mut dt_writer);
+    // let mut d_writer = BitWriter::endian(Vec::new(), BigEndian);
+    // let mut d_encoder = Encoder::new(context_model.d_model.clone()); // Todo: shouldn't clone models unless at new AVU time point, ideally...
+    // let mut dt_writer = BitWriter::endian(Vec::new(), BigEndian);
+    // let mut dt_encoder = Encoder::new(context_model.delta_t_model.clone());
 
-    context_model.encode_event(Some(&events[0].into()), &mut d_encoder, &mut dt_encoder);
+    context_model.encode_event(Some(&events[0].into()));
 
     c.bench_function("encode event", |b| {
-        b.iter(|| {
-            context_model.encode_event(Some(&events[1].into()), &mut d_encoder, &mut dt_encoder)
-        })
+        b.iter(|| context_model.encode_event(Some(&events[1].into())))
     });
 
     let mut context_model = BlockIntraPredictionContextModel::new(2550);
-    let mut d_writer = BitWriter::endian(Vec::new(), BigEndian);
-    let mut d_encoder = Encoder::new(context_model.d_model.clone(), &mut d_writer); // Todo: shouldn't clone models unless at new AVU time point, ideally...
-    let mut dt_writer = BitWriter::endian(Vec::new(), BigEndian);
-    let mut dt_encoder = Encoder::new(context_model.delta_t_model.clone(), &mut dt_writer);
 
     c.bench_function("encode block of events", |b| {
         b.iter(|| {
             let zigzag = ZigZag::new(&cube.blocks_r[0], &ZIGZAG_ORDER);
             for event in zigzag {
-                context_model.encode_event(event, &mut d_encoder, &mut dt_encoder);
+                context_model.encode_event(event);
             }
         })
     });
@@ -239,30 +233,21 @@ fn bench_encode_event2(c: &mut Criterion) {
     c.bench_function("write OUT encoded events", |b| {
         b.iter(|| {
             let mut context_model = BlockIntraPredictionContextModel::new(2550);
-            let mut d_writer = BitWriter::endian(Vec::new(), BigEndian);
-            let mut d_encoder = Encoder::new(context_model.d_model.clone(), &mut d_writer); // Todo: shouldn't clone models unless at new AVU time point, ideally...
-            let mut dt_writer = BitWriter::endian(Vec::new(), BigEndian);
-            let mut dt_encoder = Encoder::new(context_model.delta_t_model.clone(), &mut dt_writer);
             let mut out_writer = BitWriter::endian(Vec::new(), BigEndian);
 
             let zigzag = ZigZag::new(&cube.blocks_r[0], &ZIGZAG_ORDER);
             for event in zigzag {
-                context_model.encode_event(event, &mut d_encoder, &mut dt_encoder);
+                context_model.encode_event(event);
             }
 
-            d_encoder.flush().unwrap();
-            d_writer.byte_align().unwrap();
-            dt_encoder.flush().unwrap();
-            dt_writer.byte_align().unwrap();
-
-            let d = d_writer.into_writer();
+            let (d, dt) = context_model.consume_writers();
             /* The compressed length of the d residuals
             should always be representable in 2 bytes. Write that signifier as a u16.
              */
             let d_len_bytes = (d.len() as u16).to_be_bytes();
             out_writer.write_bytes(&d_len_bytes).unwrap();
             out_writer.write_bytes(&d).unwrap();
-            out_writer.write_bytes(&dt_writer.into_writer()).unwrap();
+            out_writer.write_bytes(&dt).unwrap();
         })
     });
 }
