@@ -257,6 +257,7 @@ impl BlockIntraPredictionContextModel {
     }
 
     // Encode the prediction residual for an event based on the previous coded event
+    #[inline(always)]
     fn encode_event(
         &mut self,
         event: Option<&EventCoordless>,
@@ -335,57 +336,68 @@ impl BlockIntraPredictionContextModel {
         let block_ref = block.events.as_mut();
 
         for idx in ZIGZAG_ORDER {
-            let (d, dt) = match self.prev_coded_event {
-                None => {
-                    let d_resid = d_decoder.decode().unwrap().unwrap();
-                    let dt_resid = dt_decoder.decode().unwrap().unwrap();
-                    (d_resid, dt_resid)
-                }
-                Some(prev_event) => {
-                    let d_resid = d_decoder.decode().unwrap().unwrap();
-                    let dt_resid = dt_decoder.decode().unwrap().unwrap();
-
-                    let dt_pred = match d_resid {
-                        0 => prev_event.delta_t as DeltaTResidual,
-                        1_i16..=i16::MAX => {
-                            if d_resid as u32 <= prev_event.delta_t.leading_zeros() / 2 {
-                                min(
-                                    (prev_event.delta_t << d_resid).into(),
-                                    self.delta_t_model.delta_t_max,
-                                )
-                            } else {
-                                prev_event.delta_t.into()
-                            }
-                        }
-                        i16::MIN..=-1_i16 => {
-                            if -d_resid as u32 <= 32 - prev_event.delta_t.leading_zeros() {
-                                max(
-                                    (prev_event.delta_t >> -d_resid).into(),
-                                    prev_event.delta_t.into(),
-                                )
-                            } else {
-                                prev_event.delta_t.into()
-                            }
-                        }
-                    };
-                    (d_resid + prev_event.d as i16, dt_pred + dt_resid)
-                }
-            };
-
-            let event = match d {
-                D_RESIDUAL_NO_EVENT => None,
-                _ => {
-                    let event = EventCoordless {
-                        d: d as D,
-                        delta_t: dt as DeltaT,
-                    };
-                    self.prev_coded_event = Some(event);
-                    Some(event)
-                }
-            };
-
-            block_ref[idx as usize] = event;
+            self.decode_event(block_ref, idx, &mut d_decoder, &mut dt_decoder);
         }
+    }
+
+    #[inline(always)]
+    fn decode_event(
+        &mut self,
+        block_ref: &mut [Option<EventCoordless>],
+        idx: u16,
+        d_decoder: &mut Decoder<BlockDResidualModel, BitReader<&[u8], BigEndian>>,
+        dt_decoder: &mut Decoder<BlockDeltaTResidualModel, BitReader<&[u8], BigEndian>>,
+    ) {
+        let (d, dt) = match self.prev_coded_event {
+            None => {
+                let d_resid = d_decoder.decode().unwrap().unwrap();
+                let dt_resid = dt_decoder.decode().unwrap().unwrap();
+                (d_resid, dt_resid)
+            }
+            Some(prev_event) => {
+                let d_resid = d_decoder.decode().unwrap().unwrap();
+                let dt_resid = dt_decoder.decode().unwrap().unwrap();
+
+                let dt_pred = match d_resid {
+                    0 => prev_event.delta_t as DeltaTResidual,
+                    1_i16..=i16::MAX => {
+                        if d_resid as u32 <= prev_event.delta_t.leading_zeros() / 2 {
+                            min(
+                                (prev_event.delta_t << d_resid).into(),
+                                self.delta_t_model.delta_t_max,
+                            )
+                        } else {
+                            prev_event.delta_t.into()
+                        }
+                    }
+                    i16::MIN..=-1_i16 => {
+                        if -d_resid as u32 <= 32 - prev_event.delta_t.leading_zeros() {
+                            max(
+                                (prev_event.delta_t >> -d_resid).into(),
+                                prev_event.delta_t.into(),
+                            )
+                        } else {
+                            prev_event.delta_t.into()
+                        }
+                    }
+                };
+                (d_resid + prev_event.d as i16, dt_pred + dt_resid)
+            }
+        };
+
+        let event = match d {
+            D_RESIDUAL_NO_EVENT => None,
+            _ => {
+                let event = EventCoordless {
+                    d: d as D,
+                    delta_t: dt as DeltaT,
+                };
+                self.prev_coded_event = Some(event);
+                Some(event)
+            }
+        };
+
+        block_ref[idx as usize] = event;
     }
 }
 
