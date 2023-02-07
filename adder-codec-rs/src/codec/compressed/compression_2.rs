@@ -117,7 +117,7 @@ pub struct CompressionModelEncoder<W: std::io::Write + std::fmt::Debug> {
     // pub bitreader: Option<BitReader<BufReader<R>, BigEndian>>,
 }
 impl<W: std::io::Write + std::fmt::Debug> CompressionModelEncoder<W> {
-    pub fn new_encoder(delta_t_max: DeltaT, delta_t_ref: DeltaT, writer: BufWriter<W>) -> Self {
+    pub fn new(delta_t_max: DeltaT, delta_t_ref: DeltaT, writer: BufWriter<W>) -> Self {
         let bitwriter = BitWriter::endian(writer, BigEndian);
 
         // How many symbols we need to account for in the maximum
@@ -210,6 +210,44 @@ impl<W: std::io::Write + std::fmt::Debug> CompressionModelEncoder<W> {
         self.encoder.model.set_context(self.contexts.dt_context);
         let binding = ((dt_resid + self.delta_t_max as i64) as usize); // TODO: make a function to do this mapping
         self.encoder.encode(Some(&binding), &mut self.bitwriter);
+    }
+}
+
+pub struct CompressionModelDecoder<R: std::io::Read> {
+    contexts: Contexts,
+    prev_decoded_event: Option<EventCoordless>,
+    delta_t_max: DeltaT,
+    pub bitreader: BitReader<BufReader<R>, BigEndian>,
+    decoder: Decoder<FenwickModel, BitReader<BufReader<R>, BigEndian>>,
+}
+impl<R: std::io::Read> CompressionModelDecoder<R> {
+    pub fn new(delta_t_max: DeltaT, delta_t_ref: DeltaT, reader: BufReader<R>) -> Self {
+        let bitreader = BitReader::endian(reader, BigEndian);
+
+        // How many symbols we need to account for in the maximum
+        let num_symbols = delta_t_max as usize * 2;
+
+        let mut source_model = FenwickModel::with_symbols(delta_t_max as usize * 2, 1 << 20);
+
+        // D context. Only need to account for range [-255, 255]
+        let (d_context_idx) = source_model.push_context_with_weights(d_residual_default_weights());
+
+        // Delta_t context. Need to account for range [-delta_t_max, delta_t_max]
+        let (dt_context_idx) = source_model.push_context_with_weights(
+            dt_residual_default_weights(delta_t_max, delta_t_ref).clone(),
+        );
+
+        let contexts = Contexts::new(d_context_idx, dt_context_idx);
+
+        let mut decoder = Decoder::new(source_model);
+
+        CompressionModelDecoder {
+            contexts,
+            prev_decoded_event: None,
+            delta_t_max,
+            bitreader,
+            decoder,
+        }
     }
 }
 
@@ -315,7 +353,7 @@ mod tests {
         let mut write_result = Vec::new();
         let mut out_writer = BufWriter::new(&mut write_result);
 
-        let mut model = CompressionModelEncoder::new_encoder(2550, 255, out_writer);
+        let mut model = CompressionModelEncoder::new(2550, 255, out_writer);
 
         model.encode_block(&mut cube.blocks_r[0]);
 
@@ -334,5 +372,7 @@ mod tests {
             "compression ratio: {}",
             (BLOCK_SIZE_BIG_AREA * 5) as f32 / len as f32
         );
+
+        let buf_reader = BufReader::new(&**written);
     }
 }
