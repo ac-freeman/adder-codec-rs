@@ -9,13 +9,13 @@ pub mod simple;
 /// A wrapper around a vector of fenwick counts, with one additional weight for
 /// EOF.
 #[derive(Debug, Clone)]
-struct Weights {
+pub struct Weights {
     fenwick_counts: Vec<u64>,
     total: u64,
 }
 
 impl Weights {
-    fn new(n: usize) -> Self {
+    pub fn new(n: usize) -> Self {
         // we add one extra value here to account for the EOF
         let mut fenwick_counts = vec![0; n + 1];
 
@@ -30,6 +30,23 @@ impl Weights {
         }
     }
 
+    /// Initialize the weights with the given counts
+    pub fn new_with_counts(n: usize, counts: Vec<u64>) -> Self {
+        // we add one extra value here to account for the EOF
+        let mut fenwick_counts = vec![0; n + 1];
+
+        let mut weights = Self {
+            fenwick_counts,
+            total: 0,
+        };
+
+        for (i, &count) in counts.iter().enumerate() {
+            weights.update(Some(i), count);
+        }
+        weights.update(Some(n), 1); // Add a tiny probability for the EOF symbol
+        weights
+    }
+
     fn update(&mut self, i: Option<usize>, delta: u64) {
         let index = i.map(|i| i + 1).unwrap_or_default();
         fenwick::array::update(&mut self.fenwick_counts, index, delta);
@@ -41,7 +58,9 @@ impl Weights {
         fenwick::array::prefix_sum(&self.fenwick_counts, index)
     }
 
+    /// Returns the probability range for the given symbol
     fn range(&self, i: Option<usize>) -> Range<u64> {
+        // Increment the symbol index by one to account for the EOF?
         let index = i.map(|i| i + 1).unwrap_or_default();
 
         let upper = fenwick::array::prefix_sum(&self.fenwick_counts, index);
@@ -58,6 +77,7 @@ impl Weights {
         self.fenwick_counts.len() - 1
     }
 
+    /// Used for decoding. Find the symbol index for the given prefix_sum
     fn symbol(&self, prefix_sum: u64) -> Option<usize> {
         if prefix_sum < self.prefix_sum(None) {
             return None;
