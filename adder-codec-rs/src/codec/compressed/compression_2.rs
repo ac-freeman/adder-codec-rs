@@ -165,7 +165,6 @@ impl<W: std::io::Write + std::fmt::Debug> CompressionModelEncoder<W> {
     }
 
     // Encode the prediction residual for an event based on the previous coded event
-    #[inline(always)]
     pub fn encode_event(&mut self, event: Option<&EventCoordless>) {
         // If this is the first event in the block, encode it directly
         let (d_resid, dt_resid) = match self.prev_coded_event {
@@ -526,7 +525,8 @@ mod tests {
 
         let mut model = CompressionModelEncoder::new(2550, 255, out_writer);
 
-        for _ in 0..10 {
+        let num_blocks = 100;
+        for _ in 0..num_blocks {
             model.encode_block(&mut cube.blocks_r[0]);
         }
 
@@ -537,22 +537,22 @@ mod tests {
 
         let written = writer.into_inner().unwrap();
         let len = written.len();
-        assert!(len < BLOCK_SIZE_BIG_AREA * 5 * 10); // 5 bytes per raw event when just encoding D and Dt
+        assert!(len < BLOCK_SIZE_BIG_AREA * 5 * num_blocks); // 5 bytes per raw event when just encoding D and Dt
         println!("{len}");
 
-        println!("input bytes: {}", BLOCK_SIZE_BIG_AREA * 5 * 10);
+        println!("input bytes: {}", BLOCK_SIZE_BIG_AREA * 5 * num_blocks);
         println!("output bytes: {len}");
 
         println!(
             "compression ratio: {}",
-            (BLOCK_SIZE_BIG_AREA * 5 * 10) as f32 / len as f32
+            (BLOCK_SIZE_BIG_AREA * 5 * num_blocks) as f32 / len as f32
         );
 
         let buf_reader = BufReader::new(&**written);
 
         let mut context_model = CompressionModelDecoder::new(2550, 255, buf_reader);
 
-        for block_num in 0..10 {
+        for block_num in 0..num_blocks {
             context_model.decode_block(&mut cube.blocks_r[0]);
 
             for idx in 0..BLOCK_SIZE_BIG_AREA {
