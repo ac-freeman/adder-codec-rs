@@ -249,6 +249,103 @@ impl<R: std::io::Read> CompressionModelDecoder<R> {
             decoder,
         }
     }
+
+    pub fn decode_block(&mut self, block: &mut Block) {
+        // assert!(self.reader.is_some()); // TODO: return result
+        self.prev_decoded_event = None;
+
+        for idx in ZIGZAG_ORDER {
+            self.decode_event(block, idx);
+        }
+        // self.dt_reader.byte_align();
+    }
+
+    fn decode_event(&mut self, block_ref: &mut Block, idx: u16) {
+        // Read the d residual
+        self.decoder.model.set_context(self.contexts.d_context);
+        let d_resid = self.decoder.decode(&mut self.bitreader).unwrap().unwrap();
+        let d_resid = d_resid as i16 - 255;
+
+        // Read the dt residual
+        self.decoder.model.set_context(self.contexts.dt_context);
+        let dt_resid = self.decoder.decode(&mut self.bitreader).unwrap().unwrap();
+        let dt_resid = dt_resid as i64 - self.delta_t_max as i64;
+
+        if d_resid == D_RESIDUAL_NO_EVENT {
+            unsafe { *block_ref.events.get_unchecked_mut(idx as usize) = None };
+            return;
+        }
+
+        let (d, dt) = match self.prev_decoded_event {
+            None => {
+                // let d_resid = self
+                //     .d_decoder
+                //     .decode(self.bitreader.as_mut().unwrap())
+                //     .unwrap()
+                //     .unwrap();
+                // let dt_resid = self
+                //     .dt_decoder
+                //     .decode(self.bitreader.as_mut().unwrap())
+                //     .unwrap()
+                //     .unwrap();
+
+                eprintln!("idx: {}, d_resid: {}, dt_resid: {}", idx, d_resid, dt_resid);
+                (d_resid, dt_resid)
+            }
+            Some(prev_event) => {
+                // let d_resid = self
+                //     .d_decoder
+                //     .decode(self.bitreader.as_mut().unwrap())
+                //     .unwrap()
+                //     .unwrap();
+                // let dt_resid = self
+                //     .dt_decoder
+                //     .decode(self.bitreader.as_mut().unwrap())
+                //     .unwrap()
+                //     .unwrap();
+
+                let dt_pred = match d_resid {
+                    0 => prev_event.delta_t as DeltaTResidual,
+                    1_i16..=i16::MAX => {
+                        if d_resid as u32 <= prev_event.delta_t.leading_zeros() / 2 {
+                            min(
+                                (prev_event.delta_t << d_resid).into(),
+                                self.delta_t_max.into(),
+                            )
+                        } else {
+                            prev_event.delta_t.into()
+                        }
+                    }
+                    i16::MIN..=-1_i16 => {
+                        if -d_resid as u32 <= 32 - prev_event.delta_t.leading_zeros() {
+                            max(
+                                (prev_event.delta_t >> -d_resid).into(),
+                                prev_event.delta_t.into(),
+                            )
+                        } else {
+                            prev_event.delta_t.into()
+                        }
+                    }
+                };
+                eprintln!("idx: {}, d_resid: {}, dt_resid: {}", idx, d_resid, dt_resid);
+                (d_resid + prev_event.d as i16, dt_pred + dt_resid)
+            }
+        };
+
+        let event = match d {
+            D_RESIDUAL_NO_EVENT => None,
+            _ => {
+                let event = EventCoordless {
+                    d: d as D,
+                    delta_t: dt as DeltaT,
+                };
+                self.prev_decoded_event = Some(event);
+                Some(event)
+            }
+        };
+
+        unsafe { *block_ref.events.get_unchecked_mut(idx as usize) = event };
+    }
 }
 
 #[cfg(test)]
