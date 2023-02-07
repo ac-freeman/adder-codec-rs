@@ -212,3 +212,127 @@ impl<W: std::io::Write + std::fmt::Debug> CompressionModelEncoder<W> {
         self.encoder.encode(Some(&binding), &mut self.bitwriter);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::codec::compressed::blocks::Cube;
+    use crate::codec::compressed::compression_2::CompressionModelEncoder;
+    use crate::codec::compressed::{BLOCK_SIZE_BIG, BLOCK_SIZE_BIG_AREA};
+    use crate::{Coord, Event};
+    use arithmetic_coding::{Decoder, Encoder};
+    use bitstream_io::{BigEndian, BitReader, BitWrite, BitWriter};
+    use rand::prelude::StdRng;
+    use rand::{Rng, SeedableRng};
+    use std::fs::File;
+    use std::io::{BufReader, BufWriter};
+
+    struct Setup {
+        cube: Cube,
+        event: Event,
+        events_for_block_r: Vec<Event>,
+        events_for_block_g: Vec<Event>,
+        events_for_block_b: Vec<Event>,
+    }
+    impl Setup {
+        fn new(seed: Option<u64>) -> Self {
+            let mut rng = match seed {
+                None => StdRng::from_rng(rand::thread_rng()).unwrap(),
+                Some(num) => StdRng::seed_from_u64(42),
+            };
+            //
+            let mut events_for_block_r = Vec::new();
+            for y in 0..BLOCK_SIZE_BIG {
+                for x in 0..BLOCK_SIZE_BIG {
+                    events_for_block_r.push(Event {
+                        coord: Coord {
+                            y: y as u16,
+                            x: x as u16,
+                            c: Some(0),
+                        },
+
+                        d: rng.gen_range(0..20),
+                        delta_t: rng.gen_range(1..2550),
+                    });
+                }
+            }
+
+            let mut events_for_block_g = Vec::new();
+            for y in 0..BLOCK_SIZE_BIG {
+                for x in 0..BLOCK_SIZE_BIG {
+                    events_for_block_g.push(Event {
+                        coord: Coord {
+                            y: y as u16,
+                            x: x as u16,
+                            c: Some(1),
+                        },
+                        ..Default::default()
+                    });
+                }
+            }
+
+            let mut events_for_block_b = Vec::new();
+            for y in 0..BLOCK_SIZE_BIG {
+                for x in 0..BLOCK_SIZE_BIG {
+                    events_for_block_b.push(Event {
+                        coord: Coord {
+                            y: y as u16,
+                            x: x as u16,
+                            c: Some(2),
+                        },
+                        ..Default::default()
+                    });
+                }
+            }
+
+            Self {
+                cube: Cube::new(0, 0, 0),
+                event: Event {
+                    coord: Coord {
+                        x: 0,
+                        y: 0,
+                        c: Some(0),
+                    },
+                    d: 7,
+                    delta_t: 100,
+                },
+                events_for_block_r,
+                events_for_block_g,
+                events_for_block_b,
+            }
+        }
+    }
+
+    #[test]
+    fn test_encode_decode_block() {
+        let setup = Setup::new(Some(473829479));
+        let mut cube = setup.cube;
+        let events = setup.events_for_block_r;
+
+        for event in events.iter() {
+            assert!(cube.set_event(*event).is_ok());
+        }
+
+        let mut write_result = Vec::new();
+        let mut out_writer = BufWriter::new(&mut write_result);
+
+        let mut model = CompressionModelEncoder::new_encoder(2550, 255, out_writer);
+
+        model.encode_block(&mut cube.blocks_r[0]);
+
+        let writer = model.bitwriter.into_writer();
+        // let writer: &[u8] = &*out_writer.into_writer();
+
+        let written = writer.into_inner().unwrap();
+        let len = written.len();
+        assert!(len < BLOCK_SIZE_BIG_AREA * 5); // 5 bytes per raw event when just encoding D and Dt
+        println!("{len}");
+
+        println!("input bytes: {}", BLOCK_SIZE_BIG_AREA * 5);
+        println!("output bytes: {len}");
+
+        println!(
+            "compression ratio: {}",
+            (BLOCK_SIZE_BIG_AREA * 5) as f32 / len as f32
+        );
+    }
+}
