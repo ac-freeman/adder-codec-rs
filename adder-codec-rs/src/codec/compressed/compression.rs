@@ -224,8 +224,8 @@ pub struct BlockIntraPredictionContextModel<
     bitreader: Option<BitReader<BufReader<R>, BigEndian>>,
 }
 
-pub const D_RESIDUAL_NO_EVENT: DResidual = DResidual::MAX;
-pub const DELTA_T_RESIDUAL_NO_EVENT: DeltaTResidual = DeltaTResidual::MAX;
+pub const D_RESIDUAL_NO_EVENT: DResidual = 256; // TODO: document and test
+pub const DELTA_T_RESIDUAL_NO_EVENT: DeltaTResidual = DeltaTResidual::MAX; // TODO: document and test
 
 impl<'r, R: std::io::Read, W: std::io::Write + std::fmt::Debug>
     BlockIntraPredictionContextModel<'r, R, W>

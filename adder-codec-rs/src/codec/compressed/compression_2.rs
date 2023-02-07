@@ -19,6 +19,9 @@ use std::ops::Range;
 // Get the residual between the pixel's current delta_t and the expected delta_t. Encode that
 
 use crate::codec::compressed::blocks::{Block, ZigZag, ZIGZAG_ORDER};
+use crate::codec::compressed::compression::{
+    DResidual, DeltaTResidual, DELTA_T_RESIDUAL_NO_EVENT, D_RESIDUAL_NO_EVENT,
+};
 use crate::codec::compressed::fenwick::{context_switching::FenwickModel, ValueError, Weights};
 use crate::codec::compressed::{BLOCK_SIZE_BIG, BLOCK_SIZE_BIG_AREA};
 use crate::framer::driver::EventCoordless;
@@ -107,8 +110,10 @@ pub struct CompressionModelEncoder<W: std::io::Write + std::fmt::Debug> {
     // d_context
     // dt_context
     //
+    prev_coded_event: Option<EventCoordless>,
+    delta_t_max: DeltaT,
     pub bitwriter: BitWriter<BufWriter<W>, BigEndian>,
-    encoder: Encoder<FenwickModel, BitWriter<BufWriter<Vec<u8>>, BigEndian>>,
+    encoder: Encoder<FenwickModel, BitWriter<BufWriter<W>, BigEndian>>,
     // pub bitreader: Option<BitReader<BufReader<R>, BigEndian>>,
 }
 impl<W: std::io::Write + std::fmt::Debug> CompressionModelEncoder<W> {
@@ -134,8 +139,76 @@ impl<W: std::io::Write + std::fmt::Debug> CompressionModelEncoder<W> {
 
         CompressionModelEncoder {
             contexts,
+            prev_coded_event: None,
+            delta_t_max,
             bitwriter,
             encoder,
         }
+    }
+
+    pub fn encode_block(&mut self, block: &mut Block) {
+        let zigzag = ZigZag::new(block, &ZIGZAG_ORDER);
+        for event in zigzag {
+            self.encode_event(event);
+        }
+    }
+
+    // Encode the prediction residual for an event based on the previous coded event
+    #[inline(always)]
+    pub fn encode_event(&mut self, event: Option<&EventCoordless>) {
+        // If this is the first event in the block, encode it directly
+        let (d_resid, dt_resid) = match self.prev_coded_event {
+            None => match event {
+                None => (D_RESIDUAL_NO_EVENT, DELTA_T_RESIDUAL_NO_EVENT), // TODO: test this. Need to expand alphabet
+                Some(ev) => {
+                    self.prev_coded_event = Some(*ev);
+                    (ev.d as DResidual, ev.delta_t as DeltaTResidual)
+                }
+            },
+            Some(prev_event) => match event {
+                None => (D_RESIDUAL_NO_EVENT, DELTA_T_RESIDUAL_NO_EVENT),
+                Some(ev) => {
+                    let d_resid = ev.d as DResidual - prev_event.d as DResidual;
+
+                    // Get the prediction error for delta_t based on the change in D
+                    let dt_resid = ev.delta_t as DeltaTResidual
+                        - match d_resid {
+                            0 => prev_event.delta_t as DeltaTResidual,
+                            1_i16..=i16::MAX => {
+                                if d_resid as u32 <= prev_event.delta_t.leading_zeros() / 2 {
+                                    min(
+                                        (prev_event.delta_t << d_resid).into(),
+                                        self.delta_t_max.into(),
+                                    )
+                                } else {
+                                    prev_event.delta_t.into()
+                                }
+                            }
+                            i16::MIN..=-1_i16 => {
+                                if -d_resid as u32 <= 32 - prev_event.delta_t.leading_zeros() {
+                                    max(
+                                        (prev_event.delta_t >> -d_resid).into(),
+                                        prev_event.delta_t.into(),
+                                    )
+                                } else {
+                                    prev_event.delta_t.into()
+                                }
+                            }
+                        };
+
+                    self.prev_coded_event = Some(*ev);
+                    eprintln!("d_resid: {}, dt_resid: {}", d_resid, dt_resid);
+                    (d_resid, dt_resid)
+                }
+            },
+        };
+
+        self.encoder.model.set_context(self.contexts.d_context);
+        let binding = ((d_resid + 255) as usize); // TODO: make a function to do this mapping
+        self.encoder.encode(Some(&binding), &mut self.bitwriter);
+
+        self.encoder.model.set_context(self.contexts.dt_context);
+        let binding = ((dt_resid + self.delta_t_max as i64) as usize); // TODO: make a function to do this mapping
+        self.encoder.encode(Some(&binding), &mut self.bitwriter);
     }
 }
