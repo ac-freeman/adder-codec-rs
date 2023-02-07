@@ -151,6 +151,14 @@ impl<W: std::io::Write + std::fmt::Debug> CompressionModelEncoder<W> {
         for event in zigzag {
             self.encode_event(event);
         }
+
+        // Encode the EOF symbol // TODO: only do this at AVU boundaries
+        self.encoder.model.set_context(self.contexts.d_context);
+        let binding = 0;
+        self.encoder.encode(Some(&binding), &mut self.bitwriter);
+
+        self.bitwriter.byte_align().unwrap();
+        self.bitwriter.flush().unwrap();
     }
 
     // Encode the prediction residual for an event based on the previous coded event
@@ -204,11 +212,11 @@ impl<W: std::io::Write + std::fmt::Debug> CompressionModelEncoder<W> {
         };
 
         self.encoder.model.set_context(self.contexts.d_context);
-        let binding = ((d_resid + 255) as usize); // TODO: make a function to do this mapping
+        let binding = ((d_resid + 255 + 1) as usize); // TODO: make a function to do this mapping
         self.encoder.encode(Some(&binding), &mut self.bitwriter);
 
         self.encoder.model.set_context(self.contexts.dt_context);
-        let binding = ((dt_resid + self.delta_t_max as i64) as usize); // TODO: make a function to do this mapping
+        let binding = ((dt_resid + self.delta_t_max as i64 + 1) as usize); // TODO: make a function to do this mapping
         self.encoder.encode(Some(&binding), &mut self.bitwriter);
     }
 }
@@ -264,12 +272,12 @@ impl<R: std::io::Read> CompressionModelDecoder<R> {
         // Read the d residual
         self.decoder.model.set_context(self.contexts.d_context);
         let d_resid = self.decoder.decode(&mut self.bitreader).unwrap().unwrap();
-        let d_resid = d_resid as i16 - 255;
+        let d_resid = d_resid as i16 - 255 - 1;
 
         // Read the dt residual
         self.decoder.model.set_context(self.contexts.dt_context);
         let dt_resid = self.decoder.decode(&mut self.bitreader).unwrap().unwrap();
-        let dt_resid = dt_resid as i64 - self.delta_t_max as i64;
+        let dt_resid = dt_resid as i64 - self.delta_t_max as i64 - 1;
 
         if d_resid == D_RESIDUAL_NO_EVENT {
             unsafe { *block_ref.events.get_unchecked_mut(idx as usize) = None };
@@ -351,7 +359,9 @@ impl<R: std::io::Read> CompressionModelDecoder<R> {
 #[cfg(test)]
 mod tests {
     use crate::codec::compressed::blocks::Cube;
-    use crate::codec::compressed::compression_2::CompressionModelEncoder;
+    use crate::codec::compressed::compression_2::{
+        CompressionModelDecoder, CompressionModelEncoder,
+    };
     use crate::codec::compressed::{BLOCK_SIZE_BIG, BLOCK_SIZE_BIG_AREA};
     use crate::{Coord, Event};
     use arithmetic_coding::{Decoder, Encoder};
@@ -471,5 +481,20 @@ mod tests {
         );
 
         let buf_reader = BufReader::new(&**written);
+
+        let mut context_model = CompressionModelDecoder::new(2550, 255, buf_reader);
+
+        context_model.decode_block(&mut cube.blocks_r[0]);
+
+        for idx in 0..BLOCK_SIZE_BIG_AREA {
+            let source_d = events[idx].d;
+            let source_dt = events[idx].delta_t;
+
+            let decoded_d = cube.blocks_r[0].events[idx].unwrap().d;
+            let decoded_dt = cube.blocks_r[0].events[idx].unwrap().delta_t;
+
+            assert_eq!(source_d, decoded_d);
+            assert_eq!(source_dt, decoded_dt);
+        }
     }
 }
