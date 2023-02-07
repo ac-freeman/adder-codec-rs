@@ -43,8 +43,7 @@ impl Weights {
         for (i, &count) in counts.iter().enumerate() {
             weights.update(Some(i), count);
         }
-        fenwick::array::update(&mut weights.fenwick_counts, 0, 1); // Add a tiny probability for the EOF symbol
-        weights.total += 1;
+        weights.update(None, 1);
         weights
     }
 

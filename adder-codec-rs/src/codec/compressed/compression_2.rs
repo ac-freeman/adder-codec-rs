@@ -154,9 +154,9 @@ impl<W: std::io::Write + std::fmt::Debug> CompressionModelEncoder<W> {
 
         // Encode the EOF symbol // TODO: only do this at AVU boundaries
         self.encoder.model.set_context(self.contexts.d_context);
-        let binding = 0;
-        self.encoder.encode(Some(&binding), &mut self.bitwriter);
-
+        self.encoder.encode(None, &mut self.bitwriter).unwrap();
+        // Must flush the encoder to the bitwriter before flushing the bitwriter itself
+        self.encoder.flush(&mut self.bitwriter).unwrap();
         self.bitwriter.byte_align().unwrap();
         self.bitwriter.flush().unwrap();
     }
@@ -212,11 +212,11 @@ impl<W: std::io::Write + std::fmt::Debug> CompressionModelEncoder<W> {
         };
 
         self.encoder.model.set_context(self.contexts.d_context);
-        let binding = ((d_resid + 255 + 1) as usize); // TODO: make a function to do this mapping
+        let binding = ((d_resid + 255) as usize); // TODO: make a function to do this mapping
         self.encoder.encode(Some(&binding), &mut self.bitwriter);
 
         self.encoder.model.set_context(self.contexts.dt_context);
-        let binding = ((dt_resid + self.delta_t_max as i64 + 1) as usize); // TODO: make a function to do this mapping
+        let binding = ((dt_resid + self.delta_t_max as i64) as usize); // TODO: make a function to do this mapping
         self.encoder.encode(Some(&binding), &mut self.bitwriter);
     }
 }
@@ -265,6 +265,9 @@ impl<R: std::io::Read> CompressionModelDecoder<R> {
         for idx in ZIGZAG_ORDER {
             self.decode_event(block, idx);
         }
+        self.decoder.model.set_context(self.contexts.d_context);
+        let d_resid_opt = self.decoder.decode(&mut self.bitreader).unwrap();
+        debug_assert!(d_resid_opt.is_none());
         // self.dt_reader.byte_align();
     }
 
@@ -272,12 +275,12 @@ impl<R: std::io::Read> CompressionModelDecoder<R> {
         // Read the d residual
         self.decoder.model.set_context(self.contexts.d_context);
         let d_resid = self.decoder.decode(&mut self.bitreader).unwrap().unwrap();
-        let d_resid = d_resid as i16 - 255 - 1;
+        let d_resid = d_resid as i16 - 255;
 
         // Read the dt residual
         self.decoder.model.set_context(self.contexts.dt_context);
         let dt_resid = self.decoder.decode(&mut self.bitreader).unwrap().unwrap();
-        let dt_resid = dt_resid as i64 - self.delta_t_max as i64 - 1;
+        let dt_resid = dt_resid as i64 - self.delta_t_max as i64;
 
         if d_resid == D_RESIDUAL_NO_EVENT {
             unsafe { *block_ref.events.get_unchecked_mut(idx as usize) = None };
@@ -369,7 +372,7 @@ mod tests {
     use rand::prelude::StdRng;
     use rand::{Rng, SeedableRng};
     use std::fs::File;
-    use std::io::{BufReader, BufWriter};
+    use std::io::{BufReader, BufWriter, Write};
 
     struct Setup {
         cube: Cube,
@@ -464,7 +467,8 @@ mod tests {
 
         model.encode_block(&mut cube.blocks_r[0]);
 
-        let writer = model.bitwriter.into_writer();
+        let mut writer = model.bitwriter.into_writer();
+        writer.flush().unwrap();
         // let writer: &[u8] = &*out_writer.into_writer();
 
         let written = writer.into_inner().unwrap();
