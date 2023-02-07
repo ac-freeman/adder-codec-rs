@@ -215,11 +215,11 @@ impl<W: std::io::Write + std::fmt::Debug> CompressionModelEncoder<W> {
         };
 
         self.encoder.model.set_context(self.contexts.d_context);
-        let binding = ((d_resid + 255) as usize); // TODO: make a function to do this mapping
+        let mut binding = ((d_resid + 255) as usize); // TODO: make a function to do this mapping
         self.encoder.encode(Some(&binding), &mut self.bitwriter);
 
         self.encoder.model.set_context(self.contexts.dt_context);
-        let binding = ((dt_resid + self.delta_t_max as i64) as usize); // TODO: make a function to do this mapping
+        binding = ((dt_resid + self.delta_t_max as i64) as usize); // TODO: make a function to do this mapping
         self.encoder.encode(Some(&binding), &mut self.bitwriter);
     }
 }

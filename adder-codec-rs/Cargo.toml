@@ -76,6 +76,10 @@ name = "block"
 #path = "src/codec/compressed/blocks.rs"
 harness = false
 
+[[bench]]
+name = "block_2"
+harness = false
+
 [package.metadata.docs.rs]
 no-default-features = true
 default-target = "x86_64-unknown-linux-gnu"
