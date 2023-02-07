@@ -52,7 +52,8 @@ impl Setup {
                         x: x as u16,
                         c: Some(1),
                     },
-                    ..Default::default()
+                    d: rng.gen_range(7..9),
+                    delta_t: rng.gen_range(200..300),
                 });
             }
         }
@@ -150,7 +151,6 @@ fn bench_zigzag_iter_alloc(c: &mut Criterion) {
 }
 
 fn bench_encode_block2(c: &mut Criterion) {
-    eprintln!("in function");
     let setup = Setup::new(Some(473829479));
     let mut cube = setup.cube;
     let events = setup.events_for_block_r;
@@ -192,13 +192,64 @@ fn bench_encode_block2(c: &mut Criterion) {
         b.iter(|| context_model.decode_block(&mut cube.blocks_r[0]))
     });
 
-    group.bench_function("decode MANY blocks", |b| {
-        for _ in 0..100 {
-            b.iter(|| context_model.decode_block(&mut cube.blocks_r[0]))
-        }
+    // group.bench_function("decode MANY blocks", |b| {
+    //     for _ in 0..100 {
+    //         b.iter(|| context_model.decode_block(&mut cube.blocks_r[0]))
+    //     }
+    // });
+
+    // context_model.check_eof();
+}
+
+fn bench_encode_block2_semirealistic(c: &mut Criterion) {
+    let setup = Setup::new(Some(473829479));
+    let mut cube = setup.cube;
+    let events = setup.events_for_block_g;
+
+    for event in events.iter() {
+        assert!(cube.set_event(*event).is_ok());
+    }
+
+    let mut write_result = Vec::new();
+    let mut out_writer = BufWriter::new(&mut write_result);
+
+    let mut model = CompressionModelEncoder::new(2550, 255, out_writer);
+
+    c.bench_function("encode block semirealistic", |b| {
+        b.iter(|| model.encode_block(&mut cube.blocks_g[0]))
     });
 
-    context_model.check_eof();
+    let mut group = c.benchmark_group("block_2");
+    group.significance_level(0.05).sample_size(50);
+    group.bench_function("encode MANY blocks semirealistic", |b| {
+        b.iter(|| {
+            for _ in 0..100 {
+                model.encode_block(&mut cube.blocks_g[0])
+            }
+        })
+    });
+
+    model.flush_encoder();
+
+    let mut writer = model.bitwriter.into_writer();
+    writer.flush().unwrap();
+
+    let written = writer.into_inner().unwrap();
+    let buf_reader = BufReader::new(&**written);
+
+    let mut context_model = CompressionModelDecoder::new(2550, 255, buf_reader);
+
+    group.bench_function("decode block semirealistic", |b| {
+        b.iter(|| context_model.decode_block(&mut cube.blocks_g[0]))
+    });
+
+    // group.bench_function("decode MANY blocks", |b| {
+    //     for _ in 0..100 {
+    //         b.iter(|| context_model.decode_block(&mut cube.blocks_g[0]))
+    //     }
+    // });
+    //
+    // context_model.check_eof();
 }
 
 criterion_group!(
@@ -206,5 +257,6 @@ criterion_group!(
     bench_zigzag_iter,
     bench_zigzag_iter_alloc,
     bench_encode_block2,
+    bench_encode_block2_semirealistic
 );
 criterion_main!(block_2);

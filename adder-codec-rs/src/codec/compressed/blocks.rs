@@ -198,8 +198,8 @@ impl Block {
 // TODO: use arenas to avoid allocations
 pub struct Cube {
     pub blocks_r: Vec<Block>,
-    blocks_g: Vec<Block>,
-    blocks_b: Vec<Block>,
+    pub blocks_g: Vec<Block>,
+    pub blocks_b: Vec<Block>,
     cube_idx_y: usize,
     cube_idx_x: usize,
     cube_idx_c: usize,
