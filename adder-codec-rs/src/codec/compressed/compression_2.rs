@@ -147,11 +147,14 @@ impl<W: std::io::Write + std::fmt::Debug> CompressionModelEncoder<W> {
     }
 
     pub fn encode_block(&mut self, block: &mut Block) {
+        self.prev_coded_event = None;
         let zigzag = ZigZag::new(block, &ZIGZAG_ORDER);
         for event in zigzag {
             self.encode_event(event);
         }
+    }
 
+    pub fn flush_encoder(&mut self) {
         // Encode the EOF symbol // TODO: only do this at AVU boundaries
         self.encoder.model.set_context(self.contexts.d_context);
         self.encoder.encode(None, &mut self.bitwriter).unwrap();
@@ -205,7 +208,7 @@ impl<W: std::io::Write + std::fmt::Debug> CompressionModelEncoder<W> {
                         };
 
                     self.prev_coded_event = Some(*ev);
-                    eprintln!("d_resid: {}, dt_resid: {}", d_resid, dt_resid);
+                    // eprintln!("d_resid: {}, dt_resid: {}", d_resid, dt_resid);
                     (d_resid, dt_resid)
                 }
             },
@@ -265,10 +268,14 @@ impl<R: std::io::Read> CompressionModelDecoder<R> {
         for idx in ZIGZAG_ORDER {
             self.decode_event(block, idx);
         }
+
+        // self.dt_reader.byte_align();
+    }
+
+    pub fn check_eof(&mut self) {
         self.decoder.model.set_context(self.contexts.d_context);
         let d_resid_opt = self.decoder.decode(&mut self.bitreader).unwrap();
-        debug_assert!(d_resid_opt.is_none());
-        // self.dt_reader.byte_align();
+        assert!(d_resid_opt.is_none());
     }
 
     fn decode_event(&mut self, block_ref: &mut Block, idx: u16) {
@@ -300,7 +307,7 @@ impl<R: std::io::Read> CompressionModelDecoder<R> {
                 //     .unwrap()
                 //     .unwrap();
 
-                eprintln!("idx: {}, d_resid: {}, dt_resid: {}", idx, d_resid, dt_resid);
+                // eprintln!("idx: {}, d_resid: {}, dt_resid: {}", idx, d_resid, dt_resid);
                 (d_resid, dt_resid)
             }
             Some(prev_event) => {
@@ -338,7 +345,7 @@ impl<R: std::io::Read> CompressionModelDecoder<R> {
                         }
                     }
                 };
-                eprintln!("idx: {}, d_resid: {}, dt_resid: {}", idx, d_resid, dt_resid);
+                // eprintln!("idx: {}, d_resid: {}, dt_resid: {}", idx, d_resid, dt_resid);
                 (d_resid + prev_event.d as i16, dt_pred + dt_resid)
             }
         };
@@ -466,6 +473,7 @@ mod tests {
         let mut model = CompressionModelEncoder::new(2550, 255, out_writer);
 
         model.encode_block(&mut cube.blocks_r[0]);
+        model.flush_encoder();
 
         let mut writer = model.bitwriter.into_writer();
         writer.flush().unwrap();
@@ -489,6 +497,7 @@ mod tests {
         let mut context_model = CompressionModelDecoder::new(2550, 255, buf_reader);
 
         context_model.decode_block(&mut cube.blocks_r[0]);
+        context_model.check_eof();
 
         for idx in 0..BLOCK_SIZE_BIG_AREA {
             let source_d = events[idx].d;
@@ -500,5 +509,63 @@ mod tests {
             assert_eq!(source_d, decoded_d);
             assert_eq!(source_dt, decoded_dt);
         }
+    }
+
+    #[test]
+    fn test_encode_decode_many_blocks() {
+        let setup = Setup::new(Some(473829479));
+        let mut cube = setup.cube;
+        let events = setup.events_for_block_r;
+
+        for event in events.iter() {
+            assert!(cube.set_event(*event).is_ok());
+        }
+
+        let mut write_result = Vec::new();
+        let mut out_writer = BufWriter::new(&mut write_result);
+
+        let mut model = CompressionModelEncoder::new(2550, 255, out_writer);
+
+        for _ in 0..10 {
+            model.encode_block(&mut cube.blocks_r[0]);
+        }
+
+        model.flush_encoder();
+        let mut writer = model.bitwriter.into_writer();
+        writer.flush().unwrap();
+        // let writer: &[u8] = &*out_writer.into_writer();
+
+        let written = writer.into_inner().unwrap();
+        let len = written.len();
+        assert!(len < BLOCK_SIZE_BIG_AREA * 5 * 10); // 5 bytes per raw event when just encoding D and Dt
+        println!("{len}");
+
+        println!("input bytes: {}", BLOCK_SIZE_BIG_AREA * 5 * 10);
+        println!("output bytes: {len}");
+
+        println!(
+            "compression ratio: {}",
+            (BLOCK_SIZE_BIG_AREA * 5 * 10) as f32 / len as f32
+        );
+
+        let buf_reader = BufReader::new(&**written);
+
+        let mut context_model = CompressionModelDecoder::new(2550, 255, buf_reader);
+
+        for block_num in 0..10 {
+            context_model.decode_block(&mut cube.blocks_r[0]);
+
+            for idx in 0..BLOCK_SIZE_BIG_AREA {
+                let source_d = events[idx].d;
+                let source_dt = events[idx].delta_t;
+
+                let decoded_d = cube.blocks_r[0].events[idx].unwrap().d;
+                let decoded_dt = cube.blocks_r[0].events[idx].unwrap().delta_t;
+
+                assert_eq!(source_d, decoded_d);
+                assert_eq!(source_dt, decoded_dt);
+            }
+        }
+        context_model.check_eof();
     }
 }
