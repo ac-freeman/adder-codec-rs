@@ -1,7 +1,5 @@
-use adder_codec_rs::codec::compressed::blocks::{gen_zigzag_order, Cube, ZigZag, ZIGZAG_ORDER};
-use adder_codec_rs::codec::compressed::{BLOCK_SIZE_BIG, BLOCK_SIZE_BIG_AREA};
-use arithmetic_coding::Encoder;
-use bitstream_io::{BigEndian, BitWrite, BitWriter};
+use adder_codec_rs::codec::compressed::blocks::Cube;
+use adder_codec_rs::codec::compressed::BLOCK_SIZE_BIG;
 use std::io::{BufReader, BufWriter, Write};
 
 use adder_codec_rs::codec::compressed::compression_2::{
@@ -11,7 +9,6 @@ use adder_codec_rs::{Coord, Event};
 use criterion::{criterion_group, criterion_main, Criterion};
 use rand::prelude::StdRng;
 use rand::{Rng, SeedableRng};
-use tokio::io::AsyncReadExt;
 
 struct Setup {
     cube: Cube,
@@ -24,7 +21,7 @@ impl Setup {
     fn new(seed: Option<u64>) -> Self {
         let mut rng = match seed {
             None => StdRng::from_rng(rand::thread_rng()).unwrap(),
-            Some(num) => StdRng::seed_from_u64(42),
+            Some(num) => StdRng::seed_from_u64(num),
         };
         //
         let mut events_for_block_r = Vec::new();
@@ -100,7 +97,7 @@ fn bench_encode_block2(c: &mut Criterion) {
     }
 
     let mut write_result = Vec::new();
-    let mut out_writer = BufWriter::new(&mut write_result);
+    let out_writer = BufWriter::new(&mut write_result);
 
     let mut model = CompressionModelEncoder::new(2550, 255, out_writer);
 
@@ -151,7 +148,7 @@ fn bench_encode_block2_semirealistic(c: &mut Criterion) {
     }
 
     let mut write_result = Vec::new();
-    let mut out_writer = BufWriter::new(&mut write_result);
+    let out_writer = BufWriter::new(&mut write_result);
 
     let mut model = CompressionModelEncoder::new(2550, 255, out_writer);
 
@@ -194,8 +191,6 @@ fn bench_encode_block2_semirealistic(c: &mut Criterion) {
 
 criterion_group!(
     block_2,
-    bench_zigzag_iter,
-    bench_zigzag_iter_alloc,
     bench_encode_block2,
     bench_encode_block2_semirealistic
 );
