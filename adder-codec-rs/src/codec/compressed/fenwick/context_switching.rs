@@ -39,10 +39,10 @@ impl FenwickModel {
     }
 
     /// Push a new context onto the stack, of the given size
-    pub fn push_context_with_weights(&mut self, weights: Weights) -> (usize) {
+    pub fn push_context_with_weights(&mut self, weights: Weights) -> usize {
         self.contexts.push(weights);
-        let index = self.contexts.len() - 1;
-        (index)
+        
+        self.contexts.len() - 1
     }
 
     pub fn set_context(&mut self, context: usize) {

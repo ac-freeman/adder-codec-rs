@@ -1,9 +1,9 @@
 use arithmetic_coding::{Decoder, Encoder, Model};
 use bitstream_io::{BigEndian, BitRead, BitReader, BitWrite, BitWriter};
 use std::cmp::{max, min};
-use std::fs::File;
-use std::io::{BufReader, BufWriter, Read, Seek, SeekFrom};
-use std::mem::swap;
+
+use std::io::{BufReader, BufWriter, Read};
+
 use std::ops::Range;
 
 // Intra-coding a block:
@@ -20,7 +20,7 @@ use std::ops::Range;
 
 use crate::codec::compressed::blocks::{Block, ZigZag, ZIGZAG_ORDER};
 use crate::codec::compressed::fenwick::{context_switching::FenwickModel, ValueError};
-use crate::codec::compressed::{BLOCK_SIZE_BIG, BLOCK_SIZE_BIG_AREA};
+use crate::codec::compressed::{BLOCK_SIZE_BIG_AREA};
 use crate::framer::driver::EventCoordless;
 use crate::{DeltaT, TimeMode, D};
 
@@ -235,36 +235,26 @@ impl<'r, R: std::io::Read, W: std::io::Write + std::fmt::Debug>
         reader: Option<BufReader<R>>,
         writer: Option<BufWriter<W>>,
     ) -> Self {
-        let bitreader = match reader {
-            Some(reader) => Some(BitReader::endian(reader, BigEndian)),
-            None => None,
-        };
+        let bitreader = reader.map(|reader| BitReader::endian(reader, BigEndian));
 
-        let bitwriter = match writer {
-            Some(writer) => Some(BitWriter::endian(writer, BigEndian)),
-            None => None,
-        };
-        let d_bitwriter = match &bitwriter {
-            Some(_) => Some(BitWriter::endian(BufWriter::new(Vec::new()), BigEndian)),
-            None => None,
-        };
-        let dt_bitwriter = match &bitwriter {
-            Some(_) => Some(BitWriter::endian(BufWriter::new(Vec::new()), BigEndian)),
-            None => None,
-        };
+        let bitwriter = writer.map(|writer| BitWriter::endian(writer, BigEndian));
+        let d_bitwriter = bitwriter.as_ref().map(|_| BitWriter::endian(BufWriter::new(Vec::new()), BigEndian));
+        let dt_bitwriter = bitwriter.as_ref().map(|_| BitWriter::endian(BufWriter::new(Vec::new()), BigEndian));
 
         let d_model = BlockDResidualModel::new();
         let delta_t_model = BlockDeltaTResidualModel::new(delta_t_max);
 
-        let mut d_writer = BitWriter::endian(Vec::new(), BigEndian);
-        let mut d_encoder = Encoder::new(d_model.clone()); // Todo: shouldn't clone models unless at new AVU time point, ideally...
-        let mut dt_writer = BitWriter::endian(Vec::new(), BigEndian);
-        let mut dt_encoder = Encoder::new(delta_t_model.clone());
+        let d_writer = BitWriter::endian(Vec::new(), BigEndian);
+        let d_encoder = Encoder::new(d_model.clone()); // Todo: shouldn't clone models unless at new AVU time point, ideally...
+        let dt_writer = BitWriter::endian(Vec::new(), BigEndian);
+        let dt_encoder = Encoder::new(delta_t_model.clone());
 
-        let mut d_decoder = Decoder::new(d_model.clone());
-        let mut dt_decoder = Decoder::new(delta_t_model.clone());
+        let d_decoder = Decoder::new(d_model);
+        let dt_decoder = Decoder::new(delta_t_model);
 
-        let mut ret = Self {
+        
+
+        Self {
             prev_coded_event: None,
             prediction_mode: TimeMode::AbsoluteT,
             d_model: BlockDResidualModel::new(),
@@ -284,9 +274,7 @@ impl<'r, R: std::io::Read, W: std::io::Write + std::fmt::Debug>
             dt_bitwriter,
             // d_encoder: None,
             // d_writer,
-        };
-
-        ret
+        }
     }
 
     // #[inline(always)]
@@ -409,17 +397,17 @@ impl<'r, R: std::io::Read, W: std::io::Write + std::fmt::Debug>
                         };
 
                     self.prev_coded_event = Some(*ev);
-                    eprintln!("d_resid: {}, dt_resid: {}", d_resid, dt_resid);
+                    eprintln!("d_resid: {d_resid}, dt_resid: {dt_resid}");
                     (d_resid, dt_resid)
                 }
             },
         };
 
         self.d_encoder
-            .encode(Some(&d_resid), &mut self.d_bitwriter.as_mut().unwrap())
+            .encode(Some(&d_resid), self.d_bitwriter.as_mut().unwrap())
             .unwrap();
         self.dt_encoder
-            .encode(Some(&dt_resid), &mut self.dt_bitwriter.as_mut().unwrap())
+            .encode(Some(&dt_resid), self.dt_bitwriter.as_mut().unwrap())
             .unwrap();
     }
 
@@ -534,7 +522,7 @@ impl<'r, R: std::io::Read, W: std::io::Write + std::fmt::Debug>
                 //     .unwrap()
                 //     .unwrap();
 
-                eprintln!("idx: {}, d_resid: {}, dt_resid: {}", idx, d_resid, dt_resid);
+                eprintln!("idx: {idx}, d_resid: {d_resid}, dt_resid: {dt_resid}");
                 (d_resid, dt_resid)
             }
             Some(prev_event) => {
@@ -572,7 +560,7 @@ impl<'r, R: std::io::Read, W: std::io::Write + std::fmt::Debug>
                         }
                     }
                 };
-                eprintln!("idx: {}, d_resid: {}, dt_resid: {}", idx, d_resid, dt_resid);
+                eprintln!("idx: {idx}, d_resid: {d_resid}, dt_resid: {dt_resid}");
                 (d_resid + prev_event.d as i16, dt_pred + dt_resid)
             }
         };
@@ -665,7 +653,7 @@ mod tests {
     use bitstream_io::{BigEndian, BitReader, BitWrite, BitWriter};
     use rand::prelude::StdRng;
     use rand::{Rng, SeedableRng};
-    use std::fs::File;
+    
     use std::io::{BufReader, BufWriter};
 
     #[test]
@@ -835,7 +823,7 @@ mod tests {
         fn new(seed: Option<u64>) -> Self {
             let mut rng = match seed {
                 None => StdRng::from_rng(rand::thread_rng()).unwrap(),
-                Some(num) => StdRng::seed_from_u64(42),
+                Some(_num) => StdRng::seed_from_u64(42),
             };
             //
             let mut events_for_block_r = Vec::new();
@@ -903,7 +891,7 @@ mod tests {
     #[test]
     fn test_encode_decode_block() {
         let mut write_result = Vec::new();
-        let mut out_writer = BufWriter::new(&mut write_result);
+        let out_writer = BufWriter::new(&mut write_result);
 
         let mut context_model: BlockIntraPredictionContextModel<'_, &[u8], &mut Vec<u8>> =
             BlockIntraPredictionContextModel::new(2550, None, Some(out_writer));
@@ -954,7 +942,7 @@ mod tests {
 
     #[test]
     fn test_encode_empty_event() {
-        let mut out_writer = BufWriter::new(Vec::new());
+        let out_writer = BufWriter::new(Vec::new());
 
         let mut context_model: BlockIntraPredictionContextModel<'_, &[u8], Vec<u8>> =
             BlockIntraPredictionContextModel::new(2550, None, Some(out_writer));

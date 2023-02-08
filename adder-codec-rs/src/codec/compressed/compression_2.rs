@@ -1,10 +1,10 @@
-use arithmetic_coding::{Decoder, Encoder, Model};
+use arithmetic_coding::{Decoder, Encoder};
 use bitstream_io::{BigEndian, BitRead, BitReader, BitWrite, BitWriter};
 use std::cmp::{max, min};
-use std::fs::File;
-use std::io::{BufReader, BufWriter, Read, Seek, SeekFrom};
-use std::mem::swap;
-use std::ops::Range;
+
+use std::io::{BufReader, BufWriter};
+
+
 
 // Intra-coding a block:
 // Encode the first D
@@ -22,15 +22,15 @@ use crate::codec::compressed::blocks::{Block, ZigZag, ZIGZAG_ORDER};
 use crate::codec::compressed::compression::{
     DResidual, DeltaTResidual, DELTA_T_RESIDUAL_NO_EVENT, D_RESIDUAL_NO_EVENT,
 };
-use crate::codec::compressed::fenwick::{context_switching::FenwickModel, ValueError, Weights};
-use crate::codec::compressed::{BLOCK_SIZE_BIG, BLOCK_SIZE_BIG_AREA};
+use crate::codec::compressed::fenwick::{context_switching::FenwickModel, Weights};
+
 use crate::framer::driver::EventCoordless;
-use crate::{DeltaT, TimeMode, D};
+use crate::{DeltaT, D};
 
 // static D_RESIDUAL_DEFAULT_WEIGHTS: Weights = d_residual_default_weights();
 
 fn d_residual_default_weights() -> Weights {
-    let min: usize = 255;
+    let _min: usize = 255;
 
     // The maximum positive d residual is d = 0 --> d = 255      [255]
     // The maximum negative d residual is d = 255 --> d = 0      [-255]
@@ -121,21 +121,21 @@ impl<W: std::io::Write + std::fmt::Debug> CompressionModelEncoder<W> {
         let bitwriter = BitWriter::endian(writer, BigEndian);
 
         // How many symbols we need to account for in the maximum
-        let num_symbols = delta_t_max as usize * 2;
+        let _num_symbols = delta_t_max as usize * 2;
 
         let mut source_model = FenwickModel::with_symbols(delta_t_max as usize * 2, 1 << 20);
 
         // D context. Only need to account for range [-255, 255]
-        let (d_context_idx) = source_model.push_context_with_weights(d_residual_default_weights());
+        let d_context_idx = source_model.push_context_with_weights(d_residual_default_weights());
 
         // Delta_t context. Need to account for range [-delta_t_max, delta_t_max]
-        let (dt_context_idx) = source_model.push_context_with_weights(
-            dt_residual_default_weights(delta_t_max, delta_t_ref).clone(),
+        let dt_context_idx = source_model.push_context_with_weights(
+            dt_residual_default_weights(delta_t_max, delta_t_ref),
         );
 
         let contexts = Contexts::new(d_context_idx, dt_context_idx);
 
-        let mut encoder = Encoder::new(source_model);
+        let encoder = Encoder::new(source_model);
 
         CompressionModelEncoder {
             contexts,
@@ -209,11 +209,11 @@ impl<W: std::io::Write + std::fmt::Debug> CompressionModelEncoder<W> {
         };
 
         self.encoder.model.set_context(self.contexts.d_context);
-        let mut binding = ((d_resid + 255) as usize); // TODO: make a function to do this mapping
+        let mut binding = (d_resid + 255) as usize; // TODO: make a function to do this mapping
         self.encoder.encode(Some(&binding), &mut self.bitwriter);
 
         self.encoder.model.set_context(self.contexts.dt_context);
-        binding = ((dt_resid + self.delta_t_max as i64) as usize); // TODO: make a function to do this mapping
+        binding = (dt_resid + self.delta_t_max as i64) as usize; // TODO: make a function to do this mapping
         self.encoder.encode(Some(&binding), &mut self.bitwriter);
     }
 }
@@ -230,21 +230,21 @@ impl<R: std::io::Read> CompressionModelDecoder<R> {
         let bitreader = BitReader::endian(reader, BigEndian);
 
         // How many symbols we need to account for in the maximum
-        let num_symbols = delta_t_max as usize * 2;
+        let _num_symbols = delta_t_max as usize * 2;
 
         let mut source_model = FenwickModel::with_symbols(delta_t_max as usize * 2, 1 << 20);
 
         // D context. Only need to account for range [-255, 255]
-        let (d_context_idx) = source_model.push_context_with_weights(d_residual_default_weights());
+        let d_context_idx = source_model.push_context_with_weights(d_residual_default_weights());
 
         // Delta_t context. Need to account for range [-delta_t_max, delta_t_max]
-        let (dt_context_idx) = source_model.push_context_with_weights(
-            dt_residual_default_weights(delta_t_max, delta_t_ref).clone(),
+        let dt_context_idx = source_model.push_context_with_weights(
+            dt_residual_default_weights(delta_t_max, delta_t_ref),
         );
 
         let contexts = Contexts::new(d_context_idx, dt_context_idx);
 
-        let mut decoder = Decoder::new(source_model);
+        let decoder = Decoder::new(source_model);
 
         CompressionModelDecoder {
             contexts,
@@ -368,11 +368,11 @@ mod tests {
     };
     use crate::codec::compressed::{BLOCK_SIZE_BIG, BLOCK_SIZE_BIG_AREA};
     use crate::{Coord, Event};
-    use arithmetic_coding::{Decoder, Encoder};
-    use bitstream_io::{BigEndian, BitReader, BitWrite, BitWriter};
+    
+    
     use rand::prelude::StdRng;
     use rand::{Rng, SeedableRng};
-    use std::fs::File;
+    
     use std::io::{BufReader, BufWriter, Write};
 
     struct Setup {
@@ -386,7 +386,7 @@ mod tests {
         fn new(seed: Option<u64>) -> Self {
             let mut rng = match seed {
                 None => StdRng::from_rng(rand::thread_rng()).unwrap(),
-                Some(num) => StdRng::seed_from_u64(42),
+                Some(_num) => StdRng::seed_from_u64(42),
             };
             //
             let mut events_for_block_r = Vec::new();
@@ -462,7 +462,7 @@ mod tests {
         }
 
         let mut write_result = Vec::new();
-        let mut out_writer = BufWriter::new(&mut write_result);
+        let out_writer = BufWriter::new(&mut write_result);
 
         let mut model = CompressionModelEncoder::new(2550, 255, out_writer);
 
@@ -516,7 +516,7 @@ mod tests {
         }
 
         let mut write_result = Vec::new();
-        let mut out_writer = BufWriter::new(&mut write_result);
+        let out_writer = BufWriter::new(&mut write_result);
 
         let mut model = CompressionModelEncoder::new(2550, 255, out_writer);
 
@@ -547,7 +547,7 @@ mod tests {
 
         let mut context_model = CompressionModelDecoder::new(2550, 255, buf_reader);
 
-        for block_num in 0..num_blocks {
+        for _block_num in 0..num_blocks {
             context_model.decode_block(&mut cube.blocks_r[0]);
 
             for idx in 0..BLOCK_SIZE_BIG_AREA {

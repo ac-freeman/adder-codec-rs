@@ -68,7 +68,7 @@ pub const fn gen_zigzag_order() -> [u16; BLOCK_SIZE_BIG_AREA] {
 #[cfg(test)]
 mod test_zig_zag {
     use crate::codec::compressed::blocks::gen_zigzag_order;
-    use crate::codec::compressed::{BLOCK_SIZE_BIG, BLOCK_SIZE_BIG_AREA};
+    use crate::codec::compressed::{BLOCK_SIZE_BIG_AREA};
     use itertools::Itertools;
 
     #[test]
@@ -457,7 +457,7 @@ mod tests {
 
         let zigzag = ZigZag::new(&cube.blocks_r[0], &ZIGZAG_ORDER);
         let mut idx = 0;
-        for event in zigzag.into_iter() {
+        for _event in zigzag.into_iter() {
             idx += 1;
         }
         assert_eq!(idx, BLOCK_SIZE_BIG_AREA);

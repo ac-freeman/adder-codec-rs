@@ -33,7 +33,7 @@ impl Weights {
     /// Initialize the weights with the given counts
     pub fn new_with_counts(n: usize, counts: Vec<u64>) -> Self {
         // we add one extra value here to account for the EOF (stored at the FIRST index)
-        let mut fenwick_counts = vec![0; n + 1];
+        let fenwick_counts = vec![0; n + 1];
 
         let mut weights = Self {
             fenwick_counts,
