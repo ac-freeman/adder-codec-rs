@@ -1,6 +1,6 @@
 <component name="ProjectRunConfigurationManager">
   <configuration default="false" name="Bench" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
-    <option name="command" value="bench --verbose --bench block_2" />
+    <option name="command" value="bench --verbose --bench block" />
     <option name="workingDirectory" value="file://$PROJECT_DIR$" />
     <option name="channel" value="DEFAULT" />
     <option name="requiredFeatures" value="true" />

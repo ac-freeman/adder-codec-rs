@@ -31,7 +31,7 @@ impl Weights {
     }
 
     /// Initialize the weights with the given counts
-    pub fn new_with_counts(n: usize, counts: Vec<u64>) -> Self {
+    pub fn new_with_counts(n: usize, counts: &Vec<u64>) -> Self {
         // we add one extra value here to account for the EOF (stored at the FIRST index)
         let fenwick_counts = vec![0; n + 1];
 
@@ -77,7 +77,7 @@ impl Weights {
         self.fenwick_counts.len() - 1
     }
 
-    /// Used for decoding. Find the symbol index for the given prefix_sum
+    /// Used for decoding. Find the symbol index for the given `prefix_sum`
     fn symbol(&self, prefix_sum: u64) -> Option<usize> {
         if prefix_sum < self.prefix_sum(None) {
             return None;

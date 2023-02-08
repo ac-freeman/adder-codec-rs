@@ -73,11 +73,6 @@ harness = false
 
 [[bench]]
 name = "block"
-#path = "src/codec/compressed/blocks.rs"
-harness = false
-
-[[bench]]
-name = "block_2"
 harness = false
 
 [package.metadata.docs.rs]

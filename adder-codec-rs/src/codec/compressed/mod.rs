@@ -1,6 +1,5 @@
 pub mod blocks;
 pub mod compression;
-pub mod compression_2;
 mod fenwick;
 
 use bitvec::prelude::*;

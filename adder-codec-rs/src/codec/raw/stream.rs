@@ -89,7 +89,7 @@ impl Codec for Raw {
             delta_t_max: 0,
             event_size: 0,
             source_camera: SourceCamera::default(),
-            avu: Default::default(),
+            avu: Avu::default(),
             bincode: DefaultOptions::new()
                 .with_fixint_encoding()
                 .with_big_endian(),
