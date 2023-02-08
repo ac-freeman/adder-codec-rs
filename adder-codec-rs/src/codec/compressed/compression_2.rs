@@ -164,53 +164,48 @@ impl<W: std::io::Write + std::fmt::Debug> CompressionModelEncoder<W> {
         self.bitwriter.flush().unwrap();
     }
 
-    // Encode the prediction residual for an event based on the previous coded event
+    /// Encode the prediction residual for an event based on the previous coded event
     pub fn encode_event(&mut self, event: Option<&EventCoordless>) {
         // If this is the first event in the block, encode it directly
-        let (d_resid, dt_resid) = match self.prev_coded_event {
-            None => match event {
-                None => (D_RESIDUAL_NO_EVENT, DELTA_T_RESIDUAL_NO_EVENT), // TODO: test this. Need to expand alphabet
-                Some(ev) => {
-                    self.prev_coded_event = Some(*ev);
-                    (ev.d as DResidual, ev.delta_t as DeltaTResidual)
-                }
-            },
-            Some(prev_event) => match event {
-                None => (D_RESIDUAL_NO_EVENT, DELTA_T_RESIDUAL_NO_EVENT),
-                Some(ev) => {
-                    let d_resid = ev.d as DResidual - prev_event.d as DResidual;
+        let (d_resid, dt_resid) = match (self.prev_coded_event, event) {
+            (_, None) => (D_RESIDUAL_NO_EVENT, DELTA_T_RESIDUAL_NO_EVENT), // TODO: test this. Need to expand alphabet
+            (None, Some(ev)) => {
+                self.prev_coded_event = Some(*ev);
+                (ev.d as DResidual, ev.delta_t as DeltaTResidual)
+            }
+            (Some(prev_event), Some(ev)) => {
+                let d_resid = ev.d as DResidual - prev_event.d as DResidual;
 
-                    // Get the prediction error for delta_t based on the change in D
-                    let dt_resid = ev.delta_t as DeltaTResidual
-                        - match d_resid {
-                            0 => prev_event.delta_t as DeltaTResidual,
-                            1_i16..=i16::MAX => {
-                                if d_resid as u32 <= prev_event.delta_t.leading_zeros() / 2 {
-                                    min(
-                                        (prev_event.delta_t << d_resid).into(),
-                                        self.delta_t_max.into(),
-                                    )
-                                } else {
-                                    prev_event.delta_t.into()
-                                }
+                // Get the prediction error for delta_t based on the change in D
+                let dt_resid = ev.delta_t as DeltaTResidual
+                    - match d_resid {
+                        0 => prev_event.delta_t as DeltaTResidual,
+                        1_i16..=i16::MAX => {
+                            if d_resid as u32 <= prev_event.delta_t.leading_zeros() / 2 {
+                                min(
+                                    (prev_event.delta_t << d_resid).into(),
+                                    self.delta_t_max.into(),
+                                )
+                            } else {
+                                prev_event.delta_t.into()
                             }
-                            i16::MIN..=-1_i16 => {
-                                if -d_resid as u32 <= 32 - prev_event.delta_t.leading_zeros() {
-                                    max(
-                                        (prev_event.delta_t >> -d_resid).into(),
-                                        prev_event.delta_t.into(),
-                                    )
-                                } else {
-                                    prev_event.delta_t.into()
-                                }
+                        }
+                        i16::MIN..=-1_i16 => {
+                            if -d_resid as u32 <= 32 - prev_event.delta_t.leading_zeros() {
+                                max(
+                                    (prev_event.delta_t >> -d_resid).into(),
+                                    prev_event.delta_t.into(),
+                                )
+                            } else {
+                                prev_event.delta_t.into()
                             }
-                        };
+                        }
+                    };
 
-                    self.prev_coded_event = Some(*ev);
-                    // eprintln!("d_resid: {}, dt_resid: {}", d_resid, dt_resid);
-                    (d_resid, dt_resid)
-                }
-            },
+                self.prev_coded_event = Some(*ev);
+                // eprintln!("d_resid: {}, dt_resid: {}", d_resid, dt_resid);
+                (d_resid, dt_resid)
+            }
         };
 
         self.encoder.model.set_context(self.contexts.d_context);
