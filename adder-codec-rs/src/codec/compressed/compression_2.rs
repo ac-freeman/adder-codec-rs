@@ -183,21 +183,21 @@ impl<W: std::io::Write + std::fmt::Debug> CompressionModelEncoder<W> {
                         1_i16..=i16::MAX => {
                             if d_resid as u32 <= prev_event.delta_t.leading_zeros() / 2 {
                                 min(
-                                    (prev_event.delta_t << d_resid).into(),
-                                    self.delta_t_max.into(),
+                                    (prev_event.delta_t << d_resid) as DeltaTResidual,
+                                    self.delta_t_max as DeltaTResidual,
                                 )
                             } else {
-                                prev_event.delta_t.into()
+                                prev_event.delta_t as DeltaTResidual
                             }
                         }
                         i16::MIN..=-1_i16 => {
                             if -d_resid as u32 <= 32 - prev_event.delta_t.leading_zeros() {
                                 max(
-                                    (prev_event.delta_t >> -d_resid).into(),
-                                    prev_event.delta_t.into(),
+                                    (prev_event.delta_t >> -d_resid) as DeltaTResidual,
+                                    prev_event.delta_t as DeltaTResidual,
                                 )
                             } else {
-                                prev_event.delta_t.into()
+                                prev_event.delta_t as DeltaTResidual
                             }
                         }
                     };
