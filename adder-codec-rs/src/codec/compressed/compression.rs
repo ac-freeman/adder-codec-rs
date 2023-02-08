@@ -174,8 +174,8 @@ impl<W: std::io::Write + std::fmt::Debug> CompressionModelEncoder<W> {
                 // Get the prediction error for delta_t based on the change in D
                 self.dt_resid = ev.delta_t as DeltaTResidual
                     - match self.d_resid {
-                        0 => prev_event.delta_t as DeltaTResidual,
-                        1_i16..=i16::MAX => {
+                        1_i16..=20_16 => {
+                            // If D has increased by a little bit,
                             if self.d_resid as u32 <= prev_event.delta_t.leading_zeros() / 2 {
                                 min(
                                     (prev_event.delta_t << self.d_resid) as DeltaTResidual,
@@ -185,7 +185,7 @@ impl<W: std::io::Write + std::fmt::Debug> CompressionModelEncoder<W> {
                                 prev_event.delta_t as DeltaTResidual
                             }
                         }
-                        i16::MIN..=-1_i16 => {
+                        -20_i16..=-1_i16 => {
                             if -self.d_resid as u32 <= 32 - prev_event.delta_t.leading_zeros() {
                                 max(
                                     (prev_event.delta_t >> -self.d_resid) as DeltaTResidual,
@@ -195,6 +195,8 @@ impl<W: std::io::Write + std::fmt::Debug> CompressionModelEncoder<W> {
                                 prev_event.delta_t as DeltaTResidual
                             }
                         }
+                        // If D has not changed, or has changed a whole lot, use the previous delta_t
+                        _ => prev_event.delta_t as DeltaTResidual,
                     };
 
                 self.prev_coded_event = Some(*ev);
@@ -242,7 +244,7 @@ impl<R: std::io::Read> CompressionModelDecoder<R> {
         // How many symbols we need to account for in the maximum
         let _num_symbols = delta_t_max as usize * 2;
 
-        let mut source_model = FenwickModel::with_symbols(delta_t_max as usize * 2, 1 << 20);
+        let mut source_model = FenwickModel::with_symbols(delta_t_max as usize * 2, 1 << 30);
 
         // D context. Only need to account for range [-255, 255]
         let d_context_idx = source_model.push_context_with_weights(d_residual_default_weights());
@@ -326,8 +328,7 @@ impl<R: std::io::Read> CompressionModelDecoder<R> {
                 //     .unwrap();
 
                 let dt_pred = match d_resid {
-                    0 => prev_event.delta_t as DeltaTResidual,
-                    1_i16..=i16::MAX => {
+                    1_i16..=20_i16 => {
                         if d_resid as u32 <= prev_event.delta_t.leading_zeros() / 2 {
                             min(
                                 (prev_event.delta_t << d_resid).into(),
@@ -337,7 +338,7 @@ impl<R: std::io::Read> CompressionModelDecoder<R> {
                             prev_event.delta_t.into()
                         }
                     }
-                    i16::MIN..=-1_i16 => {
+                    -20_i16..=-1_i16 => {
                         if -d_resid as u32 <= 32 - prev_event.delta_t.leading_zeros() {
                             max(
                                 (prev_event.delta_t >> -d_resid).into(),
@@ -347,6 +348,7 @@ impl<R: std::io::Read> CompressionModelDecoder<R> {
                             prev_event.delta_t.into()
                         }
                     }
+                    _ => prev_event.delta_t as DeltaTResidual,
                 };
                 // eprintln!("idx: {}, d_resid: {}, dt_resid: {}", idx, d_resid, dt_resid);
                 (d_resid + prev_event.d as i16, dt_pred + dt_resid)
@@ -406,7 +408,7 @@ mod tests {
                         },
 
                         d: rng.gen_range(0..20),
-                        delta_t: rng.gen_range(1..255),
+                        delta_t: rng.gen_range(1..2550),
                     });
                 }
             }
