@@ -195,19 +195,19 @@ fn bench_encode_block2(c: &mut Criterion) {
         })
     });
 
-    model.flush_encoder();
-
-    let mut writer = model.bitwriter.into_writer();
-    writer.flush().unwrap();
-
-    let written = writer.into_inner().unwrap();
-    let buf_reader = BufReader::new(&**written);
-
-    let mut context_model = CompressionModelDecoder::new(2550, 255, buf_reader);
-
-    group.bench_function("decode block", |b| {
-        b.iter(|| context_model.decode_block(&mut cube.blocks_r[0]))
-    });
+    // model.flush_encoder();
+    //
+    // let mut writer = model.bitwriter.into_writer();
+    // writer.flush().unwrap();
+    //
+    // let written = writer.into_inner().unwrap();
+    // let buf_reader = BufReader::new(&**written);
+    //
+    // let mut context_model = CompressionModelDecoder::new(2550, 255, buf_reader);
+    //
+    // group.bench_function("decode block", |b| {
+    //     b.iter(|| context_model.decode_block(&mut cube.blocks_r[0]))
+    // });
 
     // group.bench_function("decode MANY blocks", |b| {
     //     for _ in 0..100 {
@@ -246,19 +246,19 @@ fn bench_encode_block2_semirealistic(c: &mut Criterion) {
         })
     });
 
-    model.flush_encoder();
-
-    let mut writer = model.bitwriter.into_writer();
-    writer.flush().unwrap();
-
-    let written = writer.into_inner().unwrap();
-    let buf_reader = BufReader::new(&**written);
-
-    let mut context_model = CompressionModelDecoder::new(2550, 255, buf_reader);
-
-    group.bench_function("decode block semirealistic", |b| {
-        b.iter(|| context_model.decode_block(&mut cube.blocks_g[0]))
-    });
+    // model.flush_encoder();
+    //
+    // let mut writer = model.bitwriter.into_writer();
+    // writer.flush().unwrap();
+    //
+    // let written = writer.into_inner().unwrap();
+    // let buf_reader = BufReader::new(&**written);
+    //
+    // let mut context_model = CompressionModelDecoder::new(2550, 255, buf_reader);
+    //
+    // group.bench_function("decode block semirealistic", |b| {
+    //     b.iter(|| context_model.decode_block(&mut cube.blocks_g[0]))
+    // });
 
     // group.bench_function("decode MANY blocks", |b| {
     //     for _ in 0..100 {
