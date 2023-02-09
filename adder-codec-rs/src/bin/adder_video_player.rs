@@ -7,6 +7,7 @@ use clap::Parser;
 use opencv::core::{create_continuous, Mat, MatTraitManual, CV_64F, CV_64FC3};
 use std::cmp::max;
 use std::error::Error;
+use std::fs::File;
 use std::io::Write;
 use std::{fmt, io};
 use tokio::time::Instant;
@@ -50,7 +51,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     let file_path = args.input.as_str();
 
     let mut stream: Raw = Codec::new();
-    stream.open_reader(file_path).expect("Invalid path");
+    let file = File::open(file_path)?;
+    stream.set_input_stream(Some(io::BufReader::new(file)));
     let header_bytes = stream.decode_header().expect("Invalid header");
 
     let first_event_position = stream.get_input_stream_position()?;

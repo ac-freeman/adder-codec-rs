@@ -1,3 +1,4 @@
+use crate::codec::Codec;
 use crate::transcoder::event_pixel_tree::DeltaT;
 use crate::transcoder::event_pixel_tree::Mode::FramePerfect;
 use crate::transcoder::source::video::SourceError;
@@ -29,7 +30,7 @@ pub struct Framed {
     pub source_fps: f64,
     pub scale: f64,
     color_input: bool,
-    pub(crate) video: Video,
+    pub(crate) video: Box<Video>,
     pub time_mode: TimeMode,
 }
 unsafe impl Sync for Framed {}
@@ -81,7 +82,7 @@ impl Framed {
             source_fps,
             scale,
             color_input,
-            video,
+            video: Box::new(video),
             time_mode: TimeMode::DeltaT,
         })
     }
@@ -114,7 +115,7 @@ impl Framed {
     ) -> Result<Self, Box<dyn Error>> {
         if delta_t_max % ref_time == 0 {
             let tps = (ref_time as f64 * self.source_fps) as DeltaT;
-            self.video = self.video.time_parameters(tps, ref_time, delta_t_max)?;
+            *self.video = self.video.time_parameters(tps, ref_time, delta_t_max)?;
         } else {
             eprintln!("delta_t_max must be a multiple of ref_time");
         }
@@ -176,23 +177,23 @@ impl Source for Framed {
 
 impl VideoBuilder for Framed {
     fn contrast_thresholds(mut self, c_thresh_pos: u8, c_thresh_neg: u8) -> Self {
-        self.video = self.video.c_thresh_pos(c_thresh_pos);
-        self.video = self.video.c_thresh_neg(c_thresh_neg);
+        *self.video = self.video.c_thresh_pos(c_thresh_pos);
+        *self.video = self.video.c_thresh_neg(c_thresh_neg);
         self
     }
 
     fn c_thresh_pos(mut self, c_thresh_pos: u8) -> Self {
-        self.video = self.video.c_thresh_pos(c_thresh_pos);
+        *self.video = self.video.c_thresh_pos(c_thresh_pos);
         self
     }
 
     fn c_thresh_neg(mut self, c_thresh_neg: u8) -> Self {
-        self.video = self.video.c_thresh_neg(c_thresh_neg);
+        *self.video = self.video.c_thresh_neg(c_thresh_neg);
         self
     }
 
     fn chunk_rows(mut self, chunk_rows: usize) -> Self {
-        self.video = self.video.chunk_rows(chunk_rows);
+        *self.video = self.video.chunk_rows(chunk_rows);
         self
     }
 
@@ -203,7 +204,7 @@ impl VideoBuilder for Framed {
         delta_t_max: crate::transcoder::event_pixel_tree::DeltaT,
     ) -> Result<Self, Box<dyn Error>> {
         if delta_t_max % ref_time == 0 {
-            self.video = self.video.time_parameters(tps, ref_time, delta_t_max)?;
+            *self.video = self.video.time_parameters(tps, ref_time, delta_t_max)?;
         } else {
             eprintln!("delta_t_max must be a multiple of ref_time");
         }
@@ -216,14 +217,14 @@ impl VideoBuilder for Framed {
         source_camera: SourceCamera,
         time_mode: TimeMode,
     ) -> Result<Box<Self>, Box<dyn Error>> {
-        self.video = self
-            .video
-            .write_out(output_filename, Some(source_camera), Some(time_mode))?;
+        *self.video =
+            self.video
+                .write_out(output_filename, Some(source_camera), Some(time_mode))?;
         Ok(Box::new(self))
     }
 
     fn show_display(mut self, show_display: bool) -> Self {
-        self.video = self.video.show_display(show_display);
+        *self.video = self.video.show_display(show_display);
         self
     }
 }

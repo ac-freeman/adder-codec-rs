@@ -4,7 +4,7 @@ use std::cmp::max;
 use std::collections::VecDeque;
 use std::error::Error;
 use std::fs::File;
-use std::io::{BufWriter, Write};
+use std::io::{BufReader, BufWriter, Write};
 use std::path::Path;
 use std::{error, io};
 
@@ -60,7 +60,8 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let raw_path = "./dvs.gray8";
 
     let mut stream: Raw = Codec::new();
-    stream.open_reader(file_path).expect("Invalid path");
+    let file = File::open(file_path)?;
+    stream.set_input_stream(Some(BufReader::new(file)));
     let header_bytes = stream.decode_header().expect("Invalid header");
 
     let first_event_position = stream.get_input_stream_position()?;

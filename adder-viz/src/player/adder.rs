@@ -12,6 +12,8 @@ use opencv::core::{create_continuous, Mat, MatTraitConstManual, MatTraitManual, 
 use opencv::imgproc;
 use std::error::Error;
 use std::fmt;
+use std::fs::File;
+use std::io::BufReader;
 use std::path::Path;
 
 pub type PlayerArtifact = (u64, Option<Image>);
@@ -63,7 +65,8 @@ impl AdderPlayer {
                 Some("adder") => {
                     let input_path = path_buf.to_str().expect("Invalid string").to_string();
                     let mut stream: Raw = Codec::new();
-                    stream.open_reader(input_path)?;
+                    let file = File::open(input_path.clone())?;
+                    stream.set_input_stream(Some(BufReader::new(file)));
                     stream.decode_header()?;
 
                     let mut reconstructed_frame_rate = (stream.tps / stream.ref_interval) as f64;

@@ -12,8 +12,14 @@ pub mod raw;
 mod units;
 mod utils;
 
+pub struct Stream {
+    pub(crate) codec: Box<dyn Codec>,
+}
+
 pub trait Codec {
-    fn new() -> Self;
+    fn new() -> Self
+    where
+        Self: Sized;
 
     fn get_source_type(&self) -> SourceType;
 
@@ -22,20 +28,20 @@ pub trait Codec {
     /// * `path` - The path to the file to write to
     /// # Errors
     /// * If the file cannot be created
-    fn open_writer<P: AsRef<Path>>(&mut self, path: P) -> Result<(), std::io::Error> {
-        let file = File::create(&path)?;
-        self.set_output_stream(Some(BufWriter::new(file)));
-        Ok(())
-    }
-
-    /// Set the input stream to read from
-    /// # Errors
-    /// * If the input stream cannot be opened
-    fn open_reader<P: AsRef<Path>>(&mut self, path: P) -> Result<(), std::io::Error> {
-        let file = File::open(&path)?;
-        self.set_input_stream(Some(BufReader::new(file)));
-        Ok(())
-    }
+    // fn open_writer<P: AsRef<Path>>(&mut self, path: P) -> Result<(), std::io::Error> {
+    //     let file = File::create(&path)?;
+    //     self.set_output_stream(Some(BufWriter::new(file)));
+    //     Ok(())
+    // }
+    //
+    // /// Set the input stream to read from
+    // /// # Errors
+    // /// * If the input stream cannot be opened
+    // fn open_reader<P: AsRef<Path>>(&mut self, path: P) -> Result<(), std::io::Error> {
+    //     let file = File::open(&path)?;
+    //     self.set_input_stream(Some(BufReader::new(file)));
+    //     Ok(())
+    // }
 
     /// Write the EOF event signifier to the output stream
     /// # Errors

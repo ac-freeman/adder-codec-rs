@@ -42,7 +42,7 @@ pub enum TranscoderMode {
 pub struct Davis {
     reconstructor: Reconstructor,
     pub(crate) input_frame_scaled: Mat,
-    pub(crate) video: Video,
+    pub(crate) video: Box<Video>,
     image_8u: Mat,
     thread_pool_edi: ThreadPool,
     dvs_c: f64,
@@ -96,7 +96,7 @@ impl Davis {
         let davis_source = Davis {
             reconstructor,
             input_frame_scaled: Mat::default(),
-            video,
+            video: Box::new(video),
             image_8u: Mat::default(),
             thread_pool_edi,
             dvs_c: 0.15,
@@ -278,7 +278,7 @@ impl Davis {
         // Using a macro so that CLion still pretty prints correctly
 
         if self.video.state.write_out {
-            self.video.stream.encode_events_events(&big_buffer)?;
+            self.video.stream.codec.encode_events_events(&big_buffer)?;
         }
         Ok(())
     }
@@ -365,7 +365,7 @@ impl Davis {
             .collect();
 
         if self.video.state.write_out {
-            self.video.stream.encode_events_events(&big_buffer)?;
+            self.video.stream.codec.encode_events_events(&big_buffer)?;
         }
 
         let db = match self.video.instantaneous_frame.data_bytes_mut() {
@@ -488,7 +488,7 @@ impl Source for Davis {
                     .collect();
 
                 if self.video.state.write_out {
-                    self.video.stream.encode_events_events(&big_buffer)?;
+                    self.video.stream.codec.encode_events_events(&big_buffer)?;
                 }
 
                 return Err(SourceError::NoData);
@@ -630,29 +630,29 @@ impl Source for Davis {
     }
 
     fn get_video(self) -> Video {
-        self.video
+        *self.video
     }
 }
 
 impl VideoBuilder for Davis {
     fn contrast_thresholds(mut self, c_thresh_pos: u8, c_thresh_neg: u8) -> Self {
-        self.video = self.video.c_thresh_pos(c_thresh_pos);
-        self.video = self.video.c_thresh_neg(c_thresh_neg);
+        *self.video = self.video.c_thresh_pos(c_thresh_pos);
+        *self.video = self.video.c_thresh_neg(c_thresh_neg);
         self
     }
 
     fn c_thresh_pos(mut self, c_thresh_pos: u8) -> Self {
-        self.video = self.video.c_thresh_pos(c_thresh_pos);
+        *self.video = self.video.c_thresh_pos(c_thresh_pos);
         self
     }
 
     fn c_thresh_neg(mut self, c_thresh_neg: u8) -> Self {
-        self.video = self.video.c_thresh_neg(c_thresh_neg);
+        *self.video = self.video.c_thresh_neg(c_thresh_neg);
         self
     }
 
     fn chunk_rows(mut self, chunk_rows: usize) -> Self {
-        self.video = self.video.chunk_rows(chunk_rows);
+        *self.video = self.video.chunk_rows(chunk_rows);
         self
     }
 
@@ -662,7 +662,7 @@ impl VideoBuilder for Davis {
         ref_time: crate::transcoder::event_pixel_tree::DeltaT,
         delta_t_max: crate::transcoder::event_pixel_tree::DeltaT,
     ) -> Result<Self, Box<dyn Error>> {
-        self.video = self.video.time_parameters(tps, ref_time, delta_t_max)?;
+        *self.video = self.video.time_parameters(tps, ref_time, delta_t_max)?;
         Ok(self)
     }
 
@@ -672,14 +672,14 @@ impl VideoBuilder for Davis {
         source_camera: SourceCamera,
         time_mode: TimeMode,
     ) -> Result<Box<Self>, Box<dyn Error>> {
-        self.video = self
-            .video
-            .write_out(output_filename, Some(source_camera), Some(time_mode))?;
+        *self.video =
+            self.video
+                .write_out(output_filename, Some(source_camera), Some(time_mode))?;
         Ok(Box::new(self))
     }
 
     fn show_display(mut self, show_display: bool) -> Self {
-        self.video = self.video.show_display(show_display);
+        *self.video = self.video.show_display(show_display);
         self
     }
 }

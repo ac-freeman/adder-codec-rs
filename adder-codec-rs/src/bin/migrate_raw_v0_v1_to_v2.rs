@@ -12,6 +12,8 @@ use std::path::Path;
 
 use adder_codec_rs::codec::Codec;
 use std::error;
+use std::fs::File;
+use std::io::{BufReader, BufWriter};
 
 #[derive(Parser, Debug, Deserialize, Default)]
 pub struct Args {
@@ -39,11 +41,13 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     };
 
     let mut input_stream = stream::Raw::new();
-    input_stream.open_reader(Path::new::<String>(&args.input_events_filename))?;
+    let file = File::open(Path::new::<String>(&args.input_events_filename))?;
+    input_stream.set_input_stream(Some(BufReader::new(file)));
     input_stream.decode_header()?;
 
     let mut output_stream = stream::Raw::new();
-    output_stream.open_writer(Path::new::<String>(&args.output_events_filename))?;
+    let file = File::create(Path::new::<String>(&args.output_events_filename))?;
+    output_stream.set_output_stream(Some(BufWriter::new(file)));
     output_stream.encode_header(
         input_stream.plane.clone(),
         input_stream.tps,

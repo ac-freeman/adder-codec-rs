@@ -16,6 +16,7 @@ use std::fs::File;
 use std::io;
 use std::io::{BufWriter, Write};
 
+use crate::codec::Codec;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::time::Instant;
 

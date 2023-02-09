@@ -6,7 +6,8 @@ use adder_codec_rs::TimeMode::AbsoluteT;
 use adder_codec_rs::{DeltaT, Intensity, D_EMPTY, D_SHIFT, D_ZERO_INTEGRATION};
 use clap::Parser;
 use ndarray::Array3;
-use std::io::Write;
+use std::fs::File;
+use std::io::{BufReader, Write};
 use std::path::Path;
 use std::{error, io};
 
@@ -28,7 +29,8 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let file_path = args.input.as_str();
 
     let mut stream: Raw = Codec::new();
-    stream.open_reader(file_path).expect("Invalid path");
+    let file = File::open(file_path)?;
+    stream.set_input_stream(Some(BufReader::new(file)));
     let header_bytes = stream.decode_header().expect("Invalid header");
     let first_event_position = stream.get_input_stream_position()?;
 

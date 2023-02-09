@@ -1,18 +1,20 @@
 use opencv::core::{Mat, Size, CV_8U, CV_8UC3};
 use std::error::Error;
 use std::fmt;
+use std::fs::File;
+use std::io::BufWriter;
 
 use bumpalo::Bump;
 use std::path::Path;
 use std::sync::mpsc::{channel, Sender};
 
 use crate::codec::raw::stream::{Error as StreamError, Raw, LATEST_CODEC_VERSION};
-use crate::{codec::raw, Coord, Event, PlaneSize, SourceType, TimeMode, D};
+use crate::{codec, codec::raw, Coord, Event, PlaneSize, SourceType, TimeMode, D};
 use opencv::highgui;
 use opencv::imgproc::resize;
 use opencv::prelude::*;
 
-use crate::codec::Codec;
+use crate::codec::{Codec, Stream};
 use crate::framer::scale_intensity::FrameValue;
 use crate::transcoder::event_pixel_tree::Mode::Continuous;
 use crate::transcoder::event_pixel_tree::{DeltaT, Intensity32, Mode, PixelArena};
@@ -158,8 +160,10 @@ pub struct Video {
     pub instantaneous_frame: Mat,
     pub instantaneous_view_mode: FramedViewMode,
     pub event_sender: Sender<Vec<Event>>,
-    pub(crate) stream: Raw,
+    pub(crate) stream: Stream,
 }
+
+unsafe impl Send for Video {}
 
 impl Video {
     /// Initialize the Video with default parameters.
@@ -215,7 +219,9 @@ impl Video {
             instantaneous_frame,
             instantaneous_view_mode,
             event_sender,
-            stream,
+            stream: codec::Stream {
+                codec: Box::new(stream),
+            },
         })
     }
 
@@ -240,7 +246,7 @@ impl Video {
         ref_time: DeltaT,
         delta_t_max: DeltaT,
     ) -> Result<Self, Box<dyn Error>> {
-        if self.stream.has_output_stream() {
+        if self.stream.codec.has_output_stream() {
             return Err(
                 "Cannot change time parameters after output stream has been initialized".into(),
             );
@@ -288,8 +294,11 @@ impl Video {
         self.state.write_out = true;
 
         let path = Path::new(&output_filename);
-        self.stream.open_writer(path)?;
-        self.stream.encode_header(
+        let file = File::create(&path)?;
+        self.stream
+            .codec
+            .set_output_stream(Some(BufWriter::new(file)));
+        self.stream.codec.encode_header(
             self.state.plane.clone(),
             self.state.tps,
             self.state.ref_time,
@@ -314,7 +323,7 @@ impl Video {
     /// # Errors
     /// Returns an error if the stream writer cannot be closed cleanly.
     pub fn end_write_stream(&mut self) -> Result<(), Box<dyn Error>> {
-        self.stream.close_writer()
+        self.stream.codec.close_writer()
     }
 
     #[allow(clippy::needless_pass_by_value)]
@@ -382,7 +391,7 @@ impl Video {
             .collect();
 
         if self.state.write_out {
-            self.stream.encode_events_events(&big_buffer)?;
+            self.stream.codec.encode_events_events(&big_buffer)?;
         }
 
         let db = match self.instantaneous_frame.data_bytes_mut() {
