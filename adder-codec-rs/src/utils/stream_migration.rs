@@ -1,15 +1,19 @@
 use crate::codec::raw::stream::Raw;
-use crate::codec::Codec;
+use crate::codec::{Codec, Decoder, Encoder};
 use crate::{DeltaT, Event, SourceCamera, TimeMode};
 use ndarray::Array3;
 use std::error::Error;
+use std::io::{Seek, Write};
 
 pub fn absolute_event_to_dt_event(mut event: Event, last_t: DeltaT) -> Event {
     event.delta_t -= last_t;
     event
 }
 
-pub fn migrate_v2(mut input_stream: Raw, mut output_stream: Raw) -> Result<Raw, Box<dyn Error>> {
+pub fn migrate_v2<W: Write + Seek>(
+    mut input_stream: Raw<W>,
+    mut output_stream: Raw<W>,
+) -> Result<Raw<W>, Box<dyn Error>> {
     let mut t_tree: Array3<u32> = Array3::from_shape_vec(
         (
             input_stream.plane.h_usize(),

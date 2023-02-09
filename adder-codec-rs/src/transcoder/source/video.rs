@@ -2,7 +2,7 @@ use opencv::core::{Mat, Size, CV_8U, CV_8UC3};
 use std::error::Error;
 use std::fmt;
 use std::fs::File;
-use std::io::BufWriter;
+use std::io::{BufWriter, Seek, Write};
 
 use bumpalo::Bump;
 use std::path::Path;
@@ -14,7 +14,7 @@ use opencv::highgui;
 use opencv::imgproc::resize;
 use opencv::prelude::*;
 
-use crate::codec::{Codec, Stream};
+use crate::codec::{Codec, Encoder, Stream};
 use crate::framer::scale_intensity::FrameValue;
 use crate::transcoder::event_pixel_tree::Mode::Continuous;
 use crate::transcoder::event_pixel_tree::{DeltaT, Intensity32, Mode, PixelArena};
@@ -98,7 +98,6 @@ pub struct VideoState {
     pub(crate) ref_time: u32,
     pub(crate) ref_time_divisor: f64,
     pub(crate) tps: DeltaT,
-    pub(crate) write_out: bool,
     pub(crate) show_display: bool,
     pub(crate) show_live: bool,
 }
@@ -116,14 +115,13 @@ impl Default for VideoState {
             ref_time: 255,
             ref_time_divisor: 1.0,
             tps: 7650,
-            write_out: false,
             show_display: false,
             show_live: false,
         }
     }
 }
 
-pub trait VideoBuilder {
+pub trait VideoBuilder<W> {
     fn contrast_thresholds(self, c_thresh_pos: u8, c_thresh_neg: u8) -> Self;
 
     fn c_thresh_pos(self, c_thresh_pos: u8) -> Self;
@@ -146,6 +144,7 @@ pub trait VideoBuilder {
         output_filename: String,
         source_camera: SourceCamera,
         time_mode: TimeMode,
+        write: W,
     ) -> Result<Box<Self>, Box<dyn std::error::Error>>;
 
     fn show_display(self, show_display: bool) -> Self;
@@ -154,20 +153,25 @@ pub trait VideoBuilder {
 // impl VideoBuilder for Video {}
 
 /// Attributes common to ADΔER transcode process
-pub struct Video {
+pub struct Video<W> {
     pub state: VideoState,
     pub(crate) event_pixel_trees: Array3<PixelArena>,
     pub instantaneous_frame: Mat,
     pub instantaneous_view_mode: FramedViewMode,
     pub event_sender: Sender<Vec<Event>>,
-    pub(crate) stream: Stream,
+    pub(crate) stream: Option<Box<dyn Encoder<W>>>,
+    pub(crate) writer: Option<W>,
 }
 
-unsafe impl Send for Video {}
+unsafe impl<W: Write + Seek> Send for Video<W> {}
 
-impl Video {
+impl<W: Write + Seek + 'static> Video<W> {
     /// Initialize the Video with default parameters.
-    pub(crate) fn new(plane: PlaneSize, pixel_tree_mode: Mode) -> Result<Video, Box<dyn Error>> {
+    pub(crate) fn new(
+        plane: PlaneSize,
+        pixel_tree_mode: Mode,
+        writer: Option<W>,
+    ) -> Result<Video<W>, Box<dyn Error>> {
         let mut state = VideoState {
             pixel_tree_mode,
             ..Default::default()
@@ -212,16 +216,15 @@ impl Video {
         state.plane = plane;
         let instantaneous_view_mode = FramedViewMode::Intensity;
         let (event_sender, _) = channel();
-        let stream = Raw::new();
+
         Ok(Video {
             state,
             event_pixel_trees,
             instantaneous_frame,
             instantaneous_view_mode,
             event_sender,
-            stream: codec::Stream {
-                codec: Box::new(stream),
-            },
+            stream: None,
+            writer,
         })
     }
 
@@ -246,7 +249,7 @@ impl Video {
         ref_time: DeltaT,
         delta_t_max: DeltaT,
     ) -> Result<Self, Box<dyn Error>> {
-        if self.stream.codec.has_output_stream() {
+        if self.stream.is_some() {
             return Err(
                 "Cannot change time parameters after output stream has been initialized".into(),
             );
@@ -290,15 +293,11 @@ impl Video {
         output_filename: String,
         source_camera: Option<SourceCamera>,
         time_mode: Option<TimeMode>,
+        write: W,
     ) -> Result<Self, Box<dyn std::error::Error>> {
-        self.state.write_out = true;
-
-        let path = Path::new(&output_filename);
-        let file = File::create(&path)?;
-        self.stream
-            .codec
-            .set_output_stream(Some(BufWriter::new(file)));
-        self.stream.codec.encode_header(
+        let mut stream = Raw::new();
+        stream.set_output_stream(Some(write));
+        stream.encode_header(
             self.state.plane.clone(),
             self.state.tps,
             self.state.ref_time,
@@ -307,6 +306,7 @@ impl Video {
             source_camera,
             time_mode,
         )?;
+        self.stream = Some(Box::new(stream));
 
         self.event_pixel_trees.par_map_inplace(|px| {
             px.time_mode(time_mode);
@@ -323,7 +323,10 @@ impl Video {
     /// # Errors
     /// Returns an error if the stream writer cannot be closed cleanly.
     pub fn end_write_stream(&mut self) -> Result<(), Box<dyn Error>> {
-        self.stream.codec.close_writer()
+        match &mut self.stream {
+            Some(s) => s.close_writer(),
+            None => Ok(()),
+        }
     }
 
     #[allow(clippy::needless_pass_by_value)]
@@ -390,8 +393,8 @@ impl Video {
             })
             .collect();
 
-        if self.state.write_out {
-            self.stream.codec.encode_events_events(&big_buffer)?;
+        if let Some(stream) = &mut self.stream {
+            stream.encode_events_events(&big_buffer)?;
         }
 
         let db = match self.instantaneous_frame.data_bytes_mut() {
@@ -515,13 +518,20 @@ pub fn integrate_for_px(
     }
 }
 
+impl Video<File> {}
+
 /// If `video.show_display`, shows the given [`Mat`] in an `OpenCV` window
 /// with the given name.
 ///
 /// # Errors
 /// Returns an [`OpencvError`] if the window cannot be shown, or the [`Mat`] cannot be scaled as
 /// needed.
-pub fn show_display(window_name: &str, mat: &Mat, wait: i32, video: &Video) -> opencv::Result<()> {
+pub fn show_display<W: Write + Seek>(
+    window_name: &str,
+    mat: &Mat,
+    wait: i32,
+    video: &Video<W>,
+) -> opencv::Result<()> {
     if video.state.show_display {
         show_display_force(window_name, mat, wait)?;
     }
@@ -560,7 +570,7 @@ pub fn show_display_force(window_name: &str, mat: &Mat, wait: i32) -> opencv::Re
     Ok(())
 }
 
-pub trait Source {
+pub trait Source<W> {
     /// Intake one input interval worth of data from the source stream into the ADΔER model as
     /// intensities.
     fn consume(
@@ -569,9 +579,9 @@ pub trait Source {
         thread_pool: &ThreadPool,
     ) -> Result<Vec<Vec<Event>>, SourceError>;
 
-    fn get_video_mut(&mut self) -> &mut Video;
+    fn get_video_mut(&mut self) -> &mut Video<W>;
 
-    fn get_video_ref(&self) -> &Video;
+    fn get_video_ref(&self) -> &Video<W>;
 
-    fn get_video(self) -> Video;
+    fn get_video(self) -> Video<W>;
 }

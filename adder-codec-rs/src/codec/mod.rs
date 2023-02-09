@@ -4,7 +4,7 @@ use raw::stream::Error as StreamError;
 use std::error::Error;
 use std::fs::File;
 use std::io;
-use std::io::{BufReader, BufWriter};
+use std::io::{BufReader, BufWriter, Seek, Write};
 use std::path::Path;
 
 pub mod compressed;
@@ -17,12 +17,13 @@ pub struct Stream {
 }
 
 pub trait Codec {
+    fn get_source_type(&self) -> SourceType;
     fn new() -> Self
     where
         Self: Sized;
+}
 
-    fn get_source_type(&self) -> SourceType;
-
+pub trait Encoder<W: Write + Seek>: Codec {
     /// Create a file writer at the given `path`
     /// # Arguments
     /// * `path` - The path to the file to write to
@@ -43,6 +44,8 @@ pub trait Codec {
     //     Ok(())
     // }
 
+    fn set_output_stream(&mut self, stream: Option<W>);
+
     /// Write the EOF event signifier to the output stream
     /// # Errors
     /// * If the EOF event cannot be written
@@ -58,12 +61,30 @@ pub trait Codec {
     /// * If the stream cannot be closed
     fn close_writer(&mut self) -> Result<(), Box<dyn Error>>;
 
-    /// Close the stream reader safely
-    fn close_reader(&mut self);
-
-    fn set_output_stream(&mut self, stream: Option<BufWriter<File>>);
-
     fn has_output_stream(&self) -> bool;
+
+    fn encode_header(
+        &mut self,
+        plane_size: PlaneSize,
+        tps: u32,
+        ref_interval: u32,
+        delta_t_max: u32,
+        codec_version: u8,
+        source_camera: Option<SourceCamera>,
+        time_mode: Option<TimeMode>,
+    ) -> Result<(), Box<dyn Error>>;
+    fn get_output_stream_position(&mut self) -> Result<u64, Box<dyn std::error::Error>>;
+
+    fn encode_event(&mut self, event: &Event) -> Result<(), StreamError>;
+    fn encode_events(&mut self, events: &[Event]) -> Result<(), StreamError>;
+    fn encode_events_events(&mut self, events: &[Vec<Event>]) -> Result<(), StreamError>;
+    fn encode_event_v3(&mut self, event: &Event) -> Result<(), StreamError>;
+    fn flush_avu(&mut self) -> Result<(), StreamError>;
+}
+
+pub trait Decoder: Codec {
+    fn decode_header(&mut self) -> Result<usize, Box<dyn Error>>;
+    fn decode_event(&mut self) -> Result<Event, StreamError>;
 
     fn set_input_stream(&mut self, stream: Option<BufReader<File>>);
 
@@ -90,24 +111,6 @@ pub trait Codec {
 
     fn get_eof_position(&mut self) -> Result<u64, Box<dyn Error>>;
 
-    fn encode_header(
-        &mut self,
-        plane_size: PlaneSize,
-        tps: u32,
-        ref_interval: u32,
-        delta_t_max: u32,
-        codec_version: u8,
-        source_camera: Option<SourceCamera>,
-        time_mode: Option<TimeMode>,
-    ) -> Result<(), Box<dyn Error>>;
-
-    fn decode_header(&mut self) -> Result<usize, Box<dyn Error>>;
-
-    fn encode_event(&mut self, event: &Event) -> Result<(), StreamError>;
-    fn encode_events(&mut self, events: &[Event]) -> Result<(), StreamError>;
-    fn encode_events_events(&mut self, events: &[Vec<Event>]) -> Result<(), StreamError>;
-    fn decode_event(&mut self) -> Result<Event, StreamError>;
-    fn get_output_stream_position(&mut self) -> Result<u64, Box<dyn std::error::Error>>;
-    fn encode_event_v3(&mut self, event: &Event) -> Result<(), StreamError>;
-    fn flush_avu(&mut self) -> Result<(), StreamError>;
+    /// Close the stream reader safely
+    fn close_reader(&mut self);
 }

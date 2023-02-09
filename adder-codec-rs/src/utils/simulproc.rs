@@ -14,7 +14,7 @@ use std::cmp::max;
 use std::error::Error;
 use std::fs::File;
 use std::io;
-use std::io::{BufWriter, Write};
+use std::io::{BufWriter, Seek, Write};
 
 use crate::codec::Codec;
 use std::sync::mpsc::{channel, Receiver, Sender};
@@ -88,22 +88,22 @@ pub struct SimulProcArgs {
     pub time_mode: String,
 }
 
-pub struct SimulProcessor {
-    pub source: Framed,
+pub struct SimulProcessor<W> {
+    pub source: Framed<W>,
     thread_pool: ThreadPool,
     events_tx: Sender<Vec<Vec<Event>>>,
 }
 
-impl SimulProcessor {
+impl<W: Write + std::io::Seek + 'static> SimulProcessor<W> {
     pub fn new<T>(
-        source: Framed,
+        source: Framed<W>,
         ref_time: DeltaT,
         output_path: &str,
         frame_max: i32,
         num_threads: usize,
         codec_version: u8,
         time_mode: TimeMode,
-    ) -> Result<SimulProcessor, Box<dyn Error>>
+    ) -> Result<SimulProcessor<W>, Box<dyn Error>>
     where
         T: Clone
             + std::marker::Sync

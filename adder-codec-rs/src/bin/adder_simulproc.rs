@@ -12,7 +12,7 @@ use std::error::Error;
 use std::fs::File;
 
 use adder_codec_rs::transcoder::source::framed::Framed;
-use std::io::Cursor;
+use std::io::{BufWriter, Cursor};
 use std::path::Path;
 use std::process::Command;
 
@@ -62,17 +62,24 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // args.output_raw_video_filename = "./tests/samples/videos/drop_out".to_string();
     //////////////////////////////////////////////////////
 
-    let mut source: Framed = Framed::new(args.input_filename, args.color_input, args.scale)?
-        // .chunk_rows(64)
-        .frame_start(args.frame_idx_start)?
-        .c_thresh_pos(args.c_thresh_pos)
-        .c_thresh_neg(args.c_thresh_neg)
-        .show_display(args.show_display)
-        .auto_time_parameters(args.ref_time, args.delta_t_max)?;
+    let mut source: Framed<BufWriter<File>> =
+        Framed::new(args.input_filename, args.color_input, args.scale)?
+            // .chunk_rows(64)
+            .frame_start(args.frame_idx_start)?
+            .c_thresh_pos(args.c_thresh_pos)
+            .c_thresh_neg(args.c_thresh_neg)
+            .show_display(args.show_display)
+            .auto_time_parameters(args.ref_time, args.delta_t_max)?;
 
     if !args.output_events_filename.is_empty() {
-        // source = *source.write_out(args.output_events_filename, FramedU8, TimeMode::AbsoluteT)?;
-        source = *source.write_out(args.output_events_filename, FramedU8, time_mode)?;
+        let path = Path::new(&output_filename);
+        let file = File::create(&path)?;
+        source = *source.write_out(
+            args.output_events_filename,
+            FramedU8,
+            time_mode,
+            BufWriter::new(file),
+        )?;
     }
 
     let source_fps = source.source_fps;

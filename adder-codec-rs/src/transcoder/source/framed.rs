@@ -12,6 +12,7 @@ use opencv::videoio::{VideoCapture, CAP_PROP_FPS, CAP_PROP_FRAME_COUNT, CAP_PROP
 use opencv::{imgproc, prelude::*, videoio, Result};
 use rayon::ThreadPool;
 use std::error::Error;
+use std::io::{Seek, Write};
 use std::mem::swap;
 
 #[derive(Debug, Copy, Clone)]
@@ -22,7 +23,7 @@ pub struct IndirectCoord {
 }
 
 /// Attributes of a framed video -> ADΔER transcode
-pub struct Framed {
+pub struct Framed<W> {
     cap: VideoCapture,
     pub(crate) input_frame_scaled: Mat,
     pub(crate) input_frame: Mat,
@@ -30,17 +31,17 @@ pub struct Framed {
     pub source_fps: f64,
     pub scale: f64,
     color_input: bool,
-    pub(crate) video: Box<Video>,
+    pub(crate) video: Video<W>,
     pub time_mode: TimeMode,
 }
-unsafe impl Sync for Framed {}
+unsafe impl<W: Write + Seek> Sync for Framed<W> {}
 
-impl Framed {
+impl<W: Write + Seek + 'static> Framed<W> {
     pub fn new(
         input_filename: String,
         color_input: bool,
         scale: f64,
-    ) -> Result<Framed, Box<dyn Error>> {
+    ) -> Result<Framed<W>, Box<dyn Error>> {
         let mut cap =
             videoio::VideoCapture::from_file(input_filename.as_str(), videoio::CAP_FFMPEG)?;
 
@@ -72,7 +73,7 @@ impl Framed {
             if color_input { 3 } else { 1 },
         )?;
 
-        let video = Video::new(plane, FramePerfect)?;
+        let video = Video::new(plane, FramePerfect, None)?;
 
         Ok(Framed {
             cap,
@@ -82,7 +83,7 @@ impl Framed {
             source_fps,
             scale,
             color_input,
-            video: Box::new(video),
+            video,
             time_mode: TimeMode::DeltaT,
         })
     }
@@ -115,7 +116,7 @@ impl Framed {
     ) -> Result<Self, Box<dyn Error>> {
         if delta_t_max % ref_time == 0 {
             let tps = (ref_time as f64 * self.source_fps) as DeltaT;
-            *self.video = self.video.time_parameters(tps, ref_time, delta_t_max)?;
+            self.video = self.video.time_parameters(tps, ref_time, delta_t_max)?;
         } else {
             eprintln!("delta_t_max must be a multiple of ref_time");
         }
@@ -127,7 +128,7 @@ impl Framed {
     }
 }
 
-impl Source for Framed {
+impl<W: Write + Seek + 'static> Source<W> for Framed<W> {
     /// Get pixel-wise intensities directly from source frame, and integrate them with
     /// [`ref_time`](Video::ref_time) (the number of ticks each frame is said to span)
     fn consume(
@@ -162,38 +163,38 @@ impl Source for Framed {
         })
     }
 
-    fn get_video_mut(&mut self) -> &mut Video {
+    fn get_video_mut(&mut self) -> &mut Video<W> {
         &mut self.video
     }
 
-    fn get_video_ref(&self) -> &Video {
+    fn get_video_ref(&self) -> &Video<W> {
         &self.video
     }
 
-    fn get_video(self) -> Video {
+    fn get_video(self) -> Video<W> {
         todo!()
     }
 }
 
-impl VideoBuilder for Framed {
+impl<W: Write + Seek + 'static> VideoBuilder<W> for Framed<W> {
     fn contrast_thresholds(mut self, c_thresh_pos: u8, c_thresh_neg: u8) -> Self {
-        *self.video = self.video.c_thresh_pos(c_thresh_pos);
-        *self.video = self.video.c_thresh_neg(c_thresh_neg);
+        self.video = self.video.c_thresh_pos(c_thresh_pos);
+        self.video = self.video.c_thresh_neg(c_thresh_neg);
         self
     }
 
     fn c_thresh_pos(mut self, c_thresh_pos: u8) -> Self {
-        *self.video = self.video.c_thresh_pos(c_thresh_pos);
+        self.video = self.video.c_thresh_pos(c_thresh_pos);
         self
     }
 
     fn c_thresh_neg(mut self, c_thresh_neg: u8) -> Self {
-        *self.video = self.video.c_thresh_neg(c_thresh_neg);
+        self.video = self.video.c_thresh_neg(c_thresh_neg);
         self
     }
 
     fn chunk_rows(mut self, chunk_rows: usize) -> Self {
-        *self.video = self.video.chunk_rows(chunk_rows);
+        self.video = self.video.chunk_rows(chunk_rows);
         self
     }
 
@@ -204,7 +205,7 @@ impl VideoBuilder for Framed {
         delta_t_max: crate::transcoder::event_pixel_tree::DeltaT,
     ) -> Result<Self, Box<dyn Error>> {
         if delta_t_max % ref_time == 0 {
-            *self.video = self.video.time_parameters(tps, ref_time, delta_t_max)?;
+            self.video = self.video.time_parameters(tps, ref_time, delta_t_max)?;
         } else {
             eprintln!("delta_t_max must be a multiple of ref_time");
         }
@@ -216,15 +217,16 @@ impl VideoBuilder for Framed {
         output_filename: String,
         source_camera: SourceCamera,
         time_mode: TimeMode,
+        write: W,
     ) -> Result<Box<Self>, Box<dyn Error>> {
-        *self.video =
+        self.video =
             self.video
-                .write_out(output_filename, Some(source_camera), Some(time_mode))?;
+                .write_out(output_filename, Some(source_camera), Some(time_mode), write)?;
         Ok(Box::new(self))
     }
 
     fn show_display(mut self, show_display: bool) -> Self {
-        *self.video = self.video.show_display(show_display);
+        self.video = self.video.show_display(show_display);
         self
     }
 }

@@ -6,7 +6,7 @@ use crate::SourceType::{F32, F64, U16, U32, U64, U8};
 
 use crate::codec::raw::stream::Error::{Deserialize, Eof};
 use crate::codec::units::avu::{Avu, Type};
-use crate::codec::Codec;
+use crate::codec::{Codec, Decoder, Encoder};
 use crate::{
     Coord, DeltaT, Event, EventSingle, EventStreamHeader, PlaneSize, SourceCamera, SourceType,
     TimeMode, EOF_PX_ADDRESS,
@@ -59,8 +59,8 @@ impl From<Box<bincode::ErrorKind>> for Error {
     }
 }
 
-pub struct Raw {
-    output_stream: Option<BufWriter<File>>,
+pub struct Raw<W: Write> {
+    output_stream: Option<W>,
     input_stream: Option<BufReader<File>>,
     pub codec_version: u8,
     pub header_size: usize,
@@ -75,7 +75,7 @@ pub struct Raw {
     bincode: WithOtherEndian<WithOtherIntEncoding<DefaultOptions, FixintEncoding>, BigEndian>,
 }
 
-impl Codec for Raw {
+impl<W: Write> Codec for Raw<W> {
     fn new() -> Self {
         Raw {
             output_stream: None,
@@ -111,7 +111,8 @@ impl Codec for Raw {
             SourceCamera::Asint => F64,
         }
     }
-
+}
+impl<W: Write + Seek> Encoder<W> for Raw<W> {
     fn write_eof(&mut self) -> Result<(), Error> {
         match &mut self.output_stream {
             None => {
@@ -152,19 +153,131 @@ impl Codec for Raw {
         drop(tmp);
         Ok(())
     }
-
-    fn close_reader(&mut self) {
-        let mut tmp = None;
-        mem::swap(&mut tmp, &mut self.input_stream);
-        drop(tmp);
-    }
-
-    fn set_output_stream(&mut self, stream: Option<BufWriter<File>>) {
+    fn set_output_stream(&mut self, stream: Option<W>) {
         self.output_stream = stream;
     }
 
     fn has_output_stream(&self) -> bool {
         self.output_stream.is_some()
+    }
+
+    /// Encode the header for this [`Raw`]. If an [`input_stream`] is open for this struct
+    /// already, then it is dropped. Intended usage is to create a separate [`Raw`] if you
+    /// want to read and write two streams at once (for example, if you are cropping the spatial
+    /// pixels of a stream, reducing the number of channels, or scaling the [`DeltaT`] values in
+    /// some way).
+    fn encode_header(
+        &mut self,
+        plane: PlaneSize,
+        tps: DeltaT,
+        ref_interval: DeltaT,
+        delta_t_max: DeltaT,
+        codec_version: u8,
+        source_camera: Option<SourceCamera>,
+        time_mode: Option<TimeMode>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        self.plane = plane.clone();
+        self.tps = tps;
+        self.ref_interval = ref_interval;
+        self.delta_t_max = delta_t_max;
+        self.codec_version = codec_version;
+        let header = EventStreamHeader::new(
+            MAGIC_RAW,
+            plane,
+            tps,
+            ref_interval,
+            delta_t_max,
+            codec_version,
+        );
+        assert_eq!(header.magic, MAGIC_RAW);
+
+        self.input_stream = None;
+        self.source_camera = source_camera.unwrap_or_default();
+        self.time_mode = time_mode.unwrap_or_default();
+
+        encode_header_extension(self, header, source_camera, time_mode)?;
+        self.header_size = self.get_output_stream_position()? as usize;
+        Ok(())
+    }
+
+    fn encode_event(&mut self, event: &Event) -> Result<(), Error> {
+        if self.codec_version >= 3 {
+            return self.encode_event_v3(event);
+        }
+
+        match &mut self.output_stream {
+            None => Err(Error::UnitializedStream),
+            Some(stream) => {
+                // NOTE: for speed, the following checks only run in debug builds. It's entirely
+                // possibly to encode nonsensical events if you want to.
+                debug_assert!(event.coord.x < self.plane.width || event.coord.x == EOF_PX_ADDRESS);
+                debug_assert!(event.coord.y < self.plane.height || event.coord.y == EOF_PX_ADDRESS);
+                let output_event: EventSingle;
+                if self.plane.channels == 1 {
+                    output_event = event.into();
+                    self.bincode.serialize_into(&mut *stream, &output_event)?;
+                    // bincode::serialize_into(&mut *stream, &output_event, my_options).unwrap();
+                } else {
+                    self.bincode.serialize_into(&mut *stream, event)?;
+                }
+                Ok(())
+            }
+        }
+    }
+
+    fn get_output_stream_position(&mut self) -> Result<u64, Box<dyn std::error::Error>> {
+        match &mut self.output_stream {
+            None => Err(Error::UnitializedStream.into()),
+            Some(stream) => Ok(stream.stream_position()?),
+        }
+    }
+
+    fn encode_event_v3(&mut self, event: &Event) -> Result<(), Error> {
+        if self.avu.header.size == 0 {
+            self.avu.header.time = event.delta_t as u64;
+            self.avu.header.avu_type = Type::AbsEvents
+        }
+
+        self.avu.data.append(&mut bincode::serialize(&event)?);
+        self.avu.header.size += mem::size_of::<Event>() as u64;
+
+        if self.avu.data.len() >= 4000 {
+            // TODO: temporary fixed value
+            self.flush_avu()?;
+        }
+        Ok(())
+    }
+
+    fn encode_events(&mut self, events: &[Event]) -> Result<(), Error> {
+        for event in events {
+            self.encode_event(event)?;
+        }
+        Ok(())
+    }
+
+    fn encode_events_events(&mut self, events: &[Vec<Event>]) -> Result<(), Error> {
+        for v in events {
+            self.encode_events(v)?;
+        }
+        Ok(())
+    }
+
+    fn flush_avu(&mut self) -> Result<(), Error> {
+        match &mut self.output_stream {
+            None => Err(Error::UnitializedStream),
+            Some(stream) => {
+                self.bincode.serialize_into(&mut *stream, &self.avu)?;
+                Ok(())
+            }
+        }
+    }
+}
+
+impl<W: Write> Decoder for Raw<W> {
+    fn close_reader(&mut self) {
+        let mut tmp = None;
+        mem::swap(&mut tmp, &mut self.input_stream);
+        drop(tmp);
     }
 
     fn set_input_stream(&mut self, stream: Option<BufReader<File>>) {
@@ -212,13 +325,6 @@ impl Codec for Raw {
         }
     }
 
-    fn get_output_stream_position(&mut self) -> Result<u64, Box<dyn std::error::Error>> {
-        match &mut self.output_stream {
-            None => Err(Error::UnitializedStream.into()),
-            Some(stream) => Ok(stream.stream_position()?),
-        }
-    }
-
     // TODO: return more relevant errors
     fn get_eof_position(&mut self) -> Result<u64, Box<dyn std::error::Error>> {
         match &mut self.input_stream {
@@ -250,46 +356,6 @@ impl Codec for Raw {
         self.set_input_stream_position_from_end(0)?;
         self.get_input_stream_position()
     }
-
-    /// Encode the header for this [`Raw`]. If an [`input_stream`] is open for this struct
-    /// already, then it is dropped. Intended usage is to create a separate [`Raw`] if you
-    /// want to read and write two streams at once (for example, if you are cropping the spatial
-    /// pixels of a stream, reducing the number of channels, or scaling the [`DeltaT`] values in
-    /// some way).
-    fn encode_header(
-        &mut self,
-        plane: PlaneSize,
-        tps: DeltaT,
-        ref_interval: DeltaT,
-        delta_t_max: DeltaT,
-        codec_version: u8,
-        source_camera: Option<SourceCamera>,
-        time_mode: Option<TimeMode>,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        self.plane = plane.clone();
-        self.tps = tps;
-        self.ref_interval = ref_interval;
-        self.delta_t_max = delta_t_max;
-        self.codec_version = codec_version;
-        let header = EventStreamHeader::new(
-            MAGIC_RAW,
-            plane,
-            tps,
-            ref_interval,
-            delta_t_max,
-            codec_version,
-        );
-        assert_eq!(header.magic, MAGIC_RAW);
-
-        self.input_stream = None;
-        self.source_camera = source_camera.unwrap_or_default();
-        self.time_mode = time_mode.unwrap_or_default();
-
-        encode_header_extension(self, header, source_camera, time_mode)?;
-        self.header_size = self.get_output_stream_position()? as usize;
-        Ok(())
-    }
-
     fn decode_header(&mut self) -> Result<usize, Box<dyn std::error::Error>> {
         match &mut self.input_stream {
             None => Err(Error::UnitializedStream.into()),
@@ -328,62 +394,6 @@ impl Codec for Raw {
             }
         }
     }
-
-    fn encode_event(&mut self, event: &Event) -> Result<(), Error> {
-        if self.codec_version >= 3 {
-            return self.encode_event_v3(event);
-        }
-
-        match &mut self.output_stream {
-            None => Err(Error::UnitializedStream),
-            Some(stream) => {
-                // NOTE: for speed, the following checks only run in debug builds. It's entirely
-                // possibly to encode nonsensical events if you want to.
-                debug_assert!(event.coord.x < self.plane.width || event.coord.x == EOF_PX_ADDRESS);
-                debug_assert!(event.coord.y < self.plane.height || event.coord.y == EOF_PX_ADDRESS);
-                let output_event: EventSingle;
-                if self.plane.channels == 1 {
-                    output_event = event.into();
-                    self.bincode.serialize_into(&mut *stream, &output_event)?;
-                    // bincode::serialize_into(&mut *stream, &output_event, my_options).unwrap();
-                } else {
-                    self.bincode.serialize_into(&mut *stream, event)?;
-                }
-                Ok(())
-            }
-        }
-    }
-
-    fn encode_event_v3(&mut self, event: &Event) -> Result<(), Error> {
-        if self.avu.header.size == 0 {
-            self.avu.header.time = event.delta_t as u64;
-            self.avu.header.avu_type = Type::AbsEvents
-        }
-
-        self.avu.data.append(&mut bincode::serialize(&event)?);
-        self.avu.header.size += mem::size_of::<Event>() as u64;
-
-        if self.avu.data.len() >= 4000 {
-            // TODO: temporary fixed value
-            self.flush_avu()?;
-        }
-        Ok(())
-    }
-
-    fn encode_events(&mut self, events: &[Event]) -> Result<(), Error> {
-        for event in events {
-            self.encode_event(event)?;
-        }
-        Ok(())
-    }
-
-    fn encode_events_events(&mut self, events: &[Vec<Event>]) -> Result<(), Error> {
-        for v in events {
-            self.encode_events(v)?;
-        }
-        Ok(())
-    }
-
     fn decode_event(&mut self) -> Result<Event, Error> {
         // let mut buf = vec![0u8; self.event_size as usize];
         let event: Event = match &mut self.input_stream {
@@ -407,20 +417,10 @@ impl Codec for Raw {
         }
         Ok(event)
     }
-
-    fn flush_avu(&mut self) -> Result<(), Error> {
-        match &mut self.output_stream {
-            None => Err(Error::UnitializedStream),
-            Some(stream) => {
-                self.bincode.serialize_into(&mut *stream, &self.avu)?;
-                Ok(())
-            }
-        }
-    }
 }
 
-fn encode_header_extension(
-    raw: &mut Raw,
+fn encode_header_extension<W: Write>(
+    raw: &mut Raw<W>,
     header: EventStreamHeader,
     source_camera: Option<SourceCamera>,
     time_mode: Option<TimeMode>,
@@ -460,7 +460,7 @@ fn encode_header_extension(
     }
 }
 
-fn decode_header_extension(raw: &mut Raw) -> Result<(), Box<dyn std::error::Error>> {
+fn decode_header_extension<W: Write>(raw: &mut Raw<W>) -> Result<(), Box<dyn std::error::Error>> {
     match &mut raw.input_stream {
         None => Err(Error::UnitializedStream.into()),
         Some(stream) => {
