@@ -2,9 +2,14 @@ extern crate adder_codec_rs;
 
 use crate::adder_codec_rs::transcoder::source::video::VideoBuilder;
 use adder_codec_core::codec::decoder::Decoder;
-use adder_codec_core::codec::raw::stream::RawInput;
-use adder_codec_core::codec::ReadCompression;
+use adder_codec_core::codec::encoder::Encoder;
+use adder_codec_core::codec::raw::stream::{RawInput, RawOutput};
+use adder_codec_core::codec::{
+    CodecMetadata, ReadCompression, WriteCompression, LATEST_CODEC_VERSION,
+};
 use adder_codec_core::SourceCamera::FramedU8;
+use adder_codec_core::SourceType::*;
+use adder_codec_core::TimeMode::DeltaT;
 use adder_codec_core::{Coord, Event, PlaneSize, TimeMode};
 use bitstream_io::{BigEndian, BitReader};
 use ndarray::{Array3, Axis};
@@ -66,25 +71,25 @@ fn test_sample_perfect_dt() {
     let reconstructed_frame_rate = 24.0;
     // For instantaneous reconstruction, make sure the frame rate matches the source video rate
     assert_eq!(
-        stream.tps / stream.ref_interval,
+        reader.meta().tps / reader.meta().ref_interval,
         reconstructed_frame_rate as u32
     );
 
-    let mut frame_sequence: FrameSequence<u8> = FramerBuilder::new(stream.plane.clone(), 64)
-        .codec_version(stream.codec_version, TimeMode::DeltaT)
+    let mut frame_sequence: FrameSequence<u8> = FramerBuilder::new(reader.meta().plane.clone(), 64)
+        .codec_version(reader.meta().codec_version, TimeMode::DeltaT)
         .time_parameters(
-            stream.tps,
-            stream.ref_interval,
-            stream.delta_t_max,
+            reader.meta().tps,
+            reader.meta().ref_interval,
+            reader.meta().delta_t_max,
             reconstructed_frame_rate,
         )
         .mode(INSTANTANEOUS)
-        .source(stream.get_source_type(), stream.source_camera)
+        .source(reader.get_source_type(), reader.meta().source_camera)
         .finish();
 
     let mut frame_count = 0;
     loop {
-        match stream.decode_event() {
+        match reader.digest_event(&mut bitreader) {
             Ok(mut event) => {
                 if frame_sequence.ingest_event(&mut event) {
                     match frame_sequence.write_multi_frame_bytes(&mut output_stream) {
@@ -127,9 +132,12 @@ fn test_sample_perfect_dt() {
 #[test]
 fn test_sample_perfect_dt_color() {
     let input_path = "./tests/samples/sample_2_raw_events.adder";
-    let mut stream: Raw = Codec::new();
-    stream.open_reader(input_path).unwrap();
-    stream.decode_header().unwrap();
+    let tmp = File::open(input_path).unwrap();
+    let bufreader = BufReader::new(tmp);
+    let mut compression = <RawInput as ReadCompression<BufReader<File>>>::new();
+
+    let mut bitreader = BitReader::endian(bufreader, BigEndian);
+    let mut reader = Decoder::new(Box::new(compression), &mut bitreader);
 
     let output_path = Path::new("./tests/samples/temp_sample_2");
     let mut output_stream = BufWriter::new(File::create(output_path).unwrap());
@@ -137,24 +145,24 @@ fn test_sample_perfect_dt_color() {
     let reconstructed_frame_rate = 24.0;
     // For instantaneous reconstruction, make sure the frame rate matches the source video rate
     assert_eq!(
-        stream.tps / stream.ref_interval,
+        reader.meta().tps / reader.meta().ref_interval,
         reconstructed_frame_rate as u32
     );
 
-    let mut frame_sequence: FrameSequence<u8> = FramerBuilder::new(stream.plane.clone(), 64)
-        .codec_version(stream.codec_version, TimeMode::DeltaT)
+    let mut frame_sequence: FrameSequence<u8> = FramerBuilder::new(reader.meta().plane.clone(), 64)
+        .codec_version(reader.meta().codec_version, TimeMode::DeltaT)
         .time_parameters(
-            stream.tps,
-            stream.ref_interval,
-            stream.delta_t_max,
+            reader.meta().tps,
+            reader.meta().ref_interval,
+            reader.meta().delta_t_max,
             reconstructed_frame_rate,
         )
         .mode(INSTANTANEOUS)
-        .source(stream.get_source_type(), stream.source_camera)
+        .source(reader.get_source_type(), reader.meta().source_camera)
         .finish();
     let mut frame_count = 0;
     loop {
-        match stream.decode_event() {
+        match reader.digest_event(&mut bitreader) {
             Ok(mut event) => {
                 if frame_sequence.ingest_event(&mut event) {
                     match frame_sequence.write_multi_frame_bytes(&mut output_stream) {
@@ -194,17 +202,6 @@ fn test_sample_perfect_dt_color() {
 }
 
 #[test]
-#[should_panic]
-fn test_encode_header_non_init() {
-    let mut stream: Raw = Codec::new();
-    let plane = PlaneSize::new(50, 100, 1).unwrap();
-    stream
-        .encode_header(plane, 53000, 4000, 50000, 1, Some(FramedU8), None)
-        .unwrap();
-    // stream = RawStream::new();
-}
-
-#[test]
 fn test_encode_header_v0() {
     let n = rand_u32();
     let mut stream = setup_raw_writer_v0(n);
@@ -224,7 +221,7 @@ fn test_encode_header_v1() {
     let n = rand_u32();
     let mut stream = setup_raw_writer_v1(n);
     stream.flush_writer().unwrap();
-    assert_eq!(stream.header_size, 29);
+    assert_eq!(stream.meta().header_size, 29);
     stream.close_writer().unwrap();
     assert_eq!(
         fs::metadata("./TEST_".to_owned() + n.to_string().as_str() + ".addr")
@@ -241,7 +238,7 @@ fn test_encode_header_v2() {
     let n: u32 = rand::thread_rng().gen();
     let mut stream = setup_raw_writer_v2(n);
     stream.flush_writer().unwrap();
-    assert_eq!(stream.header_size, 33);
+    assert_eq!(stream.meta().header_size, 33);
     assert_eq!(
         fs::metadata("./TEST_".to_owned() + n.to_string().as_str() + ".addr")
             .unwrap()
@@ -251,51 +248,79 @@ fn test_encode_header_v2() {
     fs::remove_file("./TEST_".to_owned() + n.to_string().as_str() + ".addr").unwrap();
 }
 
-fn setup_raw_writer_v0(rand_num: u32) -> Raw {
-    let mut stream: Raw = Codec::new();
-    stream
-        .open_writer("./TEST_".to_owned() + rand_num.to_string().as_str() + ".addr")
-        .expect("Couldn't open file");
+fn setup_raw_writer_v0(rand_num: u32) -> Encoder<BufWriter<File>> {
     let plane = PlaneSize::new(50, 100, 1).unwrap();
-    stream
-        .encode_header(plane, 53000, 4000, 50000, 0, None, None)
-        .unwrap();
-    stream
+
+    let bufwriter = BufWriter::new(
+        File::create("./TEST_".to_owned() + rand_num.to_string().as_str() + ".addr").unwrap(),
+    );
+    let compression = adder_codec_core::codec::raw::stream::RawOutput::new(
+        adder_codec_core::codec::CodecMetadata {
+            codec_version: 0,
+            header_size: 0,
+            time_mode: DeltaT,
+            plane: plane,
+            tps: 53000,
+            ref_interval: 4000,
+            delta_t_max: 50000,
+            event_size: 0,
+            source_camera: Default::default(),
+        },
+        bufwriter,
+    );
+    let mut encoder: Encoder<BufWriter<File>> = Encoder::new(Box::new(compression));
+    encoder
 }
 
-fn setup_raw_writer_v1(rand_num: u32) -> Raw {
-    let mut stream: Raw = Codec::new();
-    stream
-        .open_writer("./TEST_".to_owned() + rand_num.to_string().as_str() + ".addr")
-        .expect("Couldn't open file");
+fn setup_raw_writer_v1(rand_num: u32) -> Encoder<BufWriter<File>> {
     let plane = PlaneSize::new(50, 100, 1).unwrap();
-    stream
-        .encode_header(plane, 53000, 4000, 50000, 1, Some(FramedU8), None)
-        .unwrap();
-    stream
+
+    let bufwriter = BufWriter::new(
+        File::create("./TEST_".to_owned() + rand_num.to_string().as_str() + ".addr").unwrap(),
+    );
+    let compression = adder_codec_core::codec::raw::stream::RawOutput::new(
+        adder_codec_core::codec::CodecMetadata {
+            codec_version: 1,
+            header_size: 0,
+            time_mode: DeltaT,
+            plane: plane,
+            tps: 53000,
+            ref_interval: 4000,
+            delta_t_max: 50000,
+            event_size: 0,
+            source_camera: FramedU8,
+        },
+        bufwriter,
+    );
+    let mut encoder: Encoder<BufWriter<File>> = Encoder::new(Box::new(compression));
+    encoder
 }
 
-fn setup_raw_writer_v2(rand_num: u32) -> Raw {
-    let mut stream: Raw = Codec::new();
-    stream
-        .open_writer("./TEST_".to_owned() + rand_num.to_string().as_str() + ".addr")
-        .expect("Couldn't open file");
+fn setup_raw_writer_v2(rand_num: u32) -> Encoder<BufWriter<File>> {
     let plane = PlaneSize::new(50, 100, 1).unwrap();
-    stream
-        .encode_header(
-            plane,
-            53000,
-            4000,
-            50000,
-            2,
-            Some(FramedU8),
-            Some(TimeMode::DeltaT),
-        )
-        .unwrap();
-    stream
+
+    let bufwriter = BufWriter::new(
+        File::create("./TEST_".to_owned() + rand_num.to_string().as_str() + ".addr").unwrap(),
+    );
+    let compression = adder_codec_core::codec::raw::stream::RawOutput::new(
+        adder_codec_core::codec::CodecMetadata {
+            codec_version: 2,
+            header_size: 0,
+            time_mode: DeltaT,
+            plane: plane,
+            tps: 53000,
+            ref_interval: 4000,
+            delta_t_max: 50000,
+            event_size: 0,
+            source_camera: FramedU8,
+        },
+        bufwriter,
+    );
+    let mut encoder: Encoder<BufWriter<File>> = Encoder::new(Box::new(compression));
+    encoder
 }
 
-fn cleanup_raw_writer(rand_num: u32, stream: &mut Raw) {
+fn cleanup_raw_writer(rand_num: u32, stream: Encoder<BufWriter<File>>) {
     stream.close_writer().unwrap();
     fs::remove_file("./TEST_".to_owned() + rand_num.to_string().as_str() + ".addr").unwrap();
     // Don't check the error
@@ -314,8 +339,8 @@ fn test_encode_event() {
         d: 5,
         delta_t: 1000,
     };
-    stream.encode_event(&event).unwrap();
-    cleanup_raw_writer(n, &mut stream)
+    stream.ingest_event(&event).unwrap();
+    cleanup_raw_writer(n, stream)
 }
 
 #[test]
@@ -332,16 +357,24 @@ fn test_encode_events() {
         delta_t: 1000,
     };
     let events = vec![event, event, event];
-    stream.encode_events(&events).unwrap();
+    stream.ingest_events(&events).unwrap();
     stream.flush_writer().unwrap();
-    cleanup_raw_writer(n, &mut stream)
+    cleanup_raw_writer(n, stream)
 }
 
-fn setup_raw_reader(rand_num: u32, stream: &mut Raw) {
-    stream
-        .open_reader("./TEST_".to_owned() + rand_num.to_string().as_str() + ".addr")
-        .expect("Couldn't open file");
-    stream.decode_header().unwrap();
+fn setup_raw_reader(
+    rand_num: u32,
+) -> (
+    Decoder<BufReader<File>>,
+    BitReader<BufReader<File>, BigEndian>,
+) {
+    let tmp = File::open("./TEST_".to_owned() + rand_num.to_string().as_str() + ".addr").unwrap();
+    let bufreader = BufReader::new(tmp);
+    let mut compression = <RawInput as ReadCompression<BufReader<File>>>::new();
+
+    let mut bitreader = BitReader::endian(bufreader, BigEndian);
+    let mut reader = Decoder::new(Box::new(compression), &mut bitreader);
+    (reader, bitreader)
 }
 
 fn rand_u32() -> u32 {
@@ -352,9 +385,8 @@ fn rand_u32() -> u32 {
 fn read_header() {
     let n: u32 = rand::thread_rng().gen();
     let mut stream = setup_raw_writer_v0(n);
-    stream.flush_writer().unwrap();
-    setup_raw_reader(n, &mut stream);
-    cleanup_raw_writer(n, &mut stream);
+    stream.close_writer().unwrap();
+    setup_raw_reader(n);
 }
 
 #[test]
@@ -370,10 +402,10 @@ fn read_event() {
         d: 5,
         delta_t: 1000,
     };
-    stream.encode_event(&event).unwrap();
+    stream.ingest_event(&event).unwrap();
     stream.flush_writer().unwrap();
-    setup_raw_reader(n, &mut stream);
-    let res = stream.decode_event();
+    let (mut reader, mut bitreader) = setup_raw_reader(n);
+    let res = reader.digest_event(&mut bitreader);
     match res {
         Ok(decoded_event) => {
             assert_eq!(event, decoded_event);
@@ -383,13 +415,13 @@ fn read_event() {
         }
     }
 
-    cleanup_raw_writer(n, &mut stream);
+    cleanup_raw_writer(n, stream);
 }
 
 #[test]
 fn test_event_framer_ingest() {
+    use adder_codec_core::SourceType::U8;
     use adder_codec_rs::framer::driver::FramerMode::INSTANTANEOUS;
-    use adder_codec_rs::framer::driver::SourceType::U8;
     use adder_codec_rs::framer::driver::{EventCoordless, FrameSequence, Framer};
 
     let plane = PlaneSize::new(10, 10, 3).unwrap();
@@ -425,7 +457,6 @@ fn test_event_framer_ingest() {
 #[test]
 fn test_event_framer_ingest_get_filled() {
     use adder_codec_rs::framer::driver::FramerMode::INSTANTANEOUS;
-    use adder_codec_rs::framer::driver::SourceType::U8;
     use adder_codec_rs::framer::driver::{EventCoordless, FrameSequence, Framer};
     let plane = PlaneSize::new(5, 5, 1).unwrap();
     let mut frame_sequence: FrameSequence<EventCoordless> = FramerBuilder::new(plane, 64)
@@ -464,7 +495,6 @@ fn test_event_framer_ingest_get_filled() {
 #[test]
 fn get_frame_bytes_eventcoordless() {
     use adder_codec_rs::framer::driver::FramerMode::INSTANTANEOUS;
-    use adder_codec_rs::framer::driver::SourceType::U8;
     use adder_codec_rs::framer::driver::{EventCoordless, FrameSequence, Framer};
     let plane = PlaneSize::new(5, 5, 1).unwrap();
     let mut frame_sequence: FrameSequence<EventCoordless> = FramerBuilder::new(plane, 64)
@@ -523,7 +553,6 @@ fn get_frame_bytes_eventcoordless() {
 #[test]
 fn get_frame_bytes_u8() {
     use adder_codec_rs::framer::driver::FramerMode::INSTANTANEOUS;
-    use adder_codec_rs::framer::driver::SourceType::U8;
     use adder_codec_rs::framer::driver::{FrameSequence, Framer};
     let plane = PlaneSize::new(5, 5, 1).unwrap();
     let mut frame_sequence: FrameSequence<u8> = FramerBuilder::new(plane, 64)
@@ -581,7 +610,6 @@ fn get_frame_bytes_u8() {
 #[test]
 fn get_frame_bytes_u16() {
     use adder_codec_rs::framer::driver::FramerMode::INSTANTANEOUS;
-    use adder_codec_rs::framer::driver::SourceType::U8;
     use adder_codec_rs::framer::driver::{FrameSequence, Framer};
     let plane = PlaneSize::new(5, 5, 1).unwrap();
     let mut frame_sequence: FrameSequence<u16> = FramerBuilder::new(plane, 64)
@@ -638,7 +666,6 @@ fn get_frame_bytes_u16() {
 #[test]
 fn get_frame_bytes_u32() {
     use adder_codec_rs::framer::driver::FramerMode::INSTANTANEOUS;
-    use adder_codec_rs::framer::driver::SourceType::U8;
     use adder_codec_rs::framer::driver::{FrameSequence, Framer};
     let plane = PlaneSize::new(5, 5, 1).unwrap();
     let mut frame_sequence: FrameSequence<u32> = FramerBuilder::new(plane, 46)
@@ -695,7 +722,6 @@ fn get_frame_bytes_u32() {
 #[test]
 fn get_frame_bytes_u64() {
     use adder_codec_rs::framer::driver::FramerMode::INSTANTANEOUS;
-    use adder_codec_rs::framer::driver::SourceType::U8;
     use adder_codec_rs::framer::driver::{FrameSequence, Framer};
     let plane = PlaneSize::new(5, 5, 1).unwrap();
     let mut frame_sequence: FrameSequence<u64> = FramerBuilder::new(plane, 64)
@@ -752,7 +778,6 @@ fn get_frame_bytes_u64() {
 #[test]
 fn test_get_empty_frame() {
     use adder_codec_rs::framer::driver::FramerMode::INSTANTANEOUS;
-    use adder_codec_rs::framer::driver::SourceType::U8;
     use adder_codec_rs::framer::driver::{FrameSequence, Framer};
     let plane = PlaneSize::new(5, 5, 1).unwrap();
     let mut frame_sequence: FrameSequence<u8> = FramerBuilder::new(plane, 64)
@@ -791,9 +816,12 @@ fn test_get_empty_frame() {
 #[test]
 fn test_sample_unordered() {
     let input_path = "./tests/samples/sample_3_unordered.adder";
-    let mut stream: Raw = Codec::new();
-    stream.open_reader(input_path).unwrap();
-    stream.decode_header().unwrap();
+    let tmp = File::open(input_path).unwrap();
+    let bufreader = BufReader::new(tmp);
+    let mut compression = <RawInput as ReadCompression<BufReader<File>>>::new();
+
+    let mut bitreader = BitReader::endian(bufreader, BigEndian);
+    let mut reader = Decoder::new(Box::new(compression), &mut bitreader);
 
     let output_path = Path::new("./tests/samples/temp_sample_3_unordered");
     let mut output_stream = BufWriter::new(File::create(output_path).unwrap());
@@ -801,24 +829,24 @@ fn test_sample_unordered() {
     let reconstructed_frame_rate = 60.0;
     // For instantaneous reconstruction, make sure the frame rate matches the source video rate
     assert_eq!(
-        stream.tps / stream.ref_interval,
+        reader.meta().tps / reader.meta().ref_interval,
         reconstructed_frame_rate as u32
     );
 
-    let mut frame_sequence: FrameSequence<u8> = FramerBuilder::new(stream.plane.clone(), 64)
-        .codec_version(stream.codec_version, TimeMode::DeltaT)
+    let mut frame_sequence: FrameSequence<u8> = FramerBuilder::new(reader.meta().plane.clone(), 64)
+        .codec_version(reader.meta().codec_version, TimeMode::DeltaT)
         .time_parameters(
-            stream.tps,
-            stream.ref_interval,
-            stream.delta_t_max,
+            reader.meta().tps,
+            reader.meta().ref_interval,
+            reader.meta().delta_t_max,
             reconstructed_frame_rate,
         )
         .mode(INSTANTANEOUS)
-        .source(stream.get_source_type(), stream.source_camera)
+        .source(reader.get_source_type(), reader.meta().source_camera)
         .finish();
     let mut frame_count = 0;
     loop {
-        match stream.decode_event() {
+        match reader.digest_event(&mut bitreader) {
             Ok(mut event) => {
                 if frame_sequence.ingest_event(&mut event) {
                     match frame_sequence.write_multi_frame_bytes(&mut output_stream) {
@@ -861,9 +889,12 @@ fn test_sample_unordered() {
 #[test]
 fn test_sample_ordered() {
     let input_path = "./tests/samples/sample_3_ordered.adder";
-    let mut stream: Raw = Codec::new();
-    stream.open_reader(input_path).unwrap();
-    stream.decode_header().unwrap();
+    let tmp = File::open(input_path).unwrap();
+    let bufreader = BufReader::new(tmp);
+    let mut compression = <RawInput as ReadCompression<BufReader<File>>>::new();
+
+    let mut bitreader = BitReader::endian(bufreader, BigEndian);
+    let mut reader = Decoder::new(Box::new(compression), &mut bitreader);
 
     let output_path = Path::new("./tests/samples/temp_sample_3_ordered");
     let mut output_stream = BufWriter::new(File::create(output_path).unwrap());
@@ -871,24 +902,24 @@ fn test_sample_ordered() {
     let reconstructed_frame_rate = 60.0;
     // For instantaneous reconstruction, make sure the frame rate matches the source video rate
     assert_eq!(
-        stream.tps / stream.ref_interval,
+        reader.meta().tps / reader.meta().ref_interval,
         reconstructed_frame_rate as u32
     );
 
-    let mut frame_sequence: FrameSequence<u8> = FramerBuilder::new(stream.plane.clone(), 64)
-        .codec_version(stream.codec_version, TimeMode::DeltaT)
+    let mut frame_sequence: FrameSequence<u8> = FramerBuilder::new(reader.meta().plane.clone(), 64)
+        .codec_version(reader.meta().codec_version, TimeMode::DeltaT)
         .time_parameters(
-            stream.tps,
-            stream.ref_interval,
-            stream.delta_t_max,
+            reader.meta().tps,
+            reader.meta().ref_interval,
+            reader.meta().delta_t_max,
             reconstructed_frame_rate,
         )
         .mode(INSTANTANEOUS)
-        .source(stream.get_source_type(), stream.source_camera)
+        .source(reader.get_source_type(), reader.meta().source_camera)
         .finish();
     let mut frame_count = 0;
     loop {
-        match stream.decode_event() {
+        match reader.digest_event(&mut bitreader) {
             Ok(mut event) => {
                 if frame_sequence.ingest_event(&mut event) {
                     match frame_sequence.write_multi_frame_bytes(&mut output_stream) {
@@ -932,15 +963,16 @@ fn test_sample_ordered() {
 fn test_framed_to_adder_bunny4() {
     let data = fs::read_to_string("./tests/samples/bunny4.json").expect("Unable to read file");
     let gt_events: Vec<Event> = serde_json::from_str(data.as_str()).unwrap();
-    let mut source = Framed::new("./tests/samples/bunny_crop4.mp4".to_string(), false, 1.0)
-        .unwrap()
-        // .chunk_rows(64)
-        .frame_start(361)
-        .unwrap()
-        .contrast_thresholds(5, 5)
-        .show_display(false)
-        .auto_time_parameters(5000, 240_000)
-        .unwrap();
+    let mut source: Framed<BufWriter<File>> =
+        Framed::new("./tests/samples/bunny_crop4.mp4".to_string(), false, 1.0)
+            .unwrap()
+            // .chunk_rows(64)
+            .frame_start(361)
+            .unwrap()
+            .contrast_thresholds(5, 5)
+            .show_display(false)
+            .auto_time_parameters(5000, 240_000)
+            .unwrap();
 
     let frame_max = 250;
 
