@@ -218,60 +218,45 @@ impl<W: Write + 'static> Video<W> {
         state.plane = plane;
         let instantaneous_view_mode = FramedViewMode::Intensity;
         let (event_sender, _) = channel();
+        let meta = CodecMetadata {
+            codec_version: LATEST_CODEC_VERSION,
+            header_size: 0,
+            time_mode: TimeMode::AbsoluteT,
+            plane: state.plane.clone(),
+            tps: state.tps,
+            ref_interval: state.ref_time,
+            delta_t_max: state.delta_t_max,
+            event_size: 0,
+            source_camera: SourceCamera::default(), // TODO: Allow for setting this
+        };
 
-        let w = writer.unwrap();
-        let encoder = Encoder::new(Box::new(
-            // TODO: Allow for compressed representation (not just raw)
-            RawOutput::new(
-                CodecMetadata {
-                    codec_version: LATEST_CODEC_VERSION,
-                    header_size: 0,
-                    time_mode: TimeMode::AbsoluteT,
-                    plane: state.plane.clone(),
-                    tps: state.tps,
-                    ref_interval: state.ref_time,
-                    delta_t_max: state.delta_t_max,
-                    event_size: 0,
-                    source_camera: SourceCamera::default(), // TODO: Allow for setting this
-                },
-                w,
-            ),
-        ));
-
-        // let encoder = match writer {
-        //     None => Encoder::new(Box::new(EmptyOutput::new(
-        //         CodecMetadata::default(),
-        //         Vec::new(),
-        //     ))),
-        //     Some(writer) => {
-        //         Encoder::new(Box::new(
-        //             // TODO: Allow for compressed representation (not just raw)
-        //             Raw::new(
-        //                 CodecMetadata {
-        //                     codec_version: LATEST_CODEC_VERSION,
-        //                     header_size: 0,
-        //                     time_mode: TimeMode::AbsoluteT,
-        //                     plane: state.plane.clone(),
-        //                     tps: state.tps,
-        //                     ref_interval: state.ref_time,
-        //                     delta_t_max: state.delta_t_max,
-        //                     event_size: 0,
-        //                     source_camera: SourceCamera::default(), // TODO: Allow for setting this
-        //                 },
-        //                 writer,
-        //             ),
-        //         ))
-        //     }
-        // };
-
-        Ok(Video {
-            state,
-            event_pixel_trees,
-            instantaneous_frame,
-            instantaneous_view_mode,
-            event_sender,
-            encoder,
-        })
+        match writer {
+            None => {
+                let encoder = Encoder::new(Box::new(EmptyOutput::new(meta, Vec::new())));
+                Ok(Video {
+                    state,
+                    event_pixel_trees,
+                    instantaneous_frame,
+                    instantaneous_view_mode,
+                    event_sender,
+                    encoder,
+                })
+            }
+            Some(w) => {
+                let encoder = Encoder::new(Box::new(
+                    // TODO: Allow for compressed representation (not just raw)
+                    RawOutput::new(meta, w),
+                ));
+                Ok(Video {
+                    state,
+                    event_pixel_trees,
+                    instantaneous_frame,
+                    instantaneous_view_mode,
+                    event_sender,
+                    encoder,
+                })
+            }
+        }
     }
 
     pub fn c_thresh_pos(mut self, c_thresh_pos: u8) -> Self {
