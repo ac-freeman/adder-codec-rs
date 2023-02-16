@@ -5,8 +5,7 @@ use crate::framer::scale_intensity;
 use crate::framer::scale_intensity::FrameValue;
 use crate::transcoder::source::framed::Framed;
 use crate::transcoder::source::video::Source;
-use crate::SourceCamera::FramedU8;
-use crate::{DeltaT, Event, TimeMode};
+use crate::{DeltaT, Event};
 use clap::Parser;
 use rayon::ThreadPool;
 use serde::Serialize;
@@ -16,7 +15,9 @@ use std::fs::File;
 use std::io;
 use std::io::{BufWriter, Seek, Write};
 
-use crate::codec::Codec;
+use adder_codec_core::SourceCamera::FramedU8;
+use adder_codec_core::TimeMode;
+use bitstream_io::BitWrite;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::time::Instant;
 
@@ -88,13 +89,13 @@ pub struct SimulProcArgs {
     pub time_mode: String,
 }
 
-pub struct SimulProcessor<W> {
+pub struct SimulProcessor<W: Write> {
     pub source: Framed<W>,
     thread_pool: ThreadPool,
     events_tx: Sender<Vec<Vec<Event>>>,
 }
 
-impl<W: Write + std::io::Seek + 'static> SimulProcessor<W> {
+impl<W: Write> SimulProcessor<W> {
     pub fn new<T>(
         source: Framed<W>,
         ref_time: DeltaT,

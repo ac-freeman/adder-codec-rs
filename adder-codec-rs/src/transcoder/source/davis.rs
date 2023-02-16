@@ -3,7 +3,7 @@ use crate::transcoder::source::video::SourceError::BufferEmpty;
 use crate::transcoder::source::video::{
     integrate_for_px, show_display, Source, SourceError, Video, VideoBuilder,
 };
-use crate::{DeltaT, Event, PlaneSize, SourceCamera, SourceType, TimeMode};
+use crate::{DeltaT, Event, SourceType};
 use aedat::events_generated::Event as DvsEvent;
 use davis_edi_rs::util::reconstructor::{IterVal, ReconstructionError, Reconstructor};
 use rayon::iter::ParallelIterator;
@@ -21,10 +21,11 @@ use std::cmp::max;
 use std::error::Error;
 use std::io::{Seek, Write};
 
+use adder_codec_core::codec::CodecError;
+use adder_codec_core::{PlaneSize, SourceCamera, TimeMode};
+use bitstream_io::BitWrite;
 use std::time::Instant;
 
-use crate::codec::raw::stream::Error as StreamError;
-use crate::codec::Codec;
 use crate::framer::scale_intensity::FrameValue;
 use crate::transcoder::event_pixel_tree::Intensity32;
 use tokio::runtime::Runtime;
@@ -40,7 +41,7 @@ pub enum TranscoderMode {
 }
 
 /// Attributes of a framed video -> ADΔER transcode
-pub struct Davis<W> {
+pub struct Davis<W: Write> {
     reconstructor: Reconstructor,
     pub(crate) input_frame_scaled: Mat,
     pub(crate) video: Video<W>,
@@ -59,9 +60,9 @@ pub struct Davis<W> {
     pub time_mode: TimeMode,
 }
 
-unsafe impl<W: Write + Seek> Sync for Davis<W> {}
+unsafe impl<W: Write> Sync for Davis<W> {}
 
-impl<W: Write + Seek + 'static> Davis<W> {
+impl<W: Write> Davis<W> {
     pub fn new(reconstructor: Reconstructor, rt: Runtime) -> Result<Self, Box<dyn Error>> {
         let plane = PlaneSize::new(reconstructor.width, reconstructor.height, 1)?;
 
@@ -75,22 +76,14 @@ impl<W: Write + Seek + 'static> Davis<W> {
         let timestamps = vec![0_i64; video.state.plane.volume()];
 
         let dvs_last_timestamps: Array3<i64> = Array3::from_shape_vec(
-            (
-                plane.height.into(),
-                plane.width.into(),
-                plane.channels.into(),
-            ),
+            (plane.h().into(), plane.w().into(), plane.c().into()),
             timestamps,
         )?;
 
         let timestamps = vec![0.0_f64; video.state.plane.volume()];
 
         let dvs_last_ln_val: Array3<f64> = Array3::from_shape_vec(
-            (
-                plane.height as usize,
-                plane.width as usize,
-                plane.channels as usize,
-            ),
+            (plane.h() as usize, plane.w() as usize, plane.c() as usize),
             timestamps,
         )?;
 
@@ -137,7 +130,7 @@ impl<W: Write + Seek + 'static> Davis<W> {
         dvs_events: &Vec<DvsEvent>,
         frame_timestamp: &i64,
         event_check: F,
-    ) -> Result<(), StreamError> {
+    ) -> Result<(), CodecError> {
         // TODO: not fixed 4 chunks?
         let mut dvs_chunks: [Vec<DvsEvent>; 4] = [
             Vec::with_capacity(100_000),
@@ -278,9 +271,7 @@ impl<W: Write + Seek + 'static> Davis<W> {
 
         // Using a macro so that CLion still pretty prints correctly
 
-        if let Some(ref mut stream) = self.video.stream {
-            stream.encode_events_events(&big_buffer)?;
-        }
+        self.video.encoder.ingest_events_events(&big_buffer)?;
         Ok(())
     }
 
@@ -437,7 +428,7 @@ impl<W: Write + Seek + 'static> Davis<W> {
     }
 }
 
-impl<W: Write + Seek + 'static> Source<W> for Davis<W> {
+impl<W: Write> Source<W> for Davis<W> {
     fn consume(
         &mut self,
         view_interval: u32,
@@ -635,7 +626,7 @@ impl<W: Write + Seek + 'static> Source<W> for Davis<W> {
     }
 }
 
-impl<W: Write + Seek + 'static> VideoBuilder<W> for Davis<W> {
+impl<W: Write> VideoBuilder<W> for Davis<W> {
     fn contrast_thresholds(mut self, c_thresh_pos: u8, c_thresh_neg: u8) -> Self {
         self.video = self.video.c_thresh_pos(c_thresh_pos);
         self.video = self.video.c_thresh_neg(c_thresh_neg);

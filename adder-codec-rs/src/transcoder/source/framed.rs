@@ -1,12 +1,12 @@
-use crate::codec::Codec;
 use crate::transcoder::event_pixel_tree::DeltaT;
 use crate::transcoder::event_pixel_tree::Mode::FramePerfect;
 use crate::transcoder::source::video::SourceError;
 use crate::transcoder::source::video::SourceError::BufferEmpty;
 use crate::transcoder::source::video::Video;
 use crate::transcoder::source::video::{Source, VideoBuilder};
-use crate::{Coord, Event, TimeMode};
-use crate::{PlaneSize, SourceCamera};
+use crate::{Coord, Event};
+use adder_codec_core::{PlaneSize, SourceCamera, TimeMode};
+use bitstream_io::BitWrite;
 use opencv::core::{Mat, Size};
 use opencv::videoio::{VideoCapture, CAP_PROP_FPS, CAP_PROP_FRAME_COUNT, CAP_PROP_POS_FRAMES};
 use opencv::{imgproc, prelude::*, videoio, Result};
@@ -23,7 +23,7 @@ pub struct IndirectCoord {
 }
 
 /// Attributes of a framed video -> ADΔER transcode
-pub struct Framed<W> {
+pub struct Framed<W: Write> {
     cap: VideoCapture,
     pub(crate) input_frame_scaled: Mat,
     pub(crate) input_frame: Mat,
@@ -34,9 +34,9 @@ pub struct Framed<W> {
     pub(crate) video: Video<W>,
     pub time_mode: TimeMode,
 }
-unsafe impl<W: Write + Seek> Sync for Framed<W> {}
+unsafe impl<W: Write> Sync for Framed<W> {}
 
-impl<W: Write + Seek + 'static> Framed<W> {
+impl<W: Write> Framed<W> {
     pub fn new(
         input_filename: String,
         color_input: bool,
@@ -128,7 +128,7 @@ impl<W: Write + Seek + 'static> Framed<W> {
     }
 }
 
-impl<W: Write + Seek + 'static> Source<W> for Framed<W> {
+impl<W: Write> Source<W> for Framed<W> {
     /// Get pixel-wise intensities directly from source frame, and integrate them with
     /// [`ref_time`](Video::ref_time) (the number of ticks each frame is said to span)
     fn consume(
@@ -176,7 +176,7 @@ impl<W: Write + Seek + 'static> Source<W> for Framed<W> {
     }
 }
 
-impl<W: Write + Seek + 'static> VideoBuilder<W> for Framed<W> {
+impl<W: Write> VideoBuilder<W> for Framed<W> {
     fn contrast_thresholds(mut self, c_thresh_pos: u8, c_thresh_neg: u8) -> Self {
         self.video = self.video.c_thresh_pos(c_thresh_pos);
         self.video = self.video.c_thresh_neg(c_thresh_neg);

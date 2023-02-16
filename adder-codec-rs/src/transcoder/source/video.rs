@@ -1,24 +1,26 @@
+use adder_codec_core::codec::raw::stream::Raw;
 use opencv::core::{Mat, Size, CV_8U, CV_8UC3};
 use std::error::Error;
 use std::fmt;
 use std::fs::File;
 use std::io::{BufWriter, Seek, Write};
 
+use adder_codec_core::codec::encoder::Encoder;
+use adder_codec_core::codec::{CodecError, CodecMetadata, WriteCompression, LATEST_CODEC_VERSION};
+use adder_codec_core::{PlaneSize, SourceCamera, TimeMode};
+use bitstream_io::BitWrite;
 use bumpalo::Bump;
 use std::path::Path;
 use std::sync::mpsc::{channel, Sender};
 
-use crate::codec::raw::stream::{Error as StreamError, Raw, LATEST_CODEC_VERSION};
-use crate::{codec, codec::raw, Coord, Event, PlaneSize, SourceType, TimeMode, D};
+use crate::{codec, Coord, Event, SourceType, D};
 use opencv::highgui;
 use opencv::imgproc::resize;
 use opencv::prelude::*;
 
-use crate::codec::{Codec, Encoder, Stream};
 use crate::framer::scale_intensity::FrameValue;
 use crate::transcoder::event_pixel_tree::Mode::Continuous;
 use crate::transcoder::event_pixel_tree::{DeltaT, Intensity32, Mode, PixelArena};
-use crate::SourceCamera;
 use davis_edi_rs::util::reconstructor::ReconstructionError;
 use ndarray::{Array3, Axis};
 use rayon::iter::IntoParallelIterator;
@@ -51,7 +53,7 @@ pub enum SourceError {
     /// OpenCV error
     OpencvError(opencv::Error),
 
-    StreamError(raw::stream::Error),
+    StreamError(CodecError),
 
     /// EDI error
     EdiError(ReconstructionError),
@@ -74,9 +76,9 @@ impl From<opencv::Error> for SourceError {
         SourceError::OpencvError(value)
     }
 }
-impl From<StreamError> for SourceError {
-    fn from(value: StreamError) -> Self {
-        SourceError::StreamError(value)
+impl From<CodecError> for SourceError {
+    fn from(value: CodecError) -> Self {
+        SourceError::CodecError(value)
     }
 }
 
@@ -153,19 +155,18 @@ pub trait VideoBuilder<W> {
 // impl VideoBuilder for Video {}
 
 /// Attributes common to ADΔER transcode process
-pub struct Video<W> {
+pub struct Video<W: Write> {
     pub state: VideoState,
     pub(crate) event_pixel_trees: Array3<PixelArena>,
     pub instantaneous_frame: Mat,
     pub instantaneous_view_mode: FramedViewMode,
     pub event_sender: Sender<Vec<Event>>,
-    pub(crate) stream: Option<Box<dyn Encoder<W>>>,
-    pub(crate) writer: Option<W>,
+    pub(crate) encoder: Encoder<W>,
 }
 
-unsafe impl<W: Write + Seek> Send for Video<W> {}
+unsafe impl<W: Write> Send for Video<W> {}
 
-impl<W: Write + Seek + 'static> Video<W> {
+impl<W: Write> Video<W> {
     /// Initialize the Video with default parameters.
     pub(crate) fn new(
         plane: PlaneSize,
@@ -295,18 +296,22 @@ impl<W: Write + Seek + 'static> Video<W> {
         time_mode: Option<TimeMode>,
         write: W,
     ) -> Result<Self, Box<dyn std::error::Error>> {
-        let mut stream = Raw::new();
-        stream.set_output_stream(Some(write));
-        stream.encode_header(
-            self.state.plane.clone(),
-            self.state.tps,
-            self.state.ref_time,
-            self.state.delta_t_max,
-            LATEST_CODEC_VERSION,
-            source_camera,
-            time_mode,
-        )?;
-        self.stream = Some(Box::new(stream));
+        let compression = Raw::new(
+            CodecMetadata {
+                codec_version: LATEST_CODEC_VERSION,
+                header_size: 0,
+                time_mode: time_mode.unwrap_or_default(),
+                plane: self.state.plane.clone(),
+                tps: self.state.tps,
+                ref_interval: self.state.ref_time,
+                delta_t_max: self.state.delta_t_max,
+                event_size: 0,
+                source_camera: source_camera,
+            },
+            write,
+        );
+        let mut encoder: Encoder<BufWriter<Vec<u8>>> = Encoder::new(Box::new(compression));
+        self.encoder = encoder;
 
         self.event_pixel_trees.par_map_inplace(|px| {
             px.time_mode(time_mode);
@@ -518,15 +523,13 @@ pub fn integrate_for_px(
     }
 }
 
-impl Video<File> {}
-
 /// If `video.show_display`, shows the given [`Mat`] in an `OpenCV` window
 /// with the given name.
 ///
 /// # Errors
 /// Returns an [`OpencvError`] if the window cannot be shown, or the [`Mat`] cannot be scaled as
 /// needed.
-pub fn show_display<W: Write + Seek>(
+pub fn show_display<W: Write>(
     window_name: &str,
     mat: &Mat,
     wait: i32,
@@ -570,7 +573,7 @@ pub fn show_display_force(window_name: &str, mat: &Mat, wait: i32) -> opencv::Re
     Ok(())
 }
 
-pub trait Source<W> {
+pub trait Source<W: Write> {
     /// Intake one input interval worth of data from the source stream into the ADΔER model as
     /// intensities.
     fn consume(

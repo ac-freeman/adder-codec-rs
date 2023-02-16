@@ -72,7 +72,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             .auto_time_parameters(args.ref_time, args.delta_t_max)?;
 
     if !args.output_events_filename.is_empty() {
-        let path = Path::new(&output_filename);
+        let path = Path::new(&args.output_events_filename);
         let file = File::create(&path)?;
         source = *source.write_out(
             args.output_events_filename,

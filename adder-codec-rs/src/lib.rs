@@ -1,12 +1,10 @@
 use crate::framer::driver::{EventCoordless, SourceType};
-use crate::header::EventStreamHeader;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::fmt::Formatter;
 
 pub mod codec;
 pub mod framer;
-mod header;
 
 #[cfg(feature = "opencv")]
 pub mod transcoder;
@@ -162,73 +160,6 @@ pub const D_SHIFT: [UDshift; 128] = [
 ];
 // pub const D_SHIFT: [u32; 9] = [1, 2, 4, 8, 16, 32, 64, 128, 256];
 
-#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
-pub enum SourceCamera {
-    #[default]
-    FramedU8,
-    FramedU16,
-    FramedU32,
-    FramedU64,
-    FramedF32,
-    FramedF64,
-    Dvs,
-    DavisU8,
-    Atis,
-    Asint,
-}
-
-#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq)]
-pub enum TimeMode {
-    #[default]
-    DeltaT,
-    AbsoluteT,
-    Mixed,
-}
-
-impl fmt::Display for TimeMode {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{self:?}")
-    }
-}
-
-impl std::fmt::Display for SourceCamera {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let text = match self {
-            SourceCamera::FramedU8 => {
-                "FramedU8 - Framed video with 8-bit pixel depth, unsigned integer"
-            }
-            SourceCamera::FramedU16 => {
-                "FramedU16 - Framed video with 16-bit pixel depth, unsigned integer"
-            }
-            SourceCamera::FramedU32 => {
-                "FramedU32 - Framed video with 32-bit pixel depth, unsigned integer"
-            }
-            SourceCamera::FramedU64 => {
-                "FramedU64 - Framed video with 64-bit pixel depth, unsigned integer"
-            }
-            SourceCamera::FramedF32 => {
-                "FramedF32 - Framed video with 32-bit pixel depth, floating point"
-            }
-            SourceCamera::FramedF64 => {
-                "FramedU8 - Framed camera with 64-bit pixel depth, floating point"
-            }
-            SourceCamera::Dvs => {
-                "Dvs - Dynamic Vision System camera"
-            }
-            SourceCamera::DavisU8 => {
-                "DavisU8 - Dynamic and Active Vision System camera. Active frames with 8-bit pixel depth, unsigned integer "
-            }
-            SourceCamera::Atis => {
-                "Atis - Asynchronous Time-Based Image Sensor camera"
-            }
-            SourceCamera::Asint => {
-                "Asint - Asynchronous Integration camera"
-            }
-        };
-        write!(f, "{text}")
-    }
-}
-
 /// The maximum intensity representation for input data. Currently 255 for 8-bit framed input.
 pub const MAX_INTENSITY: f32 = 255.0; // TODO: make variable, dependent on input bit depth
 
@@ -253,86 +184,6 @@ pub extern crate aedat;
 
 extern crate core;
 pub extern crate davis_edi_rs;
-
-/// The size of the image plane in pixels
-#[derive(Clone)]
-pub struct PlaneSize {
-    width: u16,
-    height: u16,
-    channels: u8,
-}
-
-impl Default for PlaneSize {
-    fn default() -> Self {
-        PlaneSize {
-            width: 1,
-            height: 1,
-            channels: 1,
-        }
-    }
-}
-
-impl PlaneSize {
-    pub fn new(width: u16, height: u16, channels: u8) -> Result<Self, String> {
-        if width == 0 || height == 0 || channels == 0 {
-            return Err("PlaneSize must have positive width, height, and channels".to_string());
-        }
-        Ok(Self {
-            width,
-            height,
-            channels,
-        })
-    }
-    /// The width, shorthand for `self.width`
-    pub fn w(&self) -> u16 {
-        self.width
-    }
-
-    /// The height, shorthand for `self.height`
-    pub fn w_usize(&self) -> usize {
-        self.width as usize
-    }
-
-    /// The height, shorthand for `self.height`
-    pub fn h(&self) -> u16 {
-        self.height
-    }
-
-    /// The height, shorthand for `self.height`
-    pub fn h_usize(&self) -> usize {
-        self.height as usize
-    }
-
-    /// The number of channels, shorthand for `self.channels`
-    pub fn c(&self) -> u8 {
-        self.channels
-    }
-
-    /// The number of channels, shorthand for `self.channels`
-    pub fn c_usize(&self) -> usize {
-        self.channels as usize
-    }
-
-    /// The total number of 2D pixels in the image plane, across the height and width dimension
-    pub fn area_wh(&self) -> usize {
-        self.width as usize * self.height as usize
-    }
-
-    /// The total number of 2D pixels in the image plane, across the width and channel dimension
-    pub fn area_wc(&self) -> usize {
-        self.width as usize * self.channels as usize
-    }
-
-    /// The total number of 2D pixels in the image plane, across the height and channel dimension
-    pub fn area_hc(&self) -> usize {
-        self.height as usize * self.channels as usize
-    }
-
-    /// The total number of 3D pixels in the image plane (2D pixels * color depth)
-    pub fn volume(&self) -> usize {
-        self.area_wh() * self.channels as usize
-    }
-}
 
 #[repr(packed)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
