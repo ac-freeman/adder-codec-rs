@@ -160,6 +160,9 @@ fn test_sample_perfect_dt_color() {
         .mode(INSTANTANEOUS)
         .source(reader.get_source_type(), reader.meta().source_camera)
         .finish();
+
+    // This is a hack to fix the incorrect coded event size in the original sample file
+    reader.meta_mut().event_size += 1;
     let mut frame_count = 0;
     loop {
         match reader.digest_event(&mut bitreader) {
