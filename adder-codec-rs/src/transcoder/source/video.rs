@@ -276,11 +276,11 @@ impl<W: Write> Video<W> {
         ref_time: DeltaT,
         delta_t_max: DeltaT,
     ) -> Result<Self, Box<dyn Error>> {
-        if self.stream.is_some() {
-            return Err(
-                "Cannot change time parameters after output stream has been initialized".into(),
-            );
-        }
+        // if self.stream.is_some() {
+        //     return Err(
+        //         "Cannot change time parameters after output stream has been initialized".into(),
+        //     );
+        // }
         if ref_time > f32::MAX as u32 {
             eprintln!(
                 "Reference time {} is too large. Keeping current value of {}.",
@@ -322,6 +322,7 @@ impl<W: Write> Video<W> {
         time_mode: Option<TimeMode>,
         write: W,
     ) -> Result<Self, Box<dyn std::error::Error>> {
+        // TODO: Allow for compressed representation (not just raw)
         let compression = Raw::new(
             CodecMetadata {
                 codec_version: LATEST_CODEC_VERSION,
@@ -332,11 +333,11 @@ impl<W: Write> Video<W> {
                 ref_interval: self.state.ref_time,
                 delta_t_max: self.state.delta_t_max,
                 event_size: 0,
-                source_camera: source_camera,
+                source_camera: source_camera.unwrap_or_default(),
             },
             write,
         );
-        let mut encoder: Encoder<BufWriter<Vec<u8>>> = Encoder::new(Box::new(compression));
+        let mut encoder: Encoder<_> = Encoder::new(Box::new(compression));
         self.encoder = encoder;
 
         self.event_pixel_trees.par_map_inplace(|px| {
@@ -354,10 +355,8 @@ impl<W: Write> Video<W> {
     /// # Errors
     /// Returns an error if the stream writer cannot be closed cleanly.
     pub fn end_write_stream(&mut self) -> Result<(), Box<dyn Error>> {
-        match &mut self.stream {
-            Some(s) => s.close_writer(),
-            None => Ok(()),
-        }
+        let writer = self.encoder.close_writer()?;
+        Ok(())
     }
 
     #[allow(clippy::needless_pass_by_value)]
@@ -424,9 +423,7 @@ impl<W: Write> Video<W> {
             })
             .collect();
 
-        if let Some(stream) = &mut self.stream {
-            stream.encode_events_events(&big_buffer)?;
-        }
+        self.encoder.ingest_events_events(&big_buffer)?;
 
         let db = match self.instantaneous_frame.data_bytes_mut() {
             Ok(v) => v,
