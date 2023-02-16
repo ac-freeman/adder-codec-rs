@@ -5,6 +5,7 @@ use std::fmt;
 use std::fs::File;
 use std::io::{BufWriter, Seek, Write};
 
+use adder_codec_core::codec::empty::stream::EmptyOutput;
 use adder_codec_core::codec::encoder::Encoder;
 use adder_codec_core::codec::{CodecError, CodecMetadata, WriteCompression, LATEST_CODEC_VERSION};
 use adder_codec_core::{Coord, Event, PlaneSize, SourceCamera, TimeMode};
@@ -53,7 +54,7 @@ pub enum SourceError {
     /// OpenCV error
     OpencvError(opencv::Error),
 
-    StreamError(CodecError),
+    CodecError(CodecError),
 
     /// EDI error
     EdiError(ReconstructionError),
@@ -76,7 +77,7 @@ impl From<opencv::Error> for SourceError {
         SourceError::OpencvError(value)
     }
 }
-impl From<CodecError> for SourceError {
+impl From<adder_codec_core::codec::CodecError> for SourceError {
     fn from(value: CodecError) -> Self {
         SourceError::CodecError(value)
     }
@@ -201,7 +202,7 @@ impl<W: Write> Video<W> {
         let event_pixel_trees: Array3<PixelArena> =
             Array3::from_shape_vec((plane.h_usize(), plane.w_usize(), plane.c_usize()), data)?;
         let mut instantaneous_frame = Mat::default();
-        match plane.channels {
+        match plane.c() {
             1 => unsafe {
                 instantaneous_frame.create_rows_cols(plane.h() as i32, plane.w() as i32, CV_8U)?;
             },
@@ -218,14 +219,39 @@ impl<W: Write> Video<W> {
         let instantaneous_view_mode = FramedViewMode::Intensity;
         let (event_sender, _) = channel();
 
+        let encoder = match writer {
+            None => Encoder::new(Box::new(EmptyOutput::new(
+                CodecMetadata::default(),
+                Vec::new(),
+            ))),
+            Some(writer) => {
+                Encoder::new(Box::new(
+                    // TODO: Allow for compressed representation (not just raw)
+                    Raw::new(
+                        CodecMetadata {
+                            codec_version: LATEST_CODEC_VERSION,
+                            header_size: 0,
+                            time_mode: TimeMode::AbsoluteT,
+                            plane: state.plane.clone(),
+                            tps: state.tps,
+                            ref_interval: state.ref_time,
+                            delta_t_max: state.delta_t_max,
+                            event_size: 0,
+                            source_camera: SourceCamera::default(), // TODO: Allow for setting this
+                        },
+                        writer,
+                    ),
+                ))
+            }
+        };
+
         Ok(Video {
             state,
             event_pixel_trees,
             instantaneous_frame,
             instantaneous_view_mode,
             event_sender,
-            stream: None,
-            writer,
+            encoder,
         })
     }
 

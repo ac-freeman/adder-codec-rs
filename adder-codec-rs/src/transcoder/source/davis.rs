@@ -356,9 +356,7 @@ impl<W: Write> Davis<W> {
             })
             .collect();
 
-        if let Some(ref mut stream) = self.video.encoder {
-            stream.encode_events_events(&big_buffer)?;
-        }
+        self.video.encoder.ingest_events_events(&big_buffer)?;
 
         let db = match self.video.instantaneous_frame.data_bytes_mut() {
             Ok(db) => db,
@@ -479,9 +477,7 @@ impl<W: Write> Source<W> for Davis<W> {
                     })
                     .collect();
 
-                if let Some(ref mut stream) = self.video.stream {
-                    stream.encode_events_events(&big_buffer)?;
-                }
+                self.video.encoder.ingest_events_events(&big_buffer)?;
 
                 return Err(SourceError::NoData);
             }
