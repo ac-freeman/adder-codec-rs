@@ -1,50 +1,64 @@
 extern crate adder_codec_rs;
 
 use crate::adder_codec_rs::transcoder::source::video::VideoBuilder;
+use adder_codec_core::codec::decoder::Decoder;
+use adder_codec_core::codec::raw::stream::RawInput;
+use adder_codec_core::codec::ReadCompression;
+use adder_codec_core::SourceCamera::FramedU8;
+use adder_codec_core::{Coord, Event, PlaneSize, TimeMode};
+use bitstream_io::{BigEndian, BitReader};
 use ndarray::{Array3, Axis};
 use std::fs;
 use std::fs::File;
-use std::io::{BufWriter, Write};
+use std::io::{BufReader, BufWriter, Write};
 use std::path::Path;
 use std::process::Command;
 
-use adder_codec_rs::codec::raw::stream::Raw;
-use adder_codec_rs::codec::Codec;
 use adder_codec_rs::framer::driver::FramerMode::INSTANTANEOUS;
 use adder_codec_rs::framer::driver::{FrameSequence, Framer, FramerBuilder};
 use adder_codec_rs::transcoder::source::framed::Framed;
 use adder_codec_rs::transcoder::source::video::Source;
-use adder_codec_rs::SourceCamera::FramedU8;
-use adder_codec_rs::{Coord, Event, PlaneSize, TimeMode};
 use rand::Rng;
 use rayon::current_num_threads;
 
 #[test]
 fn test_set_stream_position() {
     let input_path = "./tests/samples/sample_1_raw_events.adder";
-    let mut stream: Raw = Codec::new();
-    stream.open_reader(input_path).unwrap();
-    let header_size = stream.decode_header().unwrap();
-    for i in 1..stream.event_size as usize {
-        assert!(stream
-            .set_input_stream_position((header_size + i) as u64)
+    let tmp = File::open(input_path).unwrap();
+    let bufreader = BufReader::new(tmp);
+    let mut compression = <RawInput as ReadCompression<BufReader<File>>>::new();
+
+    let mut bitreader = BitReader::endian(bufreader, BigEndian);
+    let mut reader = Decoder::new(Box::new(compression), &mut bitreader);
+    for i in 1..reader.meta().event_size as usize {
+        assert!(reader
+            .set_input_stream_position(&mut bitreader, (reader.meta().header_size + i) as u64)
             .is_err());
     }
 
-    assert!(stream
-        .set_input_stream_position((header_size + stream.event_size as usize) as u64)
+    assert!(reader
+        .set_input_stream_position(
+            &mut bitreader,
+            (reader.meta().header_size + reader.meta().event_size as usize) as u64
+        )
         .is_ok());
-    assert!(stream
-        .set_input_stream_position((header_size + stream.event_size as usize * 2) as u64)
+    assert!(reader
+        .set_input_stream_position(
+            &mut bitreader,
+            (reader.meta().header_size + reader.meta().event_size as usize * 2) as u64
+        )
         .is_ok());
 }
 
 #[test]
 fn test_sample_perfect_dt() {
     let input_path = "./tests/samples/sample_1_raw_events.adder";
-    let mut stream: Raw = Codec::new();
-    stream.open_reader(input_path).unwrap();
-    stream.decode_header().unwrap();
+    let tmp = File::open(input_path).unwrap();
+    let bufreader = BufReader::new(tmp);
+    let mut compression = <RawInput as ReadCompression<BufReader<File>>>::new();
+
+    let mut bitreader = BitReader::endian(bufreader, BigEndian);
+    let mut reader = Decoder::new(Box::new(compression), &mut bitreader);
 
     let output_path = Path::new("./tests/samples/temp_sample_1");
     let mut output_stream = BufWriter::new(File::create(output_path).unwrap());
@@ -377,7 +391,6 @@ fn test_event_framer_ingest() {
     use adder_codec_rs::framer::driver::FramerMode::INSTANTANEOUS;
     use adder_codec_rs::framer::driver::SourceType::U8;
     use adder_codec_rs::framer::driver::{EventCoordless, FrameSequence, Framer};
-    use adder_codec_rs::{Coord, Event};
 
     let plane = PlaneSize::new(10, 10, 3).unwrap();
     let mut frame_sequence: FrameSequence<EventCoordless> = FramerBuilder::new(plane, 64)
@@ -414,7 +427,6 @@ fn test_event_framer_ingest_get_filled() {
     use adder_codec_rs::framer::driver::FramerMode::INSTANTANEOUS;
     use adder_codec_rs::framer::driver::SourceType::U8;
     use adder_codec_rs::framer::driver::{EventCoordless, FrameSequence, Framer};
-    use adder_codec_rs::{Coord, Event};
     let plane = PlaneSize::new(5, 5, 1).unwrap();
     let mut frame_sequence: FrameSequence<EventCoordless> = FramerBuilder::new(plane, 64)
         .codec_version(1, TimeMode::DeltaT)
@@ -454,7 +466,6 @@ fn get_frame_bytes_eventcoordless() {
     use adder_codec_rs::framer::driver::FramerMode::INSTANTANEOUS;
     use adder_codec_rs::framer::driver::SourceType::U8;
     use adder_codec_rs::framer::driver::{EventCoordless, FrameSequence, Framer};
-    use adder_codec_rs::{Coord, Event};
     let plane = PlaneSize::new(5, 5, 1).unwrap();
     let mut frame_sequence: FrameSequence<EventCoordless> = FramerBuilder::new(plane, 64)
         .codec_version(1, TimeMode::DeltaT)
@@ -514,7 +525,6 @@ fn get_frame_bytes_u8() {
     use adder_codec_rs::framer::driver::FramerMode::INSTANTANEOUS;
     use adder_codec_rs::framer::driver::SourceType::U8;
     use adder_codec_rs::framer::driver::{FrameSequence, Framer};
-    use adder_codec_rs::{Coord, Event};
     let plane = PlaneSize::new(5, 5, 1).unwrap();
     let mut frame_sequence: FrameSequence<u8> = FramerBuilder::new(plane, 64)
         .codec_version(1, TimeMode::DeltaT)
@@ -573,7 +583,6 @@ fn get_frame_bytes_u16() {
     use adder_codec_rs::framer::driver::FramerMode::INSTANTANEOUS;
     use adder_codec_rs::framer::driver::SourceType::U8;
     use adder_codec_rs::framer::driver::{FrameSequence, Framer};
-    use adder_codec_rs::{Coord, Event};
     let plane = PlaneSize::new(5, 5, 1).unwrap();
     let mut frame_sequence: FrameSequence<u16> = FramerBuilder::new(plane, 64)
         .codec_version(1, TimeMode::DeltaT)
@@ -631,7 +640,6 @@ fn get_frame_bytes_u32() {
     use adder_codec_rs::framer::driver::FramerMode::INSTANTANEOUS;
     use adder_codec_rs::framer::driver::SourceType::U8;
     use adder_codec_rs::framer::driver::{FrameSequence, Framer};
-    use adder_codec_rs::{Coord, Event};
     let plane = PlaneSize::new(5, 5, 1).unwrap();
     let mut frame_sequence: FrameSequence<u32> = FramerBuilder::new(plane, 46)
         .codec_version(1, TimeMode::DeltaT)
@@ -689,7 +697,6 @@ fn get_frame_bytes_u64() {
     use adder_codec_rs::framer::driver::FramerMode::INSTANTANEOUS;
     use adder_codec_rs::framer::driver::SourceType::U8;
     use adder_codec_rs::framer::driver::{FrameSequence, Framer};
-    use adder_codec_rs::{Coord, Event};
     let plane = PlaneSize::new(5, 5, 1).unwrap();
     let mut frame_sequence: FrameSequence<u64> = FramerBuilder::new(plane, 64)
         .codec_version(1, TimeMode::DeltaT)
@@ -747,7 +754,6 @@ fn test_get_empty_frame() {
     use adder_codec_rs::framer::driver::FramerMode::INSTANTANEOUS;
     use adder_codec_rs::framer::driver::SourceType::U8;
     use adder_codec_rs::framer::driver::{FrameSequence, Framer};
-    use adder_codec_rs::{Coord, Event};
     let plane = PlaneSize::new(5, 5, 1).unwrap();
     let mut frame_sequence: FrameSequence<u8> = FramerBuilder::new(plane, 64)
         .codec_version(1, TimeMode::DeltaT)

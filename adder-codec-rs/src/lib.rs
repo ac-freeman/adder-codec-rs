@@ -1,4 +1,4 @@
-use crate::framer::driver::{EventCoordless, SourceType};
+use crate::framer::driver::EventCoordless;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::fmt::Formatter;

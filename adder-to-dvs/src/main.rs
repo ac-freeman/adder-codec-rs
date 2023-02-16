@@ -1,4 +1,3 @@
-use adder_codec_rs::codec::raw::stream::Raw;
 use adder_codec_rs::{Event, D_SHIFT, D_ZERO_INTEGRATION};
 use std::cmp::max;
 use std::collections::VecDeque;

@@ -1,5 +1,4 @@
 use crate::framer::driver::FramerMode::INSTANTANEOUS;
-use crate::framer::driver::SourceType::U8;
 use crate::framer::driver::{Framer, FramerBuilder};
 use crate::framer::scale_intensity;
 use crate::framer::scale_intensity::FrameValue;
@@ -16,6 +15,7 @@ use std::io;
 use std::io::{BufWriter, Seek, Write};
 
 use adder_codec_core::SourceCamera::FramedU8;
+use adder_codec_core::SourceType::U8;
 use adder_codec_core::{Event, TimeMode};
 use bitstream_io::BitWrite;
 use std::sync::mpsc::{channel, Receiver, Sender};
@@ -95,7 +95,7 @@ pub struct SimulProcessor<W: Write> {
     events_tx: Sender<Vec<Vec<Event>>>,
 }
 
-impl<W: Write> SimulProcessor<W> {
+impl<W: Write + 'static> SimulProcessor<W> {
     pub fn new<T>(
         source: Framed<W>,
         ref_time: DeltaT,

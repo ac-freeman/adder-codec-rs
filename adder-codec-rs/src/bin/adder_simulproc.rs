@@ -2,8 +2,6 @@ extern crate core;
 
 use adder_codec_rs::transcoder::source::video::{Source, VideoBuilder};
 use adder_codec_rs::utils::simulproc::{SimulProcArgs, SimulProcessor};
-use adder_codec_rs::SourceCamera::FramedU8;
-use adder_codec_rs::TimeMode;
 
 use clap::Parser;
 use rayon::current_num_threads;
@@ -11,6 +9,8 @@ use rayon::current_num_threads;
 use std::error::Error;
 use std::fs::File;
 
+use adder_codec_core::SourceCamera::FramedU8;
+use adder_codec_core::TimeMode;
 use adder_codec_rs::transcoder::source::framed::Framed;
 use std::io::{BufWriter, Cursor};
 use std::path::Path;
@@ -74,12 +74,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     if !args.output_events_filename.is_empty() {
         let path = Path::new(&args.output_events_filename);
         let file = File::create(&path)?;
-        source = *source.write_out(
-            args.output_events_filename,
-            FramedU8,
-            time_mode,
-            BufWriter::new(file),
-        )?;
+        source = *source.write_out(FramedU8, time_mode, BufWriter::new(file))?;
     }
 
     let source_fps = source.source_fps;
@@ -136,13 +131,16 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
 #[cfg(test)]
 mod tests {
+    use adder_codec_core::SourceCamera::FramedU8;
+    use adder_codec_core::TimeMode;
     use adder_codec_rs::transcoder::source::framed::Framed;
     use adder_codec_rs::transcoder::source::video::{Source, VideoBuilder};
     use adder_codec_rs::utils::simulproc::{SimulProcArgs, SimulProcessor};
-    use adder_codec_rs::SourceCamera::FramedU8;
-    use adder_codec_rs::{DeltaT, TimeMode};
+    use adder_codec_rs::DeltaT;
     use std::error::Error;
     use std::fs;
+    use std::fs::File;
+    use std::io::BufWriter;
     use std::path::PathBuf;
     use std::process::Command;
     use std::thread::sleep;
@@ -186,7 +184,9 @@ mod tests {
             args.delta_t_max,
         )?;
         if !args.output_events_filename.is_empty() {
-            source = *source.write_out(args.output_events_filename, FramedU8, TimeMode::DeltaT)?;
+            let file = File::create(args.output_events_filename)?;
+            let writer = BufWriter::new(file);
+            source = *source.write_out(FramedU8, TimeMode::DeltaT, writer)?;
         }
         let ref_time = source.get_ref_time();
 

@@ -8,7 +8,7 @@ use std::collections::VecDeque;
 use std::error::Error;
 use std::fmt;
 
-use adder_codec_core::{Event, PlaneSize, SourceCamera, TimeMode};
+use adder_codec_core::{Event, PlaneSize, SourceCamera, SourceType, TimeMode};
 use std::fs::File;
 use std::io::BufWriter;
 use std::ops::Add;
@@ -74,16 +74,6 @@ impl num_traits::Zero for EventCoordless {
 pub enum FramerMode {
     INSTANTANEOUS,
     INTEGRATION,
-}
-
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub enum SourceType {
-    U8,
-    U16,
-    U32,
-    U64,
-    F32,
-    F64,
 }
 
 #[derive(Clone)]

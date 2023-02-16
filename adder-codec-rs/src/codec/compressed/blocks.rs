@@ -274,7 +274,7 @@ mod tests {
     use crate::codec::compressed::blocks::{Cube, ZigZag, ZIGZAG_ORDER};
     use crate::codec::compressed::{BLOCK_SIZE_BIG, BLOCK_SIZE_BIG_AREA};
     use crate::framer::driver::EventCoordless;
-    use crate::{Coord, Event};
+    use adder_codec_core::{Coord, Event};
 
     struct Setup {
         cube: Cube,

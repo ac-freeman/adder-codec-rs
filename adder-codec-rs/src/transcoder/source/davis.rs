@@ -3,7 +3,7 @@ use crate::transcoder::source::video::SourceError::BufferEmpty;
 use crate::transcoder::source::video::{
     integrate_for_px, show_display, Source, SourceError, Video, VideoBuilder,
 };
-use crate::{DeltaT, SourceType};
+use crate::DeltaT;
 use aedat::events_generated::Event as DvsEvent;
 use davis_edi_rs::util::reconstructor::{IterVal, ReconstructionError, Reconstructor};
 use rayon::iter::ParallelIterator;
@@ -22,7 +22,7 @@ use std::error::Error;
 use std::io::{Seek, Write};
 
 use adder_codec_core::codec::CodecError;
-use adder_codec_core::{Event, PlaneSize, SourceCamera, TimeMode};
+use adder_codec_core::{Event, PlaneSize, SourceCamera, SourceType, TimeMode};
 use bitstream_io::BitWrite;
 use std::time::Instant;
 
@@ -62,7 +62,7 @@ pub struct Davis<W: Write> {
 
 unsafe impl<W: Write> Sync for Davis<W> {}
 
-impl<W: Write> Davis<W> {
+impl<W: Write + 'static> Davis<W> {
     pub fn new(reconstructor: Reconstructor, rt: Runtime) -> Result<Self, Box<dyn Error>> {
         let plane = PlaneSize::new(reconstructor.width, reconstructor.height, 1)?;
 
@@ -426,7 +426,7 @@ impl<W: Write> Davis<W> {
     }
 }
 
-impl<W: Write> Source<W> for Davis<W> {
+impl<W: Write + 'static> Source<W> for Davis<W> {
     fn consume(
         &mut self,
         view_interval: u32,
@@ -622,7 +622,7 @@ impl<W: Write> Source<W> for Davis<W> {
     }
 }
 
-impl<W: Write> VideoBuilder<W> for Davis<W> {
+impl<W: Write + 'static> VideoBuilder<W> for Davis<W> {
     fn contrast_thresholds(mut self, c_thresh_pos: u8, c_thresh_neg: u8) -> Self {
         self.video = self.video.c_thresh_pos(c_thresh_pos);
         self.video = self.video.c_thresh_neg(c_thresh_neg);
@@ -656,14 +656,13 @@ impl<W: Write> VideoBuilder<W> for Davis<W> {
 
     fn write_out(
         mut self,
-        output_filename: String,
         source_camera: SourceCamera,
         time_mode: TimeMode,
         write: W,
     ) -> Result<Box<Self>, Box<dyn Error>> {
-        self.video =
-            self.video
-                .write_out(output_filename, Some(source_camera), Some(time_mode), write)?;
+        self.video = self
+            .video
+            .write_out(Some(source_camera), Some(time_mode), write)?;
         Ok(Box::new(self))
     }
 

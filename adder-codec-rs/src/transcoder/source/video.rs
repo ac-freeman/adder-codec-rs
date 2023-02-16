@@ -1,20 +1,21 @@
-use adder_codec_core::codec::raw::stream::Raw;
 use opencv::core::{Mat, Size, CV_8U, CV_8UC3};
 use std::error::Error;
 use std::fmt;
 use std::fs::File;
 use std::io::{BufWriter, Seek, Write};
+use std::mem::swap;
 
 use adder_codec_core::codec::empty::stream::EmptyOutput;
 use adder_codec_core::codec::encoder::Encoder;
+use adder_codec_core::codec::raw::stream::RawOutput;
 use adder_codec_core::codec::{CodecError, CodecMetadata, WriteCompression, LATEST_CODEC_VERSION};
-use adder_codec_core::{Coord, Event, PlaneSize, SourceCamera, TimeMode};
+use adder_codec_core::{Coord, Event, PlaneSize, SourceCamera, SourceType, TimeMode};
 use bitstream_io::BitWrite;
 use bumpalo::Bump;
 use std::path::Path;
 use std::sync::mpsc::{channel, Sender};
 
-use crate::{codec, SourceType, D};
+use crate::{codec, D};
 use opencv::highgui;
 use opencv::imgproc::resize;
 use opencv::prelude::*;
@@ -144,7 +145,6 @@ pub trait VideoBuilder<W> {
 
     fn write_out(
         self,
-        output_filename: String,
         source_camera: SourceCamera,
         time_mode: TimeMode,
         write: W,
@@ -167,7 +167,7 @@ pub struct Video<W: Write> {
 
 unsafe impl<W: Write> Send for Video<W> {}
 
-impl<W: Write> Video<W> {
+impl<W: Write + 'static> Video<W> {
     /// Initialize the Video with default parameters.
     pub(crate) fn new(
         plane: PlaneSize,
@@ -219,31 +219,50 @@ impl<W: Write> Video<W> {
         let instantaneous_view_mode = FramedViewMode::Intensity;
         let (event_sender, _) = channel();
 
-        let encoder = match writer {
-            None => Encoder::new(Box::new(EmptyOutput::new(
-                CodecMetadata::default(),
-                Vec::new(),
-            ))),
-            Some(writer) => {
-                Encoder::new(Box::new(
-                    // TODO: Allow for compressed representation (not just raw)
-                    Raw::new(
-                        CodecMetadata {
-                            codec_version: LATEST_CODEC_VERSION,
-                            header_size: 0,
-                            time_mode: TimeMode::AbsoluteT,
-                            plane: state.plane.clone(),
-                            tps: state.tps,
-                            ref_interval: state.ref_time,
-                            delta_t_max: state.delta_t_max,
-                            event_size: 0,
-                            source_camera: SourceCamera::default(), // TODO: Allow for setting this
-                        },
-                        writer,
-                    ),
-                ))
-            }
-        };
+        let w = writer.unwrap();
+        let encoder = Encoder::new(Box::new(
+            // TODO: Allow for compressed representation (not just raw)
+            RawOutput::new(
+                CodecMetadata {
+                    codec_version: LATEST_CODEC_VERSION,
+                    header_size: 0,
+                    time_mode: TimeMode::AbsoluteT,
+                    plane: state.plane.clone(),
+                    tps: state.tps,
+                    ref_interval: state.ref_time,
+                    delta_t_max: state.delta_t_max,
+                    event_size: 0,
+                    source_camera: SourceCamera::default(), // TODO: Allow for setting this
+                },
+                w,
+            ),
+        ));
+
+        // let encoder = match writer {
+        //     None => Encoder::new(Box::new(EmptyOutput::new(
+        //         CodecMetadata::default(),
+        //         Vec::new(),
+        //     ))),
+        //     Some(writer) => {
+        //         Encoder::new(Box::new(
+        //             // TODO: Allow for compressed representation (not just raw)
+        //             Raw::new(
+        //                 CodecMetadata {
+        //                     codec_version: LATEST_CODEC_VERSION,
+        //                     header_size: 0,
+        //                     time_mode: TimeMode::AbsoluteT,
+        //                     plane: state.plane.clone(),
+        //                     tps: state.tps,
+        //                     ref_interval: state.ref_time,
+        //                     delta_t_max: state.delta_t_max,
+        //                     event_size: 0,
+        //                     source_camera: SourceCamera::default(), // TODO: Allow for setting this
+        //                 },
+        //                 writer,
+        //             ),
+        //         ))
+        //     }
+        // };
 
         Ok(Video {
             state,
@@ -317,13 +336,12 @@ impl<W: Write> Video<W> {
 
     pub fn write_out(
         mut self,
-        output_filename: String,
         source_camera: Option<SourceCamera>,
         time_mode: Option<TimeMode>,
         write: W,
     ) -> Result<Self, Box<dyn std::error::Error>> {
         // TODO: Allow for compressed representation (not just raw)
-        let compression = Raw::new(
+        let compression = RawOutput::new(
             CodecMetadata {
                 codec_version: LATEST_CODEC_VERSION,
                 header_size: 0,
@@ -355,7 +373,12 @@ impl<W: Write> Video<W> {
     /// # Errors
     /// Returns an error if the stream writer cannot be closed cleanly.
     pub fn end_write_stream(&mut self) -> Result<(), Box<dyn Error>> {
-        let writer = self.encoder.close_writer()?;
+        let mut tmp = Encoder::new(Box::new(EmptyOutput::new(
+            CodecMetadata::default(),
+            Vec::new(),
+        )));
+        swap(&mut self.encoder, &mut tmp);
+        tmp.close_writer()?;
         Ok(())
     }
 

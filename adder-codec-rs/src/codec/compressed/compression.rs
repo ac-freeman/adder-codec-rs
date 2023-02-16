@@ -376,11 +376,11 @@ mod tests {
     use crate::codec::compressed::blocks::Cube;
     use crate::codec::compressed::compression::{CompressionModelDecoder, CompressionModelEncoder};
     use crate::codec::compressed::{BLOCK_SIZE_BIG, BLOCK_SIZE_BIG_AREA};
-    use crate::{Coord, Event};
 
     use rand::prelude::StdRng;
     use rand::{Rng, SeedableRng};
 
+    use adder_codec_core::{Coord, Event};
     use std::io::{BufReader, BufWriter, Write};
 
     struct Setup {

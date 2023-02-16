@@ -35,7 +35,7 @@ pub struct Framed<W: Write> {
 }
 unsafe impl<W: Write> Sync for Framed<W> {}
 
-impl<W: Write> Framed<W> {
+impl<W: Write + 'static> Framed<W> {
     pub fn new(
         input_filename: String,
         color_input: bool,
@@ -127,7 +127,7 @@ impl<W: Write> Framed<W> {
     }
 }
 
-impl<W: Write> Source<W> for Framed<W> {
+impl<W: Write + 'static> Source<W> for Framed<W> {
     /// Get pixel-wise intensities directly from source frame, and integrate them with
     /// [`ref_time`](Video::ref_time) (the number of ticks each frame is said to span)
     fn consume(
@@ -175,7 +175,7 @@ impl<W: Write> Source<W> for Framed<W> {
     }
 }
 
-impl<W: Write> VideoBuilder<W> for Framed<W> {
+impl<W: Write + 'static> VideoBuilder<W> for Framed<W> {
     fn contrast_thresholds(mut self, c_thresh_pos: u8, c_thresh_neg: u8) -> Self {
         self.video = self.video.c_thresh_pos(c_thresh_pos);
         self.video = self.video.c_thresh_neg(c_thresh_neg);
@@ -213,14 +213,13 @@ impl<W: Write> VideoBuilder<W> for Framed<W> {
 
     fn write_out(
         mut self,
-        output_filename: String,
         source_camera: SourceCamera,
         time_mode: TimeMode,
         write: W,
     ) -> Result<Box<Self>, Box<dyn Error>> {
-        self.video =
-            self.video
-                .write_out(output_filename, Some(source_camera), Some(time_mode), write)?;
+        self.video = self
+            .video
+            .write_out(Some(source_camera), Some(time_mode), write)?;
         Ok(Box::new(self))
     }
 
