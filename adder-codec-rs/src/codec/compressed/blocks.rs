@@ -1,6 +1,6 @@
 use crate::codec::compressed::{BLOCK_SIZE_BIG, BLOCK_SIZE_BIG_AREA};
 use crate::framer::driver::EventCoordless;
-use crate::Event;
+use adder_codec_core::Event;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -68,7 +68,7 @@ pub const fn gen_zigzag_order() -> [u16; BLOCK_SIZE_BIG_AREA] {
 #[cfg(test)]
 mod test_zig_zag {
     use crate::codec::compressed::blocks::gen_zigzag_order;
-    use crate::codec::compressed::{BLOCK_SIZE_BIG_AREA};
+    use crate::codec::compressed::BLOCK_SIZE_BIG_AREA;
     use itertools::Itertools;
 
     #[test]

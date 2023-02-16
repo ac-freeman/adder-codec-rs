@@ -5,7 +5,7 @@ use crate::framer::scale_intensity;
 use crate::framer::scale_intensity::FrameValue;
 use crate::transcoder::source::framed::Framed;
 use crate::transcoder::source::video::Source;
-use crate::{DeltaT, Event};
+use crate::DeltaT;
 use clap::Parser;
 use rayon::ThreadPool;
 use serde::Serialize;
@@ -16,7 +16,7 @@ use std::io;
 use std::io::{BufWriter, Seek, Write};
 
 use adder_codec_core::SourceCamera::FramedU8;
-use adder_codec_core::TimeMode;
+use adder_codec_core::{Event, TimeMode};
 use bitstream_io::BitWrite;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::time::Instant;

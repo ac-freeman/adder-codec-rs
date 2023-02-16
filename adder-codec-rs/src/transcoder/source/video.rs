@@ -7,13 +7,13 @@ use std::io::{BufWriter, Seek, Write};
 
 use adder_codec_core::codec::encoder::Encoder;
 use adder_codec_core::codec::{CodecError, CodecMetadata, WriteCompression, LATEST_CODEC_VERSION};
-use adder_codec_core::{PlaneSize, SourceCamera, TimeMode};
+use adder_codec_core::{Coord, Event, PlaneSize, SourceCamera, TimeMode};
 use bitstream_io::BitWrite;
 use bumpalo::Bump;
 use std::path::Path;
 use std::sync::mpsc::{channel, Sender};
 
-use crate::{codec, Coord, Event, SourceType, D};
+use crate::{codec, SourceType, D};
 use opencv::highgui;
 use opencv::imgproc::resize;
 use opencv::prelude::*;
@@ -179,15 +179,15 @@ impl<W: Write> Video<W> {
         };
 
         let mut data = Vec::new();
-        for y in 0..plane.height {
-            for x in 0..plane.width {
-                for c in 0..plane.channels {
+        for y in 0..plane.h() {
+            for x in 0..plane.w() {
+                for c in 0..plane.c() {
                     let px = PixelArena::new(
                         1.0,
                         Coord {
                             x,
                             y,
-                            c: match &plane.channels {
+                            c: match &plane.c() {
                                 1 => None,
                                 _ => Some(c),
                             },

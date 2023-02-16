@@ -3,7 +3,7 @@ use crate::transcoder::source::video::SourceError::BufferEmpty;
 use crate::transcoder::source::video::{
     integrate_for_px, show_display, Source, SourceError, Video, VideoBuilder,
 };
-use crate::{DeltaT, Event, SourceType};
+use crate::{DeltaT, SourceType};
 use aedat::events_generated::Event as DvsEvent;
 use davis_edi_rs::util::reconstructor::{IterVal, ReconstructionError, Reconstructor};
 use rayon::iter::ParallelIterator;
@@ -22,7 +22,7 @@ use std::error::Error;
 use std::io::{Seek, Write};
 
 use adder_codec_core::codec::CodecError;
-use adder_codec_core::{PlaneSize, SourceCamera, TimeMode};
+use adder_codec_core::{Event, PlaneSize, SourceCamera, TimeMode};
 use bitstream_io::BitWrite;
 use std::time::Instant;
 
@@ -356,7 +356,7 @@ impl<W: Write> Davis<W> {
             })
             .collect();
 
-        if let Some(ref mut stream) = self.video.stream {
+        if let Some(ref mut stream) = self.video.encoder {
             stream.encode_events_events(&big_buffer)?;
         }
 
