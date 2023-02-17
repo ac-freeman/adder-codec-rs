@@ -236,7 +236,7 @@ mod tests {
     use crate::codec::WriteCompression;
 
     use crate::Coord;
-    use std::io::{BufReader, BufWriter, Write};
+    use std::io::{BufReader, BufWriter, Cursor, Write};
 
     fn stock_event() -> Event {
         Event {
@@ -272,7 +272,7 @@ mod tests {
 
         let event = stock_event();
         encoder.ingest_event(&event).unwrap();
-        let mut writer = encoder.close_writer().unwrap();
+        let mut writer = encoder.close_writer().unwrap().unwrap();
         writer.flush().unwrap();
 
         writer.into_inner().unwrap()
@@ -301,7 +301,7 @@ mod tests {
         // let event = stock_event();
         //
         // encoder.ingest_event(&event).unwrap();
-        let mut writer = encoder.close_writer().unwrap();
+        let mut writer = encoder.close_writer().unwrap().unwrap();
         writer.flush().unwrap();
 
         writer.into_inner().unwrap()
@@ -310,92 +310,86 @@ mod tests {
     #[test]
     fn header_v0_raw() {
         let output = setup_encoded_raw(0);
-        let tmp = &*output;
+        let tmp = Cursor::new(&*output);
 
         let bufreader = BufReader::new(tmp);
 
-        let mut compression = <RawInput as ReadCompression<BufReader<&[u8]>>>::new();
+        let mut compression = <RawInput as ReadCompression<BufReader<Cursor<&[u8]>>>>::new();
 
         let mut bitreader = BitReader::endian(bufreader, BigEndian);
-        let reader = Decoder::new(Box::new(compression), &mut bitreader);
+        let reader = Decoder::new(Box::new(compression), &mut bitreader).unwrap();
         assert_eq!(reader.compression.meta().header_size, 25);
     }
 
     #[test]
     fn header_v1_raw() {
         let output = setup_encoded_raw(1);
-        let tmp = &*output;
-
+        let tmp = Cursor::new(&*output);
         let bufreader = BufReader::new(tmp);
-        let mut compression = <RawInput as ReadCompression<BufReader<&[u8]>>>::new();
+        let mut compression = <RawInput as ReadCompression<BufReader<Cursor<&[u8]>>>>::new();
 
         let mut bitreader = BitReader::endian(bufreader, BigEndian);
-        let reader = Decoder::new(Box::new(compression), &mut bitreader);
+        let reader = Decoder::new(Box::new(compression), &mut bitreader).unwrap();
         assert_eq!(reader.compression.meta().header_size, 29);
     }
 
     #[test]
     fn header_v2_raw() {
         let output = setup_encoded_raw(2);
-        let tmp = &*output;
-
+        let tmp = Cursor::new(&*output);
         let bufreader = BufReader::new(tmp);
-        let mut compression = <RawInput as ReadCompression<BufReader<&[u8]>>>::new();
+        let mut compression = <RawInput as ReadCompression<BufReader<Cursor<&[u8]>>>>::new();
 
         let mut bitreader = BitReader::endian(bufreader, BigEndian);
-        let reader = Decoder::new(Box::new(compression), &mut bitreader);
+        let reader = Decoder::new(Box::new(compression), &mut bitreader).unwrap();
         assert_eq!(reader.compression.meta().header_size, 33);
     }
 
     #[test]
     fn header_v0_compressed() {
         let output = setup_encoded_compressed(0);
-        let tmp = &*output;
-
+        let tmp = Cursor::new(&*output);
         let bufreader = BufReader::new(tmp);
-        let mut compression = <CompressedInput as ReadCompression<BufReader<&[u8]>>>::new();
+        let mut compression = <CompressedInput as ReadCompression<BufReader<Cursor<&[u8]>>>>::new();
 
         let mut bitreader = BitReader::endian(bufreader, BigEndian);
-        let reader = Decoder::new(Box::new(compression), &mut bitreader);
+        let reader = Decoder::new(Box::new(compression), &mut bitreader).unwrap();
         assert_eq!(reader.compression.meta().header_size, 25);
     }
 
     #[test]
     fn header_v1_compressed() {
         let output = setup_encoded_compressed(1);
-        let tmp = &*output;
-
+        let tmp = Cursor::new(&*output);
         let bufreader = BufReader::new(tmp);
-        let mut compression = <CompressedInput as ReadCompression<BufReader<&[u8]>>>::new();
+        let mut compression = <CompressedInput as ReadCompression<BufReader<Cursor<&[u8]>>>>::new();
 
         let mut bitreader = BitReader::endian(bufreader, BigEndian);
-        let reader = Decoder::new(Box::new(compression), &mut bitreader);
+        let reader = Decoder::new(Box::new(compression), &mut bitreader).unwrap();
         assert_eq!(reader.compression.meta().header_size, 29);
     }
 
     #[test]
     fn header_v2_compressed() {
         let output = setup_encoded_compressed(2);
-        let tmp = &*output;
-
+        let tmp = Cursor::new(&*output);
         let bufreader = BufReader::new(tmp);
-        let mut compression = <CompressedInput as ReadCompression<BufReader<&[u8]>>>::new();
+        let mut compression = <CompressedInput as ReadCompression<BufReader<Cursor<&[u8]>>>>::new();
 
         let mut bitreader = BitReader::endian(bufreader, BigEndian);
-        let reader = Decoder::new(Box::new(compression), &mut bitreader);
+        let reader = Decoder::new(Box::new(compression), &mut bitreader).unwrap();
         assert_eq!(reader.compression.meta().header_size, 33);
     }
 
     #[test]
     fn digest_event_raw() {
         let output = setup_encoded_raw(2);
-        let tmp = &*output;
-
+        let tmp = Cursor::new(&*output);
         let bufreader = BufReader::new(tmp);
-        let mut compression = <RawInput as ReadCompression<BufReader<&[u8]>>>::new();
+        let mut compression = <RawInput as ReadCompression<BufReader<Cursor<&[u8]>>>>::new();
 
         let mut bitreader = BitReader::endian(bufreader, BigEndian);
-        let mut reader = Decoder::new(Box::new(compression), &mut bitreader);
+        let mut reader = Decoder::new(Box::new(compression), &mut bitreader).unwrap();
         let event = reader.digest_event(&mut bitreader).unwrap();
         assert_eq!(event, stock_event());
     }

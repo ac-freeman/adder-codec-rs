@@ -34,7 +34,7 @@ fn test_set_stream_position() {
     let mut compression = <RawInput as ReadCompression<BufReader<File>>>::new();
 
     let mut bitreader = BitReader::endian(bufreader, BigEndian);
-    let mut reader = Decoder::new(Box::new(compression), &mut bitreader);
+    let mut reader = Decoder::new(Box::new(compression), &mut bitreader).unwrap();
     for i in 1..reader.meta().event_size as usize {
         assert!(reader
             .set_input_stream_position(&mut bitreader, (reader.meta().header_size + i) as u64)
@@ -63,7 +63,7 @@ fn test_sample_perfect_dt() {
     let mut compression = <RawInput as ReadCompression<BufReader<File>>>::new();
 
     let mut bitreader = BitReader::endian(bufreader, BigEndian);
-    let mut reader = Decoder::new(Box::new(compression), &mut bitreader);
+    let mut reader = Decoder::new(Box::new(compression), &mut bitreader).unwrap();
 
     let output_path = Path::new("./tests/samples/temp_sample_1");
     let mut output_stream = BufWriter::new(File::create(output_path).unwrap());
@@ -137,7 +137,7 @@ fn test_sample_perfect_dt_color() {
     let mut compression = <RawInput as ReadCompression<BufReader<File>>>::new();
 
     let mut bitreader = BitReader::endian(bufreader, BigEndian);
-    let mut reader = Decoder::new(Box::new(compression), &mut bitreader);
+    let mut reader = Decoder::new(Box::new(compression), &mut bitreader).unwrap();
 
     let output_path = Path::new("./tests/samples/temp_sample_2");
     let mut output_stream = BufWriter::new(File::create(output_path).unwrap());
@@ -376,7 +376,7 @@ fn setup_raw_reader(
     let mut compression = <RawInput as ReadCompression<BufReader<File>>>::new();
 
     let mut bitreader = BitReader::endian(bufreader, BigEndian);
-    let mut reader = Decoder::new(Box::new(compression), &mut bitreader);
+    let mut reader = Decoder::new(Box::new(compression), &mut bitreader).unwrap();
     (reader, bitreader)
 }
 
@@ -824,7 +824,7 @@ fn test_sample_unordered() {
     let mut compression = <RawInput as ReadCompression<BufReader<File>>>::new();
 
     let mut bitreader = BitReader::endian(bufreader, BigEndian);
-    let mut reader = Decoder::new(Box::new(compression), &mut bitreader);
+    let mut reader = Decoder::new(Box::new(compression), &mut bitreader).unwrap();
 
     let output_path = Path::new("./tests/samples/temp_sample_3_unordered");
     let mut output_stream = BufWriter::new(File::create(output_path).unwrap());
@@ -897,7 +897,7 @@ fn test_sample_ordered() {
     let mut compression = <RawInput as ReadCompression<BufReader<File>>>::new();
 
     let mut bitreader = BitReader::endian(bufreader, BigEndian);
-    let mut reader = Decoder::new(Box::new(compression), &mut bitreader);
+    let mut reader = Decoder::new(Box::new(compression), &mut bitreader).unwrap();
 
     let output_path = Path::new("./tests/samples/temp_sample_3_ordered");
     let mut output_stream = BufWriter::new(File::create(output_path).unwrap());

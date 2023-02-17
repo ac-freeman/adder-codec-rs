@@ -1,6 +1,6 @@
 use crate::codec::{CodecError, CodecMetadata, WriteCompression};
 use crate::SourceType::*;
-use crate::{Event, SourceCamera, SourceType, EOF_EVENT};
+use crate::{Event, EventSingle, SourceCamera, SourceType, EOF_EVENT};
 
 use std::io;
 use std::io::Write;
@@ -61,7 +61,15 @@ impl<W: Write> Encoder<W> {
     /// Signify the end of the file in a unified way
     fn write_eof(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         self.compression.byte_align()?;
-        Ok(self.ingest_event(&EOF_EVENT)?)
+        let output_event: EventSingle;
+        let mut buffer = Vec::new();
+        if self.compression.meta().plane.channels == 1 {
+            output_event = (&EOF_EVENT).into();
+            self.bincode.serialize_into(&mut buffer, &output_event)?;
+        } else {
+            self.bincode.serialize_into(&mut buffer, &EOF_EVENT)?;
+        }
+        Ok(self.compression.write_bytes(&buffer)?)
     }
 
     /// Flush the `BitWriter`. Does not flush the internal `BufWriter`.
@@ -160,7 +168,7 @@ mod tests {
     use crate::codec::raw::stream::RawOutput;
     use crate::codec::{CodecMetadata, WriteCompression, LATEST_CODEC_VERSION};
 
-    use crate::Coord;
+    use crate::{Coord, PlaneSize};
     use bitstream_io::{BigEndian, BitWriter};
     use std::io::BufWriter;
 
@@ -191,7 +199,7 @@ mod tests {
                 .with_fixint_encoding()
                 .with_big_endian(),
         };
-        let mut writer = encoder.close_writer().unwrap();
+        let mut writer = encoder.close_writer().unwrap().unwrap();
         writer.flush().unwrap();
         let _output = writer.into_inner().unwrap();
     }
@@ -220,7 +228,7 @@ mod tests {
                 .with_fixint_encoding()
                 .with_big_endian(),
         };
-        let mut writer = encoder.close_writer().unwrap();
+        let mut writer = encoder.close_writer().unwrap().unwrap();
         writer.flush().unwrap();
         let _output = writer.into_inner().unwrap();
     }
@@ -234,7 +242,11 @@ mod tests {
                 codec_version: LATEST_CODEC_VERSION,
                 header_size: 0,
                 time_mode: Default::default(),
-                plane: Default::default(),
+                plane: PlaneSize {
+                    width: 1,
+                    height: 1,
+                    channels: 3,
+                },
                 tps: 0,
                 ref_interval: 255,
                 delta_t_max: 255,
@@ -256,10 +268,10 @@ mod tests {
         };
 
         encoder.ingest_event(&event).unwrap();
-        let mut writer = encoder.close_writer().unwrap();
+        let mut writer = encoder.close_writer().unwrap().unwrap();
         writer.flush().unwrap();
         let output = writer.into_inner().unwrap();
-        assert_eq!(output.len(), 33 + 20); // 33 bytes for the header, 20 bytes for the 2 events
+        assert_eq!(output.len(), 33 + 22); // 33 bytes for the header, 22 bytes for the 2 events
     }
 
     #[test]

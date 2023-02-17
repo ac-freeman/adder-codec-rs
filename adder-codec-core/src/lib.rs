@@ -303,11 +303,21 @@ pub type PixelAddress = u16;
 pub const EOF_PX_ADDRESS: PixelAddress = u16::MAX;
 
 #[repr(packed)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Coord {
     pub x: PixelAddress,
     pub y: PixelAddress,
     pub c: Option<u8>,
+}
+
+impl Default for Coord {
+    fn default() -> Self {
+        Self {
+            x: 0,
+            y: 0,
+            c: Some(0),
+        }
+    }
 }
 
 impl Coord {

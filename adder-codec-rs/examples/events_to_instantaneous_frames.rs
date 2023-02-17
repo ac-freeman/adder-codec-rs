@@ -19,7 +19,7 @@ fn main() {
     let mut compression = <RawInput as ReadCompression<BufReader<File>>>::new();
 
     let mut bitreader = BitReader::endian(bufreader, BigEndian);
-    let mut reader = Decoder::new(Box::new(compression), &mut bitreader);
+    let mut reader = Decoder::new(Box::new(compression), &mut bitreader).unwrap();
 
     let output_path = "/home/andrew/Downloads/temppp_out";
     let mut output_stream = BufWriter::new(File::create(output_path).unwrap());
