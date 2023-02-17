@@ -368,11 +368,11 @@ impl<
     /// # Examples
     ///
     /// ```
-    /// # use adder_codec_rs::{Coord, Event, PlaneSize, TimeMode};
+    /// # use adder_codec_core::{Coord, Event, PlaneSize, TimeMode};
+    /// # use adder_codec_core::SourceCamera::FramedU8;
+    /// # use adder_codec_core::SourceType::U8;
     /// # use adder_codec_rs::framer::driver::FramerMode::INSTANTANEOUS;
     /// # use adder_codec_rs::framer::driver::{FrameSequence, Framer, FramerBuilder};
-    /// # use adder_codec_rs::framer::driver::SourceType::U8;
-    /// use adder_codec_rs::SourceCamera::FramedU8;
     ///
     /// let mut frame_sequence: FrameSequence<u8> =
     /// FramerBuilder::new(
