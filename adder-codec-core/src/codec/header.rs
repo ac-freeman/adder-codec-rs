@@ -66,9 +66,9 @@ impl EventStreamHeader {
 
             // Number of bytes each event occupies
             event_size: match plane_size.channels {
-                1 => 9, // If single-channel, don't need to waste a byte on the c portion
+                1 => 9, // If single-channel, don't need to waste 2 bytes on the c portion
                 // for every event
-                _ => 10,
+                _ => 11,
             },
             channels: plane_size.channels,
         }

@@ -32,7 +32,6 @@ impl<W: Write> WriteCompression<W> for RawOutput<W> {
             1 => bincode.serialized_size(&EventSingle::default()).unwrap() as u8,
             _ => bincode.serialized_size(&Event::default()).unwrap() as u8,
         };
-        eprintln!("Event size: {}", meta.event_size);
         Self {
             meta,
             bincode,
@@ -148,6 +147,7 @@ impl<R: Read + Seek> ReadCompression<R> for RawInput {
             match self.bincode.deserialize_from::<_, Event>(&*buffer) {
                 Ok(ev) => ev,
                 Err(e) => {
+                    dbg!(self.meta.event_size);
                     eprintln!("Error deserializing event: {}", e);
                     return Err(CodecError::Deserialize);
                 }
