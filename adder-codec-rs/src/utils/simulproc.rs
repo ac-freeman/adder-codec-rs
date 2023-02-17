@@ -89,7 +89,7 @@ pub struct SimulProcArgs {
     pub time_mode: String,
 }
 
-pub struct SimulProcessor<W: Write> {
+pub struct SimulProcessor<W: Write + 'static> {
     pub source: Framed<W>,
     thread_pool: ThreadPool,
     events_tx: Sender<Vec<Vec<Event>>>,

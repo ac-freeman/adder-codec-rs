@@ -1,4 +1,7 @@
 use crate::player::ui::ReconstructionMethod;
+use adder_codec_core::bitstream_io::{BigEndian, BitReader};
+use adder_codec_core::codec::decoder::Decoder;
+use adder_codec_core::{open_file_decoder, SourceCamera};
 use adder_codec_rs::framer::driver::FramerMode::INSTANTANEOUS;
 use adder_codec_rs::framer::driver::{FrameSequence, Framer, FramerBuilder};
 use adder_codec_rs::framer::scale_intensity::event_to_intensity;
@@ -25,11 +28,18 @@ pub struct StreamState {
     pub(crate) volume: usize,
 }
 
+// TODO: allow flexibility with decoding non-file inputs
+pub struct InputStream {
+    pub(crate) decoder: Decoder<BufReader<File>>,
+    pub(crate) bitreader: BitReader<BufReader<File>, BigEndian>,
+}
+unsafe impl Send for InputStream {}
+
 #[derive(Default)]
 pub struct AdderPlayer {
     pub(crate) framer_builder: Option<FramerBuilder>,
     pub(crate) frame_sequence: Option<FrameSequence<u8>>, // TODO: remove this
-    pub(crate) input_stream: Option<Raw>,
+    pub(crate) input_stream: Option<InputStream>,
     pub(crate) display_mat: Mat,
     playback_speed: f32,
     reconstruction_method: ReconstructionMethod,
@@ -62,44 +72,41 @@ impl AdderPlayer {
                 None => Err(Box::new(AdderPlayerError("Invalid file type".into()))),
                 Some("adder") => {
                     let input_path = path_buf.to_str().expect("Invalid string").to_string();
-                    let mut stream: Raw = Codec::new();
-                    let file = File::open(input_path.clone())?;
-                    stream.set_input_stream(Some(BufReader::new(file)));
-                    stream.decode_header()?;
+                    let (mut stream, mut bitreader) = open_file_decoder(&input_path)?;
 
-                    let mut reconstructed_frame_rate = (stream.tps / stream.ref_interval) as f64;
+                    let meta = *stream.meta();
+                    let mut reconstructed_frame_rate = (meta.tps / meta.ref_interval) as f64;
 
                     reconstructed_frame_rate /= playback_speed as f64;
 
-                    let framer_builder: FramerBuilder =
-                        FramerBuilder::new(stream.plane.clone(), 260)
-                            .codec_version(stream.codec_version, stream.time_mode)
-                            .time_parameters(
-                                stream.tps,
-                                stream.ref_interval,
-                                stream.delta_t_max,
-                                reconstructed_frame_rate,
-                            )
-                            .mode(INSTANTANEOUS)
-                            .view_mode(view_mode)
-                            .source(stream.get_source_type(), stream.source_camera);
+                    let framer_builder: FramerBuilder = FramerBuilder::new(meta.plane.clone(), 260)
+                        .codec_version(meta.codec_version, meta.time_mode)
+                        .time_parameters(
+                            meta.tps,
+                            meta.ref_interval,
+                            meta.delta_t_max,
+                            reconstructed_frame_rate,
+                        )
+                        .mode(INSTANTANEOUS)
+                        .view_mode(view_mode)
+                        .source(stream.get_source_type(), meta.source_camera);
 
                     let frame_sequence: FrameSequence<u8> = framer_builder.clone().finish();
 
                     let mut display_mat = Mat::default();
-                    match stream.plane.c() {
+                    match meta.plane.c() {
                         1 => {
                             create_continuous(
-                                stream.plane.h() as i32,
-                                stream.plane.w() as i32,
+                                meta.plane.h() as i32,
+                                meta.plane.w() as i32,
                                 CV_8UC1,
                                 &mut display_mat,
                             )?;
                         }
                         3 => {
                             create_continuous(
-                                stream.plane.h() as i32,
-                                stream.plane.w() as i32,
+                                meta.plane.h() as i32,
+                                meta.plane.w() as i32,
                                 CV_8UC3,
                                 &mut display_mat,
                             )?;
@@ -114,13 +121,16 @@ impl AdderPlayer {
                     Ok(AdderPlayer {
                         stream_state: StreamState {
                             current_t_ticks: 0,
-                            tps: stream.tps,
+                            tps: meta.tps,
                             file_pos: 0,
-                            volume: stream.plane.volume(),
+                            volume: meta.plane.volume(),
                         },
                         framer_builder: Some(framer_builder),
                         frame_sequence: Some(frame_sequence),
-                        input_stream: Some(stream),
+                        input_stream: Some(InputStream {
+                            decoder: stream,
+                            bitreader,
+                        }),
                         display_mat,
                         playback_speed,
                         reconstruction_method: ReconstructionMethod::Accurate,
@@ -139,13 +149,19 @@ impl AdderPlayer {
 
     pub fn stream_pos(mut self, pos: u64) -> Self {
         if let Some(ref mut stream) = self.input_stream {
-            if pos > stream.header_size as u64 {
-                match stream.set_input_stream_position(pos) {
+            if pos > stream.decoder.meta().header_size as u64 {
+                match stream
+                    .decoder
+                    .set_input_stream_position(&mut stream.bitreader, pos)
+                {
                     Ok(_) => {}
                     Err(_) => {}
                 }
             } else {
-                match stream.set_input_stream_position(stream.header_size as u64) {
+                match stream.decoder.set_input_stream_position(
+                    &mut stream.bitreader,
+                    stream.decoder.meta().header_size as u64,
+                ) {
                     Ok(_) => {}
                     Err(_) => {}
                 }
@@ -163,8 +179,11 @@ impl AdderPlayer {
         };
 
         // Reset the stats if we're starting a new looped playback of the video
-        if let Ok(pos) = stream.get_input_stream_position() {
-            if pos == stream.header_size as u64 {
+        if let Ok(pos) = stream
+            .decoder
+            .get_input_stream_position(&mut stream.bitreader)
+        {
+            if pos == stream.decoder.meta().header_size as u64 {
                 match &mut self.frame_sequence {
                     None => { // TODO: error
                     }
@@ -182,7 +201,10 @@ impl AdderPlayer {
 
         self.stream_state.file_pos = match &mut self.input_stream {
             None => 0,
-            Some(s) => s.get_input_stream_position().unwrap_or(0),
+            Some(s) => s
+                .decoder
+                .get_input_stream_position(&mut s.bitreader)
+                .unwrap_or(0),
         };
         match res {
             Ok(a) => (a.0, self.stream_state, a.1),
@@ -210,7 +232,9 @@ impl AdderPlayer {
             Some(s) => s,
         };
 
-        let frame_length = stream.ref_interval as f64 * self.playback_speed as f64; //TODO: temp
+        let meta = *stream.decoder.meta();
+
+        let frame_length = meta.ref_interval as f64 * self.playback_speed as f64; //TODO: temp
 
         let display_mat = &mut self.display_mat;
 
@@ -231,8 +255,8 @@ impl AdderPlayer {
                 // TODO: refactor
                 let image_bevy = Image::new(
                     Extent3d {
-                        width: stream.plane.w().into(),
-                        height: stream.plane.h().into(),
+                        width: meta.plane.w().into(),
+                        height: meta.plane.h().into(),
                         depth_or_array_layers: 1,
                     },
                     TextureDimension::D2,
@@ -242,7 +266,7 @@ impl AdderPlayer {
                 break Some(image_bevy);
             }
 
-            match stream.decode_event() {
+            match stream.decoder.digest_event(&mut stream.bitreader) {
                 Ok(event) if event.d <= D_ZERO_INTEGRATION => {
                     event_count += 1;
                     let y = event.coord.y as i32;
@@ -254,8 +278,8 @@ impl AdderPlayer {
 
                     // TODO: Support D and Dt view modes here
 
-                    let frame_intensity = (event_to_intensity(&event) * stream.ref_interval as f64)
-                        / match stream.source_camera {
+                    let frame_intensity = (event_to_intensity(&event) * meta.ref_interval as f64)
+                        / match meta.source_camera {
                             SourceCamera::FramedU8 => u8::MAX as f64,
                             SourceCamera::FramedU16 => u16::MAX as f64,
                             SourceCamera::FramedU32 => u32::MAX as f64,
@@ -278,12 +302,15 @@ impl AdderPlayer {
                         * 255.0;
 
                     let db = display_mat.data_bytes_mut()?;
-                    db[(y as usize * stream.plane.area_wc()
-                        + x as usize * stream.plane.c_usize()
+                    db[(y as usize * meta.plane.area_wc()
+                        + x as usize * meta.plane.c_usize()
                         + c as usize)] = frame_intensity as u8;
                 }
                 Err(_e) => {
-                    match stream.set_input_stream_position(stream.header_size as u64) {
+                    match stream
+                        .decoder
+                        .set_input_stream_position(&mut stream.bitreader, meta.header_size as u64)
+                    {
                         Ok(_) => {}
                         Err(ee) => {
                             eprintln!("{ee}")
@@ -314,6 +341,7 @@ impl AdderPlayer {
             }
             Some(s) => s,
         };
+        let meta = *stream.decoder.meta();
 
         let frame_sequence = match &mut self.frame_sequence {
             None => {
@@ -354,8 +382,8 @@ impl AdderPlayer {
             // TODO: refactor
             Some(Image::new(
                 Extent3d {
-                    width: stream.plane.w().into(),
-                    height: stream.plane.h().into(),
+                    width: meta.plane.w().into(),
+                    height: meta.plane.h().into(),
                     depth_or_array_layers: 1,
                 },
                 TextureDimension::D2,
@@ -367,7 +395,7 @@ impl AdderPlayer {
         };
 
         loop {
-            match stream.decode_event() {
+            match stream.decoder.digest_event(&mut stream.bitreader) {
                 Ok(mut event) => {
                     event_count += 1;
                     if frame_sequence.ingest_event(&mut event) {
@@ -376,7 +404,10 @@ impl AdderPlayer {
                 }
                 Err(_e) => {
                     // Loop back to the beginning
-                    stream.set_input_stream_position(stream.header_size as u64)?;
+                    stream.decoder.set_input_stream_position(
+                        &mut stream.bitreader,
+                        meta.header_size as u64,
+                    )?;
 
                     self.frame_sequence =
                         self.framer_builder.clone().map(|builder| builder.finish());

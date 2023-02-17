@@ -22,7 +22,7 @@ pub struct IndirectCoord {
 }
 
 /// Attributes of a framed video -> ADΔER transcode
-pub struct Framed<W: Write> {
+pub struct Framed<W: Write + 'static> {
     cap: VideoCapture,
     pub(crate) input_frame_scaled: Mat,
     pub(crate) input_frame: Mat,

@@ -1,7 +1,11 @@
 extern crate core;
 
 pub mod codec;
+
 pub use bitstream_io;
+use bitstream_io::{BigEndian, BitReader};
+use std::fs::File;
+use std::io::BufReader;
 
 use thiserror::Error;
 
@@ -32,7 +36,12 @@ pub enum SourceCamera {
     Asint,
 }
 
+use crate::codec::compressed::stream::CompressedInput;
+use crate::codec::decoder::Decoder;
+use crate::codec::raw::stream::RawInput;
+use crate::codec::{CodecError, ReadCompression};
 use serde::{Deserialize, Serialize};
+
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq)]
 pub enum TimeMode {
     #[default]
@@ -413,3 +422,33 @@ const EOF_EVENT: Event = Event {
     d: 0,
     delta_t: 0,
 };
+
+pub fn open_file_decoder(
+    file_path: &str,
+) -> Result<
+    (
+        Decoder<BufReader<File>>,
+        BitReader<BufReader<File>, BigEndian>,
+    ),
+    CodecError,
+> {
+    let mut bufreader = BufReader::new(File::open(file_path)?);
+    let compression = <RawInput as ReadCompression<BufReader<File>>>::new();
+
+    let mut bitreader = BitReader::endian(bufreader, BigEndian);
+
+    // First try opening the file as a raw file, then try as a compressed file
+    let mut stream = match Decoder::new(Box::new(compression), &mut bitreader) {
+        Ok(reader) => reader,
+        Err(CodecError::WrongMagic) => {
+            bufreader = BufReader::new(File::open(file_path)?);
+            let compression = <CompressedInput as ReadCompression<BufReader<File>>>::new();
+            bitreader = BitReader::endian(bufreader, BigEndian);
+            Decoder::new(Box::new(compression), &mut bitreader)?
+        }
+        Err(e) => {
+            return Err(e);
+        }
+    };
+    Ok((stream, bitreader))
+}

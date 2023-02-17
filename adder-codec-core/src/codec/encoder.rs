@@ -70,7 +70,7 @@ impl<W: Write> Encoder<W> {
     }
 
     /// Close the encoder's writer and return it, consuming the encoder in the process.
-    pub fn close_writer(mut self) -> Result<W, Box<dyn std::error::Error>> {
+    pub fn close_writer(mut self) -> Result<Option<W>, Box<dyn std::error::Error>> {
         self.compression.byte_align()?;
         self.write_eof()?;
         self.flush_writer()?;

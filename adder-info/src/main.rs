@@ -3,6 +3,7 @@ use adder_codec_core::codec::compressed::stream::CompressedInput;
 use adder_codec_core::codec::decoder::Decoder;
 use adder_codec_core::codec::raw::stream::RawInput;
 use adder_codec_core::codec::{CodecError, ReadCompression};
+use adder_codec_core::open_file_decoder;
 use adder_codec_core::TimeMode::AbsoluteT;
 use adder_codec_rs::framer::scale_intensity::event_to_intensity;
 use adder_codec_rs::utils::stream_migration::absolute_event_to_dt_event;
@@ -31,24 +32,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let args: MyArgs = MyArgs::parse();
     let file_path = args.input.as_str();
 
-    let mut bufreader = BufReader::new(File::open(file_path)?);
-    let compression = <RawInput as ReadCompression<BufReader<File>>>::new();
-
-    let mut bitreader = BitReader::endian(bufreader, BigEndian);
-
-    // First try opening the file as a raw file, then try as a compressed file
-    let mut stream = match Decoder::new(Box::new(compression), &mut bitreader) {
-        Ok(reader) => reader,
-        Err(CodecError::WrongMagic) => {
-            bufreader = BufReader::new(File::open(file_path)?);
-            let compression = <CompressedInput as ReadCompression<BufReader<File>>>::new();
-            bitreader = BitReader::endian(bufreader, BigEndian);
-            Decoder::new(Box::new(compression), &mut bitreader)?
-        }
-        Err(e) => {
-            return Err(Box::new(e));
-        }
-    };
+    let (mut stream, mut bitreader) = open_file_decoder(file_path)?;
 
     let first_event_position = stream.get_input_stream_position(&mut bitreader)?;
 

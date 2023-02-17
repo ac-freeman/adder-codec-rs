@@ -1,4 +1,4 @@
-use adder_codec_core::Event;
+use adder_codec_core::{open_file_decoder, Event};
 use adder_codec_rs::{D_SHIFT, D_ZERO_INTEGRATION};
 use std::cmp::max;
 use std::collections::VecDeque;
@@ -62,24 +62,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let output_video_path = args.output_video.as_str();
     let raw_path = "./dvs.gray8";
 
-    let mut bufreader = BufReader::new(File::open(file_path)?);
-    let compression = <RawInput as ReadCompression<BufReader<File>>>::new();
-
-    let mut bitreader = BitReader::endian(bufreader, BigEndian);
-
-    // First try opening the file as a raw file, then try as a compressed file
-    let mut stream = match Decoder::new(Box::new(compression), &mut bitreader) {
-        Ok(reader) => reader,
-        Err(CodecError::WrongMagic) => {
-            bufreader = BufReader::new(File::open(file_path)?);
-            let compression = <CompressedInput as ReadCompression<BufReader<File>>>::new();
-            bitreader = BitReader::endian(bufreader, BigEndian);
-            Decoder::new(Box::new(compression), &mut bitreader)?
-        }
-        Err(e) => {
-            return Err(Box::new(e));
-        }
-    };
+    let (mut stream, mut bitreader) = open_file_decoder(file_path)?;
 
     let first_event_position = stream.get_input_stream_position(&mut bitreader)?;
 

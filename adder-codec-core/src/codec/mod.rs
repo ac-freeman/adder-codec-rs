@@ -59,7 +59,7 @@ pub trait WriteCompression<W: Write> {
     fn byte_align(&mut self) -> io::Result<()>;
 
     /// Consumes the compression stream and returns the underlying writer.
-    fn into_writer(self: Box<Self>) -> W;
+    fn into_writer(self: Box<Self>) -> Option<W>;
 
     /// Flush the `BitWriter`. Does not flush the internal `BufWriter`.
     fn flush_writer(&mut self) -> io::Result<()>;
@@ -105,6 +105,8 @@ pub trait ReadCompression<R: Read> {
 
     // fn decompress(&self, data: &[u8]) -> Vec<u8>;
 }
+
+// unsafe impl<R: Read> Send for ReadCompression {}
 
 use thiserror::Error;
 

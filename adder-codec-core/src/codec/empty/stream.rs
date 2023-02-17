@@ -31,8 +31,8 @@ impl<W: std::io::Write> WriteCompression<W> for EmptyOutput {
         Ok(())
     }
 
-    fn into_writer(self: Box<Self>) -> W {
-        unimplemented!()
+    fn into_writer(self: Box<Self>) -> Option<W> {
+        None
     }
 
     fn flush_writer(&mut self) -> std::io::Result<()> {

@@ -42,8 +42,8 @@ impl<W: Write> WriteCompression<W> for CompressedOutput<W> {
         self.stream.byte_align()
     }
 
-    fn into_writer(self: Box<Self>) -> W {
-        self.stream.into_writer()
+    fn into_writer(self: Box<Self>) -> Option<W> {
+        Some(self.stream.into_writer())
     }
 
     fn flush_writer(&mut self) -> std::io::Result<()> {
