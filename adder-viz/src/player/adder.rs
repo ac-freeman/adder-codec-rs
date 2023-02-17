@@ -1,10 +1,9 @@
 use crate::player::ui::ReconstructionMethod;
-use adder_codec_rs::codec::Codec;
 use adder_codec_rs::framer::driver::FramerMode::INSTANTANEOUS;
 use adder_codec_rs::framer::driver::{FrameSequence, Framer, FramerBuilder};
 use adder_codec_rs::framer::scale_intensity::event_to_intensity;
 use adder_codec_rs::transcoder::source::video::FramedViewMode;
-use adder_codec_rs::{DeltaT, SourceCamera, D_ZERO_INTEGRATION};
+use adder_codec_rs::{DeltaT, D_ZERO_INTEGRATION};
 use bevy::prelude::Image;
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
 use opencv::core::{create_continuous, Mat, MatTraitConstManual, MatTraitManual, CV_8UC1, CV_8UC3};

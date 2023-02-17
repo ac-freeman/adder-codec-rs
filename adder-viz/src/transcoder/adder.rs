@@ -2,7 +2,7 @@ use std::error::Error;
 
 use adder_codec_rs::transcoder::source::davis::Davis;
 use adder_codec_rs::transcoder::source::framed::Framed;
-use adder_codec_rs::{DeltaT, TimeMode};
+use adder_codec_rs::DeltaT;
 use bevy::prelude::Image;
 use std::fmt;
 use std::path::{Path, PathBuf};

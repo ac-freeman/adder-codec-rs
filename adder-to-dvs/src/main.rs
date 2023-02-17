@@ -1,12 +1,17 @@
+use adder_codec_core::Event;
 use adder_codec_rs::{D_SHIFT, D_ZERO_INTEGRATION};
 use std::cmp::max;
 use std::collections::VecDeque;
 use std::error::Error;
 use std::fs::File;
 use std::io::{BufReader, BufWriter, Write};
-use std::path::Path;
 use std::{error, io};
 
+use adder_codec_core::bitstream_io::{BigEndian, BitReader};
+use adder_codec_core::codec::compressed::stream::CompressedInput;
+use adder_codec_core::codec::decoder::Decoder;
+use adder_codec_core::codec::raw::stream::RawInput;
+use adder_codec_core::codec::{CodecError, ReadCompression};
 use adder_codec_rs::transcoder::source::video::show_display_force;
 use adder_codec_rs::utils::viz::{encode_video_ffmpeg, write_frame_to_video};
 use clap::Parser;
@@ -57,22 +62,39 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let output_video_path = args.output_video.as_str();
     let raw_path = "./dvs.gray8";
 
-    let mut stream: Raw = Codec::new();
-    let file = File::open(file_path)?;
-    stream.set_input_stream(Some(BufReader::new(file)));
-    let header_bytes = stream.decode_header().expect("Invalid header");
+    let mut bufreader = BufReader::new(File::open(file_path)?);
+    let compression = <RawInput as ReadCompression<BufReader<File>>>::new();
 
-    let first_event_position = stream.get_input_stream_position()?;
+    let mut bitreader = BitReader::endian(bufreader, BigEndian);
 
-    let eof_position_bytes = stream.get_eof_position()?;
-    let _file_size = Path::new(file_path).metadata()?.len();
-    let num_events = (eof_position_bytes - 1 - header_bytes as u64) / stream.event_size as u64;
+    // First try opening the file as a raw file, then try as a compressed file
+    let mut stream = match Decoder::new(Box::new(compression), &mut bitreader) {
+        Ok(reader) => reader,
+        Err(CodecError::WrongMagic) => {
+            bufreader = BufReader::new(File::open(file_path)?);
+            let compression = <CompressedInput as ReadCompression<BufReader<File>>>::new();
+            bitreader = BitReader::endian(bufreader, BigEndian);
+            Decoder::new(Box::new(compression), &mut bitreader)?
+        }
+        Err(e) => {
+            return Err(Box::new(e));
+        }
+    };
+
+    let first_event_position = stream.get_input_stream_position(&mut bitreader)?;
+
+    let eof_position_bytes = stream.get_eof_position(&mut bitreader)?;
+
+    let meta = *stream.meta();
+
+    // TODO: Need a different mechanism for compressed files
+    let num_events = (eof_position_bytes - 1 - meta.header_size as u64) / meta.event_size as u64;
     let divisor = num_events / 100;
 
     let stdout = io::stdout();
     let mut handle = io::BufWriter::new(stdout.lock());
 
-    stream.set_input_stream_position(first_event_position)?;
+    stream.set_input_stream_position(&mut bitreader, first_event_position)?;
 
     let mut video_writer: Option<BufWriter<File>> = match File::create(raw_path) {
         Ok(file) => Some(BufWriter::new(file)),
@@ -81,7 +103,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let mut text_writer: BufWriter<File> = BufWriter::new(File::create(output_text_path)?);
     {
         // Write the width and height as first line header
-        let dims_str = stream.plane.w().to_string() + " " + &*stream.plane.h().to_string() + "\n";
+        let dims_str = meta.plane.w().to_string() + " " + &*meta.plane.h().to_string() + "\n";
         let amt = text_writer
             .write(dims_str.as_ref())
             .expect("Could not write");
@@ -92,9 +114,9 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
     let mut pixels: Array3<Option<DvsPixel>> = {
         let mut data: Vec<Option<DvsPixel>> = Vec::new();
-        for _ in 0..stream.plane.h() {
-            for _ in 0..stream.plane.w() {
-                for _ in 0..stream.plane.c() {
+        for _ in 0..meta.plane.h() {
+            for _ in 0..meta.plane.w() {
+                for _ in 0..meta.plane.c() {
                     let px = None;
                     data.push(px);
                 }
@@ -103,34 +125,34 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
         Array3::from_shape_vec(
             (
-                stream.plane.h().into(),
-                stream.plane.w().into(),
-                stream.plane.c().into(),
+                meta.plane.h().into(),
+                meta.plane.w().into(),
+                meta.plane.c().into(),
             ),
             data,
         )?
     };
 
     let mut event_counts: Array3<u16> = Array3::zeros((
-        stream.plane.h().into(),
-        stream.plane.w().into(),
-        stream.plane.c().into(),
+        meta.plane.h().into(),
+        meta.plane.w().into(),
+        meta.plane.c().into(),
     ));
 
     let mut instantaneous_frame_deque = {
         let mut instantaneous_frame = Mat::default();
-        match stream.plane.c() {
+        match meta.plane.c() {
             1 => unsafe {
                 instantaneous_frame.create_rows_cols(
-                    stream.plane.h() as i32,
-                    stream.plane.w() as i32,
+                    meta.plane.h() as i32,
+                    meta.plane.w() as i32,
                     CV_8U,
                 )?;
             },
             _ => unsafe {
                 instantaneous_frame.create_rows_cols(
-                    stream.plane.h() as i32,
-                    stream.plane.w() as i32,
+                    meta.plane.h() as i32,
+                    meta.plane.w() as i32,
                     CV_8UC3,
                 )?;
             },
@@ -154,7 +176,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         }
     };
 
-    let frame_length = (stream.tps as f32 / args.fps) as u128; // length in ticks
+    let frame_length = (meta.tps as f32 / args.fps) as u128; // length in ticks
     let mut frame_count = 0_usize;
     let mut current_t = 0;
     let mut max_px_event_count = 0;
@@ -168,7 +190,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             )?;
             handle.flush()?;
         }
-        if current_t > (frame_count as u128 * frame_length) + stream.delta_t_max as u128 * 4 {
+        if current_t > (frame_count as u128 * frame_length) + meta.delta_t_max as u128 * 4 {
             match instantaneous_frame_deque.pop_front() {
                 None => {}
                 Some(frame) => {
@@ -186,7 +208,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             frame_count += 1;
         }
 
-        match stream.decode_event() {
+        match stream.digest_event(&mut bitreader) {
             Ok(event) => {
                 event_count += 1;
                 let y = event.coord.y as usize;
@@ -289,9 +311,9 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
     let mut event_count_mat = instantaneous_frame_deque[0].clone();
     unsafe {
-        for y in 0..stream.plane.h() as i32 {
-            for x in 0..stream.plane.w() as i32 {
-                for c in 0..stream.plane.c() as i32 {
+        for y in 0..meta.plane.h() as i32 {
+            for x in 0..meta.plane.w() as i32 {
+                for c in 0..meta.plane.c() as i32 {
                     *event_count_mat.at_3d_unchecked_mut(y, x, c)? =
                         ((event_counts[[y as usize, x as usize, c as usize]] as f32
                             / max_px_event_count as f32)

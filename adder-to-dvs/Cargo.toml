@@ -16,6 +16,7 @@ keywords = ["neuromorphic", "decoding", "event", "asynchronous", "video"]
 categories = ["multimedia::encoding", "multimedia::video", "science"]
 
 [dependencies]
+adder-codec-core = { version = "0.1.0", path = "../adder-codec-core" }
 adder-codec-rs = { version = "0.2.5", path = "../adder-codec-rs", features = [
     "transcoder",
 ] }

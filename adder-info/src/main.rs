@@ -37,7 +37,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let mut bitreader = BitReader::endian(bufreader, BigEndian);
 
     // First try opening the file as a raw file, then try as a compressed file
-    let mut reader = match Decoder::new(Box::new(compression), &mut bitreader) {
+    let mut stream = match Decoder::new(Box::new(compression), &mut bitreader) {
         Ok(reader) => reader,
         Err(CodecError::WrongMagic) => {
             bufreader = BufReader::new(File::open(file_path)?);
@@ -50,12 +50,12 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         }
     };
 
-    let first_event_position = reader.get_input_stream_position(&mut bitreader)?;
+    let first_event_position = stream.get_input_stream_position(&mut bitreader)?;
 
-    let eof_position_bytes = reader.get_eof_position(&mut bitreader)?;
+    let eof_position_bytes = stream.get_eof_position(&mut bitreader)?;
     let file_size = Path::new(file_path).metadata()?.len();
 
-    let meta = *reader.meta();
+    let meta = *stream.meta();
 
     // TODO: Need a different mechanism for compressed files
     let num_events = (eof_position_bytes - 1 - meta.header_size as u64) / meta.event_size as u64;
@@ -90,7 +90,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     // event, and what is the lowest intensity event?
     if args.dynamic_range {
         let divisor = num_events / 100;
-        reader.set_input_stream_position(&mut bitreader, first_event_position)?;
+        stream.set_input_stream_position(&mut bitreader, first_event_position)?;
         let mut max_intensity: Intensity = 0.0;
         let mut min_intensity: Intensity = f64::MAX;
         let mut event_count: u64 = 0;
@@ -110,7 +110,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             data,
         )?;
 
-        while let Ok(mut event) = reader.digest_event(&mut bitreader) {
+        while let Ok(mut event) = stream.digest_event(&mut bitreader) {
             if meta.codec_version >= 2 && meta.time_mode == AbsoluteT {
                 let last_t = &mut t_tree[[
                     event.coord.y_usize(),

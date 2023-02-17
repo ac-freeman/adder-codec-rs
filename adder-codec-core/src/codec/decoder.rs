@@ -1,6 +1,6 @@
 use crate::codec::{CodecError, CodecMetadata, ReadCompression};
 use crate::SourceType::*;
-use crate::{Event, PlaneSize, SourceCamera, SourceType, EOF_EVENT};
+use crate::{Event, PlaneSize, SourceCamera, SourceType};
 
 use std::io::{Read, Seek, SeekFrom};
 
@@ -207,12 +207,14 @@ impl<R: Read + Seek> Decoder<R> {
         Ok(reader.position_in_bits()? / 8)
     }
 
+    /// Returns the EOF position, in bytes. This is the position of the first byte of the raw event
+    /// which demarcates the end of the stream.
     pub fn get_eof_position(
         &mut self,
         reader: &mut BitReader<R, BigEndian>,
     ) -> Result<u64, CodecError> {
         for i in self.compression.meta().event_size as i64..10 {
-            let pos = reader.seek_bits(SeekFrom::End(i * 8))?;
+            reader.seek_bits(SeekFrom::End(i * 8))?;
             match self.digest_event(reader) {
                 Err(CodecError::Eof) => {
                     break;
