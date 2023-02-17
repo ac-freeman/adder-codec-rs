@@ -1,4 +1,4 @@
-use adder_codec_rs::{Event, D_SHIFT, D_ZERO_INTEGRATION};
+use adder_codec_rs::{D_SHIFT, D_ZERO_INTEGRATION};
 use std::cmp::max;
 use std::collections::VecDeque;
 use std::error::Error;
@@ -7,7 +7,6 @@ use std::io::{BufReader, BufWriter, Write};
 use std::path::Path;
 use std::{error, io};
 
-use adder_codec_rs::codec::Codec;
 use adder_codec_rs::transcoder::source::video::show_display_force;
 use adder_codec_rs::utils::viz::{encode_video_ffmpeg, write_frame_to_video};
 use clap::Parser;

@@ -60,6 +60,7 @@ impl<W: Write> Encoder<W> {
 
     /// Signify the end of the file in a unified way
     fn write_eof(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        self.compression.byte_align()?;
         Ok(self.ingest_event(&EOF_EVENT)?)
     }
 

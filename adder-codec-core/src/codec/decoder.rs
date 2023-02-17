@@ -1,8 +1,8 @@
 use crate::codec::{CodecError, CodecMetadata, ReadCompression};
 use crate::SourceType::*;
-use crate::{Event, PlaneSize, SourceCamera, SourceType};
+use crate::{Event, PlaneSize, SourceCamera, SourceType, EOF_EVENT};
 
-use std::io::Read;
+use std::io::{Read, Seek, SeekFrom};
 
 use crate::codec::header::{
     EventStreamHeader, EventStreamHeaderExtensionV1, EventStreamHeaderExtensionV2,
@@ -22,11 +22,11 @@ pub struct Decoder<R> {
 }
 
 #[allow(dead_code)]
-impl<R: Read> Decoder<R> {
+impl<R: Read + Seek> Decoder<R> {
     pub fn new(
         compression: Box<dyn ReadCompression<R>>,
         reader: &mut BitReader<R, BigEndian>,
-    ) -> Self
+    ) -> Result<Self, CodecError>
     where
         Self: Sized,
     {
@@ -36,8 +36,8 @@ impl<R: Read> Decoder<R> {
                 .with_fixint_encoding()
                 .with_big_endian(),
         };
-        decoder.decode_header(reader).unwrap();
-        decoder
+        decoder.decode_header(reader)?;
+        Ok(decoder)
     }
 
     #[inline]
@@ -66,10 +66,7 @@ impl<R: Read> Decoder<R> {
         }
     }
 
-    fn decode_header(
-        &mut self,
-        reader: &mut BitReader<R, BigEndian>,
-    ) -> Result<usize, Box<dyn std::error::Error>> {
+    fn decode_header(&mut self, reader: &mut BitReader<R, BigEndian>) -> Result<usize, CodecError> {
         let header_size = bincode::serialized_size(&EventStreamHeader::default())?;
         let mut buffer: Vec<u8> = vec![0; header_size as usize];
         reader.read_bytes(&mut buffer)?;
@@ -84,7 +81,7 @@ impl<R: Read> Decoder<R> {
 
         {
             if header.magic != self.compression.magic() {
-                return Err(CodecError::BadFile.into());
+                return Err(CodecError::WrongMagic);
             }
             let meta = self.compression.meta_mut();
             *meta = CodecMetadata {
@@ -143,7 +140,7 @@ impl<R: Read> Decoder<R> {
     fn decode_header_extension(
         &mut self,
         reader: &mut BitReader<R, BigEndian>,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<(), CodecError> {
         let codec_version = self.compression.meta().codec_version;
         if codec_version == 0 {
             return Ok(());
@@ -186,11 +183,11 @@ impl<R: Read> Decoder<R> {
         Err(CodecError::UnsupportedVersion(codec_version).into())
     }
 
+    #[inline]
     pub fn digest_event(
         &mut self,
         reader: &mut BitReader<R, BigEndian>,
     ) -> Result<Event, CodecError> {
-
         self.compression.digest_event(reader)
     }
 
@@ -201,55 +198,31 @@ impl<R: Read> Decoder<R> {
     ) -> Result<(), CodecError> {
         self.compression.set_input_stream_position(reader, position)
     }
-    // fn decode_event(&mut self) -> Result<Event, Error> {
-    //     // let mut buf = vec![0u8; self.event_size as usize];
-    //
-    //     if self.plane.channels == 1 {
-    //                 match self.bincode.deserialize_from::<_, EventSingle>(stream) {
-    //                     Ok(ev) => ev.into(),
-    //                     Err(_e) => return Err(Deserialize),
-    //                 }
-    //             } else {
-    //                 match self.bincode.deserialize_from(stream) {
-    //                     Ok(ev) => ev,
-    //                     Err(_) => return Err(Deserialize),
-    //                 }
-    //             }
-    //         }
-    //     };
-    //     if event.coord.y == EOF_PX_ADDRESS && event.coord.x == EOF_PX_ADDRESS {
-    //         return Err(Eof);
-    //     }
-    //     Ok(event)
-    // }
-    //
-    // fn decode_header_extension<W: Write>(raw: &mut Raw<W>) -> Result<(), Box<dyn std::error::Error>> {
-    //     match &mut raw.input_stream {
-    //         None => Err(Error::UnitializedStream.into()),
-    //         Some(stream) => {
-    //             if raw.codec_version == 0 {
-    //                 // Leave source camera the default (FramedU8)
-    //                 return Ok(());
-    //             }
-    //             raw.source_camera = raw
-    //                 .bincode
-    //                 .deserialize_from::<_, EventStreamHeaderExtensionV1>(stream.get_mut())?
-    //                 .source;
-    //             if raw.codec_version == 1 {
-    //                 return Ok(());
-    //             }
-    //
-    //             raw.time_mode = raw
-    //                 .bincode
-    //                 .deserialize_from::<_, EventStreamHeaderExtensionV2>(stream.get_mut())?
-    //                 .time_mode;
-    //             if raw.codec_version == 2 {
-    //                 return Ok(());
-    //             }
-    //             Err(Error::BadFile.into())
-    //         }
-    //     }
-    // }
+
+    /// Returns the current position of the input stream in bytes
+    pub fn get_input_stream_position(
+        &self,
+        reader: &mut BitReader<R, BigEndian>,
+    ) -> Result<u64, CodecError> {
+        Ok(reader.position_in_bits()? / 8)
+    }
+
+    pub fn get_eof_position(
+        &mut self,
+        reader: &mut BitReader<R, BigEndian>,
+    ) -> Result<u64, CodecError> {
+        for i in self.compression.meta().event_size as i64..10 {
+            let pos = reader.seek_bits(SeekFrom::End(i * 8))?;
+            match self.digest_event(reader) {
+                Err(CodecError::Eof) => {
+                    break;
+                }
+                _ => {}
+            }
+        }
+
+        Ok(self.get_input_stream_position(reader)? - self.compression.meta().event_size as u64)
+    }
 }
 
 #[cfg(test)]

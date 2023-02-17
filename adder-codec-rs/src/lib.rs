@@ -1,7 +1,4 @@
 use crate::framer::driver::EventCoordless;
-use serde::{Deserialize, Serialize};
-use std::fmt;
-use std::fmt::Formatter;
 
 pub mod codec;
 pub mod framer;

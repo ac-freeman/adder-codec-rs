@@ -1,6 +1,6 @@
 use crate::codec::header::{Magic, MAGIC_RAW};
 use crate::codec::{CodecError, CodecMetadata, ReadCompression, WriteCompression};
-use crate::{Event, EventSingle, EOF_PX_ADDRESS, Coord};
+use crate::{Event, EventSingle, EOF_PX_ADDRESS};
 use bincode::config::{FixintEncoding, WithOtherEndian, WithOtherIntEncoding};
 use bincode::{DefaultOptions, Options};
 use bitstream_io::{BigEndian, BitRead, BitReader};
@@ -128,10 +128,11 @@ impl<R: Read + Seek> ReadCompression<R> for RawInput {
     //     reader.into_reader()
     // }
 
+    #[inline]
     fn digest_event(&mut self, reader: &mut BitReader<R, BigEndian>) -> Result<Event, CodecError> {
         // TODO: Why is the encoded event size wrong?
         let mut buffer: Vec<u8> = vec![0; self.meta.event_size as usize];
-        reader.read_bytes(&mut buffer);
+        reader.read_bytes(&mut buffer)?;
         let event: Event = if self.meta.plane.channels == 1 {
             match self.bincode.deserialize_from::<_, EventSingle>(&*buffer) {
                 Ok(ev) => ev.into(),
@@ -142,7 +143,7 @@ impl<R: Read + Seek> ReadCompression<R> for RawInput {
                 Ok(ev) => ev,
                 Err(e) => {
                     eprintln!("Error deserializing event: {}", e);
-                    return Err(CodecError::Deserialize)
+                    return Err(CodecError::Deserialize);
                 }
             }
         };

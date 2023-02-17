@@ -1,5 +1,11 @@
+use adder_codec_core::bitstream_io::{BigEndian, BitReader};
+use adder_codec_core::codec::compressed::stream::CompressedInput;
+use adder_codec_core::codec::decoder::Decoder;
+use adder_codec_core::codec::raw::stream::RawInput;
+use adder_codec_core::codec::{CodecError, ReadCompression};
+use adder_codec_core::TimeMode::AbsoluteT;
 use adder_codec_rs::framer::scale_intensity::event_to_intensity;
-use adder_codec_rs::transcoder::source::davis::Raw;
+use adder_codec_rs::utils::stream_migration::absolute_event_to_dt_event;
 use adder_codec_rs::{DeltaT, Intensity, D_EMPTY, D_SHIFT, D_ZERO_INTEGRATION};
 use clap::Parser;
 use ndarray::Array3;
@@ -25,38 +31,57 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let args: MyArgs = MyArgs::parse();
     let file_path = args.input.as_str();
 
-    let mut stream: Raw = Codec::new();
-    let file = File::open(file_path)?;
-    stream.set_input_stream(Some(BufReader::new(file)));
-    let header_bytes = stream.decode_header().expect("Invalid header");
-    let first_event_position = stream.get_input_stream_position()?;
+    let mut bufreader = BufReader::new(File::open(file_path)?);
+    let compression = <RawInput as ReadCompression<BufReader<File>>>::new();
 
-    let eof_position_bytes = stream.get_eof_position()?;
+    let mut bitreader = BitReader::endian(bufreader, BigEndian);
+
+    // First try opening the file as a raw file, then try as a compressed file
+    let mut reader = match Decoder::new(Box::new(compression), &mut bitreader) {
+        Ok(reader) => reader,
+        Err(CodecError::WrongMagic) => {
+            bufreader = BufReader::new(File::open(file_path)?);
+            let compression = <CompressedInput as ReadCompression<BufReader<File>>>::new();
+            bitreader = BitReader::endian(bufreader, BigEndian);
+            Decoder::new(Box::new(compression), &mut bitreader)?
+        }
+        Err(e) => {
+            return Err(Box::new(e));
+        }
+    };
+
+    let first_event_position = reader.get_input_stream_position(&mut bitreader)?;
+
+    let eof_position_bytes = reader.get_eof_position(&mut bitreader)?;
     let file_size = Path::new(file_path).metadata()?.len();
-    let num_events = (eof_position_bytes - 1 - header_bytes as u64) / stream.event_size as u64;
-    let events_per_px = num_events / stream.plane.volume() as u64;
+
+    let meta = *reader.meta();
+
+    // TODO: Need a different mechanism for compressed files
+    let num_events = (eof_position_bytes - 1 - meta.header_size as u64) / meta.event_size as u64;
+    let events_per_px = num_events / meta.plane.volume() as u64;
 
     let stdout = io::stdout();
     let mut handle = io::BufWriter::new(stdout.lock());
 
     writeln!(handle, "Dimensions")?;
-    writeln!(handle, "\tWidth: {}", stream.plane.w())?;
-    writeln!(handle, "\tHeight: {}", stream.plane.h())?;
-    writeln!(handle, "\tColor channels: {}", stream.plane.c())?;
-    writeln!(handle, "Source camera: {}", stream.source_camera)?;
+    writeln!(handle, "\tWidth: {}", meta.plane.w())?;
+    writeln!(handle, "\tHeight: {}", meta.plane.h())?;
+    writeln!(handle, "\tColor channels: {}", meta.plane.c())?;
+    writeln!(handle, "Source camera: {:?}", meta.source_camera)?;
     writeln!(handle, "ADΔER transcoder parameters")?;
-    writeln!(handle, "\tCodec version: {}", stream.codec_version)?;
-    writeln!(handle, "\tTime mode: {}", stream.time_mode)?;
-    writeln!(handle, "\tTicks per second: {}", stream.tps)?;
+    writeln!(handle, "\tCodec version: {}", meta.codec_version)?;
+    writeln!(handle, "\tTime mode: {:?}", meta.time_mode)?;
+    writeln!(handle, "\tTicks per second: {}", meta.tps)?;
     writeln!(
         handle,
         "\tReference ticks per source interval: {}",
-        stream.ref_interval
+        meta.ref_interval
     )?;
-    writeln!(handle, "\tΔt_max: {}", stream.delta_t_max)?;
+    writeln!(handle, "\tΔt_max: {}", meta.delta_t_max)?;
     writeln!(handle, "File metadata")?;
     writeln!(handle, "\tFile size: {file_size}")?;
-    writeln!(handle, "\tHeader size: {header_bytes}")?;
+    writeln!(handle, "\tHeader size: {0}", meta.header_size)?;
     writeln!(handle, "\tADΔER event count: {num_events}")?;
     writeln!(handle, "\tEvents per pixel channel: {events_per_px}")?;
     handle.flush()?;
@@ -65,28 +90,28 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     // event, and what is the lowest intensity event?
     if args.dynamic_range {
         let divisor = num_events / 100;
-        stream.set_input_stream_position(first_event_position)?;
+        reader.set_input_stream_position(&mut bitreader, first_event_position)?;
         let mut max_intensity: Intensity = 0.0;
         let mut min_intensity: Intensity = f64::MAX;
         let mut event_count: u64 = 0;
 
         // Setup time tracker for AbsoluteT mode
         let mut data = Vec::new();
-        for _ in 0..stream.plane.volume() {
+        for _ in 0..meta.plane.volume() {
             let t = 0_u32;
             data.push(t);
         }
         let mut t_tree: Array3<DeltaT> = Array3::from_shape_vec(
             (
-                stream.plane.h_usize(),
-                stream.plane.w_usize(),
-                stream.plane.c_usize(),
+                meta.plane.h_usize(),
+                meta.plane.w_usize(),
+                meta.plane.c_usize(),
             ),
             data,
         )?;
 
-        while let Ok(mut event) = stream.decode_event() {
-            if stream.codec_version >= 2 && stream.time_mode == AbsoluteT {
+        while let Ok(mut event) = reader.digest_event(&mut bitreader) {
+            if meta.codec_version >= 2 && meta.time_mode == AbsoluteT {
                 let last_t = &mut t_tree[[
                     event.coord.y_usize(),
                     event.coord.x_usize(),
@@ -129,7 +154,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             }
         }
 
-        let theory_dr_ratio = D_SHIFT[D_SHIFT.len() - 1] as f64 / (1.0 / stream.delta_t_max as f64);
+        let theory_dr_ratio = D_SHIFT[D_SHIFT.len() - 1] as f64 / (1.0 / meta.delta_t_max as f64);
         let theory_dr_db = 10.0 * theory_dr_ratio.log10();
         let theory_dr_bits = theory_dr_ratio.log2();
         writeln!(handle, "\rDynamic range                       ")?;

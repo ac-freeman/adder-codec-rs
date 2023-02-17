@@ -1,6 +1,21 @@
 extern crate core;
 
 pub mod codec;
+pub use bitstream_io;
+
+use thiserror::Error;
+
+#[derive(Error, Debug)]
+pub enum PlaneError {
+    #[error(
+        "plane dimensions invalid. All must be positive. Found {width:?}, {height:?}, {channels:?}"
+    )]
+    InvalidPlane {
+        width: u16,
+        height: u16,
+        channels: u8,
+    },
+}
 
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
 pub enum SourceCamera {
@@ -27,7 +42,7 @@ pub enum TimeMode {
 }
 
 /// The size of the image plane in pixels
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub struct PlaneSize {
     width: u16,
     height: u16,
@@ -45,9 +60,13 @@ impl Default for PlaneSize {
 }
 
 impl PlaneSize {
-    pub fn new(width: u16, height: u16, channels: u8) -> Result<Self, String> {
+    pub fn new(width: u16, height: u16, channels: u8) -> Result<Self, PlaneError> {
         if width == 0 || height == 0 || channels == 0 {
-            return Err("PlaneSize must have positive width, height, and channels".to_string());
+            return Err(PlaneError::InvalidPlane {
+                width,
+                height,
+                channels,
+            });
         }
         Ok(Self {
             width,

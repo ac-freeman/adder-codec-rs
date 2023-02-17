@@ -1,14 +1,12 @@
-// use crate::codec::raw::stream::Raw;
-// use crate::codec::{Decoder, Encoder};
-// use crate::{DeltaT, Event, SourceCamera, TimeMode};
-// use ndarray::Array3;
-// use std::error::Error;
-// use std::io::{Seek, Write};
-//
-// pub fn absolute_event_to_dt_event(mut event: Event, last_t: DeltaT) -> Event {
-//     event.delta_t -= last_t;
-//     event
-// }
+use adder_codec_core::{DeltaT, Event};
+use ndarray::Array3;
+use std::error::Error;
+use std::io::{Seek, Write};
+
+pub fn absolute_event_to_dt_event(mut event: Event, last_t: DeltaT) -> Event {
+    event.delta_t -= last_t;
+    event
+}
 //
 // pub fn migrate_v2<W: Write + Seek>(
 //     mut input_stream: Raw<W>,

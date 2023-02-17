@@ -1,14 +1,13 @@
 use crate::codec::header::{Magic, MAGIC_RAW};
 use crate::codec::{CodecError, CodecMetadata, WriteCompression};
 use crate::Event;
-use std::io::Write;
 
 pub struct EmptyOutput {
     pub(crate) meta: CodecMetadata,
 }
 
 impl<W: std::io::Write> WriteCompression<W> for EmptyOutput {
-    fn new(meta: CodecMetadata, writer: W) -> Self {
+    fn new(meta: CodecMetadata, _writer: W) -> Self {
         Self { meta }
     }
 
@@ -24,7 +23,7 @@ impl<W: std::io::Write> WriteCompression<W> for EmptyOutput {
         &mut self.meta
     }
 
-    fn write_bytes(&mut self, bytes: &[u8]) -> std::io::Result<()> {
+    fn write_bytes(&mut self, _bytes: &[u8]) -> std::io::Result<()> {
         Ok(())
     }
 

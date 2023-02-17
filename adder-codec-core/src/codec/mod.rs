@@ -1,8 +1,8 @@
 use crate::codec::header::Magic;
 use crate::{DeltaT, Event, PlaneSize, SourceCamera, TimeMode};
 use bitstream_io::{BigEndian, BitReader};
+use std::io;
 use std::io::{Read, Write};
-use std::{fmt, io};
 
 pub mod compressed;
 pub mod decoder;
@@ -13,6 +13,7 @@ pub mod raw;
 
 pub const LATEST_CODEC_VERSION: u8 = 2;
 
+#[derive(Copy, Clone)]
 pub struct CodecMetadata {
     pub codec_version: u8,
     pub header_size: usize,
@@ -49,7 +50,6 @@ pub trait WriteCompression<W: Write> {
 
     fn magic(&self) -> Magic;
 
-    #[inline]
     fn meta(&self) -> &CodecMetadata;
 
     fn meta_mut(&mut self) -> &mut CodecMetadata;
@@ -81,7 +81,6 @@ pub trait ReadCompression<R: Read> {
 
     fn magic(&self) -> Magic;
 
-    #[inline]
     fn meta(&self) -> &CodecMetadata;
 
     fn meta_mut(&mut self) -> &mut CodecMetadata;
@@ -107,45 +106,37 @@ pub trait ReadCompression<R: Read> {
     // fn decompress(&self, data: &[u8]) -> Vec<u8>;
 }
 
-#[derive(Debug)]
+use thiserror::Error;
+
+#[derive(Error, Debug)]
 pub enum CodecError {
-    /// Stream has not been initialized
+    #[error("stream has not been initialized")]
     UnitializedStream,
 
-    /// Reached end of file when expected
+    #[error("Reached end of file when expected")]
     Eof,
 
-    /// Could not deserialize data. EOF reached at unexpected time.
+    #[error("Could not deserialize data. EOF reached at unexpected time.")]
     Deserialize,
 
-    /// File formatted incorrectly
+    #[error("File formatted incorrectly")]
     BadFile,
 
-    /// Attempted to seek to a bad position in the stream
+    #[error("File is of unexpected type (compressed or raw)")]
+    WrongMagic,
+
+    #[error("Attempted to seek to a bad position in the stream")]
     Seek,
 
-    /// Unsupported codec version
+    #[error("Unsupported codec version (expected {LATEST_CODEC_VERSION} or lower, found {0})")]
     UnsupportedVersion(u8),
 
-    /// Bincode error
-    BincodeError(bincode::Error),
-}
+    #[error("Bincode error")]
+    BincodeError(#[from] bincode::Error),
 
-impl fmt::Display for CodecError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        // write!(f, "Stream error")
-        write!(f, "{self:?}")
-    }
-}
+    #[error("IO error")]
+    IoError(#[from] io::Error),
 
-impl From<CodecError> for Box<dyn std::error::Error> {
-    fn from(value: CodecError) -> Self {
-        value.to_string().into()
-    }
-}
-
-impl From<Box<bincode::ErrorKind>> for CodecError {
-    fn from(value: Box<bincode::ErrorKind>) -> Self {
-        CodecError::BincodeError(value)
-    }
+    #[error("Plane error")]
+    PlaneError(#[from] crate::PlaneError),
 }
