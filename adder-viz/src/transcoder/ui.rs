@@ -15,7 +15,7 @@ use std::error::Error;
 use adder_codec_core::TimeMode;
 use std::default::Default;
 use std::fs::File;
-use std::io::{BufWriter, Write};
+use std::io::BufWriter;
 use std::path::PathBuf;
 
 pub struct ParamsUiState {

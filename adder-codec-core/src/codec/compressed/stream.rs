@@ -104,10 +104,12 @@ impl<R: Read> ReadCompression<R> for CompressedInput {
     //     reader.into_reader()
     // }
 
+    #[allow(unused_variables)]
     fn digest_event(&mut self, reader: &mut BitReader<R, BigEndian>) -> Result<Event, CodecError> {
         todo!()
     }
 
+    #[allow(unused_variables)]
     fn set_input_stream_position(
         &mut self,
         reader: &mut BitReader<R, BigEndian>,

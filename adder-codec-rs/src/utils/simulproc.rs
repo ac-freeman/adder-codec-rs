@@ -12,12 +12,11 @@ use std::cmp::max;
 use std::error::Error;
 use std::fs::File;
 use std::io;
-use std::io::{BufWriter, Seek, Write};
+use std::io::{BufWriter, Write};
 
 use adder_codec_core::SourceCamera::FramedU8;
 use adder_codec_core::SourceType::U8;
 use adder_codec_core::{Event, TimeMode};
-use bitstream_io::BitWrite;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::time::Instant;
 

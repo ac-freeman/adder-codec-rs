@@ -2,8 +2,6 @@ mod player;
 mod transcoder;
 mod utils;
 
-use std::fs::File;
-use std::io::{BufWriter, Write};
 use std::ops::RangeInclusive;
 
 use crate::player::ui::PlayerState;

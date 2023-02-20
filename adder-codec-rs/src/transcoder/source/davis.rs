@@ -19,11 +19,10 @@ use rayon::iter::IntoParallelIterator;
 use rayon::{current_num_threads, ThreadPool};
 use std::cmp::max;
 use std::error::Error;
-use std::io::{Seek, Write};
+use std::io::Write;
 
 use adder_codec_core::codec::CodecError;
 use adder_codec_core::{Event, PlaneSize, SourceCamera, SourceType, TimeMode};
-use bitstream_io::BitWrite;
 use std::time::Instant;
 
 use crate::framer::scale_intensity::FrameValue;

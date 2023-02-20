@@ -5,13 +5,12 @@ use crate::transcoder::source::video::SourceError::BufferEmpty;
 use crate::transcoder::source::video::Video;
 use crate::transcoder::source::video::{Source, VideoBuilder};
 use adder_codec_core::{Coord, Event, PlaneSize, SourceCamera, TimeMode};
-use bitstream_io::BitWrite;
 use opencv::core::{Mat, Size};
 use opencv::videoio::{VideoCapture, CAP_PROP_FPS, CAP_PROP_FRAME_COUNT, CAP_PROP_POS_FRAMES};
 use opencv::{imgproc, prelude::*, videoio, Result};
 use rayon::ThreadPool;
 use std::error::Error;
-use std::io::{Seek, Write};
+use std::io::Write;
 use std::mem::swap;
 
 #[derive(Debug, Copy, Clone)]

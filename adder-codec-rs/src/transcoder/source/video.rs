@@ -1,8 +1,7 @@
 use opencv::core::{Mat, Size, CV_8U, CV_8UC3};
 use std::error::Error;
 use std::fmt;
-use std::fs::File;
-use std::io::{BufWriter, Seek, Write};
+use std::io::Write;
 use std::mem::swap;
 
 use adder_codec_core::codec::empty::stream::EmptyOutput;
@@ -10,12 +9,10 @@ use adder_codec_core::codec::encoder::Encoder;
 use adder_codec_core::codec::raw::stream::RawOutput;
 use adder_codec_core::codec::{CodecError, CodecMetadata, WriteCompression, LATEST_CODEC_VERSION};
 use adder_codec_core::{Coord, Event, PlaneSize, SourceCamera, SourceType, TimeMode};
-use bitstream_io::BitWrite;
 use bumpalo::Bump;
-use std::path::Path;
 use std::sync::mpsc::{channel, Sender};
 
-use adder_codec_core::{codec, D};
+use adder_codec_core::D;
 use opencv::highgui;
 use opencv::imgproc::resize;
 use opencv::prelude::*;
@@ -340,7 +337,7 @@ impl<W: Write + 'static> Video<W> {
             },
             write,
         );
-        let mut encoder: Encoder<_> = Encoder::new(Box::new(compression));
+        let encoder: Encoder<_> = Encoder::new(Box::new(compression));
         self.encoder = encoder;
 
         self.event_pixel_trees.par_map_inplace(|px| {

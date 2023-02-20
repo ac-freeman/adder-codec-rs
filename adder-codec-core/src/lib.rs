@@ -449,7 +449,7 @@ pub fn open_file_decoder(
     let mut bitreader = BitReader::endian(bufreader, BigEndian);
 
     // First try opening the file as a raw file, then try as a compressed file
-    let mut stream = match Decoder::new(Box::new(compression), &mut bitreader) {
+    let stream = match Decoder::new(Box::new(compression), &mut bitreader) {
         Ok(reader) => reader,
         Err(CodecError::WrongMagic) => {
             bufreader = BufReader::new(File::open(file_path)?);

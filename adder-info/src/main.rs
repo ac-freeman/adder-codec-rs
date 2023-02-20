@@ -1,17 +1,10 @@
-use adder_codec_core::bitstream_io::{BigEndian, BitReader};
-use adder_codec_core::codec::compressed::stream::CompressedInput;
-use adder_codec_core::codec::decoder::Decoder;
-use adder_codec_core::codec::raw::stream::RawInput;
-use adder_codec_core::codec::{CodecError, ReadCompression};
-use adder_codec_core::open_file_decoder;
-use adder_codec_core::TimeMode::AbsoluteT;
-use adder_codec_core::{DeltaT, Intensity, D_EMPTY, D_SHIFT, D_ZERO_INTEGRATION};
+use crate::TimeMode::AbsoluteT;
+use adder_codec_core::*;
 use adder_codec_rs::framer::scale_intensity::event_to_intensity;
 use adder_codec_rs::utils::stream_migration::absolute_event_to_dt_event;
 use clap::Parser;
 use ndarray::Array3;
-use std::fs::File;
-use std::io::{BufReader, Write};
+use std::io::Write;
 use std::path::Path;
 use std::{error, io};
 

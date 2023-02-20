@@ -4,10 +4,9 @@ use adder_codec_core::DeltaT;
 use adder_codec_rs::transcoder::source::davis::Davis;
 use adder_codec_rs::transcoder::source::framed::Framed;
 use bevy::prelude::Image;
-use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
 use std::fmt;
 use std::fs::File;
-use std::io::{BufWriter, Write};
+use std::io::BufWriter;
 use std::path::{Path, PathBuf};
 
 use adder_codec_rs::transcoder::source::davis::TranscoderMode;

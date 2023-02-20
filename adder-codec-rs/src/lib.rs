@@ -1,5 +1,3 @@
-use crate::framer::driver::EventCoordless;
-
 pub mod codec;
 pub mod framer;
 

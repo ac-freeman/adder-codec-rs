@@ -1,8 +1,7 @@
 use crate::player::ui::ReconstructionMethod;
 use adder_codec_core::bitstream_io::{BigEndian, BitReader};
 use adder_codec_core::codec::decoder::Decoder;
-use adder_codec_core::{open_file_decoder, SourceCamera};
-use adder_codec_core::{DeltaT, D_ZERO_INTEGRATION};
+use adder_codec_core::*;
 use adder_codec_rs::framer::driver::FramerMode::INSTANTANEOUS;
 use adder_codec_rs::framer::driver::{FrameSequence, Framer, FramerBuilder};
 use adder_codec_rs::framer::scale_intensity::event_to_intensity;
@@ -72,7 +71,7 @@ impl AdderPlayer {
                 None => Err(Box::new(AdderPlayerError("Invalid file type".into()))),
                 Some("adder") => {
                     let input_path = path_buf.to_str().expect("Invalid string").to_string();
-                    let (mut stream, mut bitreader) = open_file_decoder(&input_path)?;
+                    let (stream, bitreader) = open_file_decoder(&input_path)?;
 
                     let meta = *stream.meta();
                     let mut reconstructed_frame_rate = (meta.tps / meta.ref_interval) as f64;
