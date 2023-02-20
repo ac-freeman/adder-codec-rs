@@ -391,8 +391,7 @@ mod tests {
         let output = setup_encoded_raw(2);
         let tmp = Cursor::new(&*output);
         let bufreader = BufReader::new(tmp);
-        let "
-        compression = <RawInput as ReadCompression<BufReader<Cursor<&[u8]>>>>::new();
+        let compression = <RawInput as ReadCompression<BufReader<Cursor<&[u8]>>>>::new();
 
         let mut bitreader = BitReader::endian(bufreader, BigEndian);
         let mut reader = Decoder::new(Box::new(compression), &mut bitreader).unwrap();

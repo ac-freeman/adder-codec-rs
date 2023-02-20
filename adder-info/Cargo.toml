@@ -1,6 +1,6 @@
 [package]
 name = "adder-info"
-version = "0.1.2"
+version = "0.2.0"
 edition = "2021"
 authors = ["Andrew C. Freeman"]
 description = """
@@ -15,7 +15,7 @@ categories = ["multimedia::encoding", "multimedia::video", "science"]
 
 [dependencies]
 adder-codec-core = { version = "0.1.0", path = "../adder-codec-core" }
-adder-codec-rs = { version = "0.2.5", path = "../adder-codec-rs", features = [
+adder-codec-rs = { version = "0.3.0", path = "../adder-codec-rs", features = [
     "transcoder",
 ] }
 clap = { version = "4.0.17", features = ["derive"] }
