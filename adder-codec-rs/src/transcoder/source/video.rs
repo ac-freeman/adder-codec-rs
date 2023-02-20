@@ -33,39 +33,51 @@ use thiserror::Error;
 /// Various errors that can occur during an ADΔER transcode
 #[derive(Error, Debug)]
 pub enum SourceError {
+    /// Could not open source file
     #[error("Could not open source file")]
     Open,
 
-    #[error("ADDER parameters are invalid for the given source: {0}")]
+    /// Incorrect parameters for the given source
+    #[error("ADDER parameters are invalid for the given source: `{0}`")]
     BadParams(String),
 
-    #[error("When a [Framed](crate::transcoder::source::framed::Framed) source is used, but the start frame is out of bounds")]
-    StartOutOfBounds,
+    /// When a [Framed](crate::transcoder::source::framed::Framed) source is used, but the start frame is out of bounds"
+    #[error("start frame `{0}` is out of bounds")]
+    StartOutOfBounds(u32),
 
+    /// No more data to consume from the video source
     #[error("Source buffer is empty")]
     BufferEmpty,
 
+    /// Source buffer channel is closed
     #[error("Source buffer channel is closed")]
     BufferChannelClosed,
 
+    /// No data from next spot in buffer
     #[error("No data from next spot in buffer")]
     NoData,
 
+    /// Data not initialized
     #[error("Data not initialized")]
     UninitializedData,
 
+    /// OpenCV error
     #[error("OpenCV error")]
     OpencvError(opencv::Error),
 
+    /// Codec error
     #[error("Codec core error")]
     CodecError(CodecError),
 
+    /// EDI error
     #[error("EDI error")]
     EdiError(ReconstructionError),
 
+    /// Shape error
     #[error("Shape error")]
     ShapeError(#[from] ShapeError),
 
+    /// Plane error
     #[error("Plane error")]
     PlaneError(#[from] PlaneError),
 }

@@ -12,28 +12,33 @@ use std::error::Error;
 use std::io::Write;
 use std::mem::swap;
 
-#[derive(Debug, Copy, Clone)]
-#[repr(C)]
-pub struct IndirectCoord {
-    pub(crate) forward: Coord,
-    pub(crate) reverse: Coord,
-}
-
 /// Attributes of a framed video -> ADΔER transcode
 pub struct Framed<W: Write + 'static> {
     cap: VideoCapture,
     pub(crate) input_frame_scaled: Mat,
     pub(crate) input_frame: Mat,
+
+    /// Index of the first frame to be read from the input video
     pub frame_idx_start: u32,
+
+    /// FPS of the input video. Set automatically by `Framed::new()`
     pub source_fps: f64,
+
+    /// Scale of the input video. Input frames are resized to this scale before transcoding.
     pub scale: f64,
+
+    /// Whether the input video is color
     color_input: bool,
+
     pub(crate) video: Video<W>,
+
+    /// Time mode of the source
     pub time_mode: TimeMode,
 }
 unsafe impl<W: Write> Sync for Framed<W> {}
 
 impl<W: Write + 'static> Framed<W> {
+    /// Create a new `Framed` source
     pub fn new(
         input_filename: String,
         color_input: bool,
@@ -85,15 +90,11 @@ impl<W: Write + 'static> Framed<W> {
         })
     }
 
-    // pub fn skip_interval(mut self, frame_skip_interval: u8) -> Self {
-    //     self.frame_skip_interval = frame_skip_interval;
-    //     self
-    // }
-
+    /// Set the start frame of the source
     pub fn frame_start(mut self, frame_idx_start: u32) -> Result<Self, SourceError> {
         let video_frame_count = self.cap.get(CAP_PROP_FRAME_COUNT)?;
         if frame_idx_start >= video_frame_count as u32 {
-            return Err(SourceError::StartOutOfBounds.into());
+            return Err(SourceError::StartOutOfBounds(frame_idx_start));
         };
         self.cap
             .set(CAP_PROP_POS_FRAMES, f64::from(frame_idx_start))?;
@@ -101,6 +102,7 @@ impl<W: Write + 'static> Framed<W> {
         Ok(self)
     }
 
+    /// Set the [`TimeMode`](adder_codec_core::TimeMode) for the source
     pub fn time_mode(mut self, time_mode: TimeMode) -> Self {
         self.time_mode = time_mode;
         self

@@ -10,6 +10,7 @@ use std::io::BufReader;
 
 use thiserror::Error;
 
+/// Error type for the `PlaneSize` struct
 #[derive(Error, Debug)]
 pub enum PlaneError {
     #[error(
