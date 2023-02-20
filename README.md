@@ -12,7 +12,8 @@ Source 8-bit image frame with shadows boosted ([source video](https://www.pexels
 ![](https://github.com/ac-freeman/adder-codec-rs/blob/main/adder-codec-rs/source_frame_0.jpg)  |  ![](https://github.com/ac-freeman/adder-codec-rs/blob/main/adder-codec-rs/out_16bit_2_c10.jpg)
 
 ## Included crates
-- **adder-codec-rs**: the ADΔER library [[source](https://github.com/ac-freeman/adder-codec-rs/tree/main/adder-codec-rs)] [![Crates.io](https://img.shields.io/crates/v/adder-codec-rs)](https://crates.io/crates/adder-codec-rs)
+- **adder-codec-rs**: ADΔER transcoders [[source](https://github.com/ac-freeman/adder-codec-rs/tree/main/adder-codec-rs)] [![Crates.io](https://img.shields.io/crates/v/adder-codec-rs)](https://crates.io/crates/adder-codec-rs)
+- **adder-codec-core**: core library [[source](https://github.com/ac-freeman/adder-codec-rs/tree/main/adder-codec-core)] [![Crates.io](https://img.shields.io/crates/v/adder-codec-core)](https://crates.io/crates/adder-codec-core)
 - **adder-info**: tool for reading metadata of a .adder file [[source](https://github.com/ac-freeman/adder-codec-rs/tree/main/adder-info)] [![Crates.io](https://img.shields.io/crates/v/adder-info)](https://crates.io/crates/adder-info)
 - **adder-to-dvs**: tool for quickly converting a .adder file to a reasonable DVS representation in a text format [[source](https://github.com/ac-freeman/adder-codec-rs/tree/main/adder-to-dvs)] [![Crates.io](https://img.shields.io/crates/v/adder-to-dvs)](https://crates.io/crates/adder-to-dvs)
 - **adder-viz**: GUI application for transcoding framed and event (DVS/DAVIS) video to ADΔER, playing back .adder files, and visualizing the _many_ available ADΔER parameters [[source](https://github.com/ac-freeman/adder-codec-rs/tree/main/adder-viz)] [![Crates.io](https://img.shields.io/crates/v/adder-viz)](https://crates.io/crates/adder-viz)

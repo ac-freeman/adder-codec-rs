@@ -1,8 +1,16 @@
 [package]
 name = "adder-codec-core"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
-
+authors = ["Andrew C. Freeman"]
+description = """Core library for encoding/decoding ADΔER events
+ """
+homepage = "https://github.com/ac-freeman/adder-codec-rs/wiki"
+repository = "https://github.com/ac-freeman/adder-codec-rs/tree/main/adder-codec-core"
+readme = "README.md"
+license = "MIT OR Apache-2.0"
+keywords = ["neuromorphic", "decoding", "event", "asynchronous", "video"]
+categories = ["multimedia::encoding", "multimedia::video", "science"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]

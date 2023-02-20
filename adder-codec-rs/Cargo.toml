@@ -26,7 +26,7 @@ docs-only = ["opencv/docs-only", "dep:fast-math"]
 
 [dependencies]
 aedat = "1.2.7"
-adder-codec-core = { path = "../adder-codec-core" }
+adder-codec-core = { path = "../adder-codec-core", version = "0.1.0"}
 bincode = "1.3.3"
 bitvec = "1.0.1"
 bumpalo = "3.11.0"
