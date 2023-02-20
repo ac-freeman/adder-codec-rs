@@ -688,7 +688,7 @@ fn ingest_event_for_chunk<
         *running_ts_ref += u64::from(event.delta_t);
     }
 
-    if ((*running_ts_ref - 1) as i64 / i64::from(state.tpf)) > *last_filled_frame_ref {
+    if ((running_ts_ref.saturating_sub(1)) as i64 / i64::from(state.tpf)) > *last_filled_frame_ref {
         // Set the frame's value from the event
 
         if event.d != D_EMPTY {
@@ -710,7 +710,7 @@ fn ingest_event_for_chunk<
                 state.view_mode,
             );
         }
-        *last_filled_frame_ref = (*running_ts_ref - 1) as i64 / i64::from(state.tpf);
+        *last_filled_frame_ref = (running_ts_ref.saturating_sub(1)) as i64 / i64::from(state.tpf);
 
         // Grow the frames vec if necessary
         match *last_filled_frame_ref - *frame_idx_offset {

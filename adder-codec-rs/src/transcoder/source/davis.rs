@@ -215,6 +215,9 @@ impl<W: Write + 'static> Davis<W> {
                             let delta_t_micro = event.t()
                                 - dvs_last_timestamps_chunk
                                     [[event.y() as usize % chunk_rows, event.x() as usize, 0]];
+                            if delta_t_micro == event.t() {
+                                continue;
+                            }
                             let ticks_per_micro = self.video.state.tps as f32 / 1e6;
                             let delta_t_ticks = delta_t_micro as f32 * ticks_per_micro;
                             if delta_t_ticks <= 0.0 {
@@ -346,6 +349,10 @@ impl<W: Write + 'static> Davis<W> {
 
                     let delta_t_micro = start_of_frame_timestamp
                         - self.dvs_last_timestamps[[px.coord.y as usize, px.coord.x as usize, 0]];
+
+                    if delta_t_micro == start_of_frame_timestamp {
+                        continue;
+                    }
 
                     let delta_t_ticks = delta_t_micro as f32 * ticks_per_micro;
                     if delta_t_ticks <= 0.0 {
