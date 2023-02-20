@@ -2,6 +2,7 @@ use arithmetic_coding::{Decoder, Encoder};
 use bitstream_io::{BigEndian, BitReader, BitWrite, BitWriter};
 use std::cmp::{max, min};
 
+use adder_codec_core::{DeltaT, D};
 use std::io::{BufReader, BufWriter};
 
 // Intra-coding a block:
@@ -20,7 +21,6 @@ use crate::codec::compressed::blocks::{Block, ZigZag, ZIGZAG_ORDER};
 use crate::codec::compressed::fenwick::{context_switching::FenwickModel, Weights};
 
 use crate::framer::driver::EventCoordless;
-use crate::{DeltaT, D};
 
 pub type DResidual = i16;
 pub type DeltaTResidual = i64;

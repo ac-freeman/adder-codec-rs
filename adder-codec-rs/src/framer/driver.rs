@@ -1,5 +1,4 @@
 use crate::framer::scale_intensity::FrameValue;
-use crate::{BigT, DeltaT, D, D_EMPTY};
 use bincode::config::{BigEndian, FixintEncoding, WithOtherEndian, WithOtherIntEncoding};
 use bincode::{DefaultOptions, Options};
 use rayon::iter::ParallelIterator;
@@ -8,7 +7,9 @@ use std::collections::VecDeque;
 use std::error::Error;
 use std::fmt;
 
-use adder_codec_core::{Event, PlaneSize, SourceCamera, SourceType, TimeMode};
+use adder_codec_core::{
+    BigT, DeltaT, Event, PlaneSize, SourceCamera, SourceType, TimeMode, D, D_EMPTY,
+};
 use std::fs::File;
 use std::io::BufWriter;
 use std::ops::Add;

@@ -1,6 +1,6 @@
+use crate::framer::driver::EventCoordless;
 use crate::transcoder::source::video::FramedViewMode;
-use crate::{DeltaT, EventCoordless, Intensity, D_SHIFT};
-use adder_codec_core::{Event, SourceType};
+use adder_codec_core::{DeltaT, Event, Intensity, SourceType, D_SHIFT};
 
 pub trait FrameValue {
     type Output;

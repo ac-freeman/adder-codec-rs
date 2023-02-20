@@ -1,5 +1,5 @@
 use crate::transcoder::event_pixel_tree::{DeltaT, D};
-use crate::D_MAX;
+use adder_codec_core::D_MAX;
 use std::cmp::min;
 
 #[allow(dead_code)]
@@ -189,7 +189,7 @@ impl DControl for Aggressive {
             if *d < D_MAX && delta_t << 1 <= self.ref_time {
                 *d += 1;
             } else if *d > 0 && delta_t > self.ref_time {
-                *d = crate::D_START;
+                *d = adder_codec_core::D_START;
             }
         } else if *d < D_MAX
             && (delta_t << 1) as f32 <= (delta_t_max / u32::from(self.roi_factor)) as f32 * 0.8

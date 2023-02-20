@@ -4,7 +4,7 @@ use crate::framer::scale_intensity;
 use crate::framer::scale_intensity::FrameValue;
 use crate::transcoder::source::framed::Framed;
 use crate::transcoder::source::video::Source;
-use crate::DeltaT;
+use adder_codec_core::DeltaT;
 use clap::Parser;
 use rayon::ThreadPool;
 use serde::Serialize;

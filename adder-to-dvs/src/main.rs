@@ -1,5 +1,5 @@
 use adder_codec_core::{open_file_decoder, Event};
-use adder_codec_rs::{D_SHIFT, D_ZERO_INTEGRATION};
+use adder_codec_core::{D_SHIFT, D_ZERO_INTEGRATION};
 use std::cmp::max;
 use std::collections::VecDeque;
 use std::error::Error;

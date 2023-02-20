@@ -15,7 +15,7 @@ use bumpalo::Bump;
 use std::path::Path;
 use std::sync::mpsc::{channel, Sender};
 
-use crate::{codec, D};
+use adder_codec_core::{codec, D};
 use opencv::highgui;
 use opencv::imgproc::resize;
 use opencv::prelude::*;

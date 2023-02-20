@@ -7,10 +7,10 @@ use davis_edi_rs::Args as EdiArgs;
 
 use serde::Deserialize;
 
+use adder_codec_core::DeltaT;
 use adder_codec_core::SourceCamera::DavisU8;
 use adder_codec_core::TimeMode;
 use adder_codec_rs::transcoder::source::davis::TranscoderMode::{Framed, RawDavis, RawDvs};
-use adder_codec_rs::DeltaT;
 use std::io::Write;
 use std::time::Instant;
 use std::{error, io};

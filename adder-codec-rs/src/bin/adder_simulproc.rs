@@ -131,12 +131,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
 #[cfg(test)]
 mod tests {
+    use adder_codec_core::DeltaT;
     use adder_codec_core::SourceCamera::FramedU8;
     use adder_codec_core::TimeMode;
     use adder_codec_rs::transcoder::source::framed::Framed;
     use adder_codec_rs::transcoder::source::video::{Source, VideoBuilder};
     use adder_codec_rs::utils::simulproc::{SimulProcArgs, SimulProcessor};
-    use adder_codec_rs::DeltaT;
     use std::error::Error;
     use std::fs;
     use std::fs::File;

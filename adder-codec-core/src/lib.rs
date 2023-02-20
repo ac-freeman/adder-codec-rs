@@ -134,6 +134,7 @@ impl PlaneSize {
     }
 }
 
+/// Decimation value; a pixel's sensitivity.
 pub type D = u8;
 
 /// The maximum possible [`D`] value
