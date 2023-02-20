@@ -13,6 +13,7 @@ use bincode::config::{FixintEncoding, WithOtherEndian, WithOtherIntEncoding};
 use bincode::{DefaultOptions, Options};
 use bitstream_io::{BigEndian, BitRead, BitReader};
 
+/// Struct for decoding [`Event`]s from a stream
 pub struct Decoder<R> {
     compression: Box<dyn ReadCompression<R>>,
     bincode: WithOtherEndian<
@@ -23,6 +24,7 @@ pub struct Decoder<R> {
 
 #[allow(dead_code)]
 impl<R: Read + Seek> Decoder<R> {
+    /// Create a new decoder with the given compression scheme
     pub fn new(
         compression: Box<dyn ReadCompression<R>>,
         reader: &mut BitReader<R, BigEndian>,
@@ -40,16 +42,19 @@ impl<R: Read + Seek> Decoder<R> {
         Ok(decoder)
     }
 
+    /// Returns a reference to the metadata of the underlying compression scheme
     #[inline]
     pub fn meta(&self) -> &CodecMetadata {
         self.compression.meta()
     }
 
+    /// Returns a mutable reference to the metadata of the underlying compression scheme
     #[inline]
     pub fn meta_mut(&mut self) -> &mut CodecMetadata {
         self.compression.meta_mut()
     }
 
+    /// Get the source data representation, based on the source camera
     #[allow(clippy::match_same_arms)]
     pub fn get_source_type(&self) -> SourceType {
         match self.compression.meta().source_camera {
@@ -66,6 +71,7 @@ impl<R: Read + Seek> Decoder<R> {
         }
     }
 
+    /// Decode the header and its extensions
     fn decode_header(&mut self, reader: &mut BitReader<R, BigEndian>) -> Result<usize, CodecError> {
         let header_size = bincode::serialized_size(&EventStreamHeader::default())?;
         let mut buffer: Vec<u8> = vec![0; header_size as usize];
@@ -103,43 +109,6 @@ impl<R: Read + Seek> Decoder<R> {
         }
         self.decode_header_extension(reader)?;
         Ok(self.compression.meta().header_size)
-
-        // match &mut self.input_stream {
-        //     None => Err(Error::UnitializedStream.into()),
-        //     Some(stream) => {
-        //         let header = match self
-        //             .bincode
-        //             .deserialize_from::<_, EventStreamHeader>(stream.get_mut())
-        //         {
-        //             Ok(header) => header,
-        //             Err(_) => return Err(Deserialize.into()),
-        //         };
-        //
-        //         self.codec_version = header.version;
-        //
-        //         self.plane = match PlaneSize::new(header.width, header.height, header.channels) {
-        //             Ok(a) => a,
-        //             Err(_) => {
-        //                 return Err(Error::BadFile.into());
-        //             }
-        //         };
-        //
-        //         self.tps = header.tps;
-        //         self.ref_interval = header.ref_interval;
-        //         self.delta_t_max = header.delta_t_max;
-        //         self.event_size = header.event_size;
-        //
-        //         match header.magic {
-        //             MAGIC_RAW => {}
-        //             _ => return Err(Error::BadFile.into()),
-        //         };
-        //
-        //         decode_header_extension(self)?;
-        //         self.header_size = self.get_input_stream_position()? as usize;
-        //
-        //         Ok(self.header_size)
-        //     }
-        // }
     }
 
     fn decode_header_extension(
@@ -188,6 +157,7 @@ impl<R: Read + Seek> Decoder<R> {
         Err(CodecError::UnsupportedVersion(codec_version))
     }
 
+    /// Read and decode the next event from the input stream
     #[inline]
     pub fn digest_event(
         &mut self,
@@ -196,6 +166,7 @@ impl<R: Read + Seek> Decoder<R> {
         self.compression.digest_event(reader)
     }
 
+    /// Sets the input stream position to the given absolute byte position
     pub fn set_input_stream_position(
         &mut self,
         reader: &mut BitReader<R, BigEndian>,

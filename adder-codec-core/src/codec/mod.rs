@@ -6,15 +6,29 @@ use bitstream_io::{BigEndian, BitReader};
 use std::io;
 use std::io::{Read, Write};
 
+/// Compressed codec utilities
 pub mod compressed;
+
+/// ADΔER stream decoder
 pub mod decoder;
+
+/// Filler for when generated ADΔER events need not be captured
 pub mod empty;
+
+/// ADΔER stream encoder
 pub mod encoder;
 mod header;
+
+/// Raw codec utilities
 pub mod raw;
 
+/// Current latest version of the codec.
+///
+/// This is the version which will be written to the header.
 pub const LATEST_CODEC_VERSION: u8 = 2;
 
+/// The metadata which stays the same over the course of an ADΔER stream
+#[allow(missing_docs)]
 #[derive(Copy, Clone)]
 pub struct CodecMetadata {
     pub codec_version: u8,
@@ -44,20 +58,26 @@ impl Default for CodecMetadata {
     }
 }
 
+/// A trait for writing ADΔER data to a stream.
 pub trait WriteCompression<W: Write> {
     /// A struct implementing `WriteCompression` should take ownership of the `writer`.
     fn new(meta: CodecMetadata, writer: W) -> Self
     where
         Self: Sized;
 
+    /// The magic number for this compression format.
     fn magic(&self) -> Magic;
 
+    /// Returns a reference to the metadata
     fn meta(&self) -> &CodecMetadata;
 
+    /// Returns a mutable reference to the metadata
     fn meta_mut(&mut self) -> &mut CodecMetadata;
 
+    /// Write the given bytes to the stream
     fn write_bytes(&mut self, bytes: &[u8]) -> io::Result<()>;
 
+    /// Align the bitstream to the next byte boundary
     fn byte_align(&mut self) -> io::Result<()>;
 
     /// Consumes the compression stream and returns the underlying writer.
@@ -66,6 +86,7 @@ pub trait WriteCompression<W: Write> {
     /// Flush the `BitWriter`. Does not flush the internal `BufWriter`.
     fn flush_writer(&mut self) -> io::Result<()>;
 
+    /// Compress the given bytes.
     fn compress(&self, data: &[u8]) -> Vec<u8>;
 
     /// Take in an event and process it. May or may not write to the output, depending on the state
@@ -73,6 +94,7 @@ pub trait WriteCompression<W: Write> {
     fn ingest_event(&mut self, event: &Event) -> Result<(), CodecError>;
 }
 
+/// A trait for reading ADΔER data from a stream.
 pub trait ReadCompression<R: Read> {
     /// A struct implementing `ReadCompression` does not take ownership of the read handle.
     /// Subsequent calls to the compressor will pass the read handle each time. The caller is
@@ -81,12 +103,16 @@ pub trait ReadCompression<R: Read> {
     where
         Self: Sized;
 
+    /// Returns the magic number for the codec
     fn magic(&self) -> Magic;
 
+    /// Returns a reference to the metadata
     fn meta(&self) -> &CodecMetadata;
 
+    /// Returns a mutable reference to the metadata
     fn meta_mut(&mut self) -> &mut CodecMetadata;
 
+    /// Read a certain number of bytes from the stream, indicated by the size of the buffer passed.
     fn read_bytes(
         &mut self,
         bytes: &mut [u8],
@@ -94,6 +120,7 @@ pub trait ReadCompression<R: Read> {
     ) -> io::Result<()>;
     // fn into_reader(self: Box<Self>, reader: &mut BitReader<R, BigEndian>) -> R;
 
+    /// Read the next event from the stream. Returns `None` if the stream is exhausted.
     fn digest_event(&mut self, reader: &mut BitReader<R, BigEndian>) -> Result<Event, CodecError>;
 
     /// Set the input stream position to the given byte offset.
@@ -112,6 +139,7 @@ pub trait ReadCompression<R: Read> {
 
 use thiserror::Error;
 
+#[allow(missing_docs)]
 #[derive(Error, Debug)]
 pub enum CodecError {
     #[error("stream has not been initialized")]

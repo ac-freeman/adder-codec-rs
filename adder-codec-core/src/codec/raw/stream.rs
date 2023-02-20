@@ -6,6 +6,7 @@ use bincode::{DefaultOptions, Options};
 use bitstream_io::{BigEndian, BitRead, BitReader};
 use std::io::{Read, Seek, SeekFrom, Write};
 
+/// Write uncompressed (raw) ADΔER data to a stream.
 pub struct RawOutput<W> {
     pub(crate) meta: CodecMetadata,
     pub(crate) bincode: WithOtherEndian<
@@ -15,6 +16,7 @@ pub struct RawOutput<W> {
     pub(crate) stream: W,
 }
 
+/// Read uncompressed (raw) ADΔER data from a stream.
 pub struct RawInput {
     pub(crate) meta: CodecMetadata,
     pub(crate) bincode: WithOtherEndian<
@@ -154,7 +156,7 @@ impl<R: Read + Seek> ReadCompression<R> for RawInput {
             }
         };
 
-        if event.coord.y == EOF_PX_ADDRESS && event.coord.x == EOF_PX_ADDRESS {
+        if event.coord.is_eof() {
             return Err(CodecError::Eof);
         }
         Ok(event)

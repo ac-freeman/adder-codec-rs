@@ -2,6 +2,7 @@ use crate::codec::header::{Magic, MAGIC_RAW};
 use crate::codec::{CodecError, CodecMetadata, WriteCompression};
 use crate::Event;
 
+/// Filler for when generated ADΔER events need not be captured
 pub struct EmptyOutput {
     pub(crate) meta: CodecMetadata,
 }

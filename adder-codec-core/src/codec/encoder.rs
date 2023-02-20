@@ -13,6 +13,7 @@ use crate::SourceType::U8;
 use bincode::config::{FixintEncoding, WithOtherEndian, WithOtherIntEncoding};
 use bincode::{DefaultOptions, Options};
 
+/// Struct for encoding [`Event`]s to a stream
 pub struct Encoder<W> {
     compression: Box<dyn WriteCompression<W>>,
     bincode: WithOtherEndian<
@@ -23,6 +24,7 @@ pub struct Encoder<W> {
 
 #[allow(dead_code)]
 impl<W: Write> Encoder<W> {
+    /// Create a new [`Encoder`] with the given compression scheme
     pub fn new(compression: Box<dyn WriteCompression<W>>) -> Self
     where
         Self: Sized,
@@ -37,6 +39,7 @@ impl<W: Write> Encoder<W> {
         encoder
     }
 
+    /// Returns a reference to the metadata of the underlying compression scheme
     #[inline]
     pub fn meta(&self) -> &CodecMetadata {
         self.compression.meta()
@@ -86,11 +89,7 @@ impl<W: Write> Encoder<W> {
         Ok(writer)
     }
 
-    /// Encode the header for this [`Raw`]. If an [`input_stream`] is open for this struct
-    /// already, then it is dropped. Intended usage is to create a separate [`Raw`] if you
-    /// want to read and write two streams at once (for example, if you are cropping the spatial
-    /// pixels of a stream, reducing the number of channels, or scaling the [`DeltaT`] values in
-    /// some way).
+    /// Encode the header and its extensions.
     fn encode_header(&mut self) -> Result<(), CodecError> {
         let mut buffer: Vec<u8> = Vec::new();
         let meta = self.compression.meta();
@@ -142,10 +141,12 @@ impl<W: Write> Encoder<W> {
         Err(CodecError::BadFile)
     }
 
+    /// Ingest an event
     pub fn ingest_event(&mut self, event: &Event) -> Result<(), CodecError> {
         self.compression.ingest_event(event)
     }
 
+    /// Ingest an array of events
     pub fn ingest_events(&mut self, events: &[Event]) -> Result<(), CodecError> {
         for event in events {
             self.ingest_event(event)?;
@@ -153,6 +154,7 @@ impl<W: Write> Encoder<W> {
         Ok(())
     }
 
+    /// Ingest a vector of an array of events
     pub fn ingest_events_events(&mut self, events: &[Vec<Event>]) -> Result<(), CodecError> {
         for v in events {
             self.ingest_events(v)?;

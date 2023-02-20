@@ -1,16 +1,22 @@
 #![warn(missing_docs)]
-extern crate core;
 
+//! # adder-codec-core
+//!
+//! The core types and utilities for encoding and decoding ADΔER events
+
+/// Expose public API for encoding and decoding
 pub mod codec;
 
 pub use bitstream_io;
 use bitstream_io::{BigEndian, BitReader};
 use std::fs::File;
 use std::io::BufReader;
+use std::ops::Add;
 
 use thiserror::Error;
 
 /// Error type for the `PlaneSize` struct
+#[allow(missing_docs)]
 #[derive(Error, Debug)]
 pub enum PlaneError {
     #[error(
@@ -23,6 +29,7 @@ pub enum PlaneError {
     },
 }
 
+#[allow(missing_docs)]
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
 pub enum SourceCamera {
     #[default]
@@ -44,11 +51,17 @@ use crate::codec::raw::stream::RawInput;
 use crate::codec::{CodecError, ReadCompression};
 use serde::{Deserialize, Serialize};
 
+/// The type of time used in the ADΔER representation
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq)]
 pub enum TimeMode {
+    /// The time is the delta time from the previous event
     #[default]
     DeltaT,
+
+    /// The time is the absolute time from the start of the recording
     AbsoluteT,
+
+    /// TODO
     Mixed,
 }
 
@@ -71,6 +84,7 @@ impl Default for PlaneSize {
 }
 
 impl PlaneSize {
+    /// Create a new `PlaneSize` with the given width, height, and channels
     pub fn new(width: u16, height: u16, channels: u8) -> Result<Self, PlaneError> {
         if width == 0 || height == 0 || channels == 0 {
             return Err(PlaneError::InvalidPlane {
@@ -151,6 +165,7 @@ pub const D_ZERO_INTEGRATION: D = 254;
 /// Special symbol signifying no [`Event`] exists
 pub const D_NO_EVENT: D = 253;
 
+/// Precision for maximum intensity representable with allowed [`D`] values
 pub type UDshift = u128;
 
 /// Array for computing the intensity to integrate for a given [`D`] value
@@ -306,11 +321,17 @@ pub type PixelAddress = u16;
 /// Special pixel address when signifying the end of a sequence of [Events](Event)
 pub const EOF_PX_ADDRESS: PixelAddress = u16::MAX;
 
+/// Pixel channel address in the ADΔER model
 #[repr(packed)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Coord {
+    /// Pixel x-coordinate
     pub x: PixelAddress,
+
+    /// Pixel y-coordinate
     pub y: PixelAddress,
+
+    /// Pixel channel, if present
     pub c: Option<u8>,
 }
 
@@ -325,48 +346,74 @@ impl Default for Coord {
 }
 
 impl Coord {
+    /// Creates a new coordinate with the given x, y, and channel
     pub fn new(x: PixelAddress, y: PixelAddress, c: Option<u8>) -> Self {
         Self { x, y, c }
     }
+
+    /// Creates a new 2D coordinate
     pub fn new_2d(x: PixelAddress, y: PixelAddress) -> Self {
         Self { x, y, c: None }
     }
+
+    /// Creates a new 3D coordinate with the given channel
     pub fn new_3d(x: PixelAddress, y: PixelAddress, c: u8) -> Self {
         Self { x, y, c: Some(c) }
     }
+
+    /// Returns the x coordinate as a [`PixelAddress`]
     pub fn x(&self) -> PixelAddress {
         self.x
     }
+
+    /// Returns the y coordinate as a [`PixelAddress`]
     pub fn y(&self) -> PixelAddress {
         self.y
     }
+
+    /// Returns the channel as an `Option<u8>`
     pub fn c(&self) -> Option<u8> {
         self.c
     }
+
+    /// Returns the x coordinate as a `usize`
     pub fn x_usize(&self) -> usize {
         self.x as usize
     }
+
+    /// Returns the y coordinate as a `usize`
     pub fn y_usize(&self) -> usize {
         self.y as usize
     }
+
+    /// Returns the channel as a usize, or 0 if the coordinate is 2D
     pub fn c_usize(&self) -> usize {
         self.c.unwrap_or(0) as usize
     }
 
+    /// Returns true if the coordinate is 2D
     pub fn is_2d(&self) -> bool {
         self.c.is_none()
     }
+
+    /// Returns true if the coordinate is 3D
     pub fn is_3d(&self) -> bool {
         self.c.is_some()
     }
+
+    /// Returns true if the coordinate is valid
     pub fn is_valid(&self) -> bool {
         self.x != EOF_PX_ADDRESS && self.y != EOF_PX_ADDRESS
     }
+
+    /// Returns true if the coordinate is the EOF coordinate
     pub fn is_eof(&self) -> bool {
         self.x == EOF_PX_ADDRESS && self.y == EOF_PX_ADDRESS
     }
 }
 
+/// A 2D coordinate representation
+#[allow(missing_docs)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct CoordSingle {
     pub x: PixelAddress,
@@ -374,6 +421,7 @@ pub struct CoordSingle {
 }
 
 /// An ADΔER event representation
+#[allow(missing_docs)]
 #[repr(packed)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct Event {
@@ -383,6 +431,7 @@ pub struct Event {
 }
 
 /// An ADΔER event representation, without the channel component
+#[allow(missing_docs)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct EventSingle {
     pub coord: CoordSingle,
@@ -417,6 +466,8 @@ impl From<EventSingle> for Event {
     }
 }
 
+/// The type of data source representation
+#[allow(missing_docs)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum SourceType {
     U8,
@@ -437,6 +488,7 @@ const EOF_EVENT: Event = Event {
     delta_t: 0,
 };
 
+/// Helper function for opening a file as a raw or compressed input ADΔER stream
 pub fn open_file_decoder(
     file_path: &str,
 ) -> Result<
@@ -465,4 +517,40 @@ pub fn open_file_decoder(
         }
     };
     Ok((stream, bitreader))
+}
+
+/// An ADΔER event representation
+#[allow(missing_docs)]
+#[derive(Debug, Copy, Clone, Default, serde::Serialize, serde::Deserialize, PartialEq)]
+pub struct EventCoordless {
+    pub d: D,
+
+    pub delta_t: DeltaT,
+}
+
+impl From<Event> for EventCoordless {
+    fn from(event: Event) -> Self {
+        Self {
+            d: event.d,
+            delta_t: event.delta_t,
+        }
+    }
+}
+
+impl Add<EventCoordless> for EventCoordless {
+    type Output = EventCoordless;
+
+    fn add(self, _rhs: EventCoordless) -> EventCoordless {
+        todo!()
+    }
+}
+
+impl num_traits::Zero for EventCoordless {
+    fn zero() -> Self {
+        EventCoordless { d: 0, delta_t: 0 }
+    }
+
+    fn is_zero(&self) -> bool {
+        self.d.is_zero() && self.delta_t.is_zero()
+    }
 }

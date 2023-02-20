@@ -5,11 +5,13 @@ use std::io::{Read, Write};
 use crate::codec::header::{Magic, MAGIC_COMPRESSED};
 use crate::Event;
 
+/// Write compressed ADΔER data to a stream.
 pub struct CompressedOutput<W: Write> {
     pub(crate) meta: CodecMetadata,
     pub(crate) stream: BitWriter<W, BigEndian>,
 }
 
+/// Read compressed ADΔER data from a stream.
 pub struct CompressedInput {
     pub(crate) meta: CodecMetadata,
 }

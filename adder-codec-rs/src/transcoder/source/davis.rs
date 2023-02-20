@@ -33,7 +33,7 @@ use tokio::runtime::Runtime;
 #[derive(PartialEq, Eq, Clone, Copy)]
 pub enum TranscoderMode {
     /// Perform a framed EDI reconstruction at a given (constant) frame rate. Each frame is
-    /// integrated in the ADΔER model with a [`Framed`] source.
+    /// integrated in the ADΔER model with a [Framed](crate::transcoder::source::framed::Framed) source.
     Framed,
 
     /// Use EDI to reconstruct only one intensity frame for each input APS frame. That is, each

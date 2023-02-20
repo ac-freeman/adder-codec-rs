@@ -1,5 +1,4 @@
 use opencv::core::{Mat, Size, CV_8U, CV_8UC3};
-use std::fmt;
 use std::io::Write;
 use std::mem::swap;
 
