@@ -65,7 +65,7 @@ impl<W: Write + 'static> Davis<W> {
     pub fn new(reconstructor: Reconstructor, rt: Runtime) -> Result<Self, Box<dyn Error>> {
         let plane = PlaneSize::new(reconstructor.width, reconstructor.height, 1)?;
 
-        let video = Video::new(plane.clone(), Continuous, None)?.chunk_rows(plane.h_usize() / 4);
+        let video = Video::new(plane, Continuous, None)?.chunk_rows(plane.h_usize() / 4);
         let thread_pool_edi = rayon::ThreadPoolBuilder::new()
             .num_threads(max(current_num_threads() - 4, 1))
             .build()?;
@@ -89,7 +89,7 @@ impl<W: Write + 'static> Davis<W> {
         let davis_source = Davis {
             reconstructor,
             input_frame_scaled: Mat::default(),
-            video: video,
+            video,
             image_8u: Mat::default(),
             thread_pool_edi,
             dvs_c: 0.15,
@@ -574,21 +574,23 @@ impl<W: Write + 'static> Source<W> for Davis<W> {
         });
 
         #[allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
-        unsafe {
-            for (idx, val) in self.dvs_last_ln_val.iter_mut().enumerate() {
-                let px = match self.input_frame_scaled.at_unchecked::<f64>(idx as i32) {
+        for (idx, val) in self.dvs_last_ln_val.iter_mut().enumerate() {
+            let px = match
+                // SAFETY:
+                // `dvs_last_ln_val` is the same size as `input_frame_scaled`
+                unsafe {
+                self.input_frame_scaled.at_unchecked::<f64>(idx as i32) }{
                     Ok(px) => px,
                     Err(e) => {
                         return Err(SourceError::OpencvError(e));
                     }
                 };
-                match self.mode {
-                    TranscoderMode::RawDavis | TranscoderMode::Framed => {
-                        *val = px.ln_1p();
-                    }
-                    TranscoderMode::RawDvs => {
-                        *val = 0.5_f64.ln_1p();
-                    }
+            match self.mode {
+                TranscoderMode::RawDavis | TranscoderMode::Framed => {
+                    *val = px.ln_1p();
+                }
+                TranscoderMode::RawDvs => {
+                    *val = 0.5_f64.ln_1p();
                 }
             }
         }

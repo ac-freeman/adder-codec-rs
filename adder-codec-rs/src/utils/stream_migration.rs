@@ -26,7 +26,7 @@ pub fn migrate_v2<W: Write, R: Read + Seek>(
     )?;
 
     loop {
-        let mut event = match input_stream.digest_event(&mut bitreader) {
+        let mut event = match input_stream.digest_event(bitreader) {
             Ok(event) => event,
             Err(_) => {
                 break;

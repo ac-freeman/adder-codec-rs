@@ -129,7 +129,7 @@ impl<W: Write + 'static> SimulProcessor<W> {
             reconstructed_frame_rate as u32
         );
 
-        let plane = source.get_video_ref().state.plane.clone();
+        let plane = source.get_video_ref().state.plane;
 
         let mut framer = thread_pool_framer.install(|| {
             FramerBuilder::new(plane, source.video.state.chunk_rows)

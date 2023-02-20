@@ -96,7 +96,7 @@ impl<W: Write> Encoder<W> {
         let meta = self.compression.meta();
         let header = EventStreamHeader::new(
             self.compression.magic(),
-            meta.plane.clone(),
+            meta.plane,
             meta.tps,
             meta.ref_interval,
             meta.delta_t_max,

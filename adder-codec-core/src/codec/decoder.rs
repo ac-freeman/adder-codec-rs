@@ -76,7 +76,7 @@ impl<R: Read + Seek> Decoder<R> {
             .deserialize_from::<_, EventStreamHeader>(&*buffer)
         {
             Ok(header) => header,
-            Err(_) => return Err(Deserialize.into()),
+            Err(_) => return Err(Deserialize),
         };
 
         {
@@ -159,7 +159,7 @@ impl<R: Read + Seek> Decoder<R> {
             .deserialize_from::<_, EventStreamHeaderExtensionV1>(&*buffer)
         {
             Ok(header) => header,
-            Err(_) => return Err(Deserialize.into()),
+            Err(_) => return Err(Deserialize),
         };
         self.compression.meta_mut().source_camera = extension_v1.source;
         self.compression.meta_mut().header_size += extension_size as usize;
@@ -176,7 +176,7 @@ impl<R: Read + Seek> Decoder<R> {
             .deserialize_from::<_, EventStreamHeaderExtensionV2>(&*buffer)
         {
             Ok(header) => header,
-            Err(_) => return Err(Deserialize.into()),
+            Err(_) => return Err(Deserialize),
         };
         self.compression.meta_mut().time_mode = extension_v2.time_mode;
         self.compression.meta_mut().header_size += extension_size as usize;
@@ -185,7 +185,7 @@ impl<R: Read + Seek> Decoder<R> {
             return Ok(());
         }
 
-        Err(CodecError::UnsupportedVersion(codec_version).into())
+        Err(CodecError::UnsupportedVersion(codec_version))
     }
 
     #[inline]
@@ -220,11 +220,8 @@ impl<R: Read + Seek> Decoder<R> {
     ) -> Result<u64, CodecError> {
         for i in self.compression.meta().event_size as i64..10 {
             reader.seek_bits(SeekFrom::End(i * 8))?;
-            match self.digest_event(reader) {
-                Err(CodecError::Eof) => {
-                    break;
-                }
-                _ => {}
+            if let Err(CodecError::Eof) = self.digest_event(reader) {
+                break;
             }
         }
 

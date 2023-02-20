@@ -22,6 +22,8 @@ pub fn write_frame_to_video(
     let frame_size = frame.size()?;
     let len = frame_size.width * frame_size.height * frame.channels();
 
+    // SAFETY:
+    // `frame` is a valid `Mat` and `len` is the number of elements in the `Mat`
     unsafe {
         for idx in 0..len {
             let val: *const u8 = frame.at_unchecked(idx)? as *const u8;
