@@ -3,12 +3,10 @@ name = "adder-codec-core"
 version = "0.1.1"
 edition = "2021"
 authors = ["Andrew C. Freeman"]
-description = """Encoder/transcoder/decoder for ADΔER (Address, Decimation, Δt Event Representation) streams.
- Currently, only implemented for raw (uncompressed) streams. Includes a transcoder for casting either framed or event video
- into an ADΔER representation in a manner which preserves the temporal resolution of the source.
+description = """Core library for encoding/decoding ADΔER events
  """
 homepage = "https://github.com/ac-freeman/adder-codec-rs/wiki"
-repository = "https://github.com/ac-freeman/adder-codec-rs"
+repository = "https://github.com/ac-freeman/adder-codec-rs/tree/main/adder-codec-core"
 readme = "README.md"
 license = "MIT OR Apache-2.0"
 keywords = ["neuromorphic", "decoding", "event", "asynchronous", "video"]
