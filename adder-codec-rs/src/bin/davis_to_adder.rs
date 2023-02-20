@@ -11,7 +11,8 @@ use adder_codec_core::DeltaT;
 use adder_codec_core::SourceCamera::DavisU8;
 use adder_codec_core::TimeMode;
 use adder_codec_rs::transcoder::source::davis::TranscoderMode::{Framed, RawDavis, RawDvs};
-use std::io::Write;
+use std::fs::File;
+use std::io::{BufWriter, Write};
 use std::time::Instant;
 use std::{error, io};
 
@@ -68,107 +69,110 @@ pub struct Args {
 
 #[allow(dead_code)]
 fn main() -> Result<(), Box<dyn error::Error>> {
-    // let mut args: Args = Args::parse();
-    // if !args.args_filename.is_empty() {
-    //     let content = std::fs::read_to_string(args.args_filename)?;
-    //     args = toml::from_str(&content)?;
-    // }
-    //
-    // println!("in prog");
-    // let mut edi_args: EdiArgs = EdiArgs::default();
-    // println!("in prog2");
-    // if !args.edi_args.is_empty() {
-    //     match std::fs::read_to_string(&args.edi_args) {
-    //         Ok(content) => {
-    //             edi_args = toml::from_str(&content)?;
-    //         }
-    //         Err(_) => {
-    //             edi_args = toml::from_str(&args.edi_args)?;
-    //         }
-    //     };
-    // }
-    //
-    // if args.optimize_adder_controller {
-    //     // assert!(edi_args.optimize_controller);
-    // }
-    //
-    // // let transcode_type = match args.transcode_from.as_str() {
-    // //     "raw" => Raw,
-    // //     _ => Framed,
-    // // };
-    // let mode = match args.transcode_from.as_str() {
-    //     "raw-davis" => RawDavis,
-    //     "raw-dvs" => RawDvs,
+    let mut args: Args = Args::parse();
+    if !args.args_filename.is_empty() {
+        let content = std::fs::read_to_string(args.args_filename)?;
+        args = toml::from_str(&content)?;
+    }
+
+    println!("in prog");
+    let mut edi_args: EdiArgs = EdiArgs::default();
+    println!("in prog2");
+    if !args.edi_args.is_empty() {
+        match std::fs::read_to_string(&args.edi_args) {
+            Ok(content) => {
+                edi_args = toml::from_str(&content)?;
+            }
+            Err(_) => {
+                edi_args = toml::from_str(&args.edi_args)?;
+            }
+        };
+    }
+
+    if args.optimize_adder_controller {
+        // assert!(edi_args.optimize_controller);
+    }
+
+    // let transcode_type = match args.transcode_from.as_str() {
+    //     "raw" => Raw,
     //     _ => Framed,
     // };
-    //
-    // let events_only = match mode {
-    //     Framed => false,
-    //     RawDavis => false,
-    //     RawDvs => true,
-    // };
-    //
-    // let rt = tokio::runtime::Builder::new_multi_thread()
-    //     .worker_threads(12)
-    //     .enable_time()
-    //     .build()?;
-    // let reconstructor = rt.block_on(Reconstructor::new(
-    //     edi_args.base_path,
-    //     edi_args.events_filename_0,
-    //     edi_args.events_filename_1,
-    //     edi_args.mode,
-    //     edi_args.start_c,
-    //     edi_args.optimize_c,
-    //     edi_args.optimize_controller,
-    //     edi_args.show_display,
-    //     edi_args.show_blurred_display,
-    //     edi_args.output_fps,
-    //     Compression::None,
-    //     346,
-    //     260,
-    //     edi_args.deblur_only,
-    //     events_only,
-    //     edi_args.target_latency,
-    //     edi_args.simulate_packet_latency,
-    // ));
-    //
-    // let mut davis_source = Davis::new(reconstructor, rt)?
-    //     .optimize_adder_controller(args.optimize_adder_controller)
-    //     .mode(mode)
-    //     .time_parameters(
-    //         1_000_000, // TODO
-    //         (1_000_000.0 / edi_args.output_fps) as DeltaT,
-    //         (1_000_000.0 * args.delta_t_max_multiplier) as u32,
-    //     )? // TODO
-    //     .c_thresh_pos(args.adder_c_thresh_pos)
-    //     .c_thresh_neg(args.adder_c_thresh_neg)
-    //     .write_out(args.output_events_filename, DavisU8, TimeMode::DeltaT)?;
-    //
-    // let mut now = Instant::now();
-    // let start_time = std::time::Instant::now();
-    // let thread_pool_integration = rayon::ThreadPoolBuilder::new().num_threads(4).build()?;
-    //
-    // loop {
-    //     match davis_source.consume(1, &thread_pool_integration) {
-    //         Ok(_events) => {}
-    //         Err(e) => {
-    //             println!("Err: {e:?}");
-    //             break;
-    //         }
-    //     };
-    //
-    //     if davis_source.get_video_ref().state.in_interval_count % 30 == 0 {
-    //         println!(
-    //             "\rDavis recon frame to ADΔER {} in  {}ms",
-    //             davis_source.get_video_ref().state.in_interval_count,
-    //             now.elapsed().as_millis()
-    //         );
-    //         io::stdout().flush()?;
-    //         now = Instant::now();
-    //     }
-    // }
-    //
-    // println!("\n\n{} ms elapsed\n\n", start_time.elapsed().as_millis());
+    let mode = match args.transcode_from.as_str() {
+        "raw-davis" => RawDavis,
+        "raw-dvs" => RawDvs,
+        _ => Framed,
+    };
+
+    let events_only = match mode {
+        Framed => false,
+        RawDavis => false,
+        RawDvs => true,
+    };
+
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(12)
+        .enable_time()
+        .build()?;
+    let reconstructor = rt.block_on(Reconstructor::new(
+        edi_args.base_path,
+        edi_args.events_filename_0,
+        edi_args.events_filename_1,
+        edi_args.mode,
+        edi_args.start_c,
+        edi_args.optimize_c,
+        edi_args.optimize_controller,
+        edi_args.show_display,
+        edi_args.show_blurred_display,
+        edi_args.output_fps,
+        Compression::None,
+        346,
+        260,
+        edi_args.deblur_only,
+        events_only,
+        edi_args.target_latency,
+        edi_args.simulate_packet_latency,
+    ));
+
+    let file = File::create(args.output_events_filename)?;
+    let writer = BufWriter::new(file);
+
+    let mut davis_source = Davis::new(reconstructor, rt)?
+        .optimize_adder_controller(args.optimize_adder_controller)
+        .mode(mode)
+        .time_parameters(
+            1_000_000, // TODO
+            (1_000_000.0 / edi_args.output_fps) as DeltaT,
+            (1_000_000.0 * args.delta_t_max_multiplier) as u32,
+        )? // TODO
+        .c_thresh_pos(args.adder_c_thresh_pos)
+        .c_thresh_neg(args.adder_c_thresh_neg)
+        .write_out(DavisU8, TimeMode::DeltaT, writer)?;
+
+    let mut now = Instant::now();
+    let start_time = std::time::Instant::now();
+    let thread_pool_integration = rayon::ThreadPoolBuilder::new().num_threads(4).build()?;
+
+    loop {
+        match davis_source.consume(1, &thread_pool_integration) {
+            Ok(_events) => {}
+            Err(e) => {
+                println!("Err: {e:?}");
+                break;
+            }
+        };
+
+        if davis_source.get_video_ref().state.in_interval_count % 30 == 0 {
+            println!(
+                "\rDavis recon frame to ADΔER {} in  {}ms",
+                davis_source.get_video_ref().state.in_interval_count,
+                now.elapsed().as_millis()
+            );
+            io::stdout().flush()?;
+            now = Instant::now();
+        }
+    }
+
+    println!("\n\n{} ms elapsed\n\n", start_time.elapsed().as_millis());
 
     Ok(())
 }

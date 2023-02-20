@@ -1,7 +1,7 @@
 extern crate core;
 
 use adder_codec_core::codec::decoder::Decoder;
-use adder_codec_core::codec::raw::stream::{RawInput, RawOutput};
+use adder_codec_core::codec::raw::stream::RawInput;
 use adder_codec_core::codec::ReadCompression;
 use adder_codec_rs::framer::driver::Framer;
 use adder_codec_rs::framer::driver::FramerMode::INSTANTANEOUS;
@@ -16,7 +16,7 @@ fn main() {
     let input_path = "/home/andrew/Downloads/hjkhjkl_v2.adder";
     let tmp = File::open(input_path).unwrap();
     let bufreader = BufReader::new(tmp);
-    let mut compression = <RawInput as ReadCompression<BufReader<File>>>::new();
+    let compression = <RawInput as ReadCompression<BufReader<File>>>::new();
 
     let mut bitreader = BitReader::endian(bufreader, BigEndian);
     let mut reader = Decoder::new(Box::new(compression), &mut bitreader).unwrap();

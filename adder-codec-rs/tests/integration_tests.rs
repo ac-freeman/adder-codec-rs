@@ -3,10 +3,8 @@ extern crate adder_codec_rs;
 use crate::adder_codec_rs::transcoder::source::video::VideoBuilder;
 use adder_codec_core::codec::decoder::Decoder;
 use adder_codec_core::codec::encoder::Encoder;
-use adder_codec_core::codec::raw::stream::{RawInput, RawOutput};
-use adder_codec_core::codec::{
-    CodecMetadata, ReadCompression, WriteCompression, LATEST_CODEC_VERSION,
-};
+use adder_codec_core::codec::raw::stream::RawInput;
+use adder_codec_core::codec::{ReadCompression, WriteCompression};
 use adder_codec_core::SourceCamera::FramedU8;
 use adder_codec_core::SourceType::*;
 use adder_codec_core::TimeMode::DeltaT;
@@ -31,7 +29,7 @@ fn test_set_stream_position() {
     let input_path = "./tests/samples/sample_1_raw_events.adder";
     let tmp = File::open(input_path).unwrap();
     let bufreader = BufReader::new(tmp);
-    let mut compression = <RawInput as ReadCompression<BufReader<File>>>::new();
+    let compression = <RawInput as ReadCompression<BufReader<File>>>::new();
 
     let mut bitreader = BitReader::endian(bufreader, BigEndian);
     let mut reader = Decoder::new(Box::new(compression), &mut bitreader).unwrap();
@@ -60,7 +58,7 @@ fn test_sample_perfect_dt() {
     let input_path = "./tests/samples/sample_1_raw_events.adder";
     let tmp = File::open(input_path).unwrap();
     let bufreader = BufReader::new(tmp);
-    let mut compression = <RawInput as ReadCompression<BufReader<File>>>::new();
+    let compression = <RawInput as ReadCompression<BufReader<File>>>::new();
 
     let mut bitreader = BitReader::endian(bufreader, BigEndian);
     let mut reader = Decoder::new(Box::new(compression), &mut bitreader).unwrap();
@@ -134,7 +132,7 @@ fn test_sample_perfect_dt_color() {
     let input_path = "./tests/samples/sample_2_raw_events.adder";
     let tmp = File::open(input_path).unwrap();
     let bufreader = BufReader::new(tmp);
-    let mut compression = <RawInput as ReadCompression<BufReader<File>>>::new();
+    let compression = <RawInput as ReadCompression<BufReader<File>>>::new();
 
     let mut bitreader = BitReader::endian(bufreader, BigEndian);
     let mut reader = Decoder::new(Box::new(compression), &mut bitreader).unwrap();
@@ -161,8 +159,6 @@ fn test_sample_perfect_dt_color() {
         .source(reader.get_source_type(), reader.meta().source_camera)
         .finish();
 
-    // This is a hack to fix the incorrect coded event size in the original sample file
-    reader.meta_mut().event_size += 1;
     let mut frame_count = 0;
     loop {
         match reader.digest_event(&mut bitreader) {
@@ -207,7 +203,7 @@ fn test_sample_perfect_dt_color() {
 #[test]
 fn test_encode_header_v0() {
     let n = rand_u32();
-    let mut stream = setup_raw_writer_v0(n);
+    let stream = setup_raw_writer_v0(n);
     stream.close_writer().unwrap();
     assert_eq!(
         fs::metadata("./TEST_".to_owned() + n.to_string().as_str() + ".addr")
@@ -271,7 +267,7 @@ fn setup_raw_writer_v0(rand_num: u32) -> Encoder<BufWriter<File>> {
         },
         bufwriter,
     );
-    let mut encoder: Encoder<BufWriter<File>> = Encoder::new(Box::new(compression));
+    let encoder: Encoder<BufWriter<File>> = Encoder::new(Box::new(compression));
     encoder
 }
 
@@ -295,7 +291,7 @@ fn setup_raw_writer_v1(rand_num: u32) -> Encoder<BufWriter<File>> {
         },
         bufwriter,
     );
-    let mut encoder: Encoder<BufWriter<File>> = Encoder::new(Box::new(compression));
+    let encoder: Encoder<BufWriter<File>> = Encoder::new(Box::new(compression));
     encoder
 }
 
@@ -319,7 +315,7 @@ fn setup_raw_writer_v2(rand_num: u32) -> Encoder<BufWriter<File>> {
         },
         bufwriter,
     );
-    let mut encoder: Encoder<BufWriter<File>> = Encoder::new(Box::new(compression));
+    let encoder: Encoder<BufWriter<File>> = Encoder::new(Box::new(compression));
     encoder
 }
 
@@ -373,10 +369,10 @@ fn setup_raw_reader(
 ) {
     let tmp = File::open("./TEST_".to_owned() + rand_num.to_string().as_str() + ".addr").unwrap();
     let bufreader = BufReader::new(tmp);
-    let mut compression = <RawInput as ReadCompression<BufReader<File>>>::new();
+    let compression = <RawInput as ReadCompression<BufReader<File>>>::new();
 
     let mut bitreader = BitReader::endian(bufreader, BigEndian);
-    let mut reader = Decoder::new(Box::new(compression), &mut bitreader).unwrap();
+    let reader = Decoder::new(Box::new(compression), &mut bitreader).unwrap();
     (reader, bitreader)
 }
 
@@ -387,7 +383,7 @@ fn rand_u32() -> u32 {
 #[test]
 fn read_header() {
     let n: u32 = rand::thread_rng().gen();
-    let mut stream = setup_raw_writer_v0(n);
+    let stream = setup_raw_writer_v0(n);
     stream.close_writer().unwrap();
     setup_raw_reader(n);
 }
@@ -821,7 +817,7 @@ fn test_sample_unordered() {
     let input_path = "./tests/samples/sample_3_unordered.adder";
     let tmp = File::open(input_path).unwrap();
     let bufreader = BufReader::new(tmp);
-    let mut compression = <RawInput as ReadCompression<BufReader<File>>>::new();
+    let compression = <RawInput as ReadCompression<BufReader<File>>>::new();
 
     let mut bitreader = BitReader::endian(bufreader, BigEndian);
     let mut reader = Decoder::new(Box::new(compression), &mut bitreader).unwrap();
@@ -894,7 +890,7 @@ fn test_sample_ordered() {
     let input_path = "./tests/samples/sample_3_ordered.adder";
     let tmp = File::open(input_path).unwrap();
     let bufreader = BufReader::new(tmp);
-    let mut compression = <RawInput as ReadCompression<BufReader<File>>>::new();
+    let compression = <RawInput as ReadCompression<BufReader<File>>>::new();
 
     let mut bitreader = BitReader::endian(bufreader, BigEndian);
     let mut reader = Decoder::new(Box::new(compression), &mut bitreader).unwrap();

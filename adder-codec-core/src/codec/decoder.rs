@@ -95,6 +95,11 @@ impl<R: Read + Seek> Decoder<R> {
                 event_size: header.event_size,
                 source_camera: Default::default(),
             };
+
+            // Manual fix for malformed files with old software
+            if meta.event_size == 10 {
+                meta.event_size = 11;
+            }
         }
         self.decode_header_extension(reader)?;
         Ok(self.compression.meta().header_size)
@@ -314,7 +319,7 @@ mod tests {
 
         let bufreader = BufReader::new(tmp);
 
-        let mut compression = <RawInput as ReadCompression<BufReader<Cursor<&[u8]>>>>::new();
+        let compression = <RawInput as ReadCompression<BufReader<Cursor<&[u8]>>>>::new();
 
         let mut bitreader = BitReader::endian(bufreader, BigEndian);
         let reader = Decoder::new(Box::new(compression), &mut bitreader).unwrap();
@@ -326,7 +331,7 @@ mod tests {
         let output = setup_encoded_raw(1);
         let tmp = Cursor::new(&*output);
         let bufreader = BufReader::new(tmp);
-        let mut compression = <RawInput as ReadCompression<BufReader<Cursor<&[u8]>>>>::new();
+        let compression = <RawInput as ReadCompression<BufReader<Cursor<&[u8]>>>>::new();
 
         let mut bitreader = BitReader::endian(bufreader, BigEndian);
         let reader = Decoder::new(Box::new(compression), &mut bitreader).unwrap();
@@ -338,7 +343,7 @@ mod tests {
         let output = setup_encoded_raw(2);
         let tmp = Cursor::new(&*output);
         let bufreader = BufReader::new(tmp);
-        let mut compression = <RawInput as ReadCompression<BufReader<Cursor<&[u8]>>>>::new();
+        let compression = <RawInput as ReadCompression<BufReader<Cursor<&[u8]>>>>::new();
 
         let mut bitreader = BitReader::endian(bufreader, BigEndian);
         let reader = Decoder::new(Box::new(compression), &mut bitreader).unwrap();
@@ -350,7 +355,7 @@ mod tests {
         let output = setup_encoded_compressed(0);
         let tmp = Cursor::new(&*output);
         let bufreader = BufReader::new(tmp);
-        let mut compression = <CompressedInput as ReadCompression<BufReader<Cursor<&[u8]>>>>::new();
+        let compression = <CompressedInput as ReadCompression<BufReader<Cursor<&[u8]>>>>::new();
 
         let mut bitreader = BitReader::endian(bufreader, BigEndian);
         let reader = Decoder::new(Box::new(compression), &mut bitreader).unwrap();
@@ -362,7 +367,7 @@ mod tests {
         let output = setup_encoded_compressed(1);
         let tmp = Cursor::new(&*output);
         let bufreader = BufReader::new(tmp);
-        let mut compression = <CompressedInput as ReadCompression<BufReader<Cursor<&[u8]>>>>::new();
+        let compression = <CompressedInput as ReadCompression<BufReader<Cursor<&[u8]>>>>::new();
 
         let mut bitreader = BitReader::endian(bufreader, BigEndian);
         let reader = Decoder::new(Box::new(compression), &mut bitreader).unwrap();
@@ -374,7 +379,7 @@ mod tests {
         let output = setup_encoded_compressed(2);
         let tmp = Cursor::new(&*output);
         let bufreader = BufReader::new(tmp);
-        let mut compression = <CompressedInput as ReadCompression<BufReader<Cursor<&[u8]>>>>::new();
+        let compression = <CompressedInput as ReadCompression<BufReader<Cursor<&[u8]>>>>::new();
 
         let mut bitreader = BitReader::endian(bufreader, BigEndian);
         let reader = Decoder::new(Box::new(compression), &mut bitreader).unwrap();
@@ -386,7 +391,8 @@ mod tests {
         let output = setup_encoded_raw(2);
         let tmp = Cursor::new(&*output);
         let bufreader = BufReader::new(tmp);
-        let mut compression = <RawInput as ReadCompression<BufReader<Cursor<&[u8]>>>>::new();
+        let "
+        compression = <RawInput as ReadCompression<BufReader<Cursor<&[u8]>>>>::new();
 
         let mut bitreader = BitReader::endian(bufreader, BigEndian);
         let mut reader = Decoder::new(Box::new(compression), &mut bitreader).unwrap();
