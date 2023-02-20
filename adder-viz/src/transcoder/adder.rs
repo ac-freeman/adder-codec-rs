@@ -1,10 +1,12 @@
 use std::error::Error;
 
+use adder_codec_core::DeltaT;
 use adder_codec_rs::transcoder::source::davis::Davis;
 use adder_codec_rs::transcoder::source::framed::Framed;
-use adder_codec_rs::{DeltaT, TimeMode};
 use bevy::prelude::Image;
 use std::fmt;
+use std::fs::File;
+use std::io::BufWriter;
 use std::path::{Path, PathBuf};
 
 use adder_codec_rs::transcoder::source::davis::TranscoderMode;
@@ -13,16 +15,26 @@ use adder_codec_rs::aedat::base::ioheader_generated::Compression;
 use adder_codec_rs::davis_edi_rs::util::reconstructor::Reconstructor;
 
 use crate::transcoder::ui::{ParamsUiState, TranscoderState};
+use adder_codec_core::SourceCamera::{DavisU8, FramedU8};
+use adder_codec_core::TimeMode;
 use adder_codec_rs::transcoder::source::video::VideoBuilder;
-use adder_codec_rs::SourceCamera::{DavisU8, FramedU8};
 use bevy_egui::egui::{Color32, RichText};
 use opencv::Result;
 
-#[derive(Default)]
 pub struct AdderTranscoder {
-    pub(crate) framed_source: Option<Framed>,
-    pub(crate) davis_source: Option<Davis>,
+    pub(crate) framed_source: Option<Framed<BufWriter<File>>>,
+    pub(crate) davis_source: Option<Davis<BufWriter<File>>>,
     pub(crate) live_image: Image,
+}
+
+impl Default for AdderTranscoder {
+    fn default() -> Self {
+        Self {
+            framed_source: None,
+            davis_source: None,
+            live_image: Image::default(),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -49,7 +61,7 @@ impl AdderTranscoder {
                 match ext.to_ascii_lowercase().to_str() {
                     None => Err(Box::new(AdderTranscoderError("Invalid file type".into()))),
                     Some("mp4") => {
-                        let mut framed = Framed::new(
+                        let mut framed: Framed<BufWriter<File>> = Framed::new(
                             match input_path_buf.to_str() {
                                 None => {
                                     return Err(Box::new(AdderTranscoderError(
@@ -77,11 +89,9 @@ impl AdderTranscoder {
                         match output_path_opt {
                             None => {}
                             Some(output_path) => {
-                                framed = *framed.write_out(
-                                    output_path.to_str().unwrap().parse()?,
-                                    FramedU8,
-                                    ui_state.time_mode,
-                                )?;
+                                let out_path = output_path.to_str().unwrap();
+                                let writer = BufWriter::new(File::create(out_path)?);
+                                framed = *framed.write_out(FramedU8, ui_state.time_mode, writer)?;
                                 //     .output_events_filename(match output_path.to_str() {
                                 //     None => {
                                 //         return Err(Box::new(AdderTranscoderError(
@@ -133,7 +143,7 @@ impl AdderTranscoder {
                             .to_str()
                             .expect("Bad filename")
                             .to_string();
-                        eprintln!("{}", filename);
+                        eprintln!("{filename}");
                         let reconstructor = rt.block_on(Reconstructor::new(
                             dir + "/",
                             filename,
@@ -157,24 +167,23 @@ impl AdderTranscoder {
                         let output_string = output_path_opt
                             .map(|output_path| output_path.to_str().expect("Bad path").to_string());
 
-                        let mut davis_source = Davis::new(reconstructor, rt)?
-                            .optimize_adder_controller(false) // TODO
-                            .mode(ui_state.davis_mode_radio_state)
-                            .time_mode(ui_state.time_mode)
-                            .time_parameters(
-                                1000000_u32, // TODO
-                                (1_000_000.0 / ui_state.davis_output_fps) as DeltaT,
-                                (1_000_000.0 * ui_state.delta_t_max_mult as f32) as u32, // TODO
-                            )? // TODO
-                            .c_thresh_pos(ui_state.adder_tresh as u8)
-                            .c_thresh_neg(ui_state.adder_tresh as u8);
+                        let mut davis_source: Davis<BufWriter<File>> =
+                            Davis::new(reconstructor, rt)?
+                                .optimize_adder_controller(false) // TODO
+                                .mode(ui_state.davis_mode_radio_state)
+                                .time_mode(ui_state.time_mode)
+                                .time_parameters(
+                                    1000000_u32, // TODO
+                                    (1_000_000.0 / ui_state.davis_output_fps) as DeltaT,
+                                    (1_000_000.0 * ui_state.delta_t_max_mult as f32) as u32, // TODO
+                                )? // TODO
+                                .c_thresh_pos(ui_state.adder_tresh as u8)
+                                .c_thresh_neg(ui_state.adder_tresh as u8);
 
                         if let Some(output_string) = output_string {
-                            davis_source = *davis_source.write_out(
-                                output_string,
-                                DavisU8,
-                                TimeMode::DeltaT,
-                            )?;
+                            let writer = BufWriter::new(File::create(&output_string)?);
+                            davis_source =
+                                *davis_source.write_out(DavisU8, TimeMode::DeltaT, writer)?;
                         }
 
                         Ok(AdderTranscoder {

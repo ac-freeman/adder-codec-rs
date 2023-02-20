@@ -44,7 +44,8 @@ fn simul_proc(video_path: &str, scale: f64, thread_count: u8, _chunk_rows: usize
         .unwrap()
         .contrast_thresholds(args.c_thresh_pos, args.c_thresh_neg)
         .show_display(args.show_display)
-        .auto_time_parameters(args.ref_time, args.delta_t_max)?;
+        .auto_time_parameters(args.ref_time, args.delta_t_max)
+        .unwrap();
 
     let ref_time = source.get_ref_time();
 

@@ -279,7 +279,7 @@ fn consume_source(
             if e.is::<std::sync::mpsc::TryRecvError>() {
                 main_ui_state.error_msg = Some("Loading file...".to_string());
             } else {
-                main_ui_state.error_msg = Some(format!("{}", e));
+                main_ui_state.error_msg = Some(format!("{e}"));
             }
         }
     }
@@ -288,7 +288,7 @@ fn consume_source(
 #[derive(Component, Default)]
 struct MyDropTarget;
 
-///https://bevy-cheatbook.github.io/input/dnd.html
+///<https://bevy-cheatbook.github.io/input/dnd.html>
 fn file_drop(
     main_ui_state: ResMut<MainUiState>,
     mut player_state: ResMut<PlayerState>,

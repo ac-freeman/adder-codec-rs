@@ -1,12 +1,17 @@
+use adder_codec_core::codec::decoder::Decoder;
+use adder_codec_core::codec::raw::stream::RawInput;
+use adder_codec_core::codec::ReadCompression;
+use adder_codec_core::SourceCamera;
+use adder_codec_core::D_ZERO_INTEGRATION;
 use adder_codec_rs::framer::scale_intensity::event_to_intensity;
-use adder_codec_rs::raw::stream::Raw;
 use adder_codec_rs::transcoder::source::video::show_display_force;
-use adder_codec_rs::{Codec, SourceCamera};
+use bitstream_io::{BigEndian, BitReader};
 use clap::Parser;
 use opencv::core::{create_continuous, Mat, MatTraitManual, CV_64F, CV_64FC3};
 use std::cmp::max;
 use std::error::Error;
-use std::io::Write;
+use std::fs::File;
+use std::io::{BufReader, Write};
 use std::{fmt, io};
 use tokio::time::Instant;
 
@@ -48,36 +53,42 @@ fn main() -> Result<(), Box<dyn Error>> {
     let args: MyArgs = MyArgs::parse();
     let file_path = args.input.as_str();
 
-    let mut stream: Raw = Codec::new();
-    stream.open_reader(file_path).expect("Invalid path");
-    let header_bytes = stream.decode_header().expect("Invalid header");
+    let bufreader = BufReader::new(File::open(file_path)?);
 
-    let first_event_position = stream.get_input_stream_position()?;
+    let compression = <RawInput as ReadCompression<BufReader<File>>>::new();
 
-    let eof_position_bytes = stream.get_eof_position()?;
-    let num_events = (eof_position_bytes - 1 - header_bytes as u64) / u64::from(stream.event_size);
+    let mut bitreader = BitReader::endian(bufreader, BigEndian);
+    let mut stream = Decoder::new(Box::new(compression), &mut bitreader).unwrap();
+    let meta = *stream.meta();
+
+    let header_bytes = stream.meta().header_size;
+
+    let first_event_position = stream.get_input_stream_position(&mut bitreader)?;
+
+    let eof_position_bytes = stream.get_eof_position(&mut bitreader)?;
+    let num_events = (eof_position_bytes - 1 - header_bytes as u64) / u64::from(meta.event_size);
     let divisor = num_events / 100;
-    let frame_length = f64::from(stream.tps) / args.playback_fps;
+    let frame_length = f64::from(meta.tps) / args.playback_fps;
 
     let stdout = io::stdout();
     let mut handle = io::BufWriter::new(stdout.lock());
 
-    stream.set_input_stream_position(first_event_position)?;
+    stream.set_input_stream_position(&mut bitreader, first_event_position)?;
 
     let mut display_mat = Mat::default();
-    match stream.plane.c() {
+    match meta.plane.c() {
         1 => {
             create_continuous(
-                i32::from(stream.plane.h()),
-                i32::from(stream.plane.w()),
+                i32::from(meta.plane.h()),
+                i32::from(meta.plane.w()),
                 CV_64F,
                 &mut display_mat,
             )?;
         }
         3 => {
             create_continuous(
-                i32::from(stream.plane.h()),
-                i32::from(stream.plane.w()),
+                i32::from(meta.plane.h()),
+                i32::from(meta.plane.w()),
                 CV_64FC3,
                 &mut display_mat,
             )?;
@@ -111,8 +122,8 @@ fn main() -> Result<(), Box<dyn Error>> {
             frame_count += 1;
         }
 
-        match stream.decode_event() {
-            Ok(event) if event.d <= 0xFE => {
+        match stream.digest_event(&mut bitreader) {
+            Ok(event) if event.d <= D_ZERO_INTEGRATION => {
                 event_count += 1;
                 let y = i32::from(event.coord.y);
                 let x = i32::from(event.coord.x);
@@ -121,8 +132,8 @@ fn main() -> Result<(), Box<dyn Error>> {
                     current_t += event.delta_t;
                 }
 
-                let frame_intensity = (event_to_intensity(&event) * f64::from(stream.ref_interval))
-                    / match stream.source_camera {
+                let frame_intensity = (event_to_intensity(&event) * f64::from(meta.ref_interval))
+                    / match meta.source_camera {
                         SourceCamera::FramedU8 => f64::from(u8::MAX),
                         SourceCamera::FramedU16 => f64::from(u16::MAX),
                         SourceCamera::FramedU32 => f64::from(u32::MAX),

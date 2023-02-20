@@ -5,9 +5,11 @@ pub(crate) type Magic = [u8; 5];
 pub(crate) const MAGIC_RAW: Magic = [97, 100, 100, 101, 114]; // 'adder' in ASCII
 pub(crate) const MAGIC_COMPRESSED: Magic = [97, 100, 100, 101, 99]; // 'addec' in ASCII
 
+/// ADΔER event stream header
+///
 /// Both the raw (uncompressed) and compressed ADΔER streams have the same header structure. All
-/// that changes is [magic]. A new [version] of the raw stream format necessitates a new [version]
-/// of the compressed format.
+/// that changes is the [`Magic`]. A new `version` of the raw stream format necessitates a new
+/// `version` of the compressed format.
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub(crate) struct EventStreamHeader {
     pub(crate) magic: Magic,
@@ -66,9 +68,9 @@ impl EventStreamHeader {
 
             // Number of bytes each event occupies
             event_size: match plane_size.channels {
-                1 => 9, // If single-channel, don't need to waste a byte on the c portion
+                1 => 9, // If single-channel, don't need to waste 2 bytes on the c portion
                 // for every event
-                _ => 10,
+                _ => 11,
             },
             channels: plane_size.channels,
         }

@@ -1,18 +1,22 @@
-use crate::framer::driver::SourceType;
 use crate::transcoder::source::video::FramedViewMode;
-use crate::{DeltaT, Event, EventCoordless, Intensity, D_SHIFT};
+use adder_codec_core::{DeltaT, Event, EventCoordless, Intensity, SourceType, D_SHIFT};
 
+/// A trait for types that can be used as the value of a pixel in a `Frame`.
 pub trait FrameValue {
+    /// The type of the output intensity value
     type Output;
+
+    /// Get the frame-normalized intensity value of an event
     fn get_frame_value(
         event: &Event,
         source_type: SourceType,
-        i1: DeltaT,
+        delta_t: DeltaT,
         practical_d_max: f32,
         delta_t_max: DeltaT,
         view_mode: FramedViewMode,
     ) -> Self::Output;
 
+    /// The maximum value of the type, as an f32
     fn max_f32() -> f32;
 }
 
@@ -227,6 +231,7 @@ impl FrameValue for u64 {
     }
 }
 
+/// Convert an event to an intensity value.
 #[must_use]
 pub fn event_to_intensity(event: &Event) -> Intensity {
     match event.d as usize {

@@ -1,12 +1,10 @@
 use crate::framer::driver::FramerMode::INSTANTANEOUS;
-use crate::framer::driver::SourceType::U8;
 use crate::framer::driver::{Framer, FramerBuilder};
 use crate::framer::scale_intensity;
 use crate::framer::scale_intensity::FrameValue;
 use crate::transcoder::source::framed::Framed;
 use crate::transcoder::source::video::Source;
-use crate::SourceCamera::FramedU8;
-use crate::{DeltaT, Event, TimeMode};
+use adder_codec_core::DeltaT;
 use clap::Parser;
 use rayon::ThreadPool;
 use serde::Serialize;
@@ -16,6 +14,9 @@ use std::fs::File;
 use std::io;
 use std::io::{BufWriter, Write};
 
+use adder_codec_core::SourceCamera::FramedU8;
+use adder_codec_core::SourceType::U8;
+use adder_codec_core::{Event, TimeMode};
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::time::Instant;
 
@@ -87,22 +88,41 @@ pub struct SimulProcArgs {
     pub time_mode: String,
 }
 
-pub struct SimulProcessor {
-    pub source: Framed,
+/// A struct for simultaneously transcoding a video source to ADΔER and reconstructing a framed
+/// video from ADΔER
+pub struct SimulProcessor<W: Write + 'static> {
+    /// Framed transcoder hook
+    pub source: Framed<W>,
     thread_pool: ThreadPool,
     events_tx: Sender<Vec<Vec<Event>>>,
 }
 
-impl SimulProcessor {
+impl<W: Write + 'static> SimulProcessor<W> {
+    /// Create a new SimulProcessor
+    ///
+    /// # Arguments
+    ///
+    /// * `source`: [`Framed<W>`] source
+    /// * `ref_time`: ticks per source frame
+    /// * `output_path`: path to output file
+    /// * `frame_max`: max number of frames to transcode
+    /// * `num_threads`: number of threads to use
+    /// * `codec_version`: codec version
+    /// * `time_mode`: time mode
+    ///
+    /// returns: `Result<SimulProcessor<W>, Box<dyn Error, Global>>`
+    ///
+    /// # Examples
+    /// TODO: add examples
     pub fn new<T>(
-        source: Framed,
+        source: Framed<W>,
         ref_time: DeltaT,
         output_path: &str,
         frame_max: i32,
         num_threads: usize,
         codec_version: u8,
         time_mode: TimeMode,
-    ) -> Result<SimulProcessor, Box<dyn Error>>
+    ) -> Result<SimulProcessor<W>, Box<dyn Error>>
     where
         T: Clone
             + std::marker::Sync
@@ -128,7 +148,7 @@ impl SimulProcessor {
             reconstructed_frame_rate as u32
         );
 
-        let plane = source.get_video_ref().state.plane.clone();
+        let plane = source.get_video_ref().state.plane;
 
         let mut framer = thread_pool_framer.install(|| {
             FramerBuilder::new(plane, source.video.state.chunk_rows)
@@ -207,6 +227,8 @@ impl SimulProcessor {
         })
     }
 
+    /// Run the processor
+    /// This will run until the source is exhausted
     pub fn run(&mut self) -> Result<(), Box<dyn Error>> {
         let mut now = Instant::now();
 

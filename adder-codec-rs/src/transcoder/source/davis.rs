@@ -3,7 +3,7 @@ use crate::transcoder::source::video::SourceError::BufferEmpty;
 use crate::transcoder::source::video::{
     integrate_for_px, show_display, Source, SourceError, Video, VideoBuilder,
 };
-use crate::{Codec, DeltaT, Event, PlaneSize, SourceCamera, SourceType, TimeMode};
+use adder_codec_core::DeltaT;
 use aedat::events_generated::Event as DvsEvent;
 use davis_edi_rs::util::reconstructor::{IterVal, ReconstructionError, Reconstructor};
 use rayon::iter::ParallelIterator;
@@ -19,51 +19,76 @@ use rayon::iter::IntoParallelIterator;
 use rayon::{current_num_threads, ThreadPool};
 use std::cmp::max;
 use std::error::Error;
+use std::io::Write;
 
+use adder_codec_core::codec::CodecError;
+use adder_codec_core::{Event, PlaneSize, SourceCamera, SourceType, TimeMode};
 use std::time::Instant;
 
 use crate::framer::scale_intensity::FrameValue;
-use crate::raw::stream::Error as StreamError;
 use crate::transcoder::event_pixel_tree::Intensity32;
 use tokio::runtime::Runtime;
 
-pub struct Framed {}
-pub struct Raw {}
-
+/// The EDI reconstruction mode, determining how intensities are integrated for the ADΔER model
 #[derive(PartialEq, Eq, Clone, Copy)]
 pub enum TranscoderMode {
+    /// Perform a framed EDI reconstruction at a given (constant) frame rate. Each frame is
+    /// integrated in the ADΔER model with a [Framed](crate::transcoder::source::framed::Framed) source.
     Framed,
+
+    /// Use EDI to reconstruct only one intensity frame for each input APS frame. That is, each
+    /// APS frame is deblurred, by using the DVS events that occur during that exposure.
+    /// The DVS events between deblurred APS frames are integrated directly and asynchronously
+    /// into the ADΔER model.
     RawDavis,
+
+    /// Use EDI merely as a driver for providing the DVS events. The DVS events between are
+    /// integrated directly and asynchronously into the ADΔER model. Any APS frames are ignored.
     RawDvs,
 }
 
 /// Attributes of a framed video -> ADΔER transcode
-pub struct Davis {
+pub struct Davis<W: Write> {
     reconstructor: Reconstructor,
     pub(crate) input_frame_scaled: Mat,
-    pub(crate) video: Video,
+    pub(crate) video: Video<W>,
     image_8u: Mat,
     thread_pool_edi: ThreadPool,
     dvs_c: f64,
     dvs_events_before: Option<Vec<DvsEvent>>,
     dvs_events_after: Option<Vec<DvsEvent>>,
+
+    /// The timestamp for the start of the APS frame exposure
     pub start_of_frame_timestamp: Option<i64>,
+
+    /// The timestamp for the end of the APS frame exposure
     pub end_of_frame_timestamp: Option<i64>,
+
+    /// The tokio runtime
     pub rt: Runtime,
+
+    /// The timestamp of the last DVS event integrated for each pixel
     pub dvs_last_timestamps: Array3<i64>,
+
+    /// The log-space last intensity value for each pixel
     pub dvs_last_ln_val: Array3<f64>,
     optimize_adder_controller: bool,
+
+    /// The EDI reconstruction mode, determining how intensities are integrated for the ADΔER model
     pub mode: TranscoderMode,
+
+    /// The time mode of the transcoded ADΔER video
     pub time_mode: TimeMode,
 }
 
-unsafe impl Sync for Davis {}
+unsafe impl<W: Write> Sync for Davis<W> {}
 
-impl Davis {
+impl<W: Write + 'static> Davis<W> {
+    /// Create a new `Davis` transcoder
     pub fn new(reconstructor: Reconstructor, rt: Runtime) -> Result<Self, Box<dyn Error>> {
         let plane = PlaneSize::new(reconstructor.width, reconstructor.height, 1)?;
 
-        let video = Video::new(plane.clone(), Continuous)?.chunk_rows(plane.h_usize() / 4);
+        let video = Video::new(plane, Continuous, None)?.chunk_rows(plane.h_usize() / 4);
         let thread_pool_edi = rayon::ThreadPoolBuilder::new()
             .num_threads(max(current_num_threads() - 4, 1))
             .build()?;
@@ -73,22 +98,14 @@ impl Davis {
         let timestamps = vec![0_i64; video.state.plane.volume()];
 
         let dvs_last_timestamps: Array3<i64> = Array3::from_shape_vec(
-            (
-                plane.height.into(),
-                plane.width.into(),
-                plane.channels.into(),
-            ),
+            (plane.h().into(), plane.w().into(), plane.c().into()),
             timestamps,
         )?;
 
         let timestamps = vec![0.0_f64; video.state.plane.volume()];
 
         let dvs_last_ln_val: Array3<f64> = Array3::from_shape_vec(
-            (
-                plane.height as usize,
-                plane.width as usize,
-                plane.channels as usize,
-            ),
+            (plane.h() as usize, plane.w() as usize, plane.c() as usize),
             timestamps,
         )?;
 
@@ -114,28 +131,34 @@ impl Davis {
         Ok(davis_source)
     }
 
+    /// Set whether to optimize the EDI controller (default: `false`) during EDI reconstruction.
+    ///
+    /// If true, then the program will regularly re-calculate the optimal DVS contrast threshold.
     pub fn optimize_adder_controller(mut self, optimize: bool) -> Self {
         self.optimize_adder_controller = optimize;
         self
     }
 
+    /// Set the [`TranscoderMode`] (default: [`TranscoderMode::Framed`])
     pub fn mode(mut self, mode: TranscoderMode) -> Self {
         self.mode = mode;
         self
     }
 
+    /// Set the [`TimeMode`]
     pub fn time_mode(mut self, time_mode: TimeMode) -> Self {
         self.time_mode = time_mode;
         self
     }
 
+    /// Integrate a sequence of [DVS events](DvsEvent) into the ADΔER video model
     #[allow(clippy::cast_sign_loss)]
     pub fn integrate_dvs_events<F: Fn(i64, i64) -> bool + Send + 'static + std::marker::Sync>(
         &mut self,
         dvs_events: &Vec<DvsEvent>,
         frame_timestamp: &i64,
         event_check: F,
-    ) -> Result<(), StreamError> {
+    ) -> Result<(), CodecError> {
         // TODO: not fixed 4 chunks?
         let mut dvs_chunks: [Vec<DvsEvent>; 4] = [
             Vec::with_capacity(100_000),
@@ -279,9 +302,7 @@ impl Davis {
 
         // Using a macro so that CLion still pretty prints correctly
 
-        if self.video.state.write_out {
-            self.video.stream.encode_events_events(&big_buffer)?;
-        }
+        self.video.encoder.ingest_events_events(&big_buffer)?;
         Ok(())
     }
 
@@ -370,9 +391,7 @@ impl Davis {
             })
             .collect();
 
-        if self.video.state.write_out {
-            self.video.stream.encode_events_events(&big_buffer)?;
-        }
+        self.video.encoder.ingest_events_events(&big_buffer)?;
 
         let db = match self.video.instantaneous_frame.data_bytes_mut() {
             Ok(db) => db,
@@ -433,16 +452,18 @@ impl Davis {
         }
     }
 
+    /// Get an immutable reference to the [`Reconstructor`]
     pub fn get_reconstructor(&self) -> &Reconstructor {
         &self.reconstructor
     }
 
+    /// Get a mutable reference to the [`Reconstructor`]
     pub fn get_reconstructor_mut(&mut self) -> &mut Reconstructor {
         &mut self.reconstructor
     }
 }
 
-impl Source for Davis {
+impl<W: Write + 'static> Source<W> for Davis<W> {
     fn consume(
         &mut self,
         view_interval: u32,
@@ -493,9 +514,7 @@ impl Source for Davis {
                     })
                     .collect();
 
-                if self.video.state.write_out {
-                    self.video.stream.encode_events_events(&big_buffer)?;
-                }
+                self.video.encoder.ingest_events_events(&big_buffer)?;
 
                 return Err(SourceError::NoData);
             }
@@ -593,21 +612,23 @@ impl Source for Davis {
         });
 
         #[allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
-        unsafe {
-            for (idx, val) in self.dvs_last_ln_val.iter_mut().enumerate() {
-                let px = match self.input_frame_scaled.at_unchecked::<f64>(idx as i32) {
+        for (idx, val) in self.dvs_last_ln_val.iter_mut().enumerate() {
+            let px = match
+                // SAFETY:
+                // `dvs_last_ln_val` is the same size as `input_frame_scaled`
+                unsafe {
+                self.input_frame_scaled.at_unchecked::<f64>(idx as i32) }{
                     Ok(px) => px,
                     Err(e) => {
                         return Err(SourceError::OpencvError(e));
                     }
                 };
-                match self.mode {
-                    TranscoderMode::RawDavis | TranscoderMode::Framed => {
-                        *val = px.ln_1p();
-                    }
-                    TranscoderMode::RawDvs => {
-                        *val = 0.5_f64.ln_1p();
-                    }
+            match self.mode {
+                TranscoderMode::RawDavis | TranscoderMode::Framed => {
+                    *val = px.ln_1p();
+                }
+                TranscoderMode::RawDvs => {
+                    *val = 0.5_f64.ln_1p();
                 }
             }
         }
@@ -627,20 +648,20 @@ impl Source for Davis {
         ret
     }
 
-    fn get_video_mut(&mut self) -> &mut Video {
+    fn get_video_mut(&mut self) -> &mut Video<W> {
         &mut self.video
     }
 
-    fn get_video_ref(&self) -> &Video {
+    fn get_video_ref(&self) -> &Video<W> {
         &self.video
     }
 
-    fn get_video(self) -> Video {
+    fn get_video(self) -> Video<W> {
         self.video
     }
 }
 
-impl VideoBuilder for Davis {
+impl<W: Write + 'static> VideoBuilder<W> for Davis<W> {
     fn contrast_thresholds(mut self, c_thresh_pos: u8, c_thresh_neg: u8) -> Self {
         self.video = self.video.c_thresh_pos(c_thresh_pos);
         self.video = self.video.c_thresh_neg(c_thresh_neg);
@@ -664,23 +685,23 @@ impl VideoBuilder for Davis {
 
     fn time_parameters(
         mut self,
-        tps: crate::transcoder::event_pixel_tree::DeltaT,
-        ref_time: crate::transcoder::event_pixel_tree::DeltaT,
-        delta_t_max: crate::transcoder::event_pixel_tree::DeltaT,
-    ) -> Result<Self, Box<dyn Error>> {
+        tps: DeltaT,
+        ref_time: DeltaT,
+        delta_t_max: DeltaT,
+    ) -> Result<Self, SourceError> {
         self.video = self.video.time_parameters(tps, ref_time, delta_t_max)?;
         Ok(self)
     }
 
     fn write_out(
         mut self,
-        output_filename: String,
         source_camera: SourceCamera,
         time_mode: TimeMode,
-    ) -> Result<Box<Self>, Box<dyn Error>> {
+        write: W,
+    ) -> Result<Box<Self>, SourceError> {
         self.video = self
             .video
-            .write_out(output_filename, Some(source_camera), Some(time_mode))?;
+            .write_out(Some(source_camera), Some(time_mode), write)?;
         Ok(Box::new(self))
     }
 

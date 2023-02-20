@@ -1,15 +1,8 @@
 use crate::transcoder::event_pixel_tree::Mode::{Continuous, FramePerfect};
-use crate::{Coord, Event, TimeMode, UDshift, D_MAX, D_SHIFT};
+use adder_codec_core::{Coord, DeltaT, Event, TimeMode, D};
+use adder_codec_core::{UDshift, D_EMPTY, D_MAX, D_SHIFT, D_ZERO_INTEGRATION};
 use smallvec::{smallvec, SmallVec};
 use std::cmp::min;
-
-/// Decimation value; a pixel's sensitivity.
-pub type D = u8;
-
-// type Integration = f32;
-
-/// Number of ticks elapsed since a given pixel last fired an [`pixel::Event`]
-pub type DeltaT = u32;
 
 /// Measure of an amount of light intensity. Is f32 so that we can use `fast_math::log2_raw`
 pub type Intensity32 = f32;
@@ -103,7 +96,7 @@ impl PixelArena {
         let mut node = &mut self.arena[idx];
         let mut ret_event = Event64 {
             coord: self.coord,
-            d: 0xFE, // 254_u8
+            d: D_ZERO_INTEGRATION, // 254_u8
             delta_t: node.state.delta_t,
         };
         node.state.delta_t = 0.0;
@@ -162,9 +155,11 @@ impl PixelArena {
                     // TODO: cover with a unit test
                     root.best_event = Some(Event64 {
                         coord: self.coord,
-                        d: unsafe {
-                            // This should be safe, because we know that the integration will
-                            // not exceed 2^D_MAX
+                        d:
+                        // SAFETY:
+                        // By design, the integration will not exceed 2^[`D_MAX`], so we can
+                        // safely cast it to integer [`D`] type.
+                        unsafe {
                             fast_math::log2_raw(root.state.integration).to_int_unchecked::<D>()
                         },
                         delta_t: root.state.delta_t,
@@ -239,7 +234,7 @@ impl PixelArena {
         let ret = if next_d < head.state.d && head.state.delta_t > 0.0 {
             let ret = Some(Event {
                 coord: self.coord,
-                d: 0xFF,
+                d: D_EMPTY,
                 delta_t: (head.state.delta_t) as DeltaT,
             });
             head.state.delta_t = 0.0;
@@ -311,7 +306,11 @@ impl PixelArena {
         assert!(self.length > 0);
 
         self.need_to_pop_top = self.arena[0].state.d == D_MAX
-            || unsafe { self.arena[0].state.delta_t.to_int_unchecked::<DeltaT>() } >= dtm;
+            ||
+            // SAFETY:
+            // By design, the integration will not exceed 2^[`D_MAX`], so we can
+            // safely cast it to integer [`D`] type.
+            unsafe { self.arena[0].state.delta_t.to_int_unchecked::<DeltaT>() } >= dtm;
     }
 
     /// Integrate an intensity for a given node. Returns `Some()` if the node fires an event, so
@@ -378,6 +377,9 @@ fn get_d_from_intensity(intensity: Intensity32) -> D {
     min(
         {
             if intensity > 0.0 {
+                // SAFETY:
+                // By design, the integration will not exceed 2^[`D_MAX`], so we can
+                // safely cast it to integer [`D`] type.
                 unsafe { fast_math::log2_raw(intensity).to_int_unchecked::<D>() }
             } else {
                 0

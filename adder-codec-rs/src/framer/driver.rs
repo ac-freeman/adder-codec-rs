@@ -1,5 +1,4 @@
 use crate::framer::scale_intensity::FrameValue;
-use crate::{BigT, DeltaT, Event, PlaneSize, SourceCamera, TimeMode, D};
 use bincode::config::{BigEndian, FixintEncoding, WithOtherEndian, WithOtherIntEncoding};
 use bincode::{DefaultOptions, Options};
 use rayon::iter::ParallelIterator;
@@ -8,74 +7,30 @@ use std::collections::VecDeque;
 use std::error::Error;
 use std::fmt;
 
+use adder_codec_core::{
+    BigT, DeltaT, Event, PlaneSize, SourceCamera, SourceType, TimeMode, D_EMPTY,
+};
 use std::fs::File;
 use std::io::BufWriter;
-use std::ops::Add;
 
 // Want one main framer with the same functions
 // Want additional functions
 // Want ability to get instantaneous frames at a fixed interval, or at api-spec'd times
 // Want ability to get full integration frames at a fixed interval, or at api-spec'd times
 
-/// An ADΔER event representation
-#[derive(Debug, Copy, Clone, Default, serde::Serialize, serde::Deserialize)]
-pub struct EventCoordless {
-    pub d: D,
-    pub delta_t: DeltaT,
-}
-
-impl Add<EventCoordless> for EventCoordless {
-    type Output = EventCoordless;
-
-    fn add(self, _rhs: EventCoordless) -> EventCoordless {
-        todo!()
-    }
-}
-
-impl num_traits::Zero for EventCoordless {
-    fn zero() -> Self {
-        EventCoordless { d: 0, delta_t: 0 }
-    }
-
-    fn is_zero(&self) -> bool {
-        self.d.is_zero() && self.delta_t.is_zero()
-    }
-}
-
-// impl Add<Self, Output = Self> for EventCoordless {
-//     type Output = ();
-//
-//     fn add(self, rhs: Self) -> Self::Output {
-//         todo!()
-//     }
-// }
-//
-// impl num::traits::Zero for EventCoordless {
-//     fn zero() -> Self {
-//         EventCoordless { d: 0, delta_t: 0 }
-//     }
-//
-//     fn is_zero(&self) -> bool {
-//         self.d.is_zero() && self.delta_t.is_zero()
-//     }
-// }
-
+/// The mode for how a `Framer` should handle events which span multiple frames and frames
+/// spanning multiple events.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum FramerMode {
+    /// Each frame's pixel values are derived from only the _last_ event which spanned the
+    /// frame's integration period.
     INSTANTANEOUS,
+
+    /// The frame is the sum of all events in the integration period.
     INTEGRATION,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub enum SourceType {
-    U8,
-    U16,
-    U32,
-    U64,
-    F32,
-    F64,
-}
-
+/// Builder for a Framer.
 #[derive(Clone)]
 pub struct FramerBuilder {
     plane: PlaneSize,
@@ -89,10 +44,13 @@ pub struct FramerBuilder {
     time_mode: TimeMode,
     ref_interval: DeltaT,
     delta_t_max: DeltaT,
+
+    /// The number of rows to process in each chunk (thread).
     pub chunk_rows: usize,
 }
 
 impl FramerBuilder {
+    /// Create a new FramerBuilder.
     #[must_use]
     pub fn new(plane: PlaneSize, chunk_rows: usize) -> FramerBuilder {
         FramerBuilder {
@@ -103,13 +61,15 @@ impl FramerBuilder {
             mode: FramerMode::INSTANTANEOUS,
             view_mode: FramedViewMode::Intensity,
             source: SourceType::U8,
-            codec_version: 1,
+            codec_version: 3,
             source_camera: SourceCamera::default(),
             time_mode: TimeMode::DeltaT,
             ref_interval: 5000,
             delta_t_max: 5000,
         }
     }
+
+    /// Set the time parameters.
     #[must_use]
     pub fn time_parameters(
         mut self,
@@ -125,18 +85,21 @@ impl FramerBuilder {
         self
     }
 
+    /// Set the framer mode.
     #[must_use]
     pub fn mode(mut self, mode: FramerMode) -> FramerBuilder {
         self.mode = mode;
         self
     }
 
+    /// Set the view mode.
     #[must_use]
     pub fn view_mode(mut self, mode: FramedViewMode) -> FramerBuilder {
         self.view_mode = mode;
         self
     }
 
+    /// Set the source type and camera.
     #[must_use]
     pub fn source(mut self, source: SourceType, source_camera: SourceCamera) -> FramerBuilder {
         self.source_camera = source_camera;
@@ -144,6 +107,7 @@ impl FramerBuilder {
         self
     }
 
+    /// Set the codec version and time mode.
     #[must_use]
     pub fn codec_version(mut self, codec_version: u8, time_mode: TimeMode) -> FramerBuilder {
         self.codec_version = codec_version;
@@ -151,7 +115,8 @@ impl FramerBuilder {
         self
     }
 
-    // TODO: Make this return a result
+    /// Build a [`Framer`].
+    /// TODO: Make this return a result
     #[must_use]
     pub fn finish<T>(self) -> FrameSequence<T>
     where
@@ -167,28 +132,24 @@ impl FramerBuilder {
     }
 }
 
+/// A trait for accumulating ADΔER events into frames.
 pub trait Framer {
+    /// The type of the output frame.
     type Output;
+    /// Create a new [`Framer`] with the given [`FramerBuilder`].
     fn new(builder: FramerBuilder) -> Self;
 
     /// Ingest an ADΔER event. Will process differently depending on choice of [`FramerMode`].
     ///
-    /// If [`INSTANTANEOUS`], this function will set the corresponding output frame's pixel value to
+    /// If [INSTANTANEOUS](FramerMode::INSTANTANEOUS), this function will set the corresponding output frame's pixel value to
     /// the value derived from this [`Event`], only if this is the first value ingested for that
     /// pixel and frame. Otherwise, the operation will silently be ignored.
     ///
-    /// If [`INTEGRATION`], this function will integrate this [`Event`] value for the corresponding
+    /// If [INTEGRATION](FramerMode::INTEGRATION), this function will integrate this [`Event`] value for the corresponding
     /// output frame(s)
     fn ingest_event(&mut self, event: &mut Event) -> bool;
 
-    // fn ingest_event_for_chunk(
-    //     &self,
-    //     event: &Event,
-    //     frame_chunk: &mut VecDeque<Frame<Option<Self::Output>>>,
-    //     pixel_ts_tracker: &mut BigT,
-    //     frame_idx_offset: &mut i64,
-    //     last_filled_tracker: &mut i64,
-    // ) -> bool;
+    /// Ingest a vector of a vector of ADΔER events.
     fn ingest_events_events(&mut self, events: Vec<Vec<Event>>) -> bool;
 }
 
@@ -198,6 +159,7 @@ pub(crate) struct Frame<T> {
     pub(crate) filled_count: usize,
 }
 
+/// Errors that can occur when working with [`FrameSequence`]
 #[derive(Debug)]
 pub enum FrameSequenceError {
     /// Frame index out of bounds
@@ -238,8 +200,12 @@ impl From<FrameSequenceError> for Box<dyn std::error::Error> {
 //
 // impl std::error::Error for FrameSequenceError {}
 
+/// The state of a [`FrameSequence`]
 pub struct FrameSequenceState {
+    /// The number of frames written to the output so far
     pub frames_written: i64,
+
+    /// Ticks per output frame
     pub tpf: DeltaT,
     pub(crate) source: SourceType,
     codec_version: u8,
@@ -250,8 +216,10 @@ pub struct FrameSequenceState {
     time_mode: TimeMode,
 }
 
+/// A sequence of frames, each of which is a 3D array of [`FrameValue`]s
 #[allow(dead_code)]
 pub struct FrameSequence<T> {
+    /// The state of the frame sequence
     pub state: FrameSequenceState,
     pub(crate) frames: Vec<VecDeque<Frame<Option<T>>>>,
     pub(crate) frame_idx_offsets: Vec<i64>,
@@ -260,6 +228,8 @@ pub struct FrameSequence<T> {
     pub(crate) last_frame_intensity_tracker: Vec<Array3<T>>,
     chunk_filled_tracker: Vec<bool>,
     pub(crate) mode: FramerMode,
+
+    /// Number of rows per chunk (per thread)
     pub chunk_rows: usize,
     bincode: WithOtherEndian<WithOtherIntEncoding<DefaultOptions, FixintEncoding>, BigEndian>,
 }
@@ -368,11 +338,11 @@ impl<
     /// # Examples
     ///
     /// ```
-    /// # use adder_codec_rs::{Coord, Event, PlaneSize, TimeMode};
+    /// # use adder_codec_core::{Coord, Event, PlaneSize, TimeMode};
+    /// # use adder_codec_core::SourceCamera::FramedU8;
+    /// # use adder_codec_core::SourceType::U8;
     /// # use adder_codec_rs::framer::driver::FramerMode::INSTANTANEOUS;
     /// # use adder_codec_rs::framer::driver::{FrameSequence, Framer, FramerBuilder};
-    /// # use adder_codec_rs::framer::driver::SourceType::U8;
-    /// use adder_codec_rs::SourceCamera::FramedU8;
     ///
     /// let mut frame_sequence: FrameSequence<u8> =
     /// FramerBuilder::new(
@@ -579,6 +549,7 @@ impl<T: Clone + Default + FrameValue<Output = T> + Serialize> FrameSequence<T> {
         Ok(true)
     }
 
+    /// Get whether or not the next frame is "filled" (i.e., all pixels have been written to)
     #[must_use]
     pub fn is_frame_0_filled(&self) -> bool {
         for chunk in &self.chunk_filled_tracker {
@@ -589,6 +560,9 @@ impl<T: Clone + Default + FrameValue<Output = T> + Serialize> FrameSequence<T> {
         true
     }
 
+    /// Pop the next frame for all chunks
+    ///
+    /// returns: the frame
     pub fn pop_next_frame(&mut self) -> Option<Vec<Array3<Option<T>>>> {
         let mut ret: Vec<Array3<Option<T>>> = Vec::with_capacity(self.frames.len());
 
@@ -606,6 +580,13 @@ impl<T: Clone + Default + FrameValue<Output = T> + Serialize> FrameSequence<T> {
         Some(ret)
     }
 
+    /// Pop the next frame from the given chunk
+    ///
+    /// # Arguments
+    ///
+    /// * `chunk_num`: the y-index of the chunk to pop the frame from
+    ///
+    /// returns: the chunk of frame values
     pub fn pop_next_frame_for_chunk(&mut self, chunk_num: usize) -> Option<Array3<Option<T>>> {
         self.frames[chunk_num].rotate_left(1);
         match self.frames[chunk_num].pop_back() {
@@ -710,7 +691,7 @@ fn ingest_event_for_chunk<
     if ((running_ts_ref.saturating_sub(1)) as i64 / i64::from(state.tpf)) > *last_filled_frame_ref {
         // Set the frame's value from the event
 
-        if event.d != 0xFF {
+        if event.d != D_EMPTY {
             // If d == 0xFF, then the event was empty, and we simply repeat the last non-empty
             // event's intensity. Else we reset the intensity here.
             let practical_d_max =

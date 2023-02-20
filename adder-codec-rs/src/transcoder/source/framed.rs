@@ -1,45 +1,48 @@
-use crate::transcoder::event_pixel_tree::DeltaT;
 use crate::transcoder::event_pixel_tree::Mode::FramePerfect;
 use crate::transcoder::source::video::SourceError;
 use crate::transcoder::source::video::SourceError::BufferEmpty;
 use crate::transcoder::source::video::Video;
 use crate::transcoder::source::video::{Source, VideoBuilder};
-use crate::{Coord, Event, TimeMode};
-use crate::{PlaneSize, SourceCamera};
+use adder_codec_core::{DeltaT, Event, PlaneSize, SourceCamera, TimeMode};
 use opencv::core::{Mat, Size};
 use opencv::videoio::{VideoCapture, CAP_PROP_FPS, CAP_PROP_FRAME_COUNT, CAP_PROP_POS_FRAMES};
 use opencv::{imgproc, prelude::*, videoio, Result};
 use rayon::ThreadPool;
-use std::error::Error;
+use std::io::Write;
 use std::mem::swap;
 
-#[derive(Debug, Copy, Clone)]
-#[repr(C)]
-pub struct IndirectCoord {
-    pub(crate) forward: Coord,
-    pub(crate) reverse: Coord,
-}
-
 /// Attributes of a framed video -> ADΔER transcode
-pub struct Framed {
+pub struct Framed<W: Write + 'static> {
     cap: VideoCapture,
     pub(crate) input_frame_scaled: Mat,
     pub(crate) input_frame: Mat,
+
+    /// Index of the first frame to be read from the input video
     pub frame_idx_start: u32,
+
+    /// FPS of the input video. Set automatically by `Framed::new()`
     pub source_fps: f64,
+
+    /// Scale of the input video. Input frames are resized to this scale before transcoding.
     pub scale: f64,
+
+    /// Whether the input video is color
     color_input: bool,
-    pub(crate) video: Video,
+
+    pub(crate) video: Video<W>,
+
+    /// Time mode of the source
     pub time_mode: TimeMode,
 }
-unsafe impl Sync for Framed {}
+unsafe impl<W: Write> Sync for Framed<W> {}
 
-impl Framed {
+impl<W: Write + 'static> Framed<W> {
+    /// Create a new `Framed` source
     pub fn new(
         input_filename: String,
         color_input: bool,
         scale: f64,
-    ) -> Result<Framed, Box<dyn Error>> {
+    ) -> Result<Framed<W>, SourceError> {
         let mut cap =
             videoio::VideoCapture::from_file(input_filename.as_str(), videoio::CAP_FFMPEG)?;
 
@@ -52,7 +55,7 @@ impl Framed {
 
         let opened = videoio::VideoCapture::is_opened(&cap)?;
         if !opened {
-            return Err("Failed to open video capture".into());
+            return Err(SourceError::Open);
         }
         let mut init_frame = Mat::default();
         cap.read(&mut init_frame)?;
@@ -71,7 +74,7 @@ impl Framed {
             if color_input { 3 } else { 1 },
         )?;
 
-        let video = Video::new(plane, FramePerfect)?;
+        let video = Video::new(plane, FramePerfect, None)?;
 
         Ok(Framed {
             cap,
@@ -86,15 +89,11 @@ impl Framed {
         })
     }
 
-    // pub fn skip_interval(mut self, frame_skip_interval: u8) -> Self {
-    //     self.frame_skip_interval = frame_skip_interval;
-    //     self
-    // }
-
-    pub fn frame_start(mut self, frame_idx_start: u32) -> Result<Self, Box<dyn Error>> {
+    /// Set the start frame of the source
+    pub fn frame_start(mut self, frame_idx_start: u32) -> Result<Self, SourceError> {
         let video_frame_count = self.cap.get(CAP_PROP_FRAME_COUNT)?;
         if frame_idx_start >= video_frame_count as u32 {
-            return Err(SourceError::StartOutOfBounds.into());
+            return Err(SourceError::StartOutOfBounds(frame_idx_start));
         };
         self.cap
             .set(CAP_PROP_POS_FRAMES, f64::from(frame_idx_start))?;
@@ -102,33 +101,38 @@ impl Framed {
         Ok(self)
     }
 
+    /// Set the [`TimeMode`](adder_codec_core::TimeMode) for the source
     pub fn time_mode(mut self, time_mode: TimeMode) -> Self {
         self.time_mode = time_mode;
         self
     }
 
+    /// Automatically derive the ticks per second from the source FPS and `ref_time`
     pub fn auto_time_parameters(
         mut self,
-        ref_time: crate::transcoder::event_pixel_tree::DeltaT,
-        delta_t_max: crate::transcoder::event_pixel_tree::DeltaT,
-    ) -> Result<Self, Box<dyn Error>> {
+        ref_time: DeltaT,
+        delta_t_max: DeltaT,
+    ) -> Result<Self, SourceError> {
         if delta_t_max % ref_time == 0 {
             let tps = (ref_time as f64 * self.source_fps) as DeltaT;
             self.video = self.video.time_parameters(tps, ref_time, delta_t_max)?;
         } else {
-            eprintln!("delta_t_max must be a multiple of ref_time");
+            return Err(SourceError::BadParams(
+                "delta_t_max must be a multiple of ref_time".to_string(),
+            ));
         }
         Ok(self)
     }
 
+    /// Get the number of ticks each frame is said to span
     pub fn get_ref_time(&self) -> u32 {
         self.video.state.ref_time
     }
 }
 
-impl Source for Framed {
+impl<W: Write + 'static> Source<W> for Framed<W> {
     /// Get pixel-wise intensities directly from source frame, and integrate them with
-    /// [`ref_time`](Video::ref_time) (the number of ticks each frame is said to span)
+    /// `ref_time` (the number of ticks each frame is said to span)
     fn consume(
         &mut self,
         view_interval: u32,
@@ -161,20 +165,20 @@ impl Source for Framed {
         })
     }
 
-    fn get_video_mut(&mut self) -> &mut Video {
+    fn get_video_mut(&mut self) -> &mut Video<W> {
         &mut self.video
     }
 
-    fn get_video_ref(&self) -> &Video {
+    fn get_video_ref(&self) -> &Video<W> {
         &self.video
     }
 
-    fn get_video(self) -> Video {
+    fn get_video(self) -> Video<W> {
         todo!()
     }
 }
 
-impl VideoBuilder for Framed {
+impl<W: Write + 'static> VideoBuilder<W> for Framed<W> {
     fn contrast_thresholds(mut self, c_thresh_pos: u8, c_thresh_neg: u8) -> Self {
         self.video = self.video.c_thresh_pos(c_thresh_pos);
         self.video = self.video.c_thresh_neg(c_thresh_neg);
@@ -198,10 +202,10 @@ impl VideoBuilder for Framed {
 
     fn time_parameters(
         mut self,
-        tps: crate::transcoder::event_pixel_tree::DeltaT,
-        ref_time: crate::transcoder::event_pixel_tree::DeltaT,
-        delta_t_max: crate::transcoder::event_pixel_tree::DeltaT,
-    ) -> Result<Self, Box<dyn Error>> {
+        tps: DeltaT,
+        ref_time: DeltaT,
+        delta_t_max: DeltaT,
+    ) -> Result<Self, SourceError> {
         if delta_t_max % ref_time == 0 {
             self.video = self.video.time_parameters(tps, ref_time, delta_t_max)?;
         } else {
@@ -212,13 +216,13 @@ impl VideoBuilder for Framed {
 
     fn write_out(
         mut self,
-        output_filename: String,
         source_camera: SourceCamera,
         time_mode: TimeMode,
-    ) -> Result<Box<Self>, Box<dyn Error>> {
+        write: W,
+    ) -> Result<Box<Self>, SourceError> {
         self.video = self
             .video
-            .write_out(output_filename, Some(source_camera), Some(time_mode))?;
+            .write_out(Some(source_camera), Some(time_mode), write)?;
         Ok(Box::new(self))
     }
 

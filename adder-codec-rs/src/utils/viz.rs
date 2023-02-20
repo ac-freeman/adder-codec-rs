@@ -11,7 +11,7 @@ use std::process::{Command, Output};
 /// * [`io::Error`] if there is an error writing to the file
 /// * [`opencv::Error`] if the [`Mat`] is malformed
 /// # Safety
-/// This function is unsafe because it calls [`Mat::at_unchecked`] which is unsafe
+/// This function is unsafe because it calls `Mat::at_unchecked()` which is unsafe
 /// # Panics
 /// This function panics if the amount data written to the file is not equal to the amount of data
 /// in the [`Mat`].
@@ -22,6 +22,8 @@ pub fn write_frame_to_video(
     let frame_size = frame.size()?;
     let len = frame_size.width * frame_size.height * frame.channels();
 
+    // SAFETY:
+    // `frame` is a valid `Mat` and `len` is the number of elements in the `Mat`
     unsafe {
         for idx in 0..len {
             let val: *const u8 = frame.at_unchecked(idx)? as *const u8;

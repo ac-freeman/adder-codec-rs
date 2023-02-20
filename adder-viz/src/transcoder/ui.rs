@@ -12,8 +12,10 @@ use opencv::imgproc;
 use rayon::current_num_threads;
 use std::error::Error;
 
-use adder_codec_rs::TimeMode;
+use adder_codec_core::TimeMode;
 use std::default::Default;
+use std::fs::File;
+use std::io::BufWriter;
 use std::path::PathBuf;
 
 pub struct ParamsUiState {
@@ -201,7 +203,7 @@ impl TranscoderState {
 
     pub fn update_adder_params(&mut self) {
         // TODO: do conditionals on the sliders themselves
-        let source: &mut dyn Source = {
+        let source: &mut dyn Source<BufWriter<File>> = {
             match &mut self.transcoder.framed_source {
                 None => {
                     match &mut self.transcoder.davis_source {
@@ -278,7 +280,7 @@ impl TranscoderState {
         let mut ui_info_state = &mut self.ui_info_state;
         ui_info_state.events_per_sec = 0.;
 
-        let source: &mut dyn Source = {
+        let source: &mut dyn Source<BufWriter<File>> = {
             match &mut self.transcoder.framed_source {
                 None => match &mut self.transcoder.davis_source {
                     None => {
