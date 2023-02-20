@@ -1,3 +1,4 @@
+#![warn(missing_docs)]
 extern crate core;
 
 pub mod codec;
@@ -146,12 +147,12 @@ pub const D_EMPTY: D = 255;
 /// Special symbol signifying no information (filler dt)
 pub const D_ZERO_INTEGRATION: D = 254;
 
-/// Special symbol signifying no event exists
+/// Special symbol signifying no [`Event`] exists
 pub const D_NO_EVENT: D = 253;
 
 pub type UDshift = u128;
 
-/// Array for computing the intensity to integrate for a given D
+/// Array for computing the intensity to integrate for a given [`D`] value
 pub const D_SHIFT: [UDshift; 128] = [
     1 << 0,
     1 << 1,
@@ -289,10 +290,10 @@ pub const MAX_INTENSITY: f32 = 255.0; // TODO: make variable, dependent on input
 /// The default [`D`] value for every pixel at the beginning of transcode
 pub const D_START: D = 7;
 
-/// Number of ticks elapsed since a given pixel last fired an [`pixel::Event`]
+/// Number of ticks elapsed since a given pixel last fired an [`Event`]
 pub type DeltaT = u32;
 
-/// Large count of ticks (e.g., for tracking the running timestamp of a sequence of events)
+/// Large count of ticks (e.g., for tracking the running timestamp of a sequence of [Events](Event)
 pub type BigT = u64;
 
 /// Measure of an amount of light intensity
@@ -301,6 +302,7 @@ pub type Intensity = f64;
 /// Pixel x- or y- coordinate address in the ADΔER model
 pub type PixelAddress = u16;
 
+/// Special pixel address when signifying the end of a sequence of [Events](Event)
 pub const EOF_PX_ADDRESS: PixelAddress = u16::MAX;
 
 #[repr(packed)]

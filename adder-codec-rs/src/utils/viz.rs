@@ -11,7 +11,7 @@ use std::process::{Command, Output};
 /// * [`io::Error`] if there is an error writing to the file
 /// * [`opencv::Error`] if the [`Mat`] is malformed
 /// # Safety
-/// This function is unsafe because it calls [`Mat::at_unchecked`] which is unsafe
+/// This function is unsafe because it calls `Mat::at_unchecked()` which is unsafe
 /// # Panics
 /// This function panics if the amount data written to the file is not equal to the amount of data
 /// in the [`Mat`].

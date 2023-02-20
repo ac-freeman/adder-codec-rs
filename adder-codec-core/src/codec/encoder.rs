@@ -59,7 +59,7 @@ impl<W: Write> Encoder<W> {
     }
 
     /// Signify the end of the file in a unified way
-    fn write_eof(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+    fn write_eof(&mut self) -> Result<(), CodecError> {
         self.compression.byte_align()?;
         let output_event: EventSingle;
         let mut buffer = Vec::new();
@@ -78,7 +78,7 @@ impl<W: Write> Encoder<W> {
     }
 
     /// Close the encoder's writer and return it, consuming the encoder in the process.
-    pub fn close_writer(mut self) -> Result<Option<W>, Box<dyn std::error::Error>> {
+    pub fn close_writer(mut self) -> Result<Option<W>, CodecError> {
         self.compression.byte_align()?;
         self.write_eof()?;
         self.flush_writer()?;
@@ -91,7 +91,7 @@ impl<W: Write> Encoder<W> {
     /// want to read and write two streams at once (for example, if you are cropping the spatial
     /// pixels of a stream, reducing the number of channels, or scaling the [`DeltaT`] values in
     /// some way).
-    fn encode_header(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+    fn encode_header(&mut self) -> Result<(), CodecError> {
         let mut buffer: Vec<u8> = Vec::new();
         let meta = self.compression.meta();
         let header = EventStreamHeader::new(

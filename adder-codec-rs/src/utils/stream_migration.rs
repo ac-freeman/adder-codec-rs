@@ -6,14 +6,32 @@ use ndarray::Array3;
 use std::error::Error;
 use std::io::{Read, Seek, Write};
 
+/// Transforms an [`Event`] with an [absolute](TimeMode::AbsoluteT) timestamp to am [`Event`] with
+/// a [delta](TimeMode::DeltaT) timestamp.
+///
+/// # Arguments
+///
+/// * `event`: [`Event`] to be transformed
+/// * `last_t`: last [absolute](TimeMode::AbsoluteT) timestamp of the pixel
+///
+/// returns: transformed Event
 pub fn absolute_event_to_dt_event(mut event: Event, last_t: DeltaT) -> Event {
     event.delta_t -= last_t;
     event
 }
 
+/// Transforms an input stream to a new output stream with v2 of the codec.
+///
+/// # Arguments
+///
+/// * `input_stream`: input stream to be migrated
+/// * `bitreader`: bitreader to be used for reading the input stream
+/// * `output_stream`: output stream to be written to
+///
+/// returns: `Result<Encoder<W>, Box<dyn Error, Global>>` where `W` is the type of the output stream
 pub fn migrate_v2<W: Write, R: Read + Seek>(
     mut input_stream: Decoder<R>,
-    mut bitreader: &mut bitstream_io::BitReader<R, BigEndian>,
+    bitreader: &mut bitstream_io::BitReader<R, BigEndian>,
     mut output_stream: Encoder<W>,
 ) -> Result<Encoder<W>, Box<dyn Error>> {
     let mut t_tree: Array3<u32> = Array3::from_shape_vec(

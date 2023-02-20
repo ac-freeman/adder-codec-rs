@@ -647,10 +647,10 @@ impl<W: Write + 'static> VideoBuilder<W> for Davis<W> {
 
     fn time_parameters(
         mut self,
-        tps: crate::transcoder::event_pixel_tree::DeltaT,
-        ref_time: crate::transcoder::event_pixel_tree::DeltaT,
-        delta_t_max: crate::transcoder::event_pixel_tree::DeltaT,
-    ) -> Result<Self, Box<dyn Error>> {
+        tps: DeltaT,
+        ref_time: DeltaT,
+        delta_t_max: DeltaT,
+    ) -> Result<Self, SourceError> {
         self.video = self.video.time_parameters(tps, ref_time, delta_t_max)?;
         Ok(self)
     }
@@ -660,7 +660,7 @@ impl<W: Write + 'static> VideoBuilder<W> for Davis<W> {
         source_camera: SourceCamera,
         time_mode: TimeMode,
         write: W,
-    ) -> Result<Box<Self>, Box<dyn Error>> {
+    ) -> Result<Box<Self>, SourceError> {
         self.video = self
             .video
             .write_out(Some(source_camera), Some(time_mode), write)?;

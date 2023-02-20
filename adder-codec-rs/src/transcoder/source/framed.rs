@@ -1,10 +1,9 @@
-use crate::transcoder::event_pixel_tree::DeltaT;
 use crate::transcoder::event_pixel_tree::Mode::FramePerfect;
 use crate::transcoder::source::video::SourceError;
 use crate::transcoder::source::video::SourceError::BufferEmpty;
 use crate::transcoder::source::video::Video;
 use crate::transcoder::source::video::{Source, VideoBuilder};
-use adder_codec_core::{Coord, Event, PlaneSize, SourceCamera, TimeMode};
+use adder_codec_core::{Coord, DeltaT, Event, PlaneSize, SourceCamera, TimeMode};
 use opencv::core::{Mat, Size};
 use opencv::videoio::{VideoCapture, CAP_PROP_FPS, CAP_PROP_FRAME_COUNT, CAP_PROP_POS_FRAMES};
 use opencv::{imgproc, prelude::*, videoio, Result};
@@ -39,7 +38,7 @@ impl<W: Write + 'static> Framed<W> {
         input_filename: String,
         color_input: bool,
         scale: f64,
-    ) -> Result<Framed<W>, Box<dyn Error>> {
+    ) -> Result<Framed<W>, SourceError> {
         let mut cap =
             videoio::VideoCapture::from_file(input_filename.as_str(), videoio::CAP_FFMPEG)?;
 
@@ -52,7 +51,7 @@ impl<W: Write + 'static> Framed<W> {
 
         let opened = videoio::VideoCapture::is_opened(&cap)?;
         if !opened {
-            return Err("Failed to open video capture".into());
+            return Err(SourceError::Open);
         }
         let mut init_frame = Mat::default();
         cap.read(&mut init_frame)?;
@@ -91,7 +90,7 @@ impl<W: Write + 'static> Framed<W> {
     //     self
     // }
 
-    pub fn frame_start(mut self, frame_idx_start: u32) -> Result<Self, Box<dyn Error>> {
+    pub fn frame_start(mut self, frame_idx_start: u32) -> Result<Self, SourceError> {
         let video_frame_count = self.cap.get(CAP_PROP_FRAME_COUNT)?;
         if frame_idx_start >= video_frame_count as u32 {
             return Err(SourceError::StartOutOfBounds.into());
@@ -107,20 +106,24 @@ impl<W: Write + 'static> Framed<W> {
         self
     }
 
+    /// Automatically derive the ticks per second from the source FPS and `ref_time`
     pub fn auto_time_parameters(
         mut self,
-        ref_time: crate::transcoder::event_pixel_tree::DeltaT,
-        delta_t_max: crate::transcoder::event_pixel_tree::DeltaT,
-    ) -> Result<Self, Box<dyn Error>> {
+        ref_time: DeltaT,
+        delta_t_max: DeltaT,
+    ) -> Result<Self, SourceError> {
         if delta_t_max % ref_time == 0 {
             let tps = (ref_time as f64 * self.source_fps) as DeltaT;
             self.video = self.video.time_parameters(tps, ref_time, delta_t_max)?;
         } else {
-            eprintln!("delta_t_max must be a multiple of ref_time");
+            return Err(SourceError::BadParams(
+                "delta_t_max must be a multiple of ref_time".to_string(),
+            ));
         }
         Ok(self)
     }
 
+    /// Get the number of ticks each frame is said to span
     pub fn get_ref_time(&self) -> u32 {
         self.video.state.ref_time
     }
@@ -128,7 +131,7 @@ impl<W: Write + 'static> Framed<W> {
 
 impl<W: Write + 'static> Source<W> for Framed<W> {
     /// Get pixel-wise intensities directly from source frame, and integrate them with
-    /// [`ref_time`](Video::ref_time) (the number of ticks each frame is said to span)
+    /// `ref_time` (the number of ticks each frame is said to span)
     fn consume(
         &mut self,
         view_interval: u32,
@@ -198,10 +201,10 @@ impl<W: Write + 'static> VideoBuilder<W> for Framed<W> {
 
     fn time_parameters(
         mut self,
-        tps: crate::transcoder::event_pixel_tree::DeltaT,
-        ref_time: crate::transcoder::event_pixel_tree::DeltaT,
-        delta_t_max: crate::transcoder::event_pixel_tree::DeltaT,
-    ) -> Result<Self, Box<dyn Error>> {
+        tps: DeltaT,
+        ref_time: DeltaT,
+        delta_t_max: DeltaT,
+    ) -> Result<Self, SourceError> {
         if delta_t_max % ref_time == 0 {
             self.video = self.video.time_parameters(tps, ref_time, delta_t_max)?;
         } else {
@@ -215,7 +218,7 @@ impl<W: Write + 'static> VideoBuilder<W> for Framed<W> {
         source_camera: SourceCamera,
         time_mode: TimeMode,
         write: W,
-    ) -> Result<Box<Self>, Box<dyn Error>> {
+    ) -> Result<Box<Self>, SourceError> {
         self.video = self
             .video
             .write_out(Some(source_camera), Some(time_mode), write)?;

@@ -288,7 +288,7 @@ fn consume_source(
 #[derive(Component, Default)]
 struct MyDropTarget;
 
-///https://bevy-cheatbook.github.io/input/dnd.html
+///<https://bevy-cheatbook.github.io/input/dnd.html>
 fn file_drop(
     main_ui_state: ResMut<MainUiState>,
     mut player_state: ResMut<PlayerState>,

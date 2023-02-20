@@ -174,11 +174,11 @@ pub trait Framer {
 
     /// Ingest an ADΔER event. Will process differently depending on choice of [`FramerMode`].
     ///
-    /// If [`INSTANTANEOUS`], this function will set the corresponding output frame's pixel value to
+    /// If [INSTANTANEOUS](FramerMode::INSTANTANEOUS), this function will set the corresponding output frame's pixel value to
     /// the value derived from this [`Event`], only if this is the first value ingested for that
     /// pixel and frame. Otherwise, the operation will silently be ignored.
     ///
-    /// If [`INTEGRATION`], this function will integrate this [`Event`] value for the corresponding
+    /// If [INTEGRATION](FramerMode::INTEGRATION), this function will integrate this [`Event`] value for the corresponding
     /// output frame(s)
     fn ingest_event(&mut self, event: &mut Event) -> bool;
 

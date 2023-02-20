@@ -1,5 +1,4 @@
 use opencv::core::{Mat, Size, CV_8U, CV_8UC3};
-use std::error::Error;
 use std::fmt;
 use std::io::Write;
 use std::mem::swap;
@@ -8,7 +7,9 @@ use adder_codec_core::codec::empty::stream::EmptyOutput;
 use adder_codec_core::codec::encoder::Encoder;
 use adder_codec_core::codec::raw::stream::RawOutput;
 use adder_codec_core::codec::{CodecError, CodecMetadata, WriteCompression, LATEST_CODEC_VERSION};
-use adder_codec_core::{Coord, Event, PlaneSize, SourceCamera, SourceType, TimeMode};
+use adder_codec_core::{
+    Coord, DeltaT, Event, PlaneError, PlaneSize, SourceCamera, SourceType, TimeMode,
+};
 use bumpalo::Bump;
 use std::sync::mpsc::{channel, Sender};
 
@@ -19,55 +20,54 @@ use opencv::prelude::*;
 
 use crate::framer::scale_intensity::FrameValue;
 use crate::transcoder::event_pixel_tree::Mode::Continuous;
-use crate::transcoder::event_pixel_tree::{DeltaT, Intensity32, Mode, PixelArena};
+use crate::transcoder::event_pixel_tree::{Intensity32, Mode, PixelArena};
 use davis_edi_rs::util::reconstructor::ReconstructionError;
-use ndarray::{Array3, Axis};
+use ndarray::{Array3, Axis, ShapeError};
 use rayon::iter::IntoParallelIterator;
 use rayon::iter::ParallelIterator;
 use rayon::iter::{IndexedParallelIterator, IntoParallelRefMutIterator};
 use rayon::ThreadPool;
 
-#[derive(Debug)]
+use thiserror::Error;
+
+/// Various errors that can occur during an ADΔER transcode
+#[derive(Error, Debug)]
 pub enum SourceError {
-    /// Could not open source file
+    #[error("Could not open source file")]
     Open,
 
-    /// ADDER parameters are invalid for the given source
-    BadParams,
+    #[error("ADDER parameters are invalid for the given source: {0}")]
+    BadParams(String),
 
+    #[error("When a [Framed](crate::transcoder::source::framed::Framed) source is used, but the start frame is out of bounds")]
     StartOutOfBounds,
 
-    /// Source buffer is empty
+    #[error("Source buffer is empty")]
     BufferEmpty,
 
-    /// Source buffer channel is closed
+    #[error("Source buffer channel is closed")]
     BufferChannelClosed,
 
-    /// No data from next spot in buffer
+    #[error("No data from next spot in buffer")]
     NoData,
 
-    /// Data not initialized
+    #[error("Data not initialized")]
     UninitializedData,
 
-    /// OpenCV error
+    #[error("OpenCV error")]
     OpencvError(opencv::Error),
 
+    #[error("Codec core error")]
     CodecError(CodecError),
 
-    /// EDI error
+    #[error("EDI error")]
     EdiError(ReconstructionError),
-}
 
-impl fmt::Display for SourceError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Source error")
-    }
-}
+    #[error("Shape error")]
+    ShapeError(#[from] ShapeError),
 
-impl From<SourceError> for Box<dyn std::error::Error> {
-    fn from(value: SourceError) -> Self {
-        value.to_string().into()
-    }
+    #[error("Plane error")]
+    PlaneError(#[from] PlaneError),
 }
 
 impl From<opencv::Error> for SourceError {
@@ -81,17 +81,29 @@ impl From<adder_codec_core::codec::CodecError> for SourceError {
     }
 }
 
+/// The display mode
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub enum FramedViewMode {
+    /// Visualize the intensity (2^[`D`] / [`DeltaT`]) of each pixel's most recent event
     Intensity,
+
+    /// Visualize the [`D`] component of each pixel's most recent event
     D,
+
+    /// Visualize the temporal component ([`DeltaT`]) of each pixel's most recent event
     DeltaT,
 }
 
+/// Running state of the video transcode
 pub struct VideoState {
+    /// The size of the imaging plane
     pub plane: PlaneSize,
     pub(crate) pixel_tree_mode: Mode,
+
+    /// The number of rows of pixels to process at a time (per thread)
     pub chunk_rows: usize,
+
+    /// The number of input intervals (of fixed time) processed so far
     pub in_interval_count: u32,
     pub(crate) c_thresh_pos: u8,
     pub(crate) c_thresh_neg: u8,
@@ -122,31 +134,39 @@ impl Default for VideoState {
     }
 }
 
+/// A builder for a [`Video`]
 pub trait VideoBuilder<W> {
+    /// Set both the positive and negative contrast thresholds
     fn contrast_thresholds(self, c_thresh_pos: u8, c_thresh_neg: u8) -> Self;
 
+    /// Set the positive contrast threshold
     fn c_thresh_pos(self, c_thresh_pos: u8) -> Self;
 
+    /// Set the negative contrast threshold
     fn c_thresh_neg(self, c_thresh_neg: u8) -> Self;
 
+    /// Set the chunk rows
     fn chunk_rows(self, chunk_rows: usize) -> Self;
 
+    /// Set the time parameters
     fn time_parameters(
         self,
         tps: DeltaT,
         ref_time: DeltaT,
         delta_t_max: DeltaT,
-    ) -> Result<Self, Box<dyn Error>>
+    ) -> Result<Self, SourceError>
     where
         Self: std::marker::Sized;
 
+    /// Set the [`Encoder`]
     fn write_out(
         self,
         source_camera: SourceCamera,
         time_mode: TimeMode,
         write: W,
-    ) -> Result<Box<Self>, Box<dyn std::error::Error>>;
+    ) -> Result<Box<Self>, SourceError>;
 
+    /// Set whether or not the show the live display
     fn show_display(self, show_display: bool) -> Self;
 }
 
@@ -154,10 +174,17 @@ pub trait VideoBuilder<W> {
 
 /// Attributes common to ADΔER transcode process
 pub struct Video<W: Write> {
+    /// The current state of the video transcode
     pub state: VideoState,
     pub(crate) event_pixel_trees: Array3<PixelArena>,
+
+    /// The current instantaneous frame
     pub instantaneous_frame: Mat,
+
+    /// The current view mode of the instantaneous frame
     pub instantaneous_view_mode: FramedViewMode,
+
+    /// Channel for sending events to the encoder
     pub event_sender: Sender<Vec<Event>>,
     pub(crate) encoder: Encoder<W>,
 }
@@ -170,7 +197,7 @@ impl<W: Write + 'static> Video<W> {
         plane: PlaneSize,
         pixel_tree_mode: Mode,
         writer: Option<W>,
-    ) -> Result<Video<W>, Box<dyn Error>> {
+    ) -> Result<Video<W>, SourceError> {
         let mut state = VideoState {
             pixel_tree_mode,
             ..Default::default()
@@ -256,32 +283,42 @@ impl<W: Write + 'static> Video<W> {
         }
     }
 
+    /// Set the positive contrast threshold
     pub fn c_thresh_pos(mut self, c_thresh_pos: u8) -> Self {
         self.state.c_thresh_pos = c_thresh_pos;
         self
     }
 
+    /// Set the negative contrast threshold
     pub fn c_thresh_neg(mut self, c_thresh_neg: u8) -> Self {
         self.state.c_thresh_neg = c_thresh_neg;
         self
     }
 
+    /// Set the number of rows to process at a time (in each thread)
     pub fn chunk_rows(mut self, chunk_rows: usize) -> Self {
         self.state.chunk_rows = chunk_rows;
         self
     }
 
+    /// Set the time parameters for the video.
+    ///
+    /// These parameters, in conjunction, determine the temporal resolution and maximum transcode
+    /// accuracy/quality.
+    ///
+    /// # Arguments
+    ///
+    /// * `tps`: ticks per second
+    /// * `ref_time`: reference time in ticks.
+    /// * `delta_t_max`: maximum time difference between events of the same pixel, in ticks
+    ///
+    /// returns: `Result<Video<W>, Box<dyn Error, Global>>`
     pub fn time_parameters(
         mut self,
         tps: DeltaT,
         ref_time: DeltaT,
         delta_t_max: DeltaT,
-    ) -> Result<Self, Box<dyn Error>> {
-        // if self.stream.is_some() {
-        //     return Err(
-        //         "Cannot change time parameters after output stream has been initialized".into(),
-        //     );
-        // }
+    ) -> Result<Self, SourceError> {
         if ref_time > f32::MAX as u32 {
             eprintln!(
                 "Reference time {} is too large. Keeping current value of {}.",
@@ -316,12 +353,19 @@ impl<W: Write + 'static> Video<W> {
         Ok(self)
     }
 
+    /// Write out the video to a file.
+    ///
+    /// # Arguments
+    ///
+    /// * `source_camera`: the type of video source
+    /// * `time_mode`: the time mode of the video
+    /// * `write`: the output stream to write to
     pub fn write_out(
         mut self,
         source_camera: Option<SourceCamera>,
         time_mode: Option<TimeMode>,
         write: W,
-    ) -> Result<Self, Box<dyn std::error::Error>> {
+    ) -> Result<Self, SourceError> {
         // TODO: Allow for compressed representation (not just raw)
         let compression = RawOutput::new(
             CodecMetadata {
@@ -346,6 +390,7 @@ impl<W: Write + 'static> Video<W> {
         Ok(self)
     }
 
+    /// Set the display mode for the instantaneous view.
     pub fn show_display(mut self, show_display: bool) -> Self {
         self.state.show_display = show_display;
         self
@@ -354,7 +399,7 @@ impl<W: Write + 'static> Video<W> {
     /// Close and flush the stream writer.
     /// # Errors
     /// Returns an error if the stream writer cannot be closed cleanly.
-    pub fn end_write_stream(&mut self) -> Result<(), Box<dyn Error>> {
+    pub fn end_write_stream(&mut self) -> Result<(), SourceError> {
         let mut tmp = Encoder::new(Box::new(EmptyOutput::new(
             CodecMetadata::default(),
             Vec::new(),
@@ -508,6 +553,20 @@ impl<W: Write + 'static> Video<W> {
     }
 }
 
+/// Integrate an intensity value for a pixel, over a given time span
+///
+/// # Arguments
+///
+/// * `px`: the pixel to integrate
+/// * `base_val`: holder for the base intensity value of the pixel
+/// * `frame_val`: the intensity value, normalized to a fixed-length period defined by `ref_time`.
+/// Used for determining if the pixel must pop its events.
+/// * `intensity`: the intensity to integrate
+/// * `time_spanned`: the time spanned by the intensity value
+/// * `buffer`: the buffer to push events to
+/// * `state`: the state of the video source
+///
+/// returns: ()
 pub fn integrate_for_px(
     px: &mut PixelArena,
     base_val: &mut u8,
@@ -555,7 +614,7 @@ pub fn integrate_for_px(
 /// with the given name.
 ///
 /// # Errors
-/// Returns an [`OpencvError`] if the window cannot be shown, or the [`Mat`] cannot be scaled as
+/// Returns an [`opencv::Error`] if the window cannot be shown, or the [`Mat`] cannot be scaled as
 /// needed.
 pub fn show_display<W: Write>(
     window_name: &str,
@@ -574,7 +633,7 @@ pub fn show_display<W: Write>(
 /// [`Video::show_display`].
 /// This function is useful for debugging.
 /// # Errors
-/// Returns an [`OpencvError`] if the window cannot be shown, or the [`Mat`] cannot be scaled as
+/// Returns an [`opencv::Error`] if the window cannot be shown, or the [`Mat`] cannot be scaled as
 /// needed.
 pub fn show_display_force(window_name: &str, mat: &Mat, wait: i32) -> opencv::Result<()> {
     let mut tmp = Mat::default();
@@ -601,6 +660,7 @@ pub fn show_display_force(window_name: &str, mat: &Mat, wait: i32) -> opencv::Re
     Ok(())
 }
 
+/// A trait for objects that can be used as a source of data for the ADΔER transcode model.
 pub trait Source<W: Write> {
     /// Intake one input interval worth of data from the source stream into the ADΔER model as
     /// intensities.
@@ -610,9 +670,13 @@ pub trait Source<W: Write> {
         thread_pool: &ThreadPool,
     ) -> Result<Vec<Vec<Event>>, SourceError>;
 
+    /// Get a mutable reference to the [`Video`] object associated with this [`Source`].
     fn get_video_mut(&mut self) -> &mut Video<W>;
 
+    /// Get an immutable reference to the [`Video`] object associated with this [`Source`].
     fn get_video_ref(&self) -> &Video<W>;
 
+    /// Get the [`Video`] object associated with this [`Source`], consuming the [`Source`] in the
+    /// process.
     fn get_video(self) -> Video<W>;
 }

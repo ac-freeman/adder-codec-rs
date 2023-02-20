@@ -1,16 +1,8 @@
 use crate::transcoder::event_pixel_tree::Mode::{Continuous, FramePerfect};
-use adder_codec_core::{Coord, Event, TimeMode};
+use adder_codec_core::{Coord, DeltaT, Event, TimeMode, D};
 use adder_codec_core::{UDshift, D_EMPTY, D_MAX, D_SHIFT, D_ZERO_INTEGRATION};
 use smallvec::{smallvec, SmallVec};
 use std::cmp::min;
-
-/// Decimation value; a pixel's sensitivity.
-pub type D = u8;
-
-// type Integration = f32;
-
-/// Number of ticks elapsed since a given pixel last fired an [`pixel::Event`]
-pub type DeltaT = u32;
 
 /// Measure of an amount of light intensity. Is f32 so that we can use `fast_math::log2_raw`
 pub type Intensity32 = f32;

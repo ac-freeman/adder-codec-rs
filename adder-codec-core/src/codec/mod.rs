@@ -1,3 +1,5 @@
+#![warn(missing_docs)]
+
 use crate::codec::header::Magic;
 use crate::{DeltaT, Event, PlaneSize, SourceCamera, TimeMode};
 use bitstream_io::{BigEndian, BitReader};

@@ -88,13 +88,32 @@ pub struct SimulProcArgs {
     pub time_mode: String,
 }
 
+/// A struct for simultaneously transcoding a video source to ADΔER and reconstructing a framed
+/// video from ADΔER
 pub struct SimulProcessor<W: Write + 'static> {
+    /// Framed transcoder hook
     pub source: Framed<W>,
     thread_pool: ThreadPool,
     events_tx: Sender<Vec<Vec<Event>>>,
 }
 
 impl<W: Write + 'static> SimulProcessor<W> {
+    /// Create a new SimulProcessor
+    ///
+    /// # Arguments
+    ///
+    /// * `source`: [`Framed<W>`] source
+    /// * `ref_time`: ticks per source frame
+    /// * `output_path`: path to output file
+    /// * `frame_max`: max number of frames to transcode
+    /// * `num_threads`: number of threads to use
+    /// * `codec_version`: codec version
+    /// * `time_mode`: time mode
+    ///
+    /// returns: `Result<SimulProcessor<W>, Box<dyn Error, Global>>`
+    ///
+    /// # Examples
+    /// TODO: add examples
     pub fn new<T>(
         source: Framed<W>,
         ref_time: DeltaT,
@@ -208,6 +227,8 @@ impl<W: Write + 'static> SimulProcessor<W> {
         })
     }
 
+    /// Run the processor
+    /// This will run until the source is exhausted
     pub fn run(&mut self) -> Result<(), Box<dyn Error>> {
         let mut now = Instant::now();
 

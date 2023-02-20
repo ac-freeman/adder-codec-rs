@@ -1,5 +1,4 @@
-use crate::transcoder::event_pixel_tree::{DeltaT, D};
-use adder_codec_core::D_MAX;
+use adder_codec_core::{DeltaT, D, D_MAX};
 use std::cmp::min;
 
 #[allow(dead_code)]
