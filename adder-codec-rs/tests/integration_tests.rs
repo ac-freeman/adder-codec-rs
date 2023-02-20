@@ -8,7 +8,7 @@ use adder_codec_core::codec::{ReadCompression, WriteCompression};
 use adder_codec_core::SourceCamera::FramedU8;
 use adder_codec_core::SourceType::*;
 use adder_codec_core::TimeMode::DeltaT;
-use adder_codec_core::{Coord, Event, PlaneSize, TimeMode};
+use adder_codec_core::{Coord, Event, EventCoordless, PlaneSize, TimeMode};
 use bitstream_io::{BigEndian, BitReader};
 use ndarray::{Array3, Axis};
 use std::fs;
@@ -421,7 +421,7 @@ fn read_event() {
 fn test_event_framer_ingest() {
     use adder_codec_core::SourceType::U8;
     use adder_codec_rs::framer::driver::FramerMode::INSTANTANEOUS;
-    use adder_codec_rs::framer::driver::{EventCoordless, FrameSequence, Framer};
+    use adder_codec_rs::framer::driver::{FrameSequence, Framer};
 
     let plane = PlaneSize::new(10, 10, 3).unwrap();
     let mut frame_sequence: FrameSequence<EventCoordless> = FramerBuilder::new(plane, 64)
@@ -456,7 +456,7 @@ fn test_event_framer_ingest() {
 #[test]
 fn test_event_framer_ingest_get_filled() {
     use adder_codec_rs::framer::driver::FramerMode::INSTANTANEOUS;
-    use adder_codec_rs::framer::driver::{EventCoordless, FrameSequence, Framer};
+    use adder_codec_rs::framer::driver::{FrameSequence, Framer};
     let plane = PlaneSize::new(5, 5, 1).unwrap();
     let mut frame_sequence: FrameSequence<EventCoordless> = FramerBuilder::new(plane, 64)
         .codec_version(1, TimeMode::DeltaT)
@@ -494,7 +494,7 @@ fn test_event_framer_ingest_get_filled() {
 #[test]
 fn get_frame_bytes_eventcoordless() {
     use adder_codec_rs::framer::driver::FramerMode::INSTANTANEOUS;
-    use adder_codec_rs::framer::driver::{EventCoordless, FrameSequence, Framer};
+    use adder_codec_rs::framer::driver::{FrameSequence, Framer};
     let plane = PlaneSize::new(5, 5, 1).unwrap();
     let mut frame_sequence: FrameSequence<EventCoordless> = FramerBuilder::new(plane, 64)
         .codec_version(1, TimeMode::DeltaT)
