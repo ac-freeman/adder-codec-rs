@@ -42,6 +42,9 @@ jobs:
 
       - name: Test project
         run: cargo test -vv
+      
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v3
 
   docs-rs:
       runs-on: ubuntu-20.04
