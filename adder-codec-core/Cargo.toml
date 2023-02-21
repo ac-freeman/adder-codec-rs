@@ -14,8 +14,10 @@ categories = ["multimedia::encoding", "multimedia::video", "science"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+arithmetic-coding = {path = "../../arithmetic-coding"}
 bincode = "1.3.3"
 bitstream-io = "1.6.0"
+fenwick = "2.0.1"
 num-traits = "0.2.15"
 serde = { version = "1.0.140", features = ["derive"] }
 serde_bytes = "0.11.6"

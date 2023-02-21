@@ -76,7 +76,7 @@ impl<W: Write> WriteCompression<W> for RawOutput<W> {
         todo!()
     }
 
-    /// Ingest an event into the codec.
+    /// Ingest an event into the codec_old.
     ///
     /// This will always write the event immediately to the underlying writer.
     fn ingest_event(&mut self, event: &Event) -> Result<(), CodecError> {

@@ -1,6 +1,6 @@
 #![warn(missing_docs)]
 
-//! # adder-codec-rs
+//! # adder-codec_old-rs
 //!
 //! A library for transcoding to ADΔER from a variety of video sources, both framed and asynchronous
 

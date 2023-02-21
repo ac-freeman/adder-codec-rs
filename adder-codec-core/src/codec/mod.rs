@@ -6,7 +6,7 @@ use bitstream_io::{BigEndian, BitReader};
 use std::io;
 use std::io::{Read, Write};
 
-/// Compressed codec utilities
+/// Compressed codec_old utilities
 pub mod compressed;
 
 /// ADΔER stream decoder
@@ -19,10 +19,10 @@ pub mod empty;
 pub mod encoder;
 mod header;
 
-/// Raw codec utilities
+/// Raw codec_old utilities
 pub mod raw;
 
-/// Current latest version of the codec.
+/// Current latest version of the codec_old.
 ///
 /// This is the version which will be written to the header.
 pub const LATEST_CODEC_VERSION: u8 = 2;
@@ -103,7 +103,7 @@ pub trait ReadCompression<R: Read> {
     where
         Self: Sized;
 
-    /// Returns the magic number for the codec
+    /// Returns the magic number for the codec_old
     fn magic(&self) -> Magic;
 
     /// Returns a reference to the metadata
@@ -160,7 +160,7 @@ pub enum CodecError {
     #[error("Attempted to seek to a bad position in the stream")]
     Seek,
 
-    #[error("Unsupported codec version (expected {LATEST_CODEC_VERSION} or lower, found {0})")]
+    #[error("Unsupported codec_old version (expected {LATEST_CODEC_VERSION} or lower, found {0})")]
     UnsupportedVersion(u8),
 
     #[error("Bincode error")]

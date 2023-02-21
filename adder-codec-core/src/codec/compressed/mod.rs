@@ -1,2 +1,2 @@
-/// Compressed codec
+/// Compressed codec_old
 pub mod stream;
