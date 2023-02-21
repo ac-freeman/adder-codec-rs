@@ -43,8 +43,17 @@ jobs:
       - name: Test project
         run: cargo test -vv
       
-      - name: Upload coverage reports to Codecov
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@cargo-llvm-cov
+      - uses: Swatinem/rust-cache@v2
+      - name: run llvm-cov test
+        # should test with --all-features if gpu support.
+        run: cargo llvm-cov --workspace --lcov --output-path lcov.info
+      - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
+        with:
+          files: lcov.info
+          fail_ci_if_error: true
 
   docs-rs:
       runs-on: ubuntu-20.04
