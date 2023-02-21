@@ -107,7 +107,7 @@ impl<W: Write + 'static> SimulProcessor<W> {
     /// * `output_path`: path to output file
     /// * `frame_max`: max number of frames to transcode
     /// * `num_threads`: number of threads to use
-    /// * `codec_version`: codec version
+    /// * `codec_version`: codec_old version
     /// * `time_mode`: time mode
     ///
     /// returns: `Result<SimulProcessor<W>, Box<dyn Error, Global>>`

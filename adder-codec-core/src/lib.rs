@@ -1,11 +1,12 @@
 #![warn(missing_docs)]
 
-//! # adder-codec-core
+//! # adder-codec_old-core
 //!
 //! The core types and utilities for encoding and decoding ADΔER events
 
 /// Expose public API for encoding and decoding
 pub mod codec;
+mod codec_old;
 
 pub use bitstream_io;
 use bitstream_io::{BigEndian, BitReader};

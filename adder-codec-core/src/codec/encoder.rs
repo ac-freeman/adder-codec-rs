@@ -145,7 +145,7 @@ impl<W: Write + 'static> Encoder<W> {
         );
         self.bincode.serialize_into(&mut buffer, &header)?;
 
-        // Encode the header extensions (for newer versions of the codec)
+        // Encode the header extensions (for newer versions of the codec_old)
         buffer = self.encode_header_extension(buffer)?;
 
         self.output.write_bytes(&buffer)?;
