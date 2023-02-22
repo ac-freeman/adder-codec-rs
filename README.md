@@ -1,6 +1,7 @@
 # ADDER-codec-rs
 [![Build Status](https://github.com/ac-freeman/adder-codec-rs/workflows/Rust/badge.svg)](https://github.com/ac-freeman/adder-codec-rs/actions)
 [![Documentation](https://docs.rs/adder-codec-rs/badge.svg)](https://docs.rs/adder-codec-rs)
+[![codecov](https://codecov.io/gh/ac-freeman/adder-codec-rs/branch/main/graph/badge.svg?token=P0MSB1CJSE)](https://codecov.io/gh/ac-freeman/adder-codec-rs)
 [![Crates.io](https://img.shields.io/crates/v/adder-codec-rs)](https://crates.io/crates/adder-codec-rs)
 [![Downloads](https://img.shields.io/crates/dr/adder-codec-rs)](https://crates.io/crates/adder-codec-rs)
 
