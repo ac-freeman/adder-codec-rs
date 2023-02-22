@@ -23,8 +23,12 @@ pub struct MyArgs {
 
 fn main() -> Result<(), Box<dyn error::Error>> {
     let args: MyArgs = MyArgs::parse();
-    let file_path = args.input.as_str();
+    adder_info(args, io::stdout())?;
+    Ok(())
+}
 
+fn adder_info(args: MyArgs, out: impl Write) -> Result<(), Box<dyn error::Error>> {
+    let file_path = args.input.as_str();
     let (mut stream, mut bitreader) = open_file_decoder(file_path)?;
 
     let first_event_position = stream.get_input_stream_position(&mut bitreader)?;
@@ -38,8 +42,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let num_events = (eof_position_bytes - 1 - meta.header_size as u64) / meta.event_size as u64;
     let events_per_px = num_events / meta.plane.volume() as u64;
 
-    let stdout = io::stdout();
-    let mut handle = io::BufWriter::new(stdout.lock());
+    let mut handle = io::BufWriter::new(out);
 
     writeln!(handle, "Dimensions")?;
     writeln!(handle, "\tWidth: {}", meta.plane.w())?;
@@ -154,30 +157,37 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
 #[cfg(test)]
 mod tests {
-    use assert_cmd::prelude::*;
-    use predicates::prelude::*;
-    use std::process::Command;
+    use crate::{adder_info, MyArgs};
+    use std::io::Cursor;
 
     #[test]
     fn test_adder_info() -> Result<(), Box<dyn std::error::Error>> {
-        let mut cmd = Command::cargo_bin("adder-info")?;
+        let args = MyArgs {
+            input: "tests/test_sample.adder".to_string(),
+            dynamic_range: true,
+        };
 
-        cmd.arg("--input").arg("tests/test_sample.adder");
-        cmd.arg("-d");
-        cmd.assert()
-            .success()
-            .stdout(predicate::str::contains("Width: 2"))
-            .stdout(predicate::str::contains("Height: 2"))
-            .stdout(predicate::str::contains("Color channels: 1"))
-            .stdout(predicate::str::contains("Source camera: FramedU8"))
-            .stdout(predicate::str::contains("Codec version: 1"))
-            .stdout(predicate::str::contains("Ticks per second: 120000"))
-            .stdout(predicate::str::contains("ticks per source interval: 5000"))
-            .stdout(predicate::str::contains("t_max: 240000"))
-            .stdout(predicate::str::contains("File size: 1307"))
-            .stdout(predicate::str::contains("Header size: 29"))
-            .stdout(predicate::str::contains("event count: 140"))
-            .stdout(predicate::str::contains("Events per pixel channel: 35"));
+        let mut data = Vec::new();
+        {
+            let cursor = Cursor::new(&mut data);
+
+            let _ = adder_info(args, cursor)?;
+        }
+
+        let string = String::from_utf8(data)?;
+        assert!(string.contains("Width: 2"));
+
+        assert!(string.contains("Height: 2"));
+        assert!(string.contains("Color channels: 1"));
+        assert!(string.contains("Source camera: FramedU8"));
+        assert!(string.contains("Codec version: 1"));
+        assert!(string.contains("Ticks per second: 120000"));
+        assert!(string.contains("ticks per source interval: 5000"));
+        assert!(string.contains("t_max: 240000"));
+        assert!(string.contains("File size: 1307"));
+        assert!(string.contains("Header size: 29"));
+        assert!(string.contains("event count: 140"));
+        assert!(string.contains("Events per pixel channel: 35"));
 
         Ok(())
     }

@@ -1,6 +1,6 @@
 <component name="ProjectRunConfigurationManager">
   <configuration default="false" name="Run adderinfo" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
-    <option name="command" value="run -p adder-info -- -i $USER_HOME$/Downloads/tmp_events.adder -d" />
+    <option name="command" value="run -p adder-info -- -i &quot;$USER_HOME$/Downloads/davis (copy).adder&quot; -d" />
     <option name="workingDirectory" value="file://$PROJECT_DIR$" />
     <option name="channel" value="DEFAULT" />
     <option name="requiredFeatures" value="true" />
