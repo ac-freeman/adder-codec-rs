@@ -272,8 +272,7 @@ fn set_event_for_channel(
 mod tests {
     use crate::codec_old::compressed::blocks::{Cube, ZigZag, ZIGZAG_ORDER};
     use crate::codec_old::compressed::{BLOCK_SIZE_BIG, BLOCK_SIZE_BIG_AREA};
-    use crate::framer::driver::EventCoordless;
-    use adder_codec_core::{Coord, Event};
+    use crate::{Coord, Event, EventCoordless};
 
     struct Setup {
         cube: Cube,
