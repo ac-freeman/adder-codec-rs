@@ -380,7 +380,7 @@ mod tests {
     use rand::prelude::StdRng;
     use rand::{Rng, SeedableRng};
 
-    use adder_codec_core::{Coord, Event};
+    use crate::{Coord, Event};
     use std::io::{BufReader, BufWriter, Write};
 
     struct Setup {
