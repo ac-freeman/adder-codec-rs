@@ -324,7 +324,7 @@ pub const EOF_PX_ADDRESS: PixelAddress = u16::MAX;
 
 /// Pixel channel address in the ADΔER model
 #[repr(packed)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Coord {
     /// Pixel x-coordinate
     pub x: PixelAddress,
@@ -424,7 +424,7 @@ pub struct CoordSingle {
 /// An ADΔER event representation
 #[allow(missing_docs)]
 #[repr(packed)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Default, Hash, Serialize, Deserialize)]
 pub struct Event {
     pub coord: Coord,
     pub d: D,

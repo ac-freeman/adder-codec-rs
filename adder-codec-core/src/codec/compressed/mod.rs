@@ -1,3 +1,3 @@
-mod blocks;
+pub mod blocks;
 /// Compressed codec_old
 pub mod stream;
