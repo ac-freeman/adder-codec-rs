@@ -10,6 +10,7 @@ mod codec_old;
 
 pub use bitstream_io;
 use bitstream_io::{BigEndian, BitReader};
+use std::cmp::{max, min};
 use std::fs::File;
 use std::io::BufReader;
 use std::ops::Add;
@@ -46,10 +47,12 @@ pub enum SourceCamera {
     Asint,
 }
 
+use crate::codec::compressed::blocks::{DeltaTResidual, EventResidual};
 use crate::codec::compressed::stream::CompressedInput;
 use crate::codec::decoder::Decoder;
 use crate::codec::raw::stream::RawInput;
-use crate::codec::CodecError;
+use crate::codec::{CodecError, ReadCompression};
+use crate::codec_old::compressed::compression::DResidual;
 use serde::{Deserialize, Serialize};
 
 /// The type of time used in the ADΔER representation
