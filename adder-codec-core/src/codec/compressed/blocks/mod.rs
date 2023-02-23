@@ -1,5 +1,10 @@
 #![allow(non_upper_case_globals)]
 
+pub mod block;
+
+pub const BLOCK_SIZE: usize = 16;
+pub const BLOCK_SIZE_AREA: usize = BLOCK_SIZE * BLOCK_SIZE;
+
 /// Lookup table for quantization step sizes with 8-bit internal bit depth
 /// https://aomedia.org/docs/AV1_ToolDescription_v11-clean.pdf
 /// Quantization matrices inspired by AV1: https://arxiv.org/pdf/2008.06091.pdf
@@ -227,7 +232,7 @@ pub fn select_ac_qi(quantizer: i64, bit_depth: usize) -> u8 {
 
 #[cfg(test)]
 mod tests {
-    use crate::codec::compressed::blocks::dc_q;
+    use crate::codec::compressed::blocks::{dc_q, BLOCK_SIZE};
     use float_cmp::ApproxEq;
     use rustdct::DctPlanner;
 
@@ -255,8 +260,8 @@ mod tests {
 
     #[test]
     fn dct_16_x_16() {
-        let dim: usize = 16;
-        let divisor = 4.0 / (dim as f64 * dim as f64);
+        let dim: usize = BLOCK_SIZE;
+        let divisor = 4.0 / (dim * dim) as f64;
         let mut arr = gen_array(dim);
 
         // Not necessary, but may be important for adder accuracy
@@ -292,9 +297,9 @@ mod tests {
         //// End forward DCT
 
         // Quantize the coefficients
-        for elem in arr.iter_mut() {
-            *elem = (*elem).round();
-        }
+        // for elem in arr.iter_mut() {
+        //     *elem = (*elem).round();
+        // }
 
         //// Perform inverse DCT
         arr.chunks_exact_mut(dim as usize).for_each(|row| {
@@ -319,7 +324,7 @@ mod tests {
     }
 
     fn quantize(qparam: u8) {
-        let dim: usize = 16;
+        let dim: usize = BLOCK_SIZE;
         let divisor = 4.0 / (dim as f64 * dim as f64);
         let mut arr = gen_array(dim);
 
