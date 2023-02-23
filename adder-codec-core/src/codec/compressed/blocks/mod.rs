@@ -318,8 +318,7 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_quantize_qparam_12() {
+    fn quantize(qparam: u8) {
         let dim: usize = 16;
         let divisor = 4.0 / (dim as f64 * dim as f64);
         let mut arr = gen_array(dim);
@@ -355,7 +354,6 @@ mod tests {
         //// Quantize the coefficients
         let mut arr_i16 = arr.iter().map(|x| *x as i16).collect::<Vec<i16>>();
         let pre_quantized = arr_i16.clone();
-        let qparam = 0;
         // assume 12-bit depth
         let dc_quant = dc_q(qparam, 0, 12);
         // let dc_quant = 1;
@@ -402,5 +400,16 @@ mod tests {
         for (idx, (new, old)) in arr.iter().zip(orig.iter()).enumerate() {
             assert!(new.approx_eq(*old, (5.0, 5)));
         }
+    }
+
+    #[test]
+    fn test_quantize_qparam_0() {
+        quantize(0);
+    }
+
+    #[should_panic]
+    #[test]
+    fn test_quantize_qparam_1() {
+        quantize(1);
     }
 }
