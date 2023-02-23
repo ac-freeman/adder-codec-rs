@@ -1,5 +1,11 @@
-use crate::codec::compressed::blocks::{BLOCK_SIZE, BLOCK_SIZE_AREA};
-use crate::{Coord, Event, EventCoordless};
+use crate::codec::compressed::blocks::{
+    dc_q, Coefficient, DResidual, DeltaTResidual, EventResidual, BLOCK_SIZE, BLOCK_SIZE_AREA,
+    D_ENCODE_NO_EVENT,
+};
+use crate::{Coord, DeltaT, Event, EventCoordless, D_NO_EVENT};
+use itertools::Itertools;
+use rustdct::DctPlanner;
+use std::cmp::{max, min};
 use std::collections::HashMap;
 use thiserror::Error;
 
@@ -9,7 +15,7 @@ pub enum BlockError {
     AlreadyExists { idx: usize },
 }
 
-// Simpler approach. Don't build a complex tree. Just group events into fixed block sizes and
+// Simpler approach. Don't build a complex tree for now. Just group events into fixed block sizes and
 // differentially encode the D-values. Choose between a block being intra- or inter-coded.
 // With color sources, have 3 blocks at each idx. One for each color.
 pub type BlockEvents = [Option<EventCoordless>; BLOCK_SIZE_AREA];
@@ -49,6 +55,135 @@ impl Block {
             }
         }
         Ok(())
+    }
+
+    /// Perform intra-block compression.
+    ///
+    /// First, get prediction residuals of all event D-values and DeltaT. Then, quantize the
+    /// residual DeltaT.
+    ///
+    /// Write the qparam. Write the D-residuals directly, because we don't want any loss. Write the
+    /// quantized DeltaT residuals. Use arithmetic encoding.
+    ///
+    fn get_intra_residual_transforms(&mut self, qparam: u8, dtm: DeltaT) {
+        // Loop through the events and get prediction residuals
+
+        let mut d_residuals = [D_ENCODE_NO_EVENT; BLOCK_SIZE_AREA];
+        let mut dt_residuals: [Coefficient; BLOCK_SIZE_AREA] = [0.0; BLOCK_SIZE_AREA];
+        let mut init = false;
+
+        for (idx, event_opt) in self.events.iter().enumerate() {
+            if let Some(prev) = event_opt {
+                // If this is the first event encountered, then encode it directly
+                if !init {
+                    init = true;
+                    d_residuals[idx] = prev.d as DResidual;
+                    dt_residuals[idx] = prev.delta_t as Coefficient;
+                }
+
+                // Get the prediction residual for the next event and store it
+                for (next_idx, next_event_opt) in self.events.iter().skip(idx + 1).enumerate() {
+                    if let Some(next) = next_event_opt {
+                        let residual = predict_residual_from_prev(prev, next, dtm);
+                        d_residuals[next_idx] = residual.d;
+                        dt_residuals[next_idx] = residual.delta_t as Coefficient;
+                        break;
+                    }
+                }
+            }
+        }
+
+        // Quantize the dt residuals
+        let mut planner = DctPlanner::new(); // TODO: reuse planner
+        let dct = planner.plan_dct2(BLOCK_SIZE);
+
+        //// Perform forward DCT
+        dt_residuals.chunks_exact_mut(BLOCK_SIZE).for_each(|row| {
+            println!("{:?}", row);
+            dct.process_dct2(row);
+            println!("{:?}", row);
+        });
+
+        let mut transpose_buffer = vec![0.0; BLOCK_SIZE];
+        transpose::transpose_inplace(
+            &mut dt_residuals,
+            &mut transpose_buffer,
+            BLOCK_SIZE,
+            BLOCK_SIZE,
+        );
+
+        dt_residuals.chunks_exact_mut(BLOCK_SIZE).for_each(|row| {
+            println!("{:?}", row);
+            dct.process_dct2(row);
+            println!("{:?}", row);
+        });
+        transpose::transpose_inplace(
+            &mut dt_residuals,
+            &mut transpose_buffer,
+            BLOCK_SIZE,
+            BLOCK_SIZE,
+        );
+        //// End forward DCT
+
+        //// Quantize the coefficients
+        let mut arr_i16 = dt_residuals.iter().map(|x| *x as i16).collect::<Vec<i16>>();
+        // let pre_quantized = arr_i16.clone();
+        // assume 12-bit depth
+        let dc_quant = dc_q(qparam, 0, 12);
+        // let dc_quant = 1;
+        arr_i16[0] = arr_i16[0] / dc_quant;
+
+        let ac_quant = dc_q(qparam, 0, 12);
+        let ac_quant = 1;
+        for elem in arr_i16.iter_mut().skip(1) {
+            *elem = *elem / ac_quant;
+        }
+        //// End quantize the coefficients
+    }
+
+    fn compress_inter(&mut self) {
+        todo!()
+    }
+}
+
+fn predict_residual_from_prev(
+    previous: &EventCoordless,
+    next: &EventCoordless,
+    dtm: DeltaT,
+) -> EventResidual {
+    /// Predict what the `next` DeltaT will be, based on the change in D and the current DeltaT
+    let d_resid = next.d as DResidual - previous.d as DResidual;
+
+    // Get the prediction error for delta_t based on the change in D
+    let delta_t_resid = next.delta_t as DeltaTResidual
+        - match d_resid {
+            1_i16..=20_16 => {
+                // If D has increased by a little bit,
+                if d_resid as u32 <= previous.delta_t.leading_zeros() / 2 {
+                    min(
+                        (previous.delta_t << d_resid) as DeltaTResidual,
+                        dtm as DeltaTResidual,
+                    )
+                } else {
+                    previous.delta_t as DeltaTResidual
+                }
+            }
+            -20_i16..=-1_i16 => {
+                if -d_resid as u32 <= 32 - previous.delta_t.leading_zeros() {
+                    max(
+                        (previous.delta_t >> -d_resid) as DeltaTResidual,
+                        previous.delta_t as DeltaTResidual,
+                    )
+                } else {
+                    previous.delta_t as DeltaTResidual
+                }
+            }
+            // If D has not changed, or has changed a whole lot, use the previous delta_t
+            _ => previous.delta_t as DeltaTResidual,
+        };
+    EventResidual {
+        d: d_resid,
+        delta_t: delta_t_resid,
     }
 }
 

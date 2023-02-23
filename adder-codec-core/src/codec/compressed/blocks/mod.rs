@@ -4,6 +4,15 @@ pub mod block;
 
 pub const BLOCK_SIZE: usize = 16;
 pub const BLOCK_SIZE_AREA: usize = BLOCK_SIZE * BLOCK_SIZE;
+pub const D_ENCODE_NO_EVENT: DResidual = 256;
+
+pub type DResidual = i16;
+pub type Coefficient = f32;
+pub type DeltaTResidual = i64;
+pub struct EventResidual {
+    pub(crate) d: DResidual,
+    pub(crate) delta_t: DeltaTResidual,
+}
 
 /// Lookup table for quantization step sizes with 8-bit internal bit depth
 /// https://aomedia.org/docs/AV1_ToolDescription_v11-clean.pdf
@@ -271,7 +280,7 @@ mod tests {
         let orig = arr.clone();
 
         let mut planner = DctPlanner::new();
-        let dct = planner.plan_dct2(dim as usize);
+        let dct = planner.plan_dct2(dim as usize); // Should automatcially use butterflies if the size is right
 
         //// Perform forward DCT
         arr.chunks_exact_mut(dim as usize).for_each(|row| {
