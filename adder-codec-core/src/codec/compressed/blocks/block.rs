@@ -685,6 +685,7 @@ mod tests {
         }
     }
 
+    // Note: it's not perfectly lossless, because of the large dtm value.
     #[test]
     fn test_intra_compression_lossless_2() {
         let dtm = 25500;
@@ -716,6 +717,139 @@ mod tests {
                             recon_event.unwrap().delta_t + epsilon > orig_event.unwrap().delta_t
                                 && recon_event.unwrap().delta_t.saturating_sub(epsilon)
                                     < orig_event.unwrap().delta_t
+                        );
+                    } else {
+                        assert!(recon_event.is_none() && orig_event.is_none());
+                    }
+                    // assert_eq!(*recon_event, orig_event);
+                }
+            }
+        }
+    }
+
+    // Note: it's not perfectly lossless, because of the large dtm value.
+    #[test]
+    fn test_intra_compression_lossless_3() {
+        let dtm = 255000;
+        let events = get_random_events(
+            Some(743822),
+            10000,
+            BLOCK_SIZE as u16,
+            BLOCK_SIZE as u16,
+            1,
+            dtm,
+        );
+        let mut frame = setup_frame(events.clone(), BLOCK_SIZE, BLOCK_SIZE);
+        for mut cube in &mut frame.cubes {
+            for block in &mut cube.blocks_r {
+                assert!(block.fill_count <= BLOCK_SIZE_AREA as u16);
+                let (d_residuals, dt_residuals, qp_dt) =
+                    block.get_intra_residual_transforms(None, dtm);
+                // dbg!(d_residuals);
+                // dbg!(dt_residuals);
+                let events =
+                    block.get_intra_residual_inverse(None, dtm, d_residuals, dt_residuals, qp_dt);
+
+                // As our delta_t_max value increases, we can get more loss. Increase epsilon to allow for more slop.
+                let epsilon = 5000;
+                for (idx, recon_event) in events.iter().enumerate() {
+                    let orig_event = block.events[idx];
+                    if recon_event.is_some() && orig_event.is_some() {
+                        assert_eq!(recon_event.unwrap().d, orig_event.unwrap().d);
+                        let recon_dt = recon_event.unwrap().delta_t;
+                        let orig_dt = orig_event.unwrap().delta_t;
+                        assert!(
+                            recon_dt + epsilon > orig_dt
+                                && recon_dt.saturating_sub(epsilon) < orig_dt
+                        );
+                    } else {
+                        assert!(recon_event.is_none() && orig_event.is_none());
+                    }
+                    // assert_eq!(*recon_event, orig_event);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_intra_compression_lossy_1() {
+        let dtm = 255000;
+        let events = get_random_events(
+            Some(743822),
+            10000,
+            BLOCK_SIZE as u16,
+            BLOCK_SIZE as u16,
+            1,
+            dtm,
+        );
+        let mut frame = setup_frame(events.clone(), BLOCK_SIZE, BLOCK_SIZE);
+        for mut cube in &mut frame.cubes {
+            for block in &mut cube.blocks_r {
+                assert!(block.fill_count <= BLOCK_SIZE_AREA as u16);
+                let (d_residuals, dt_residuals, qp_dt) =
+                    block.get_intra_residual_transforms(Some(30), dtm);
+                // dbg!(d_residuals);
+                // dbg!(dt_residuals);
+                let events = block.get_intra_residual_inverse(
+                    Some(30),
+                    dtm,
+                    d_residuals,
+                    dt_residuals,
+                    qp_dt,
+                );
+
+                // As our delta_t_max value increases, we can get more loss. Increase epsilon to allow for more slop.
+                let epsilon = 5000;
+                for (idx, recon_event) in events.iter().enumerate() {
+                    let orig_event = block.events[idx];
+                    if recon_event.is_some() && orig_event.is_some() {
+                        assert_eq!(recon_event.unwrap().d, orig_event.unwrap().d);
+                        let recon_dt = recon_event.unwrap().delta_t;
+                        let orig_dt = orig_event.unwrap().delta_t;
+                        assert!(
+                            recon_dt + epsilon > orig_dt
+                                && recon_dt.saturating_sub(epsilon) < orig_dt
+                        );
+                    } else {
+                        assert!(recon_event.is_none() && orig_event.is_none());
+                    }
+                    // assert_eq!(*recon_event, orig_event);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_intra_compression_lossy_1_big_frame() {
+        let dtm = 255000;
+        let events = get_random_events(Some(743822), 10000, 640, 480, 1, dtm);
+        let mut frame = setup_frame(events.clone(), 640, 480);
+        for mut cube in &mut frame.cubes {
+            for block in &mut cube.blocks_r {
+                assert!(block.fill_count <= BLOCK_SIZE_AREA as u16);
+                let (d_residuals, dt_residuals, qp_dt) =
+                    block.get_intra_residual_transforms(Some(30), dtm);
+                // dbg!(d_residuals);
+                // dbg!(dt_residuals);
+                let events = block.get_intra_residual_inverse(
+                    Some(30),
+                    dtm,
+                    d_residuals,
+                    dt_residuals,
+                    qp_dt,
+                );
+
+                // As our delta_t_max value increases, we can get more loss. Increase epsilon to allow for more slop.
+                let epsilon = 50000;
+                for (idx, recon_event) in events.iter().enumerate() {
+                    let orig_event = block.events[idx];
+                    if recon_event.is_some() && orig_event.is_some() {
+                        assert_eq!(recon_event.unwrap().d, orig_event.unwrap().d);
+                        let recon_dt = recon_event.unwrap().delta_t;
+                        let orig_dt = orig_event.unwrap().delta_t;
+                        assert!(
+                            recon_dt + epsilon > orig_dt
+                                && recon_dt.saturating_sub(epsilon) < orig_dt
                         );
                     } else {
                         assert!(recon_event.is_none() && orig_event.is_none());
