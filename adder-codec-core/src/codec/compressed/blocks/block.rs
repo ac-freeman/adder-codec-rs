@@ -1,8 +1,8 @@
 use crate::codec::compressed::blocks::{
-    dc_q, Coefficient, DResidual, DeltaTResidual, EventResidual, BLOCK_SIZE, BLOCK_SIZE_AREA,
+    ac_q, dc_q, Coefficient, DResidual, DeltaTResidual, EventResidual, BLOCK_SIZE, BLOCK_SIZE_AREA,
     D_ENCODE_NO_EVENT,
 };
-use crate::{Coord, DeltaT, Event, EventCoordless, D_NO_EVENT};
+use crate::{Coord, DeltaT, Event, EventCoordless, D, D_NO_EVENT};
 use itertools::Itertools;
 use rustdct::DctPlanner;
 use std::cmp::{max, min};
@@ -24,6 +24,7 @@ pub struct Block {
     /// Events organized in row-major order.
     pub events: BlockEvents,
     fill_count: u16,
+    max_dt: DeltaT,
     // block_idx_y: usize,
     // block_idx_x: usize,
     // block_idx_c: usize,
@@ -37,6 +38,7 @@ impl Block {
             // block_idx_x,
             // block_idx_c,
             fill_count: 0,
+            max_dt: 0,
         }
     }
 
@@ -52,6 +54,9 @@ impl Block {
             None => {
                 self.events[idx] = Some(EventCoordless::from(*event));
                 self.fill_count += 1;
+                if event.delta_t > self.max_dt {
+                    self.max_dt = event.delta_t;
+                }
             }
         }
         Ok(())
@@ -65,7 +70,12 @@ impl Block {
     /// Write the qparam. Write the D-residuals directly, because we don't want any loss. Write the
     /// quantized DeltaT residuals. Use arithmetic encoding.
     ///
-    fn get_intra_residual_transforms(&mut self, qparam: u8, dtm: DeltaT) {
+    /// TODO: Note: under this, the maximum value of dtm is 8388608 (since 8388608 * BLOCK_SIZE_AREA = i32::MAX)
+    fn get_intra_residual_transforms(
+        &mut self,
+        qparam: Option<u8>,
+        dtm: DeltaT,
+    ) -> ([DResidual; 256], [i16; 256], i16) {
         // Loop through the events and get prediction residuals
 
         let mut d_residuals = [D_ENCODE_NO_EVENT; BLOCK_SIZE_AREA];
@@ -85,8 +95,8 @@ impl Block {
                 for (next_idx, next_event_opt) in self.events.iter().skip(idx + 1).enumerate() {
                     if let Some(next) = next_event_opt {
                         let residual = predict_residual_from_prev(prev, next, dtm);
-                        d_residuals[next_idx] = residual.d;
-                        dt_residuals[next_idx] = residual.delta_t as Coefficient;
+                        d_residuals[next_idx + idx + 1] = residual.d;
+                        dt_residuals[next_idx + idx + 1] = residual.delta_t as Coefficient;
                         break;
                     }
                 }
@@ -99,9 +109,7 @@ impl Block {
 
         //// Perform forward DCT
         dt_residuals.chunks_exact_mut(BLOCK_SIZE).for_each(|row| {
-            println!("{:?}", row);
             dct.process_dct2(row);
-            println!("{:?}", row);
         });
 
         let mut transpose_buffer = vec![0.0; BLOCK_SIZE];
@@ -113,9 +121,7 @@ impl Block {
         );
 
         dt_residuals.chunks_exact_mut(BLOCK_SIZE).for_each(|row| {
-            println!("{:?}", row);
             dct.process_dct2(row);
-            println!("{:?}", row);
         });
         transpose::transpose_inplace(
             &mut dt_residuals,
@@ -125,20 +131,150 @@ impl Block {
         );
         //// End forward DCT
 
+        // TODO: derive qparam from the maximum delta_t in the block, so that we can use a
+        // variable qparam for each block and keep the range of symbols small.
         //// Quantize the coefficients
-        let mut arr_i16 = dt_residuals.iter().map(|x| *x as i16).collect::<Vec<i16>>();
+
+        // Test if any of the coefficients are too large
+        let max_coeff = dt_residuals
+            .iter()
+            .map(|x| x.abs())
+            .fold(0.0, |acc: f32, x| acc.max(x));
+        let mut qp_dt = 0;
+        if max_coeff > i16::MAX as f32 {
+            qp_dt = (max_coeff / i16::MAX as f32) as i16 + 1;
+        }
+
+        // for elem in dt_residuals.iter() {
+        //     if *elem > i16::MAX as f32 || *elem < i16::MIN as f32 {
+        //         panic!("Coefficient too large: {}", elem);
+        //     }
+        // }
+        // let mut qp_dt: i16 = 0;
+        // if self.max_dt * BLOCK_SIZE_AREA as DeltaT > i16::MAX as DeltaT {
+        //     // panic!("DeltaT too large: {}", self.max_dt);
+        //     qp_dt = ((self.max_dt as u32 * BLOCK_SIZE_AREA as u32) / i16::MAX as u32) as i16 + 1;
+        // }
+
+        let mut arr_i32: [i32; BLOCK_SIZE_AREA] = dt_residuals
+            .iter()
+            .map(|x| *x as i32)
+            .collect::<Vec<i32>>()
+            .try_into()
+            .unwrap();
         // let pre_quantized = arr_i16.clone();
         // assume 12-bit depth
-        let dc_quant = dc_q(qparam, 0, 12);
-        // let dc_quant = 1;
-        arr_i16[0] = arr_i16[0] / dc_quant;
+        let mut dc_quant = match qparam {
+            None => 1 + qp_dt,
+            Some(q) => dc_q(q, 0, 12) + qp_dt,
+        };
+        arr_i32[0] = arr_i32[0] / dc_quant as i32;
 
-        let ac_quant = dc_q(qparam, 0, 12);
-        let ac_quant = 1;
-        for elem in arr_i16.iter_mut().skip(1) {
-            *elem = *elem / ac_quant;
+        let mut ac_quant = match qparam {
+            None => 1 + qp_dt,
+            Some(q) => ac_q(q, 0, 12) + qp_dt,
+        };
+        for elem in arr_i32.iter_mut().skip(1) {
+            *elem = *elem / ac_quant as i32;
         }
+        let mut arr_i16: [i16; BLOCK_SIZE_AREA] = arr_i32
+            .iter()
+            .map(|x| *x as i16)
+            .collect::<Vec<i16>>()
+            .try_into()
+            .unwrap();
         //// End quantize the coefficients
+
+        (d_residuals, arr_i16, qp_dt)
+    }
+
+    /// Takes in the quantized DeltaT residuals and dequantizes them, performs inverse DCT, and
+    /// returns the reconstructed events from the residuals.
+    fn get_intra_residual_inverse(
+        &mut self,
+        qparam: Option<u8>,
+        dtm: DeltaT,
+        d_residuals: [DResidual; BLOCK_SIZE_AREA],
+        mut dt_residuals: [i16; BLOCK_SIZE_AREA],
+        qp_dt: i16,
+    ) -> [Option<EventCoordless>; BLOCK_SIZE_AREA] {
+        let divisor = 4.0 / (BLOCK_SIZE_AREA as f64);
+
+        let mut dt_residuals: [i32; BLOCK_SIZE_AREA] = dt_residuals
+            .iter()
+            .map(|x| *x as i32)
+            .collect::<Vec<i32>>()
+            .try_into()
+            .unwrap();
+
+        let mut dc_quant = match qparam {
+            None => 1,
+            Some(q) => dc_q(q, 0, 12),
+        } + qp_dt;
+        dt_residuals[0] = dt_residuals[0] * dc_quant as i32;
+
+        let mut ac_quant = match qparam {
+            None => 1,
+            Some(q) => ac_q(q, 0, 12),
+        } + qp_dt;
+
+        for elem in dt_residuals.iter_mut().skip(1) {
+            *elem = *elem * ac_quant as i32;
+        }
+
+        let mut dt_coeffs = dt_residuals
+            .iter()
+            .map(|x| *x as f64 * divisor)
+            .collect::<Vec<f64>>();
+
+        //// Perform inverse DCT
+        let mut planner = DctPlanner::new(); // TODO: reuse planner
+        let dct = planner.plan_dct2(BLOCK_SIZE);
+        dt_coeffs.chunks_exact_mut(BLOCK_SIZE).for_each(|row| {
+            dct.process_dct3(row);
+        });
+        let mut transpose_buffer = vec![0.0; BLOCK_SIZE];
+        transpose::transpose_inplace(
+            &mut dt_coeffs,
+            &mut transpose_buffer,
+            BLOCK_SIZE,
+            BLOCK_SIZE,
+        );
+
+        dt_coeffs.chunks_exact_mut(BLOCK_SIZE).for_each(|row| {
+            dct.process_dct3(row);
+        });
+        transpose::transpose_inplace(
+            &mut dt_coeffs,
+            &mut transpose_buffer,
+            BLOCK_SIZE,
+            BLOCK_SIZE,
+        );
+        //// End inverse DCT
+
+        let mut events = [None; BLOCK_SIZE_AREA];
+        let mut init = false;
+        // TODO!
+
+        let mut prev = &None;
+        for (idx, (d_resid, dt_resid)) in d_residuals.iter().zip(dt_coeffs).enumerate() {
+            if !init && *d_resid != D_ENCODE_NO_EVENT as i16 {
+                init = true;
+                events[idx] = Some(EventCoordless {
+                    d: *d_resid as D,
+                    delta_t: dt_resid as DeltaT,
+                });
+                prev = &events[idx];
+            } else if *d_resid != D_ENCODE_NO_EVENT as i16 {
+                let next = EventResidual {
+                    d: *d_resid,
+                    delta_t: dt_resid as DeltaTResidual,
+                };
+                events[idx] = Some(predict_next_from_residual(prev, &next, dtm));
+                prev = &events[idx];
+            }
+        }
+        events
     }
 
     fn compress_inter(&mut self) {
@@ -184,6 +320,55 @@ fn predict_residual_from_prev(
     EventResidual {
         d: d_resid,
         delta_t: delta_t_resid,
+    }
+}
+
+fn predict_next_from_residual(
+    previous: &Option<EventCoordless>,
+    next_residual: &EventResidual,
+    dtm: DeltaT,
+) -> EventCoordless {
+    let previous = previous.as_ref().unwrap();
+    let d_resid = next_residual.d;
+
+    let delta_t: DeltaT = min(
+        max(
+            (next_residual.delta_t
+                + match d_resid {
+                    1_i16..=20_16 => {
+                        // If D has increased by a little bit,
+                        if d_resid as u32 <= previous.delta_t.leading_zeros() / 2 {
+                            min(
+                                (previous.delta_t << d_resid) as DeltaTResidual,
+                                dtm as DeltaTResidual,
+                            )
+                        } else {
+                            previous.delta_t as DeltaTResidual
+                        }
+                    }
+                    -20_i16..=-1_i16 => {
+                        if -d_resid as u32 <= 32 - previous.delta_t.leading_zeros() {
+                            max(
+                                (previous.delta_t >> -d_resid) as DeltaTResidual,
+                                previous.delta_t as DeltaTResidual,
+                            )
+                        } else {
+                            previous.delta_t as DeltaTResidual
+                        }
+                    }
+                    // If D has not changed, or has changed a whole lot, use the previous delta_t
+                    _ => previous.delta_t as DeltaTResidual,
+                }),
+            0,
+        ) as DeltaT,
+        dtm,
+    );
+
+    debug_assert!(delta_t <= dtm);
+
+    EventCoordless {
+        d: (previous.d as DResidual + d_resid) as D,
+        delta_t: delta_t as DeltaT,
     }
 }
 
@@ -363,11 +548,13 @@ impl Frame {
 #[cfg(test)]
 mod tests {
     use crate::codec::compressed::blocks::block::Frame;
-    use crate::codec::compressed::blocks::BLOCK_SIZE_AREA;
-    use crate::{Coord, Event};
+    use crate::codec::compressed::blocks::{BLOCK_SIZE, BLOCK_SIZE_AREA};
+    use crate::{Coord, DeltaT, Event};
+    use rand::prelude::StdRng;
+    use rand::{Rng, SeedableRng};
 
-    fn setup_frame(events: Vec<Event>) -> Frame {
-        let mut frame = Frame::new(640, 480, true);
+    fn setup_frame(events: Vec<Event>, width: usize, height: usize) -> Frame {
+        let mut frame = Frame::new(width, height, true);
 
         for event in events {
             frame.add_event(event).unwrap();
@@ -375,33 +562,45 @@ mod tests {
         frame
     }
 
-    fn get_random_events(num: usize) -> Vec<Event> {
+    fn get_random_events(
+        seed: Option<u64>,
+        num: usize,
+        width: u16,
+        height: u16,
+        channels: u8,
+        dtm: DeltaT,
+    ) -> Vec<Event> {
+        let mut rng = match seed {
+            None => StdRng::from_rng(rand::thread_rng()).unwrap(),
+            Some(num) => StdRng::seed_from_u64(num),
+        };
         let mut events = Vec::with_capacity(num);
         for _ in 0..num {
-            events.push(Event {
+            let event = Event {
                 coord: Coord {
-                    x: rand::random::<u16>() % 640,
-                    y: rand::random::<u16>() % 480,
-                    c: Some(rand::random::<u8>() % 3),
+                    x: rng.gen::<u16>() % width,
+                    y: rng.gen::<u16>() % height,
+                    c: Some(rng.gen::<u8>() % channels),
                 },
-                d: rand::random::<u8>(),
-                delta_t: rand::random::<u32>(),
-            });
+                d: rng.gen::<u8>(),
+                delta_t: rng.gen::<u32>() % dtm,
+            };
+            events.push(event);
         }
         events
     }
 
     #[test]
     fn test_setup_frame() {
-        let events = get_random_events(10000);
-        let frame = setup_frame(events);
+        let events = get_random_events(None, 10000, 640, 480, 3, 25500);
+        let frame = setup_frame(events, 640, 480);
     }
 
     /// Test that cubes are growing correctlly, according to the incoming events.
     #[test]
     fn test_cube_growth() {
-        let events = get_random_events(100000);
-        let frame = setup_frame(events.clone());
+        let events = get_random_events(None, 100000, 640, 480, 3, 25500);
+        let frame = setup_frame(events.clone(), 640, 480);
 
         let mut cube_counts_r = vec![0; frame.cubes.len()];
         let mut cube_counts_g = vec![0; frame.cubes.len()];
@@ -442,6 +641,88 @@ mod tests {
                 fill_count_b += block.fill_count;
             }
             assert_eq!(fill_count_b, cube_counts_b[cube_idx]);
+        }
+    }
+
+    #[test]
+    fn test_intra_compression_lossless_1() {
+        let dtm = 25500;
+        let events = get_random_events(
+            Some(743822),
+            10,
+            BLOCK_SIZE as u16,
+            BLOCK_SIZE as u16,
+            1,
+            dtm,
+        );
+        let mut frame = setup_frame(events.clone(), BLOCK_SIZE, BLOCK_SIZE);
+        for mut cube in &mut frame.cubes {
+            for block in &mut cube.blocks_r {
+                assert!(block.fill_count <= BLOCK_SIZE_AREA as u16);
+                let (d_residuals, dt_residuals, qp_dt) =
+                    block.get_intra_residual_transforms(None, dtm);
+                // dbg!(d_residuals);
+                // dbg!(dt_residuals);
+                let events =
+                    block.get_intra_residual_inverse(None, dtm, d_residuals, dt_residuals, qp_dt);
+
+                let epsilon = 100;
+                for (idx, recon_event) in events.iter().enumerate() {
+                    let orig_event = block.events[idx];
+                    if recon_event.is_some() && orig_event.is_some() {
+                        assert_eq!(recon_event.unwrap().d, orig_event.unwrap().d);
+                        assert!(
+                            recon_event.unwrap().delta_t + epsilon > orig_event.unwrap().delta_t
+                                && recon_event.unwrap().delta_t - epsilon
+                                    < orig_event.unwrap().delta_t
+                        );
+                    } else {
+                        assert!(recon_event.is_none() && orig_event.is_none());
+                    }
+                    // assert_eq!(*recon_event, orig_event);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_intra_compression_lossless_2() {
+        let dtm = 25500;
+        let events = get_random_events(
+            Some(743822),
+            10000,
+            BLOCK_SIZE as u16,
+            BLOCK_SIZE as u16,
+            1,
+            dtm,
+        );
+        let mut frame = setup_frame(events.clone(), BLOCK_SIZE, BLOCK_SIZE);
+        for mut cube in &mut frame.cubes {
+            for block in &mut cube.blocks_r {
+                assert!(block.fill_count <= BLOCK_SIZE_AREA as u16);
+                let (d_residuals, dt_residuals, qp_dt) =
+                    block.get_intra_residual_transforms(None, dtm);
+                // dbg!(d_residuals);
+                // dbg!(dt_residuals);
+                let events =
+                    block.get_intra_residual_inverse(None, dtm, d_residuals, dt_residuals, qp_dt);
+
+                let epsilon = 2000;
+                for (idx, recon_event) in events.iter().enumerate() {
+                    let orig_event = block.events[idx];
+                    if recon_event.is_some() && orig_event.is_some() {
+                        assert_eq!(recon_event.unwrap().d, orig_event.unwrap().d);
+                        assert!(
+                            recon_event.unwrap().delta_t + epsilon > orig_event.unwrap().delta_t
+                                && recon_event.unwrap().delta_t.saturating_sub(epsilon)
+                                    < orig_event.unwrap().delta_t
+                        );
+                    } else {
+                        assert!(recon_event.is_none() && orig_event.is_none());
+                    }
+                    // assert_eq!(*recon_event, orig_event);
+                }
+            }
         }
     }
 }

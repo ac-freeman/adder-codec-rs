@@ -241,7 +241,7 @@ pub fn select_ac_qi(quantizer: i64, bit_depth: usize) -> u8 {
 
 #[cfg(test)]
 mod tests {
-    use crate::codec::compressed::blocks::{dc_q, BLOCK_SIZE};
+    use crate::codec::compressed::blocks::{ac_q, dc_q, BLOCK_SIZE};
     use float_cmp::ApproxEq;
     use rustdct::DctPlanner;
 
@@ -332,7 +332,7 @@ mod tests {
         }
     }
 
-    fn quantize(qparam: u8) {
+    fn quantize(qparam: Option<u8>) {
         let dim: usize = BLOCK_SIZE;
         let divisor = 4.0 / (dim as f64 * dim as f64);
         let mut arr = gen_array(dim);
@@ -369,12 +369,16 @@ mod tests {
         let mut arr_i16 = arr.iter().map(|x| *x as i16).collect::<Vec<i16>>();
         let pre_quantized = arr_i16.clone();
         // assume 12-bit depth
-        let dc_quant = dc_q(qparam, 0, 12);
-        // let dc_quant = 1;
+        let mut dc_quant = match qparam {
+            None => 1,
+            Some(q) => dc_q(q, 0, 12),
+        };
         arr_i16[0] = arr_i16[0] / dc_quant;
 
-        let ac_quant = dc_q(qparam, 0, 12);
-        let ac_quant = 1;
+        let mut ac_quant = match qparam {
+            None => 1,
+            Some(q) => ac_q(q, 0, 12),
+        };
         for elem in arr_i16.iter_mut().skip(1) {
             *elem = *elem / ac_quant;
         }
@@ -418,12 +422,12 @@ mod tests {
 
     #[test]
     fn test_quantize_qparam_0() {
-        quantize(0);
+        quantize(None);
     }
 
     #[should_panic]
     #[test]
     fn test_quantize_qparam_1() {
-        quantize(1);
+        quantize(Some(1));
     }
 }
