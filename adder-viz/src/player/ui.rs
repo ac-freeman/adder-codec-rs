@@ -343,6 +343,7 @@ impl PlayerState {
     pub fn replace_player(&mut self, path_buf: &std::path::Path) {
         self.player_path_buf = Some(PathBuf::from(path_buf.clone()));
         self.ui_info_state.events_total = 0;
+        self.ui_info_state.events_ppc_total = 0.0;
         let mut player = match AdderPlayer::new(
             path_buf,
             self.ui_state.ui_sliders.playback_speed,

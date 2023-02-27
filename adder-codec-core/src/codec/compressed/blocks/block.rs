@@ -474,8 +474,8 @@ impl Frame {
     /// assert_eq!(frame.cube_height, 30);
     /// ```
     pub fn new(width: usize, height: usize, color: bool) -> Self {
-        let cube_width = ((width as f64) / (BLOCK_SIZE as f64).ceil()) as usize;
-        let cube_height = ((height as f64) / (BLOCK_SIZE as f64).ceil()) as usize;
+        let cube_width = ((width as f64) / (BLOCK_SIZE as f64)).ceil() as usize;
+        let cube_height = ((height as f64) / (BLOCK_SIZE as f64)).ceil() as usize;
         let cube_count = cube_width * cube_height;
 
         let mut cubes = Vec::with_capacity(cube_count as usize);
@@ -549,9 +549,16 @@ impl Frame {
 mod tests {
     use crate::codec::compressed::blocks::block::Frame;
     use crate::codec::compressed::blocks::{BLOCK_SIZE, BLOCK_SIZE_AREA};
+    use crate::codec::decoder::Decoder;
+    use crate::codec::encoder::Encoder;
+    use crate::codec::raw::stream::{RawInput, RawOutput};
+    use crate::codec::{CodecError, ReadCompression, WriteCompression};
     use crate::{Coord, DeltaT, Event};
+    use bitstream_io::{BigEndian, BitReader};
     use rand::prelude::StdRng;
     use rand::{Rng, SeedableRng};
+    use std::fs::File;
+    use std::io::{BufReader, BufWriter, Write};
 
     fn setup_frame(events: Vec<Event>, width: usize, height: usize) -> Frame {
         let mut frame = Frame::new(width, height, true);
@@ -858,5 +865,81 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn test_real_data() {
+        let mut bufreader =
+            BufReader::new(File::open("/home/andrew/Downloads/test.adder").unwrap());
+        let mut bitreader = BitReader::endian(bufreader, BigEndian);
+        let compression = <RawInput as ReadCompression<BufReader<File>>>::new();
+        let mut reader = Decoder::new(Box::new(compression), &mut bitreader).unwrap();
+        let mut events = Vec::new();
+        loop {
+            match reader.digest_event(&mut bitreader) {
+                Ok(ev) => {
+                    events.push(ev);
+                }
+                Err(_) => {
+                    break;
+                }
+            }
+        }
+
+        let bufwriter =
+            BufWriter::new(File::create("/home/andrew/Downloads/test_recon.adder").unwrap());
+        let compression = <RawOutput<_> as WriteCompression<BufWriter<File>>>::new(
+            reader.meta().clone(),
+            bufwriter,
+        );
+        let mut encoder: Encoder<BufWriter<File>> = Encoder::new(Box::new(compression));
+
+        let mut frame = setup_frame(
+            events.clone(),
+            reader.meta().plane.w_usize(),
+            reader.meta().plane.h_usize(),
+        );
+        let qp = 1;
+        for mut cube in &mut frame.cubes {
+            for block in &mut cube.blocks_r {
+                assert!(block.fill_count <= BLOCK_SIZE_AREA as u16);
+                let (d_residuals, dt_residuals, qp_dt) =
+                    block.get_intra_residual_transforms(Some(qp), reader.meta().delta_t_max);
+                // dbg!(d_residuals);
+                // dbg!(dt_residuals);
+                let events = block.get_intra_residual_inverse(
+                    Some(qp),
+                    reader.meta().delta_t_max,
+                    d_residuals,
+                    dt_residuals,
+                    qp_dt,
+                );
+                for (idx, event) in events.iter().enumerate() {
+                    if event.is_some() {
+                        let event_coord = Event {
+                            coord: Coord {
+                                x: (cube.cube_idx_x * BLOCK_SIZE as usize
+                                    + (idx % BLOCK_SIZE as usize))
+                                    as u16,
+                                y: (cube.cube_idx_y * BLOCK_SIZE as usize
+                                    + (idx / BLOCK_SIZE as usize))
+                                    as u16,
+                                c: None,
+                            },
+                            d: event.unwrap().d,
+                            delta_t: event.unwrap().delta_t,
+                        };
+                        encoder.ingest_event(&event_coord).unwrap();
+                    }
+                }
+
+                // As our delta_t_max value increases, we can get more loss. Increase epsilon to allow for more slop.
+                let epsilon = 50000;
+            }
+        }
+        let mut writer = encoder.close_writer().unwrap().unwrap();
+        writer.flush().unwrap();
+
+        writer.into_inner().unwrap();
     }
 }
