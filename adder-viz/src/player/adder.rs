@@ -407,7 +407,9 @@ impl AdderPlayer {
                 }
                 Err(e) => {
                     eprintln!("{}", e);
-                    // Loop back to the beginning
+
+                    // TODO: Need to reset the UI event count events_ppc count when looping back here
+                    // Loop/restart back to the beginning
                     stream.decoder.set_input_stream_position(
                         &mut stream.bitreader,
                         meta.header_size as u64,
