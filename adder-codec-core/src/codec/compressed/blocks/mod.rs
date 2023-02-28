@@ -2,7 +2,7 @@
 
 pub mod block;
 
-pub const BLOCK_SIZE: usize = 16;
+pub const BLOCK_SIZE: usize = 32;
 pub const BLOCK_SIZE_AREA: usize = BLOCK_SIZE * BLOCK_SIZE;
 pub const D_ENCODE_NO_EVENT: DResidual = 256;
 

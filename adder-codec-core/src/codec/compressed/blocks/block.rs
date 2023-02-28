@@ -75,7 +75,12 @@ impl Block {
         &mut self,
         qparam: Option<u8>,
         dtm: DeltaT,
-    ) -> ([DResidual; 256], Coefficient, [i16; 256], i16) {
+    ) -> (
+        [DResidual; BLOCK_SIZE_AREA],
+        Coefficient,
+        [i16; BLOCK_SIZE_AREA],
+        i16,
+    ) {
         // Loop through the events and get prediction residuals
 
         let mut d_residuals = [D_ENCODE_NO_EVENT; BLOCK_SIZE_AREA];
@@ -924,16 +929,16 @@ mod tests {
             reader.meta().plane.w_usize(),
             reader.meta().plane.h_usize(),
         );
-        let qp = 1;
+        let qp = 6;
         for mut cube in &mut frame.cubes {
             for block in &mut cube.blocks_r {
                 assert!(block.fill_count <= BLOCK_SIZE_AREA as u16);
                 let (d_residuals, start_dt, dt_residuals, qp_dt) =
-                    block.get_intra_residual_transforms(None, reader.meta().delta_t_max);
+                    block.get_intra_residual_transforms(Some(qp), reader.meta().delta_t_max);
                 // dbg!(d_residuals);
                 // dbg!(dt_residuals);
                 let events = block.get_intra_residual_inverse(
-                    None,
+                    Some(qp),
                     reader.meta().delta_t_max,
                     d_residuals,
                     start_dt,
