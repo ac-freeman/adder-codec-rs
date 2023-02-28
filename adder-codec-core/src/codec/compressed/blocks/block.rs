@@ -75,12 +75,13 @@ impl Block {
         &mut self,
         qparam: Option<u8>,
         dtm: DeltaT,
-    ) -> ([DResidual; 256], [i16; 256], i16) {
+    ) -> ([DResidual; 256], Coefficient, [i16; 256], i16) {
         // Loop through the events and get prediction residuals
 
         let mut d_residuals = [D_ENCODE_NO_EVENT; BLOCK_SIZE_AREA];
         let mut dt_residuals: [Coefficient; BLOCK_SIZE_AREA] = [0.0; BLOCK_SIZE_AREA];
         let mut init = false;
+        let mut start_dt: Coefficient = 0.0;
 
         for (idx, event_opt) in self.events.iter().enumerate() {
             if let Some(prev) = event_opt {
@@ -88,7 +89,8 @@ impl Block {
                 if !init {
                     init = true;
                     d_residuals[idx] = prev.d as DResidual;
-                    dt_residuals[idx] = prev.delta_t as Coefficient;
+                    // dt_residuals[idx] = prev.delta_t as Coefficient;
+                    start_dt = prev.delta_t as Coefficient;
                 }
 
                 // Get the prediction residual for the next event and store it
@@ -96,7 +98,8 @@ impl Block {
                     if let Some(next) = next_event_opt {
                         let residual = predict_residual_from_prev(prev, next, dtm);
                         d_residuals[next_idx + idx + 1] = residual.d;
-                        dt_residuals[next_idx + idx + 1] = residual.delta_t as Coefficient;
+                        // dt_residuals[next_idx + idx + 1] = residual.delta_t as Coefficient;
+                        dt_residuals[next_idx + idx + 1] = next.delta_t as Coefficient - start_dt;
                         break;
                     }
                 }
@@ -185,7 +188,7 @@ impl Block {
             .unwrap();
         //// End quantize the coefficients
 
-        (d_residuals, arr_i16, qp_dt)
+        (d_residuals, start_dt, arr_i16, qp_dt)
     }
 
     /// Takes in the quantized DeltaT residuals and dequantizes them, performs inverse DCT, and
@@ -195,6 +198,7 @@ impl Block {
         qparam: Option<u8>,
         dtm: DeltaT,
         d_residuals: [DResidual; BLOCK_SIZE_AREA],
+        start_dt: Coefficient,
         mut dt_residuals: [i16; BLOCK_SIZE_AREA],
         qp_dt: i16,
     ) -> [Option<EventCoordless>; BLOCK_SIZE_AREA] {
@@ -262,7 +266,7 @@ impl Block {
                 init = true;
                 events[idx] = Some(EventCoordless {
                     d: *d_resid as D,
-                    delta_t: dt_resid as DeltaT,
+                    delta_t: start_dt as DeltaT,
                 });
                 prev = &events[idx];
             } else if *d_resid != D_ENCODE_NO_EVENT as i16 {
@@ -271,6 +275,7 @@ impl Block {
                     delta_t: dt_resid as DeltaTResidual,
                 };
                 events[idx] = Some(predict_next_from_residual(prev, &next, dtm));
+                events[idx].as_mut().unwrap().delta_t = (start_dt as f64 + dt_resid) as DeltaT;
                 prev = &events[idx];
             }
         }
@@ -666,12 +671,18 @@ mod tests {
         for mut cube in &mut frame.cubes {
             for block in &mut cube.blocks_r {
                 assert!(block.fill_count <= BLOCK_SIZE_AREA as u16);
-                let (d_residuals, dt_residuals, qp_dt) =
+                let (d_residuals, start_dt, dt_residuals, qp_dt) =
                     block.get_intra_residual_transforms(None, dtm);
                 // dbg!(d_residuals);
                 // dbg!(dt_residuals);
-                let events =
-                    block.get_intra_residual_inverse(None, dtm, d_residuals, dt_residuals, qp_dt);
+                let events = block.get_intra_residual_inverse(
+                    None,
+                    dtm,
+                    d_residuals,
+                    start_dt,
+                    dt_residuals,
+                    qp_dt,
+                );
 
                 let epsilon = 100;
                 for (idx, recon_event) in events.iter().enumerate() {
@@ -708,12 +719,18 @@ mod tests {
         for mut cube in &mut frame.cubes {
             for block in &mut cube.blocks_r {
                 assert!(block.fill_count <= BLOCK_SIZE_AREA as u16);
-                let (d_residuals, dt_residuals, qp_dt) =
+                let (d_residuals, start_dt, dt_residuals, qp_dt) =
                     block.get_intra_residual_transforms(None, dtm);
                 // dbg!(d_residuals);
                 // dbg!(dt_residuals);
-                let events =
-                    block.get_intra_residual_inverse(None, dtm, d_residuals, dt_residuals, qp_dt);
+                let events = block.get_intra_residual_inverse(
+                    None,
+                    dtm,
+                    d_residuals,
+                    start_dt,
+                    dt_residuals,
+                    qp_dt,
+                );
 
                 let epsilon = 2000;
                 for (idx, recon_event) in events.iter().enumerate() {
@@ -750,12 +767,18 @@ mod tests {
         for mut cube in &mut frame.cubes {
             for block in &mut cube.blocks_r {
                 assert!(block.fill_count <= BLOCK_SIZE_AREA as u16);
-                let (d_residuals, dt_residuals, qp_dt) =
+                let (d_residuals, start_dt, dt_residuals, qp_dt) =
                     block.get_intra_residual_transforms(None, dtm);
                 // dbg!(d_residuals);
                 // dbg!(dt_residuals);
-                let events =
-                    block.get_intra_residual_inverse(None, dtm, d_residuals, dt_residuals, qp_dt);
+                let events = block.get_intra_residual_inverse(
+                    None,
+                    dtm,
+                    d_residuals,
+                    start_dt,
+                    dt_residuals,
+                    qp_dt,
+                );
 
                 // As our delta_t_max value increases, we can get more loss. Increase epsilon to allow for more slop.
                 let epsilon = 5000;
@@ -793,7 +816,7 @@ mod tests {
         for mut cube in &mut frame.cubes {
             for block in &mut cube.blocks_r {
                 assert!(block.fill_count <= BLOCK_SIZE_AREA as u16);
-                let (d_residuals, dt_residuals, qp_dt) =
+                let (d_residuals, start_dt, dt_residuals, qp_dt) =
                     block.get_intra_residual_transforms(Some(30), dtm);
                 // dbg!(d_residuals);
                 // dbg!(dt_residuals);
@@ -801,6 +824,7 @@ mod tests {
                     Some(30),
                     dtm,
                     d_residuals,
+                    start_dt,
                     dt_residuals,
                     qp_dt,
                 );
@@ -834,7 +858,7 @@ mod tests {
         for mut cube in &mut frame.cubes {
             for block in &mut cube.blocks_r {
                 assert!(block.fill_count <= BLOCK_SIZE_AREA as u16);
-                let (d_residuals, dt_residuals, qp_dt) =
+                let (d_residuals, start_dt, dt_residuals, qp_dt) =
                     block.get_intra_residual_transforms(Some(30), dtm);
                 // dbg!(d_residuals);
                 // dbg!(dt_residuals);
@@ -842,6 +866,7 @@ mod tests {
                     Some(30),
                     dtm,
                     d_residuals,
+                    start_dt,
                     dt_residuals,
                     qp_dt,
                 );
@@ -870,7 +895,7 @@ mod tests {
     #[test]
     fn test_real_data() {
         let mut bufreader =
-            BufReader::new(File::open("/home/andrew/Downloads/test.adder").unwrap());
+            BufReader::new(File::open("/home/andrew/Downloads/test_abs.adder").unwrap());
         let mut bitreader = BitReader::endian(bufreader, BigEndian);
         let compression = <RawInput as ReadCompression<BufReader<File>>>::new();
         let mut reader = Decoder::new(Box::new(compression), &mut bitreader).unwrap();
@@ -887,7 +912,7 @@ mod tests {
         }
 
         let bufwriter =
-            BufWriter::new(File::create("/home/andrew/Downloads/test_recon.adder").unwrap());
+            BufWriter::new(File::create("/home/andrew/Downloads/test_abs_recon.adder").unwrap());
         let compression = <RawOutput<_> as WriteCompression<BufWriter<File>>>::new(
             reader.meta().clone(),
             bufwriter,
@@ -903,14 +928,15 @@ mod tests {
         for mut cube in &mut frame.cubes {
             for block in &mut cube.blocks_r {
                 assert!(block.fill_count <= BLOCK_SIZE_AREA as u16);
-                let (d_residuals, dt_residuals, qp_dt) =
-                    block.get_intra_residual_transforms(Some(qp), reader.meta().delta_t_max);
+                let (d_residuals, start_dt, dt_residuals, qp_dt) =
+                    block.get_intra_residual_transforms(None, reader.meta().delta_t_max);
                 // dbg!(d_residuals);
                 // dbg!(dt_residuals);
                 let events = block.get_intra_residual_inverse(
-                    Some(qp),
+                    None,
                     reader.meta().delta_t_max,
                     d_residuals,
+                    start_dt,
                     dt_residuals,
                     qp_dt,
                 );
