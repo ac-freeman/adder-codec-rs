@@ -698,7 +698,7 @@ fn ingest_event_for_chunk<
                 fast_math::log2_raw(T::max_f32() * (state.source_dtm / state.ref_interval) as f32);
             if state.codec_version >= 2 && state.time_mode == TimeMode::AbsoluteT {
                 // event.delta_t -= ((*last_filled_frame_ref + 1) * state.ref_interval as i64) as u32;
-                event.delta_t -= prev_running_ts as u32;
+                event.delta_t = event.delta_t.saturating_sub(prev_running_ts as u32);
             }
 
             *last_frame_intensity_ref = T::get_frame_value(
