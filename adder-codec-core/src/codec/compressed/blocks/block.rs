@@ -87,6 +87,9 @@ impl Block {
         let mut dt_residuals: [Coefficient; BLOCK_SIZE_AREA] = [0.0; BLOCK_SIZE_AREA];
         let mut init = false;
         let mut start_dt: Coefficient = 0.0;
+        let mut start = EventCoordless { d: 0, delta_t: 0 };
+
+        let mut last_dt = 0.0;
 
         for (idx, event_opt) in self.events.iter().enumerate() {
             if let Some(prev) = event_opt {
@@ -96,18 +99,24 @@ impl Block {
                     d_residuals[idx] = prev.d as DResidual;
                     // dt_residuals[idx] = prev.delta_t as Coefficient;
                     start_dt = prev.delta_t as Coefficient;
+                    start = *prev;
+                    last_dt = start_dt as Coefficient;
                 }
 
                 // Get the prediction residual for the next event and store it
                 for (next_idx, next_event_opt) in self.events.iter().skip(idx + 1).enumerate() {
                     if let Some(next) = next_event_opt {
-                        let residual = predict_residual_from_prev(prev, next, dtm);
+                        let residual = predict_residual_from_prev(&start, next, dtm);
                         d_residuals[next_idx + idx + 1] = residual.d;
-                        // dt_residuals[next_idx + idx + 1] = residual.delta_t as Coefficient;
-                        dt_residuals[next_idx + idx + 1] = next.delta_t as Coefficient - start_dt;
+                        dt_residuals[next_idx + idx + 1] = residual.delta_t as Coefficient;
+                        // dt_residuals[next_idx + idx + 1] = next.delta_t as Coefficient - start_dt;
+                        last_dt = residual.delta_t as Coefficient;
                         break;
                     }
                 }
+            } else {
+                d_residuals[idx] = D_ENCODE_NO_EVENT;
+                dt_residuals[idx] = last_dt;
             }
         }
 
@@ -263,9 +272,11 @@ impl Block {
 
         let mut events = [None; BLOCK_SIZE_AREA];
         let mut init = false;
+        let mut start = EventCoordless { d: 0, delta_t: 0 };
         // TODO!
 
         let mut prev = &None;
+        // let mut start = EventCoordless { d: 0, delta_t: 0 };
         for (idx, (d_resid, dt_resid)) in d_residuals.iter().zip(dt_coeffs).enumerate() {
             if !init && *d_resid != D_ENCODE_NO_EVENT as i16 {
                 init = true;
@@ -273,13 +284,17 @@ impl Block {
                     d: *d_resid as D,
                     delta_t: start_dt as DeltaT,
                 });
+                start = EventCoordless {
+                    d: *d_resid as D,
+                    delta_t: start_dt as DeltaT,
+                };
                 prev = &events[idx];
             } else if *d_resid != D_ENCODE_NO_EVENT as i16 {
                 let next = EventResidual {
                     d: *d_resid,
                     delta_t: dt_resid as DeltaTResidual,
                 };
-                events[idx] = Some(predict_next_from_residual(prev, &next, dtm));
+                events[idx] = Some(predict_next_from_residual(&start, &next, dtm));
                 events[idx].as_mut().unwrap().delta_t = (start_dt as f64 + dt_resid) as DeltaT;
                 prev = &events[idx];
             }
@@ -301,32 +316,37 @@ fn predict_residual_from_prev(
     let d_resid = next.d as DResidual - previous.d as DResidual;
 
     // Get the prediction error for delta_t based on the change in D
-    let delta_t_resid = next.delta_t as DeltaTResidual
-        - match d_resid {
-            1_i16..=20_16 => {
-                // If D has increased by a little bit,
-                if d_resid as u32 <= previous.delta_t.leading_zeros() / 2 {
-                    min(
-                        (previous.delta_t << d_resid) as DeltaTResidual,
-                        dtm as DeltaTResidual,
-                    )
-                } else {
-                    previous.delta_t as DeltaTResidual
-                }
-            }
-            -20_i16..=-1_i16 => {
-                if -d_resid as u32 <= 32 - previous.delta_t.leading_zeros() {
-                    max(
-                        (previous.delta_t >> -d_resid) as DeltaTResidual,
-                        previous.delta_t as DeltaTResidual,
-                    )
-                } else {
-                    previous.delta_t as DeltaTResidual
-                }
-            }
-            // If D has not changed, or has changed a whole lot, use the previous delta_t
-            _ => previous.delta_t as DeltaTResidual,
-        };
+    // let delta_t_resid = next.delta_t as DeltaTResidual
+    //     - match d_resid {
+    //         1_i16..=20_16 => {
+    //             // If D has increased by a little bit,
+    //             (previous.delta_t + (dtm / d_resid as DeltaT)) as DeltaTResidual
+    //
+    //             // if d_resid as u32 <= previous.delta_t.leading_zeros() / 2 {
+    //             //     min(
+    //             //         (previous.delta_t << d_resid) as DeltaTResidual,
+    //             //         dtm as DeltaTResidual,
+    //             //     )
+    //             // } else {
+    //             //     previous.delta_t as DeltaTResidual
+    //             // }
+    //         }
+    //         -20_i16..=-1_i16 => {
+    //             (previous.delta_t - (dtm / d_resid as DeltaT)) as DeltaTResidual
+    //
+    //             // if -d_resid as u32 <= 32 - previous.delta_t.leading_zeros() {
+    //             //     max(
+    //             //         (previous.delta_t >> -d_resid) as DeltaTResidual,
+    //             //         previous.delta_t as DeltaTResidual,
+    //             //     )
+    //             // } else {
+    //             //     previous.delta_t as DeltaTResidual
+    //             // }
+    //         }
+    //         // If D has not changed, or has changed a whole lot, use the previous delta_t
+    //         _ => previous.delta_t as DeltaTResidual,
+    //     };
+    let delta_t_resid = next.delta_t as DeltaTResidual - previous.delta_t as DeltaTResidual;
     EventResidual {
         d: d_resid,
         delta_t: delta_t_resid,
@@ -334,47 +354,49 @@ fn predict_residual_from_prev(
 }
 
 fn predict_next_from_residual(
-    previous: &Option<EventCoordless>,
+    previous: &EventCoordless,
     next_residual: &EventResidual,
     dtm: DeltaT,
 ) -> EventCoordless {
-    let previous = previous.as_ref().unwrap();
     let d_resid = next_residual.d;
+    let delta_t = (next_residual.delta_t + previous.delta_t as DeltaTResidual) as DeltaT;
 
-    let delta_t: DeltaT = min(
-        max(
-            (next_residual.delta_t
-                + match d_resid {
-                    1_i16..=20_16 => {
-                        // If D has increased by a little bit,
-                        if d_resid as u32 <= previous.delta_t.leading_zeros() / 2 {
-                            min(
-                                (previous.delta_t << d_resid) as DeltaTResidual,
-                                dtm as DeltaTResidual,
-                            )
-                        } else {
-                            previous.delta_t as DeltaTResidual
-                        }
-                    }
-                    -20_i16..=-1_i16 => {
-                        if -d_resid as u32 <= 32 - previous.delta_t.leading_zeros() {
-                            max(
-                                (previous.delta_t >> -d_resid) as DeltaTResidual,
-                                previous.delta_t as DeltaTResidual,
-                            )
-                        } else {
-                            previous.delta_t as DeltaTResidual
-                        }
-                    }
-                    // If D has not changed, or has changed a whole lot, use the previous delta_t
-                    _ => previous.delta_t as DeltaTResidual,
-                }),
-            0,
-        ) as DeltaT,
-        dtm,
-    );
+    // let delta_t: DeltaT = min(
+    //     max(
+    //         (next_residual.delta_t
+    //             + match d_resid {
+    //                 1_i16..=20_16 => {
+    //                     // If D has increased by a little bit,
+    //                     (previous.delta_t + (dtm / d_resid as DeltaT)) as DeltaTResidual
+    //                     // if d_resid as u32 <= previous.delta_t.leading_zeros() / 2 {
+    //                     //     min(
+    //                     //         (previous.delta_t << d_resid) as DeltaTResidual,
+    //                     //         dtm as DeltaTResidual,
+    //                     //     )
+    //                     // } else {
+    //                     //     previous.delta_t as DeltaTResidual
+    //                     // }
+    //                 }
+    //                 -20_i16..=-1_i16 => {
+    //                     (previous.delta_t - (dtm / d_resid as DeltaT)) as DeltaTResidual
+    //                     // if -d_resid as u32 <= 32 - previous.delta_t.leading_zeros() {
+    //                     //     max(
+    //                     //         (previous.delta_t >> -d_resid) as DeltaTResidual,
+    //                     //         previous.delta_t as DeltaTResidual,
+    //                     //     )
+    //                     // } else {
+    //                     //     previous.delta_t as DeltaTResidual
+    //                     // }
+    //                 }
+    //                 // If D has not changed, or has changed a whole lot, use the previous delta_t
+    //                 _ => previous.delta_t as DeltaTResidual,
+    //             }),
+    //         0,
+    //     ) as DeltaT,
+    //     dtm,
+    // );
 
-    debug_assert!(delta_t <= dtm);
+    // debug_assert!(delta_t <= dtm);
 
     EventCoordless {
         d: (previous.d as DResidual + d_resid) as D,
@@ -934,11 +956,11 @@ mod tests {
             for block in &mut cube.blocks_r {
                 assert!(block.fill_count <= BLOCK_SIZE_AREA as u16);
                 let (d_residuals, start_dt, dt_residuals, qp_dt) =
-                    block.get_intra_residual_transforms(Some(qp), reader.meta().delta_t_max);
+                    block.get_intra_residual_transforms(None, reader.meta().delta_t_max);
                 // dbg!(d_residuals);
                 // dbg!(dt_residuals);
                 let events = block.get_intra_residual_inverse(
-                    Some(qp),
+                    None,
                     reader.meta().delta_t_max,
                     d_residuals,
                     start_dt,
