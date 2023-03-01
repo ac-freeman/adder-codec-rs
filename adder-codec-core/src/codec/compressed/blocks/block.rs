@@ -199,6 +199,7 @@ impl Block {
             if let Some(next) = event_opt {
                 // Get the d-residual
                 let d_resid = next.d as DResidual - event_mem.d as DResidual;
+                event_mem.d = next.d; // ??? TODO
                 d_residuals[idx] = d_resid;
 
                 // The true delta_t
@@ -268,6 +269,7 @@ impl Block {
                         }
                     }
                 };
+                let tmp = t_recon[idx];
                 let recon_t = (t_recon[idx] as DeltaTResidual + dt_pred as DeltaTResidual + t_resid)
                     as DeltaT;
                 event_mem.delta_t = recon_t - t_recon[idx];
@@ -276,6 +278,59 @@ impl Block {
         }
 
         (d_residuals, start_dt, t_resid_i16, sparam)
+    }
+
+    fn get_inter_residual_tshifts_inverse(
+        &mut self,
+        event_memory: &mut [EventCoordless; BLOCK_SIZE_AREA], // Holds (reconstructed) delta_t values, regardless of time mode
+        t_recon: &mut [DeltaT; BLOCK_SIZE_AREA],
+        mut sparam: u8,
+        d_residuals: [DResidual; BLOCK_SIZE_AREA],
+        mut t_residuals: [i16; BLOCK_SIZE_AREA],
+    ) -> [Option<EventCoordless>; BLOCK_SIZE_AREA] {
+        let mut events = [None; BLOCK_SIZE_AREA];
+        for (idx, ((d_resid, t_resid_i16), event_mem)) in d_residuals
+            .iter()
+            .zip(t_residuals)
+            .zip(event_memory.iter_mut())
+            .enumerate()
+        {
+            if *d_resid != D_ENCODE_NO_EVENT as i16 {
+                let d = (event_mem.d as DResidual + *d_resid) as D;
+                // let mut event = EventCoordless { d, delta_t: 0 }
+                let t_resid = ((t_resid_i16 as DeltaTResidual) << sparam);
+                let dt_pred = match *d_resid > 0 {
+                    true => {
+                        if *d_resid < 32 {
+                            event_mem.delta_t << *d_resid
+                        } else {
+                            event_mem.delta_t
+                        }
+                    }
+                    false => {
+                        if *d_resid > -32 {
+                            event_mem.delta_t >> -*d_resid
+                        } else {
+                            event_mem.delta_t
+                        }
+                    }
+                };
+                let tmp = t_recon[idx];
+                let recon_t = (t_recon[idx] as DeltaTResidual + dt_pred as DeltaTResidual + t_resid)
+                    as DeltaT;
+                event_mem.delta_t = recon_t - t_recon[idx];
+                event_mem.d = d;
+                t_recon[idx] = recon_t;
+
+                let event = EventCoordless {
+                    d,
+                    delta_t: recon_t,
+                };
+                events[idx] = Some(event);
+            }
+        }
+
+        events
     }
 
     /// Perform intra-block compression.
@@ -1336,8 +1391,13 @@ mod tests {
                 // Should only be None on the block margins beyond the frame plane
                 if let Some(ev) = event {
                     event_memory[idx] = *ev;
+                    t_memory[idx] = ev.delta_t;
+                    t_recon[idx] = ev.delta_t;
                 }
             }
+            t_memory_inverse = t_memory.clone();
+            event_memory_inverse = event_memory.clone();
+            t_recon_inverse = t_recon.clone();
 
             assert!(block.fill_count <= BLOCK_SIZE_AREA as u16);
             let (d_residuals, start_dt, dt_residuals, sparam) =
@@ -1369,11 +1429,39 @@ mod tests {
             }
 
             for block in cube.blocks_r.iter_mut().skip(1) {
-                let (d_residuals, start_dt, dt_residuals, sparam) = block
+                let (d_residuals, start_dt, t_residuals, sparam) = block
                     .get_inter_residual_tshifts(&mut event_memory, &mut t_memory, &mut t_recon, 0);
+
+                // t_memory_inverse = t_memory.clone();
+                // event_memory_inverse = event_memory.clone();
+                // t_recon_inverse = t_recon.clone();
                 eprint!("{}", sparam);
 
-                // block
+                let events = block.get_inter_residual_tshifts_inverse(
+                    &mut event_memory_inverse,
+                    &mut t_recon_inverse,
+                    sparam,
+                    d_residuals,
+                    t_residuals,
+                );
+                for (idx, event) in events.iter().enumerate() {
+                    if event.is_some() {
+                        let event_coord = Event {
+                            coord: Coord {
+                                x: (cube.cube_idx_x * BLOCK_SIZE as usize
+                                    + (idx % BLOCK_SIZE as usize))
+                                    as u16,
+                                y: (cube.cube_idx_y * BLOCK_SIZE as usize
+                                    + (idx / BLOCK_SIZE as usize))
+                                    as u16,
+                                c: None,
+                            },
+                            d: event.unwrap().d,
+                            delta_t: event.unwrap().delta_t,
+                        };
+                        encoder.ingest_event(&event_coord).unwrap();
+                    }
+                }
             }
         }
         let mut writer = encoder.close_writer().unwrap().unwrap();
