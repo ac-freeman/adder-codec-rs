@@ -1104,7 +1104,7 @@ mod tests {
     #[test]
     fn test_real_data_tshift() {
         let mut bufreader =
-            BufReader::new(File::open("/home/andrew/Downloads/test_abs.adder").unwrap());
+            BufReader::new(File::open("/home/andrew/Downloads/test_abs2.adder").unwrap());
         let mut bitreader = BitReader::endian(bufreader, BigEndian);
         let compression = <RawInput as ReadCompression<BufReader<File>>>::new();
         let mut reader = Decoder::new(Box::new(compression), &mut bitreader).unwrap();
@@ -1133,12 +1133,11 @@ mod tests {
             reader.meta().plane.w_usize(),
             reader.meta().plane.h_usize(),
         );
-        let qp = 6;
         for mut cube in &mut frame.cubes {
             for block in &mut cube.blocks_r {
                 assert!(block.fill_count <= BLOCK_SIZE_AREA as u16);
                 let (d_residuals, start_dt, dt_residuals, sparam) =
-                    block.get_intra_residual_tshifts(0, reader.meta().delta_t_max);
+                    block.get_intra_residual_tshifts(3, reader.meta().delta_t_max);
 
                 let events = block.get_intra_residual_tshifts_inverse(
                     sparam,
@@ -1168,7 +1167,7 @@ mod tests {
                 }
 
                 // As our delta_t_max value increases, we can get more loss. Increase epsilon to allow for more slop.
-                let epsilon = 50000;
+                let epsilon = 5000;
             }
         }
         let mut writer = encoder.close_writer().unwrap().unwrap();
