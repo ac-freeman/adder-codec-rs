@@ -16,13 +16,13 @@ use std::io::{BufReader, BufWriter};
 // Calculate what the EXPECTED delta_t is based on the previous delta_t and the NEW D.
 // Get the residual between the pixel's current delta_t and the expected delta_t. Encode that
 
+use crate::codec::compressed::blocks::D_ENCODE_NO_EVENT;
 use crate::codec_old::compressed::blocks::{Block, ZigZag, ZIGZAG_ORDER};
 use crate::codec_old::compressed::fenwick::{context_switching::FenwickModel, Weights};
 use crate::{DeltaT, EventCoordless, D};
 
 pub type DResidual = i16;
 pub type DeltaTResidual = i64;
-pub const D_RESIDUAL_NO_EVENT: DResidual = 256; // TODO: document and test
 pub const DELTA_T_RESIDUAL_NO_EVENT: DeltaTResidual = DeltaTResidual::MAX; // TODO: document and test
 
 // static D_RESIDUAL_DEFAULT_WEIGHTS: Weights = d_residual_default_weights();
@@ -158,7 +158,7 @@ impl<W: std::io::Write + std::fmt::Debug> CompressionModelEncoder<W> {
         // If this is the first event in the block, encode it directly
         match (self.prev_coded_event, event) {
             (_, None) => {
-                self.d_resid = D_RESIDUAL_NO_EVENT;
+                self.d_resid = D_ENCODE_NO_EVENT;
                 self.dt_resid = DELTA_T_RESIDUAL_NO_EVENT
             } // TODO: test this. Need to expand alphabet
             (None, Some(ev)) => {
@@ -292,7 +292,7 @@ impl<R: std::io::Read> CompressionModelDecoder<R> {
         let dt_resid = self.decoder.decode(&mut self.bitreader).unwrap().unwrap();
         let dt_resid = dt_resid as i64 - self.delta_t_max as i64;
 
-        if d_resid == D_RESIDUAL_NO_EVENT {
+        if d_resid == D_ENCODE_NO_EVENT {
             unsafe { *block_ref.events.get_unchecked_mut(idx as usize) = None };
             return;
         }
