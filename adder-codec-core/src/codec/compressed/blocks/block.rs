@@ -1585,6 +1585,7 @@ mod tests {
             reader.meta().plane.h_usize(),
         );
         let dt_ref = reader.meta().ref_interval;
+        let base_sparam = 5;
 
         for mut cube in &mut frame.cubes {
             let mut block = &mut cube.blocks_r[0];
@@ -1616,7 +1617,7 @@ mod tests {
 
             assert!(block.fill_count <= BLOCK_SIZE_AREA as u16);
             let (d_residuals, start_dt, dt_residuals, sparam) =
-                block.get_intra_residual_tshifts(0, reader.meta().delta_t_max);
+                block.get_intra_residual_tshifts(base_sparam, reader.meta().delta_t_max);
 
             let events = block.get_intra_residual_tshifts_inverse(
                 sparam,
@@ -1649,7 +1650,7 @@ mod tests {
                         &mut event_memory,
                         &mut t_memory,
                         &mut t_recon,
-                        0,
+                        base_sparam,
                         reader.meta().delta_t_max,
                         dt_ref,
                     );
