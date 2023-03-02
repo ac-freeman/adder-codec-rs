@@ -1,6 +1,7 @@
 #![allow(non_upper_case_globals)]
 
 pub mod block;
+mod inter_coding;
 
 pub const BLOCK_SIZE: usize = 16;
 pub const BLOCK_SIZE_AREA: usize = BLOCK_SIZE * BLOCK_SIZE;
@@ -9,6 +10,8 @@ pub const D_ENCODE_NO_EVENT: DResidual = 256;
 pub type DResidual = i16;
 pub type Coefficient = f32;
 pub type DeltaTResidual = i64;
+pub type TResidual = u32;
+
 pub struct EventResidual {
     pub(crate) d: DResidual,
     pub(crate) delta_t: DeltaTResidual,

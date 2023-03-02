@@ -167,7 +167,7 @@ pub const D_EMPTY: D = 255;
 pub const D_ZERO_INTEGRATION: D = 254;
 
 /// Special symbol signifying no [`Event`] exists
-pub const D_NO_EVENT: D = 253;
+// pub const D_NO_EVENT: D = 253;
 
 /// Precision for maximum intensity representable with allowed [`D`] values
 pub type UDshift = u128;
@@ -312,6 +312,8 @@ pub const D_START: D = 7;
 
 /// Number of ticks elapsed since a given pixel last fired an [`Event`]
 pub type DeltaT = u32;
+
+pub type AbsoluteT = u32;
 
 /// Large count of ticks (e.g., for tracking the running timestamp of a sequence of [Events](Event)
 pub type BigT = u64;
@@ -529,6 +531,13 @@ pub struct EventCoordless {
     pub d: D,
 
     pub delta_t: DeltaT,
+}
+
+impl EventCoordless {
+    #[inline(always)]
+    pub fn t(&self) -> AbsoluteT {
+        self.delta_t as AbsoluteT
+    }
 }
 
 impl From<Event> for EventCoordless {

@@ -2,7 +2,7 @@ use crate::codec::compressed::blocks::{
     ac_q, dc_q, Coefficient, DResidual, DeltaTResidual, EventResidual, BLOCK_SIZE, BLOCK_SIZE_AREA,
     D_ENCODE_NO_EVENT,
 };
-use crate::{Coord, DeltaT, Event, EventCoordless, D, D_NO_EVENT};
+use crate::{Coord, DeltaT, Event, EventCoordless, D};
 use itertools::Itertools;
 use rustdct::DctPlanner;
 use std::cmp::{max, min};
@@ -24,10 +24,10 @@ pub struct Block {
     /// Events organized in row-major order.
     pub events: BlockEvents,
     fill_count: u16,
-    max_dt: DeltaT,
-    // block_idx_y: usize,
-    // block_idx_x: usize,
-    // block_idx_c: usize,
+    max_dt: DeltaT, // TODO: remove?
+                    // block_idx_y: usize,
+                    // block_idx_x: usize,
+                    // block_idx_c: usize,
 }
 
 impl Block {
@@ -1555,7 +1555,7 @@ mod tests {
     #[test]
     fn test_real_data_tshift_inter() {
         let mut bufreader =
-            BufReader::new(File::open("/home/andrew/Downloads/test_abs2.adder").unwrap());
+            BufReader::new(File::open("/home/andrew/Downloads/test_out_abs.adder").unwrap());
         let mut bitreader = BitReader::endian(bufreader, BigEndian);
         let compression = <RawInput as ReadCompression<BufReader<File>>>::new();
         let mut reader = Decoder::new(Box::new(compression), &mut bitreader).unwrap();
@@ -1577,6 +1577,10 @@ mod tests {
             reader.meta().clone(),
             bufwriter,
         );
+
+        let mut bufrawriter = BufWriter::new(
+            File::create("/home/andrew/Downloads/test_abs_compressed_raw.adder").unwrap(),
+        );
         let mut encoder: Encoder<BufWriter<File>> = Encoder::new(Box::new(compression));
 
         let mut frame = setup_frame(
@@ -1585,7 +1589,7 @@ mod tests {
             reader.meta().plane.h_usize(),
         );
         let dt_ref = reader.meta().ref_interval;
-        let base_sparam = 5;
+        let base_sparam = 4;
 
         for mut cube in &mut frame.cubes {
             let mut block = &mut cube.blocks_r[0];
@@ -1618,6 +1622,10 @@ mod tests {
             assert!(block.fill_count <= BLOCK_SIZE_AREA as u16);
             let (d_residuals, start_dt, dt_residuals, sparam) =
                 block.get_intra_residual_tshifts(base_sparam, reader.meta().delta_t_max);
+            for (d_resid, dt_resid) in d_residuals.iter().zip(dt_residuals.iter()) {
+                bufrawriter.write(&d_resid.to_be_bytes()).unwrap();
+                bufrawriter.write(&dt_resid.to_be_bytes()).unwrap();
+            }
 
             let events = block.get_intra_residual_tshifts_inverse(
                 sparam,
@@ -1654,6 +1662,10 @@ mod tests {
                         reader.meta().delta_t_max,
                         dt_ref,
                     );
+                for (d_resid, dt_resid) in d_residuals.iter().zip(dt_residuals.iter()) {
+                    bufrawriter.write(&d_resid.to_be_bytes()).unwrap();
+                    bufrawriter.write(&dt_resid.to_be_bytes()).unwrap();
+                }
 
                 // t_memory_inverse = t_memory.clone();
                 // event_memory_inverse = event_memory.clone();
@@ -1693,5 +1705,7 @@ mod tests {
         writer.flush().unwrap();
 
         writer.into_inner().unwrap();
+
+        bufrawriter.flush().unwrap();
     }
 }
