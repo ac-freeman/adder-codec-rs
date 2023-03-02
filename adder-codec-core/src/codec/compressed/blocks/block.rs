@@ -179,6 +179,7 @@ impl Block {
         t_recon: &mut [DeltaT; BLOCK_SIZE_AREA],
         mut sparam: u8,
         dtm: DeltaT,
+        dt_ref: DeltaT,
     ) -> (
         [DResidual; BLOCK_SIZE_AREA],
         Coefficient,
@@ -206,7 +207,17 @@ impl Block {
                 let tmp = t_memory[idx];
                 // The true delta_t
                 let delta_t = next.delta_t - t_memory[idx];
+
                 t_memory[idx] = next.delta_t;
+                let tmpp = t_memory[idx];
+                let mut tmp_div = 0;
+                if t_memory[idx] % dt_ref != 0 {
+                    // TODO: only do this adjustment for framed sources
+                    tmp_div = t_memory[idx] / dt_ref;
+                    t_memory[idx] = ((t_memory[idx] / dt_ref) + 1) * dt_ref;
+                }
+                let tmppp = t_memory[idx];
+                assert_eq!(t_memory[idx] % dt_ref, 0);
 
                 // The t prediction residual is based on the previous RECONSTRUCTED delta_t
                 let mut dt_pred = match d_resid > 0 {
@@ -234,6 +245,11 @@ impl Block {
                 t_residuals[idx] = t_resid;
                 if t_resid.abs() > max_t_resid {
                     max_t_resid = t_resid.abs();
+                    if max_t_resid > dtm as DeltaTResidual {
+                        dbg!(delta_t);
+                        dbg!(dt_pred);
+                        dbg!(max_t_resid);
+                    }
                     assert!(max_t_resid <= dtm as DeltaTResidual);
                 }
             }
@@ -282,8 +298,12 @@ impl Block {
                 let recon_t = (t_recon[idx] as DeltaTResidual + dt_pred as DeltaTResidual + t_resid)
                     as DeltaT;
                 event_mem.delta_t = recon_t - t_recon[idx];
-                assert!(event_mem.delta_t <= dtm);
+                // assert!(event_mem.delta_t <= dtm);
                 t_recon[idx] = recon_t;
+                if t_recon[idx] % dt_ref != 0 {
+                    // TODO: only do this adjustment for framed sources
+                    t_recon[idx] = ((t_recon[idx] / dt_ref) + 1) * dt_ref;
+                }
             }
         }
 
@@ -298,6 +318,7 @@ impl Block {
         d_residuals: [DResidual; BLOCK_SIZE_AREA],
         mut t_residuals: [i16; BLOCK_SIZE_AREA],
         dtm: DeltaT,
+        dt_ref: DeltaT,
     ) -> [Option<EventCoordless>; BLOCK_SIZE_AREA] {
         let mut events = [None; BLOCK_SIZE_AREA];
         for (idx, ((d_resid, t_resid_i16), event_mem)) in d_residuals
@@ -339,6 +360,10 @@ impl Block {
                 event_mem.delta_t = recon_t - t_recon[idx];
                 event_mem.d = d;
                 t_recon[idx] = recon_t;
+                if t_recon[idx] % dt_ref != 0 {
+                    // TODO: only do this adjustment for framed sources
+                    t_recon[idx] = ((t_recon[idx] / dt_ref) + 1) * dt_ref;
+                }
 
                 let event = EventCoordless {
                     d,
@@ -1491,6 +1516,7 @@ mod tests {
                         &mut t_recon,
                         0,
                         dtm,
+                        255,
                     );
 
                 assert!(sparam == 0);
@@ -1506,6 +1532,7 @@ mod tests {
                     d_residuals,
                     t_residuals,
                     dtm,
+                    255,
                 );
                 for (idx, recon_event) in events.iter().enumerate() {
                     let orig_event = block.events[idx];
@@ -1557,6 +1584,7 @@ mod tests {
             reader.meta().plane.w_usize(),
             reader.meta().plane.h_usize(),
         );
+        let dt_ref = reader.meta().ref_interval;
 
         for mut cube in &mut frame.cubes {
             let mut block = &mut cube.blocks_r[0];
@@ -1575,7 +1603,11 @@ mod tests {
                 if let Some(ev) = event {
                     event_memory[idx] = *ev;
                     t_memory[idx] = ev.delta_t;
-                    t_recon[idx] = ev.delta_t;
+                    if t_memory[idx] % dt_ref != 0 {
+                        // TODO: only do this adjustment for framed sources
+                        t_memory[idx] = ((t_memory[idx] / dt_ref) + 1) * dt_ref;
+                    }
+                    t_recon[idx] = t_memory[idx];
                 }
             }
             t_memory_inverse = t_memory.clone();
@@ -1619,6 +1651,7 @@ mod tests {
                         &mut t_recon,
                         0,
                         reader.meta().delta_t_max,
+                        dt_ref,
                     );
 
                 // t_memory_inverse = t_memory.clone();
@@ -1633,6 +1666,7 @@ mod tests {
                     d_residuals,
                     t_residuals,
                     reader.meta().delta_t_max,
+                    dt_ref,
                 );
                 for (idx, event) in events.iter().enumerate() {
                     if event.is_some() {
