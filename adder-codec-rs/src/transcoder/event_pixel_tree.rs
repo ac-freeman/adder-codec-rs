@@ -9,11 +9,6 @@ pub type Intensity32 = f32;
 
 /// Pixel x- or y- coordinate address in the ADΔER model
 // pub type PixelAddress = u16;
-#[derive(Clone, Copy, PartialEq)]
-pub enum Mode {
-    FramePerfect,
-    Continuous,
-}
 
 #[repr(packed)]
 #[derive(Copy, Clone, Debug)]

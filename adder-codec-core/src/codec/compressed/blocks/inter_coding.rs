@@ -2,22 +2,23 @@ use crate::codec::compressed::blocks::block::BlockEvents;
 use crate::codec::compressed::blocks::{
     DResidual, DeltaTResidual, TResidual, BLOCK_SIZE_AREA, D_ENCODE_NO_EVENT,
 };
-use crate::{AbsoluteT, DeltaT, EventCoordless, D};
+use crate::Mode::FramePerfect;
+use crate::{AbsoluteT, DeltaT, EventCoordless, Mode, D};
 
 static D_RESIDUALS_EMPTY: [DResidual; BLOCK_SIZE_AREA] = [D_ENCODE_NO_EVENT; BLOCK_SIZE_AREA];
 
 /// Keeps track of the actual and predicted (reconstructed) times of past events, and gets the next
 /// prediction residual
-struct InterPredictionModel {
+pub struct InterPredictionModel {
     /// Holds the true last t
-    t_memory: [AbsoluteT; BLOCK_SIZE_AREA],
+    pub t_memory: [AbsoluteT; BLOCK_SIZE_AREA],
 
     /// Holds (reconstructed) delta_t values, regardless of time mode
-    event_memory: [EventCoordless; BLOCK_SIZE_AREA],
+    pub event_memory: [EventCoordless; BLOCK_SIZE_AREA],
 
     /// Holds the reconstructed last t
-    t_recon: [AbsoluteT; BLOCK_SIZE_AREA],
-
+    pub t_recon: [AbsoluteT; BLOCK_SIZE_AREA],
+    // TODO: Make the above three private
     /// The encoded d_residuals. Stored here so that we can recycle the memory.
     d_residuals: [DResidual; BLOCK_SIZE_AREA],
 
@@ -25,10 +26,12 @@ struct InterPredictionModel {
 
     /// The residuals for the events' delta_t predictions. This is what actually gets arithmetic encoded.
     dt_pred_residuals_i16: [i16; BLOCK_SIZE_AREA],
+
+    pub time_modulation_mode: Mode,
 }
 
 impl InterPredictionModel {
-    fn new() -> Self {
+    pub fn new(time_modulation_mode: Mode) -> Self {
         InterPredictionModel {
             t_memory: [0; BLOCK_SIZE_AREA],
             event_memory: [Default::default(); BLOCK_SIZE_AREA],
@@ -36,6 +39,7 @@ impl InterPredictionModel {
             d_residuals: D_RESIDUALS_EMPTY,
             dt_pred_residuals: [0; BLOCK_SIZE_AREA],
             dt_pred_residuals_i16: [0; BLOCK_SIZE_AREA],
+            time_modulation_mode,
         }
     }
 
@@ -47,7 +51,7 @@ impl InterPredictionModel {
         self.dt_pred_residuals_i16 = [0; BLOCK_SIZE_AREA];
     }
 
-    fn forward_inter_prediction(
+    pub(crate) fn forward_inter_prediction(
         &mut self,
         mut sparam: u8,
         dtm: DeltaT,
@@ -61,19 +65,21 @@ impl InterPredictionModel {
         {
             if let Some(next) = event_opt {
                 // Get the d-residual
-                let d_resid = d_residual(next.d, event_mem.d);
+                let d_resid = d_residual(event_mem.d, next.d);
                 event_mem.d = next.d; // ??? TODO
                 self.d_residuals[idx] = d_resid;
 
+                let tmp = self.t_memory[idx];
+
                 // The true delta_t
                 let delta_t = next.t() - self.t_memory[idx];
+                assert!(delta_t <= dtm);
 
                 self.t_memory[idx] = next.t();
-                if self.t_memory[idx] % dt_ref != 0 {
-                    // TODO: only do this adjustment for framed sources
+                if self.time_modulation_mode == FramePerfect && self.t_memory[idx] % dt_ref != 0 {
                     self.t_memory[idx] = ((self.t_memory[idx] / dt_ref) + 1) * dt_ref;
+                    debug_assert_eq!(self.t_memory[idx] % dt_ref, 0);
                 }
-                debug_assert_eq!(self.t_memory[idx] % dt_ref, 0);
 
                 let dt_pred = predict_delta_t(event_mem, d_resid, dtm);
 
@@ -125,8 +131,7 @@ impl InterPredictionModel {
                     dt_pred_residual,
                 );
 
-                if self.t_recon[idx] % dt_ref != 0 {
-                    // TODO: only do this adjustment for framed sources
+                if self.time_modulation_mode == FramePerfect && self.t_recon[idx] % dt_ref != 0 {
                     self.t_recon[idx] = ((self.t_recon[idx] / dt_ref) + 1) * dt_ref;
                 }
             }

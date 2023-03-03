@@ -169,6 +169,11 @@ pub const D_ZERO_INTEGRATION: D = 254;
 /// Special symbol signifying no [`Event`] exists
 // pub const D_NO_EVENT: D = 253;
 
+#[derive(Clone, Copy, PartialEq)]
+pub enum Mode {
+    FramePerfect,
+    Continuous,
+}
 /// Precision for maximum intensity representable with allowed [`D`] values
 pub type UDshift = u128;
 
