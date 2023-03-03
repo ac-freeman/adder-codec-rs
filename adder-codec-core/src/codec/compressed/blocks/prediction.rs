@@ -69,6 +69,7 @@ impl PredictionModel {
     pub(crate) fn forward_intra_prediction(
         &mut self,
         mut sparam: u8,
+        dt_ref: DeltaT,
         events: &BlockEvents,
     ) -> (&[DResidual; 256], &[i16; 256], u8) {
         self.reset_residuals();
@@ -85,6 +86,13 @@ impl PredictionModel {
                     init = true;
                     self.d_residuals[idx] = prev.d as DResidual;
                     self.dt_pred_residuals[idx] = prev.t() as DeltaTResidual;
+                    self.t_memory[idx] = prev.t();
+                    if self.time_modulation_mode == FramePerfect && self.t_memory[idx] % dt_ref != 0
+                    {
+                        self.t_memory[idx] = ((self.t_memory[idx] / dt_ref) + 1) * dt_ref;
+                    }
+                    self.t_recon[idx] = self.t_memory[idx];
+                    self.event_memory[idx] = *prev;
                     start = *prev;
                 }
 
@@ -97,6 +105,15 @@ impl PredictionModel {
 
                         self.d_residuals[next_idx + idx + 1] = d_resid;
                         self.dt_pred_residuals[next_idx + idx + 1] = t_resid;
+                        self.t_memory[next_idx + idx + 1] = next.t();
+                        if self.time_modulation_mode == FramePerfect
+                            && self.t_memory[next_idx + idx + 1] % dt_ref != 0
+                        {
+                            self.t_memory[next_idx + idx + 1] =
+                                ((self.t_memory[next_idx + idx + 1] / dt_ref) + 1) * dt_ref;
+                        }
+                        self.t_recon[idx] = self.t_memory[idx];
+                        self.event_memory[next_idx + idx + 1] = *next;
                         if t_resid.abs() > max_t_resid {
                             max_t_resid = t_resid.abs();
                         }
@@ -112,7 +129,6 @@ impl PredictionModel {
             sparam = (49 - num_places) as u8;
         }
 
-        let mut t_resid_i16: [i16; BLOCK_SIZE_AREA] = [0; BLOCK_SIZE_AREA];
         // Quantize the T residuals
         for (t_resid, t_resid_i16) in self
             .dt_pred_residuals
