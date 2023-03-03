@@ -1,7 +1,7 @@
 #![allow(non_upper_case_globals)]
 
 pub mod block;
-mod inter_coding;
+mod prediction;
 
 pub const BLOCK_SIZE: usize = 16;
 pub const BLOCK_SIZE_AREA: usize = BLOCK_SIZE * BLOCK_SIZE;
