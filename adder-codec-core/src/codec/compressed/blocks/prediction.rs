@@ -135,6 +135,7 @@ impl PredictionModel {
             .iter()
             .zip(self.dt_pred_residuals_i16.iter_mut())
         {
+            assert!(*t_resid >> sparam <= i16::MAX as i64);
             *t_resid_i16 = (*t_resid >> sparam) as i16;
         }
 
