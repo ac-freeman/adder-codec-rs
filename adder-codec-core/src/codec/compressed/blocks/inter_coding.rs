@@ -43,6 +43,15 @@ impl InterPredictionModel {
         }
     }
 
+    pub fn override_memory(
+        &mut self,
+        event_memory: [EventCoordless; BLOCK_SIZE_AREA],
+        t_recon: [AbsoluteT; BLOCK_SIZE_AREA],
+    ) {
+        self.event_memory = event_memory;
+        self.t_recon = t_recon;
+    }
+
     fn reset_residuals(&mut self) {
         // self.t_memory = [0; BLOCK_SIZE_AREA];
         // self.event_memory = [Default::default(); BLOCK_SIZE_AREA],
@@ -110,6 +119,68 @@ impl InterPredictionModel {
         self.reconstruct_t_values(sparam, dtm, dt_ref);
 
         (&self.d_residuals, &self.dt_pred_residuals_i16, sparam)
+    }
+
+    pub(crate) fn inverse_inter_prediction(
+        &mut self,
+        sparam: u8,
+        dtm: DeltaT,
+        dt_ref: DeltaT,
+    ) -> [Option<EventCoordless>; BLOCK_SIZE_AREA] {
+        let mut events = [None; BLOCK_SIZE_AREA];
+        for (idx, ((d_resid, t_resid_i16), event_mem)) in self
+            .d_residuals
+            .iter()
+            .zip(self.dt_pred_residuals_i16)
+            .zip(self.event_memory.iter_mut())
+            .enumerate()
+        {
+            if *d_resid != D_ENCODE_NO_EVENT as i16 {
+                let d = (event_mem.d as DResidual + *d_resid) as D;
+                // let mut event = EventCoordless { d, delta_t: 0 }
+                let t_resid = ((t_resid_i16 as DeltaTResidual) << sparam);
+                let mut dt_pred = match *d_resid > 0 {
+                    true => {
+                        if *d_resid < 8 {
+                            event_mem.delta_t << *d_resid
+                        } else {
+                            event_mem.delta_t
+                        }
+                    }
+                    false => {
+                        if *d_resid > -8 {
+                            event_mem.delta_t >> -*d_resid
+                        } else {
+                            event_mem.delta_t
+                        }
+                    }
+                };
+                if dt_pred > dtm {
+                    dt_pred = event_mem.delta_t;
+                }
+                // if dt_pred > dtm as DeltaTResidual {
+                //     dt_pred = event_mem.delta_t as DeltaTResidual;
+                // }
+
+                let recon_t = (self.t_recon[idx] as DeltaTResidual
+                    + dt_pred as DeltaTResidual
+                    + t_resid) as DeltaT;
+                event_mem.delta_t = recon_t - self.t_recon[idx];
+                event_mem.d = d;
+                self.t_recon[idx] = recon_t;
+                if self.time_modulation_mode == FramePerfect && self.t_recon[idx] % dt_ref != 0 {
+                    self.t_recon[idx] = ((self.t_recon[idx] / dt_ref) + 1) * dt_ref;
+                }
+
+                let event = EventCoordless {
+                    d,
+                    delta_t: recon_t,
+                };
+                events[idx] = Some(event);
+            }
+        }
+
+        events
     }
 
     fn reconstruct_t_values(&mut self, sparam: u8, dtm: DeltaT, dt_ref: DeltaT) {

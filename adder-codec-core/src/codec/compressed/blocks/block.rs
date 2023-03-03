@@ -1803,11 +1803,17 @@ mod tests {
                 // assert_eq!(*recon_event, orig_event);
             }
 
+            let mut tmp_event_memory;
+            let mut tmp_t_recon;
+
             for (block_idx, block) in cube.blocks_r.iter_mut().skip(1).enumerate() {
                 let (d_residuals, t_residuals, sparam) =
                     inter_model.forward_inter_prediction(0, dtm, dt_ref, &block.events);
                 let d_resid_clone = d_residuals.clone();
                 let t_resid_clone = t_residuals.clone();
+
+                tmp_event_memory = inter_model.event_memory.clone();
+                tmp_t_recon = inter_model.t_recon.clone();
 
                 assert!(sparam == 0);
                 // t_memory_inverse = t_memory.clone();
@@ -1815,16 +1821,14 @@ mod tests {
                 // t_recon_inverse = t_recon.clone();
                 eprint!("{}", sparam);
 
-                let events = block.get_inter_residual_tshifts_inverse(
-                    &mut event_memory_inverse,
-                    &mut t_recon_inverse,
-                    sparam,
-                    d_resid_clone,
-                    t_resid_clone,
-                    dtm,
-                    255,
-                    Continuous,
-                );
+                inter_model.override_memory(event_memory_inverse, t_recon_inverse);
+
+                let events = inter_model.inverse_inter_prediction(sparam, dtm, dt_ref);
+
+                event_memory_inverse = inter_model.event_memory.clone();
+                t_recon_inverse = inter_model.t_recon.clone();
+                inter_model.override_memory(tmp_event_memory, tmp_t_recon);
+
                 for (idx, recon_event) in events.iter().enumerate() {
                     let orig_event = block.events[idx];
                     if recon_event.is_some() && orig_event.is_some() {
@@ -1881,7 +1885,7 @@ mod tests {
             FramePerfect,
         );
         let dt_ref = reader.meta().ref_interval;
-        let base_sparam = 0;
+        let base_sparam = 4;
 
         for mut cube in &mut frame.cubes {
             let mut block = &mut cube.blocks_r[0];
@@ -1946,6 +1950,8 @@ mod tests {
                 }
             }
 
+            let mut tmp_event_memory;
+            let mut tmp_t_recon;
             for block in cube.blocks_r.iter_mut().skip(1) {
                 let (d_residuals, t_residuals, sparam) = inter_model.forward_inter_prediction(
                     base_sparam,
@@ -1956,26 +1962,28 @@ mod tests {
                 let d_resid_clone = d_residuals.clone();
                 let t_resid_clone = t_residuals.clone();
 
-                for (d_resid, dt_resid) in d_residuals.iter().zip(dt_residuals.iter()) {
-                    bufrawriter.write(&d_resid.to_be_bytes()).unwrap();
-                    bufrawriter.write(&dt_resid.to_be_bytes()).unwrap();
-                }
+                tmp_event_memory = inter_model.event_memory.clone();
+                tmp_t_recon = inter_model.t_recon.clone();
+
+                // for (d_resid, dt_resid) in d_residuals.iter().zip(dt_residuals.iter()) {
+                //     bufrawriter.write(&d_resid.to_be_bytes()).unwrap();
+                //     bufrawriter.write(&dt_resid.to_be_bytes()).unwrap();
+                // }
 
                 // t_memory_inverse = t_memory.clone();
                 // event_memory_inverse = event_memory.clone();
                 // t_recon_inverse = t_recon.clone();
                 eprint!("{}", sparam);
 
-                let events = block.get_inter_residual_tshifts_inverse(
-                    &mut event_memory_inverse,
-                    &mut t_recon_inverse,
-                    sparam,
-                    d_resid_clone,
-                    t_resid_clone,
-                    reader.meta().delta_t_max,
-                    dt_ref,
-                    FramePerfect,
-                );
+                inter_model.override_memory(event_memory_inverse, t_recon_inverse);
+
+                let events =
+                    inter_model.inverse_inter_prediction(sparam, reader.meta().delta_t_max, dt_ref);
+
+                event_memory_inverse = inter_model.event_memory.clone();
+                t_recon_inverse = inter_model.t_recon.clone();
+                inter_model.override_memory(tmp_event_memory, tmp_t_recon);
+
                 for (idx, event) in events.iter().enumerate() {
                     if event.is_some() {
                         let event_coord = Event {
