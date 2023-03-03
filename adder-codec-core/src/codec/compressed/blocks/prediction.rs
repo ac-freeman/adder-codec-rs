@@ -9,7 +9,7 @@ static D_RESIDUALS_EMPTY: [DResidual; BLOCK_SIZE_AREA] = [D_ENCODE_NO_EVENT; BLO
 
 /// Keeps track of the actual and predicted (reconstructed) times of past events, and gets the next
 /// prediction residual
-pub struct InterPredictionModel {
+pub struct PredictionModel {
     /// Holds the true last t
     pub t_memory: [AbsoluteT; BLOCK_SIZE_AREA],
 
@@ -30,9 +30,9 @@ pub struct InterPredictionModel {
     pub time_modulation_mode: Mode,
 }
 
-impl InterPredictionModel {
+impl PredictionModel {
     pub fn new(time_modulation_mode: Mode) -> Self {
-        InterPredictionModel {
+        PredictionModel {
             t_memory: [0; BLOCK_SIZE_AREA],
             event_memory: [Default::default(); BLOCK_SIZE_AREA],
             t_recon: [0; BLOCK_SIZE_AREA],
@@ -52,6 +52,12 @@ impl InterPredictionModel {
         self.t_recon = t_recon;
     }
 
+    fn reset_memory(&mut self) {
+        self.t_memory = [0; BLOCK_SIZE_AREA];
+        self.event_memory = [Default::default(); BLOCK_SIZE_AREA];
+        self.t_recon = [0; BLOCK_SIZE_AREA];
+    }
+
     fn reset_residuals(&mut self) {
         // self.t_memory = [0; BLOCK_SIZE_AREA];
         // self.event_memory = [Default::default(); BLOCK_SIZE_AREA],
@@ -60,6 +66,70 @@ impl InterPredictionModel {
         self.dt_pred_residuals_i16 = [0; BLOCK_SIZE_AREA];
     }
 
+    pub(crate) fn forward_intra_prediction(
+        &mut self,
+        mut sparam: u8,
+        events: &BlockEvents,
+    ) -> (&[DResidual; 256], &[i16; 256], u8) {
+        self.reset_residuals();
+        self.reset_memory();
+        let mut init = false;
+        let mut start = EventCoordless { d: 0, delta_t: 0 };
+
+        let mut max_t_resid = 0;
+
+        for (idx, event_opt) in events.iter().enumerate() {
+            if let Some(prev) = event_opt {
+                // If this is the first event encountered, then encode it directly
+                if !init {
+                    init = true;
+                    self.d_residuals[idx] = prev.d as DResidual;
+                    self.dt_pred_residuals[idx] = prev.t() as DeltaTResidual;
+                    start = *prev;
+                }
+
+                // Get the prediction residual for the next event and store it
+                for (next_idx, next_event_opt) in events.iter().skip(idx + 1).enumerate() {
+                    if let Some(next) = next_event_opt {
+                        let d_resid = next.d as DResidual - start.d as DResidual;
+                        let t_resid =
+                            next.delta_t as DeltaTResidual - start.delta_t as DeltaTResidual;
+
+                        self.d_residuals[next_idx + idx + 1] = d_resid;
+                        self.dt_pred_residuals[next_idx + idx + 1] = t_resid;
+                        if t_resid.abs() > max_t_resid {
+                            max_t_resid = t_resid.abs();
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+
+        // if max_t_resid is greater than 2^15, then we need to increase the sparam
+        let num_places = max_t_resid.leading_zeros();
+        if num_places + (sparam as u32) < 49 && max_t_resid > 0 {
+            sparam = (49 - num_places) as u8;
+        }
+
+        let mut t_resid_i16: [i16; BLOCK_SIZE_AREA] = [0; BLOCK_SIZE_AREA];
+        // Quantize the T residuals
+        for (t_resid, t_resid_i16) in self
+            .dt_pred_residuals
+            .iter()
+            .zip(self.dt_pred_residuals_i16.iter_mut())
+        {
+            *t_resid_i16 = (*t_resid >> sparam) as i16;
+        }
+
+        (&self.d_residuals, &self.dt_pred_residuals_i16, sparam)
+    }
+
+    /// Get a block of inter-prediction residuals. `t_memory` should hold the previous absolute t
+    /// values for each pixel in the block. If the previous block was also inter-coded, then this
+    /// memory should be the _reconstructed_ t values after compression (to prevent temporal drift).
+    /// In the end, we'll do intra-coding at the beginning of each dtm interval, so there's a guarantee
+    /// that each pixel will have an event in the first block.
     pub(crate) fn forward_inter_prediction(
         &mut self,
         mut sparam: u8,
