@@ -1543,33 +1543,35 @@ mod tests {
 
             let mut event_memory_inverse: [EventCoordless; BLOCK_SIZE_AREA] =
                 [Default::default(); BLOCK_SIZE_AREA];
-            let mut t_memory_inverse: [DeltaT; BLOCK_SIZE_AREA] = [0; BLOCK_SIZE_AREA];
-            let mut t_recon_inverse = t_memory_inverse.clone();
-            for (idx, event) in block.events.iter().enumerate() {
-                // Should only be None on the block margins beyond the frame plane
-                if let Some(ev) = event {
-                    inter_model.event_memory[idx] = *ev;
-                    inter_model.t_memory[idx] = ev.delta_t;
-                    if inter_model.time_modulation_mode == FramePerfect
-                        && inter_model.t_memory[idx] % dt_ref != 0
-                    {
-                        inter_model.t_memory[idx] =
-                            ((inter_model.t_memory[idx] / dt_ref) + 1) * dt_ref;
-                    }
-                    inter_model.t_recon[idx] = inter_model.t_memory[idx];
-                }
-            }
-            dbg!(inter_model.t_memory);
-            t_memory_inverse = inter_model.t_memory.clone();
-            event_memory_inverse = inter_model.event_memory.clone();
-            t_recon_inverse = inter_model.t_recon.clone();
+            // let mut t_memory_inverse: [DeltaT; BLOCK_SIZE_AREA] = [0; BLOCK_SIZE_AREA];
+            // let mut t_recon_inverse = t_memory_inverse.clone();
+            // // for (idx, event) in block.events.iter().enumerate() {
+            // //     // Should only be None on the block margins beyond the frame plane
+            // //     if let Some(ev) = event {
+            // //         // inter_model.event_memory[idx] = *ev;
+            // //         // inter_model.t_memory[idx] = ev.delta_t;
+            // //         if inter_model.time_modulation_mode == FramePerfect
+            // //             && inter_model.t_memory[idx] % dt_ref != 0
+            // //         {
+            // //             inter_model.t_memory[idx] =
+            // //                 ((inter_model.t_memory[idx] / dt_ref) + 1) * dt_ref;
+            // //         }
+            // //         inter_model.t_recon[idx] = inter_model.t_memory[idx];
+            // //     }
+            // // }
+            // dbg!(inter_model.t_memory);
 
             assert!(block.fill_count <= BLOCK_SIZE_AREA as u16);
             let (d_residuals, dt_residuals, sparam) =
-                inter_model.forward_intra_prediction(0, &block.events);
+                inter_model.forward_intra_prediction(0, dt_ref, &block.events);
 
-            let events =
-                block.get_intra_residual_tshifts_inverse(sparam, dtm, *d_residuals, *dt_residuals);
+            let d_resids = d_residuals.clone();
+            let dt_resids = dt_residuals.clone();
+            let mut t_memory_inverse = inter_model.t_memory.clone();
+            let mut event_memory_inverse = inter_model.event_memory.clone();
+            let mut t_recon_inverse = inter_model.t_recon.clone();
+
+            let events = block.get_intra_residual_tshifts_inverse(sparam, dtm, d_resids, dt_resids);
 
             let epsilon = 100;
             for (idx, recon_event) in events.iter().enumerate() {
