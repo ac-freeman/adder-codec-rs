@@ -1846,7 +1846,7 @@ mod tests {
     #[test]
     fn test_real_data_tshift_inter_refactor() {
         let mut bufreader =
-            BufReader::new(File::open("/home/andrew/Downloads/test_out_abs.adder").unwrap());
+            BufReader::new(File::open("/home/andrew/Downloads/test_abs2.adder").unwrap());
         let mut bitreader = BitReader::endian(bufreader, BigEndian);
         let compression = <RawInput as ReadCompression<BufReader<File>>>::new();
         let mut reader = Decoder::new(Box::new(compression), &mut bitreader).unwrap();

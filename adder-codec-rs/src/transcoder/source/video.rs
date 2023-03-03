@@ -7,7 +7,7 @@ use adder_codec_core::codec::encoder::Encoder;
 use adder_codec_core::codec::raw::stream::RawOutput;
 use adder_codec_core::codec::{CodecError, CodecMetadata, WriteCompression, LATEST_CODEC_VERSION};
 use adder_codec_core::{
-    Coord, DeltaT, Event, PlaneError, PlaneSize, SourceCamera, SourceType, TimeMode,
+    Coord, DeltaT, Event, Mode, PlaneError, PlaneSize, SourceCamera, SourceType, TimeMode,
 };
 use bumpalo::Bump;
 use std::sync::mpsc::{channel, Sender};
@@ -18,8 +18,8 @@ use opencv::imgproc::resize;
 use opencv::prelude::*;
 
 use crate::framer::scale_intensity::FrameValue;
-use crate::transcoder::event_pixel_tree::Mode::Continuous;
-use crate::transcoder::event_pixel_tree::{Intensity32, Mode, PixelArena};
+use crate::transcoder::event_pixel_tree::{Intensity32, PixelArena};
+use adder_codec_core::Mode::{Continuous, FramePerfect};
 use davis_edi_rs::util::reconstructor::ReconstructionError;
 use ndarray::{Array3, Axis, ShapeError};
 use rayon::iter::IntoParallelIterator;
@@ -130,7 +130,7 @@ impl Default for VideoState {
     fn default() -> Self {
         VideoState {
             plane: PlaneSize::default(),
-            pixel_tree_mode: Mode::Continuous,
+            pixel_tree_mode: Continuous,
             chunk_rows: 64,
             in_interval_count: 1,
             c_thresh_pos: 0,
