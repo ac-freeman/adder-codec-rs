@@ -1,10 +1,11 @@
-use crate::aedat::events_generated::Event as DvsEvent;
 use crate::transcoder::event_pixel_tree::Mode::{Continuous, FramePerfect};
 use crate::transcoder::source::video::SourceError::BufferEmpty;
 use crate::transcoder::source::video::{
     integrate_for_px, show_display, Source, SourceError, Video, VideoBuilder,
 };
 use adder_codec_core::DeltaT;
+use adder_codec_core::Mode::{Continuous, FramePerfect};
+use aedat::events_generated::Event as DvsEvent;
 use davis_edi_rs::util::reconstructor::{IterVal, ReconstructionError, Reconstructor};
 use rayon::iter::ParallelIterator;
 use rayon::iter::{IndexedParallelIterator, IntoParallelRefMutIterator};

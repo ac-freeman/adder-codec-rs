@@ -1,5 +1,5 @@
-use crate::transcoder::event_pixel_tree::Mode::{Continuous, FramePerfect};
-use adder_codec_core::{Coord, DeltaT, Event, TimeMode, D};
+use adder_codec_core::Mode::{Continuous, FramePerfect};
+use adder_codec_core::{Coord, DeltaT, Event, Mode, TimeMode, D};
 use adder_codec_core::{UDshift, D_EMPTY, D_MAX, D_SHIFT, D_ZERO_INTEGRATION};
 use smallvec::{smallvec, SmallVec};
 use std::cmp::min;
