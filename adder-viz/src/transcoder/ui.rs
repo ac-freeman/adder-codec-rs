@@ -165,24 +165,42 @@ impl TranscoderState {
             ui.label("OR drag and drop your source file here (.mp4, .aedat4)");
         });
 
-        if ui.button("Open DVS socket").clicked() {
-            if let Some(path) = rfd::FileDialog::new()
-                .set_directory("/tmp")
-                .add_filter("DVS/DAVIS video", &["sock"])
-                .pick_file()
-            {
-                self.ui_info_state.input_path_0 = Some(path.clone());
-                self.ui_info_state.input_path_1 = Some(path.clone());
-                replace_adder_transcoder(
-                    self,
-                    self.ui_info_state.input_path_0.clone(),
-                    self.ui_info_state.input_path_1.clone(),
-                    self.ui_info_state.output_path.clone(),
-                    0,
-                );
+        ui.horizontal(|ui| {
+            if ui.button("Open DVS socket").clicked() {
+                if let Some(path) = rfd::FileDialog::new()
+                    .set_directory("/tmp")
+                    .add_filter("DVS/DAVIS video", &["sock"])
+                    .pick_file()
+                {
+                    self.ui_info_state.input_path_0 = Some(path.clone());
+                    // self.ui_info_state.input_path_1 = Some(path.clone());
+                }
             }
-        }
-
+            if ui.button("Open APS socket").clicked() {
+                if let Some(path) = rfd::FileDialog::new()
+                    .set_directory("/tmp")
+                    .add_filter("DVS/DAVIS video", &["sock"])
+                    .pick_file()
+                {
+                    self.ui_info_state.input_path_1 = Some(path.clone());
+                }
+            }
+            if ui.button("Go!").clicked() {
+                eprintln!("aaa");
+                if self.ui_info_state.input_path_0.is_some()
+                    && self.ui_info_state.input_path_1.is_some()
+                {
+                    replace_adder_transcoder(
+                        self,
+                        self.ui_info_state.input_path_0.clone(),
+                        self.ui_info_state.input_path_1.clone(),
+                        self.ui_info_state.output_path.clone(),
+                        0,
+                    );
+                    eprintln!("ccc");
+                }
+            }
+        });
         ui.label(self.ui_info_state.source_name.clone());
 
         if ui.button("Save file").clicked() {
@@ -200,7 +218,7 @@ impl TranscoderState {
                 replace_adder_transcoder(
                     self,
                     self.ui_info_state.input_path_0.clone(),
-                    None,
+                    self.ui_info_state.input_path_1.clone(),
                     Some(path),
                     0,
                 );
@@ -275,7 +293,7 @@ impl TranscoderState {
                         replace_adder_transcoder(
                             self,
                             self.ui_info_state.input_path_0.clone(),
-                            None,
+                            self.ui_info_state.input_path_1.clone(),
                             self.ui_info_state.output_path.clone(),
                             current_frame,
                         );
@@ -316,6 +334,7 @@ impl TranscoderState {
                 Some(source) => source,
             }
         };
+        eprintln!("consume_source");
         match source.consume(1, &pool) {
             Ok(events_vec_vec) => {
                 for events_vec in events_vec_vec {

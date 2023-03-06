@@ -153,19 +153,22 @@ impl AdderTranscoder {
                         };
 
                         let filename_1 = match input_path_buf_1 {
-                            None => "".to_string(),
-                            Some(input_path_buf_1) => input_path_buf_1
-                                .file_name()
-                                .expect("File must exist")
-                                .to_str()
-                                .expect("Bad filename")
-                                .to_string(),
+                            None => None,
+                            Some(input_path_buf_1) => Some(
+                                input_path_buf_1
+                                    .file_name()
+                                    .expect("File must exist")
+                                    .to_str()
+                                    .expect("Bad filename")
+                                    .to_string(),
+                            ),
                         };
+                        dbg!(filename_1.clone());
 
                         let reconstructor = rt.block_on(Reconstructor::new(
                             dir + "/",
                             filename_0,
-                            filename_1,
+                            filename_1.unwrap_or("".to_string()),
                             mode.to_string(), // TODO
                             0.15,
                             ui_state.optimize_c,
@@ -239,6 +242,7 @@ pub(crate) fn replace_adder_transcoder(
             current_frame,
         ) {
             Ok(transcoder) => {
+                eprintln!("bgood");
                 transcoder_state.transcoder = transcoder;
                 ui_info_state.source_name = RichText::new(
                     input_path
@@ -254,8 +258,10 @@ pub(crate) fn replace_adder_transcoder(
                     )
                     .color(Color32::DARK_GREEN);
                 }
+                eprintln!("bgood2");
             }
             Err(e) => {
+                eprintln!("berror");
                 transcoder_state.transcoder = AdderTranscoder::default();
                 ui_info_state.source_name = RichText::new(e.to_string()).color(Color32::RED);
             }
