@@ -311,13 +311,15 @@ fn file_drop(
 
             match main_ui_state.view {
                 Tabs::Transcoder => {
-                    transcoder_state.ui_info_state.input_path = Some(path_buf.clone());
+                    transcoder_state.ui_info_state.input_path_0 = Some(path_buf.clone());
+                    transcoder_state.ui_info_state.input_path_1 = None;
 
                     let output_path_opt = transcoder_state.ui_info_state.output_path.clone();
                     // TODO: refactor as struct func
                     replace_adder_transcoder(
                         &mut transcoder_state,
                         Some(path_buf.clone()),
+                        None,
                         output_path_opt,
                         0,
                     ); // TODO!!

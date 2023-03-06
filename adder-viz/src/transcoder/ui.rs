@@ -71,7 +71,8 @@ pub struct InfoUiState {
     pub events_total: u64,
     pub source_name: RichText,
     pub output_name: OutputName,
-    pub(crate) input_path: Option<PathBuf>,
+    pub(crate) input_path_0: Option<PathBuf>,
+    pub(crate) input_path_1: Option<PathBuf>,
     pub(crate) output_path: Option<PathBuf>,
     pub view_mode_radio_state: FramedViewMode, // TODO: Move to different struct
 }
@@ -97,7 +98,8 @@ impl Default for InfoUiState {
             events_total: 0,
             source_name: RichText::new("No input file selected yet"),
             output_name: Default::default(),
-            input_path: None,
+            input_path_0: None,
+            input_path_1: None,
             output_path: None,
             view_mode_radio_state: FramedViewMode::Intensity,
         }
@@ -148,10 +150,12 @@ impl TranscoderState {
                     .add_filter("DVS/DAVIS video", &["aedat4"])
                     .pick_file()
                 {
-                    self.ui_info_state.input_path = Some(path.clone());
+                    self.ui_info_state.input_path_0 = Some(path.clone());
+                    self.ui_info_state.input_path_1 = None;
                     replace_adder_transcoder(
                         self,
                         Some(path),
+                        None,
                         self.ui_info_state.output_path.clone(),
                         0,
                     );
@@ -160,6 +164,24 @@ impl TranscoderState {
 
             ui.label("OR drag and drop your source file here (.mp4, .aedat4)");
         });
+
+        if ui.button("Open DVS socket").clicked() {
+            if let Some(path) = rfd::FileDialog::new()
+                .set_directory("/tmp")
+                .add_filter("DVS/DAVIS video", &["sock"])
+                .pick_file()
+            {
+                self.ui_info_state.input_path_0 = Some(path.clone());
+                self.ui_info_state.input_path_1 = Some(path.clone());
+                replace_adder_transcoder(
+                    self,
+                    self.ui_info_state.input_path_0.clone(),
+                    self.ui_info_state.input_path_1.clone(),
+                    self.ui_info_state.output_path.clone(),
+                    0,
+                );
+            }
+        }
 
         ui.label(self.ui_info_state.source_name.clone());
 
@@ -177,7 +199,8 @@ impl TranscoderState {
                 };
                 replace_adder_transcoder(
                     self,
-                    self.ui_info_state.input_path.clone(),
+                    self.ui_info_state.input_path_0.clone(),
+                    None,
                     Some(path),
                     0,
                 );
@@ -218,7 +241,8 @@ impl TranscoderState {
                             {
                                 replace_adder_transcoder(
                                     self,
-                                    self.ui_info_state.input_path.clone(),
+                                    self.ui_info_state.input_path_0.clone(),
+                                    self.ui_info_state.input_path_1.clone(),
                                     self.ui_info_state.output_path.clone(),
                                     0,
                                 );
@@ -250,7 +274,8 @@ impl TranscoderState {
                             source.get_video_ref().state.in_interval_count + source.frame_idx_start;
                         replace_adder_transcoder(
                             self,
-                            self.ui_info_state.input_path.clone(),
+                            self.ui_info_state.input_path_0.clone(),
+                            None,
                             self.ui_info_state.output_path.clone(),
                             current_frame,
                         );
@@ -312,7 +337,13 @@ impl TranscoderState {
                 self.ui_info_state.output_name = Default::default();
 
                 // Start video over from the beginning
-                replace_adder_transcoder(self, self.ui_info_state.input_path.clone(), None, 0);
+                replace_adder_transcoder(
+                    self,
+                    self.ui_info_state.input_path_0.clone(),
+                    self.ui_info_state.input_path_1.clone(),
+                    None,
+                    0,
+                );
                 return Ok(());
             }
         };

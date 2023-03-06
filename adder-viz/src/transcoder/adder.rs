@@ -51,6 +51,7 @@ impl Error for AdderTranscoderError {}
 impl AdderTranscoder {
     pub(crate) fn new(
         input_path_buf: &Path,
+        input_path_buf_1: &Option<PathBuf>,
         output_path_opt: Option<PathBuf>,
         ui_state: &mut ParamsUiState,
         current_frame: u32,
@@ -115,7 +116,7 @@ impl AdderTranscoder {
                         // }
                     }
 
-                    Some("aedat4") => {
+                    Some(ext) if ext == "aedat4" || ext == "sock" => {
                         let events_only = match &ui_state.davis_mode_radio_state {
                             TranscoderMode::Framed => false,
                             TranscoderMode::RawDavis => false,
@@ -137,18 +138,35 @@ impl AdderTranscoder {
                             .to_str()
                             .expect("Bad path")
                             .to_string();
-                        let filename = input_path_buf
+                        let filename_0 = input_path_buf
                             .file_name()
                             .expect("File must exist")
                             .to_str()
                             .expect("Bad filename")
                             .to_string();
-                        eprintln!("{filename}");
+                        eprintln!("{filename_0}");
+
+                        let mode = match ext {
+                            "aedat4" => "file",
+                            "sock" => "socket",
+                            _ => "file",
+                        };
+
+                        let filename_1 = match input_path_buf_1 {
+                            None => "".to_string(),
+                            Some(input_path_buf_1) => input_path_buf_1
+                                .file_name()
+                                .expect("File must exist")
+                                .to_str()
+                                .expect("Bad filename")
+                                .to_string(),
+                        };
+
                         let reconstructor = rt.block_on(Reconstructor::new(
                             dir + "/",
-                            filename,
-                            "".to_string(),
-                            "file".to_string(), // TODO
+                            filename_0,
+                            filename_1,
+                            mode.to_string(), // TODO
                             0.15,
                             ui_state.optimize_c,
                             false,
@@ -202,7 +220,8 @@ impl AdderTranscoder {
 
 pub(crate) fn replace_adder_transcoder(
     transcoder_state: &mut TranscoderState,
-    input_path_buf: Option<PathBuf>,
+    input_path_buf_0: Option<PathBuf>,
+    input_path_buf_1: Option<PathBuf>,
     output_path_opt: Option<PathBuf>,
     current_frame: u32,
 ) {
@@ -211,9 +230,10 @@ pub(crate) fn replace_adder_transcoder(
     ui_info_state.events_ppc_total = 0.0;
     ui_info_state.events_total = 0;
     ui_info_state.events_ppc_per_sec = 0.0;
-    if let Some(input_path) = input_path_buf {
+    if let Some(input_path) = input_path_buf_0 {
         match AdderTranscoder::new(
             &input_path,
+            &input_path_buf_1,
             output_path_opt.clone(),
             &mut transcoder_state.ui_state,
             current_frame,
