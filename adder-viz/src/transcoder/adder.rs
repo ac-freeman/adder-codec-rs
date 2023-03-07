@@ -146,11 +146,12 @@ impl AdderTranscoder {
                             .to_string();
                         eprintln!("{filename_0}");
 
-                        let mode = match ext {
-                            "aedat4" => "file",
-                            "sock" => "socket",
-                            _ => "file",
-                        };
+                        let mut mode = "file";
+                        let mut simulate_latency = true;
+                        if ext == "sock" {
+                            mode = "socket";
+                            simulate_latency = false;
+                        }
 
                         let filename_1 = match input_path_buf_1 {
                             None => None,
@@ -165,6 +166,7 @@ impl AdderTranscoder {
                         };
                         dbg!(filename_1.clone());
 
+                        dbg!(ui_state.davis_output_fps);
                         let reconstructor = rt.block_on(Reconstructor::new(
                             dir + "/",
                             filename_0,
@@ -174,8 +176,8 @@ impl AdderTranscoder {
                             ui_state.optimize_c,
                             ui_state.optimize_c_frequency,
                             false,
-                            false,
-                            false,
+                            true,
+                            true,
                             ui_state.davis_output_fps,
                             Compression::None,
                             346,
