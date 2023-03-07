@@ -189,7 +189,6 @@ impl TranscoderState {
                 }
             }
             if ui.button("Go!").clicked() {
-                eprintln!("aaa");
                 if self.ui_info_state.input_path_0.is_some()
                     && self.ui_info_state.input_path_1.is_some()
                 {
@@ -200,7 +199,6 @@ impl TranscoderState {
                         self.ui_info_state.output_path.clone(),
                         0,
                     );
-                    eprintln!("ccc");
                 }
             }
         });
@@ -249,37 +247,33 @@ impl TranscoderState {
         // TODO: do conditionals on the sliders themselves
         let source: &mut dyn Source<BufWriter<File>> = {
             match &mut self.transcoder.framed_source {
-                None => {
-                    match &mut self.transcoder.davis_source {
-                        None => {
+                None => match &mut self.transcoder.davis_source {
+                    None => {
+                        return;
+                    }
+                    Some(source) => {
+                        if source.mode != self.ui_state.davis_mode_radio_state
+                            || source.get_reconstructor().output_fps
+                                != self.ui_state.davis_output_fps
+                            || source.time_mode != self.ui_state.time_mode
+                        {
+                            replace_adder_transcoder(
+                                self,
+                                self.ui_info_state.input_path_0.clone(),
+                                self.ui_info_state.input_path_1.clone(),
+                                self.ui_info_state.output_path.clone(),
+                                0,
+                            );
                             return;
                         }
-                        Some(source) => {
-                            if source.mode != self.ui_state.davis_mode_radio_state
-                                || source.get_reconstructor().output_fps
-                                    != self.ui_state.davis_output_fps
-                                || source.time_mode != self.ui_state.time_mode
-                            {
-                                eprintln!("replace 260");
-                                replace_adder_transcoder(
-                                    self,
-                                    self.ui_info_state.input_path_0.clone(),
-                                    self.ui_info_state.input_path_1.clone(),
-                                    self.ui_info_state.output_path.clone(),
-                                    0,
-                                );
-                                return;
-                            }
-                            // let tmp = source.get_reconstructor();
-                            let tmp = source.get_reconstructor_mut();
-                            tmp.set_optimize_c(
-                                self.ui_state.optimize_c,
-                                self.ui_state.optimize_c_frequency,
-                            );
-                            source
-                        }
+                        let tmp = source.get_reconstructor_mut();
+                        tmp.set_optimize_c(
+                            self.ui_state.optimize_c,
+                            self.ui_state.optimize_c_frequency,
+                        );
+                        source
                     }
-                }
+                },
                 Some(source) => {
                     if source.scale != self.ui_state.scale
                         || source.get_ref_time() != self.ui_state.delta_t_ref as u32
@@ -297,7 +291,6 @@ impl TranscoderState {
                     {
                         let current_frame =
                             source.get_video_ref().state.in_interval_count + source.frame_idx_start;
-                        eprintln!("replace 300");
                         replace_adder_transcoder(
                             self,
                             self.ui_info_state.input_path_0.clone(),
@@ -342,7 +335,6 @@ impl TranscoderState {
                 Some(source) => source,
             }
         };
-        eprintln!("consume_source");
         match source.consume(1, &pool) {
             Ok(events_vec_vec) => {
                 for events_vec in events_vec_vec {
@@ -363,7 +355,6 @@ impl TranscoderState {
                 source.get_video_mut().end_write_stream()?;
                 self.ui_info_state.output_path = None;
                 self.ui_info_state.output_name = Default::default();
-                eprintln!("replace 360");
 
                 // Start video over from the beginning
                 replace_adder_transcoder(
@@ -536,12 +527,12 @@ fn side_panel_grid_contents(
     ui.label("DAVIS deblurred FPS:");
     slider_pm(
         !enabled,
-        false,
+        true,
         ui,
         &mut ui_state.davis_output_fps,
         &mut ui_state.davis_output_fps_slider,
         1.0..=10000.0,
-        vec![2500.0, 5000.0, 7500.0],
+        vec![50.0, 250.0, 500.0, 1000.0, 2500.0, 5000.0, 7500.0],
         50.0,
     );
     ui.end_row();

@@ -16,7 +16,6 @@ use adder_codec_rs::davis_edi_rs::util::reconstructor::Reconstructor;
 
 use crate::transcoder::ui::{ParamsUiState, TranscoderState};
 use adder_codec_core::SourceCamera::{DavisU8, FramedU8};
-use adder_codec_core::TimeMode;
 use adder_codec_rs::transcoder::source::video::VideoBuilder;
 use bevy_egui::egui::{Color32, RichText};
 use opencv::Result;
@@ -144,7 +143,6 @@ impl AdderTranscoder {
                             .to_str()
                             .expect("Bad filename")
                             .to_string();
-                        eprintln!("{filename_0}");
 
                         let mut mode = "file";
                         let mut simulate_latency = true;
@@ -164,9 +162,7 @@ impl AdderTranscoder {
                                     .to_string(),
                             ),
                         };
-                        dbg!(filename_1.clone());
 
-                        dbg!(ui_state.davis_output_fps);
                         let reconstructor = rt.block_on(Reconstructor::new(
                             dir + "/",
                             filename_0,
@@ -176,8 +172,8 @@ impl AdderTranscoder {
                             ui_state.optimize_c,
                             ui_state.optimize_c_frequency,
                             false,
-                            true,
-                            true,
+                            false,
+                            false,
                             ui_state.davis_output_fps,
                             Compression::None,
                             346,
@@ -192,22 +188,31 @@ impl AdderTranscoder {
                             .map(|output_path| output_path.to_str().expect("Bad path").to_string());
 
                         let mut davis_source: Davis<BufWriter<File>> =
-                            Davis::new(reconstructor, rt)?
+                            Davis::new(reconstructor, rt, ui_state.davis_mode_radio_state)?
                                 .optimize_adder_controller(false) // TODO
                                 .mode(ui_state.davis_mode_radio_state)
                                 .time_mode(ui_state.time_mode)
                                 .time_parameters(
-                                    1000000_u32, // TODO
+                                    1000000_u32,
                                     (1_000_000.0 / ui_state.davis_output_fps) as DeltaT,
-                                    (1_000_000.0 * ui_state.delta_t_max_mult as f32) as u32, // TODO
+                                    (1_000_000.0 * ui_state.delta_t_max_mult as f32) as u32,
                                 )? // TODO
                                 .c_thresh_pos(ui_state.adder_tresh as u8)
                                 .c_thresh_neg(ui_state.adder_tresh as u8);
 
+                        // Override time parameters if we're in framed mode
+                        if ui_state.davis_mode_radio_state == TranscoderMode::Framed {
+                            davis_source = davis_source.time_parameters(
+                                (255.0 * ui_state.davis_output_fps) as u32,
+                                255,
+                                255 * ui_state.delta_t_max_mult,
+                            )?;
+                        }
+
                         if let Some(output_string) = output_string {
                             let writer = BufWriter::new(File::create(&output_string)?);
                             davis_source =
-                                *davis_source.write_out(DavisU8, TimeMode::DeltaT, writer)?;
+                                *davis_source.write_out(DavisU8, ui_state.time_mode, writer)?;
                         }
 
                         Ok(AdderTranscoder {
@@ -245,7 +250,6 @@ pub(crate) fn replace_adder_transcoder(
             current_frame,
         ) {
             Ok(transcoder) => {
-                eprintln!("bgood");
                 transcoder_state.transcoder = transcoder;
                 ui_info_state.source_name = RichText::new(
                     input_path
@@ -261,10 +265,8 @@ pub(crate) fn replace_adder_transcoder(
                     )
                     .color(Color32::DARK_GREEN);
                 }
-                eprintln!("bgood2");
             }
             Err(e) => {
-                eprintln!("berror");
                 transcoder_state.transcoder = AdderTranscoder::default();
                 ui_info_state.source_name = RichText::new(e.to_string()).color(Color32::RED);
             }
