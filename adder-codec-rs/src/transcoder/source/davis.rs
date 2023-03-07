@@ -523,6 +523,9 @@ impl<W: Write + 'static> Source<W> for Davis<W> {
                 opt_timestamp,
                 Some((c, events_before, events_after, img_start_ts, img_end_ts)),
             ))) => {
+                // We get here if we're in raw mode (getting raw events from EDI, and also
+                // potentially deblurred frames)
+                dbg!("GOT DATA FROM EDI");
                 self.control_latency(opt_timestamp);
 
                 self.input_frame_scaled = mat;
@@ -535,6 +538,9 @@ impl<W: Write + 'static> Source<W> for Davis<W> {
                     (img_end_ts - img_start_ts) as f64 / f64::from(self.video.state.ref_time);
             }
             Ok(Some((mat, opt_timestamp, None))) => {
+                // We get here if we're in framed mode (just getting deblurred frames from EDI,
+                // including intermediate frames)
+                dbg!("GOT just a mat FROM EDI");
                 self.control_latency(opt_timestamp);
                 self.input_frame_scaled = mat;
             }
@@ -542,12 +548,14 @@ impl<W: Write + 'static> Source<W> for Davis<W> {
         }
         let start_of_frame_timestamp = match self.start_of_frame_timestamp {
             Some(t) => t,
-            None => return Err(SourceError::UninitializedData),
+            None => 0,
         };
+        eprintln!("d1");
         let end_of_frame_timestamp = match self.end_of_frame_timestamp {
             Some(t) => t,
-            None => return Err(SourceError::UninitializedData),
+            None => self.video.state.ref_time.into(),
         };
+        eprintln!("d2");
         if with_events {
             if self.video.state.in_interval_count == 0 {
                 self.dvs_last_timestamps.par_map_inplace(|ts| {
@@ -566,6 +574,7 @@ impl<W: Write + 'static> Source<W> for Davis<W> {
                 self.integrate_frame_gaps()?;
             }
         }
+        eprintln!("d3");
 
         if self.input_frame_scaled.empty() {
             return Err(BufferEmpty);
@@ -632,6 +641,7 @@ impl<W: Write + 'static> Source<W> for Davis<W> {
                 }
             }
         }
+        eprintln!("d4");
 
         if with_events {
             let dvs_events_after = match &self.dvs_events_after {
@@ -644,6 +654,7 @@ impl<W: Write + 'static> Source<W> for Davis<W> {
 
             self.integrate_dvs_events(&dvs_events_after, &end_of_frame_timestamp, check_dvs_after)?;
         }
+        eprintln!("d5");
 
         ret
     }

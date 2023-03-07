@@ -185,7 +185,7 @@ impl AdderTranscoder {
                             deblur_only,
                             events_only,
                             1000.0, // Target latency (not used)
-                            true,
+                            simulate_latency,
                         ));
 
                         let output_string = output_path_opt

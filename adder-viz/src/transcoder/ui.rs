@@ -177,7 +177,6 @@ impl TranscoderState {
                     .pick_file()
                 {
                     self.ui_info_state.input_path_0 = Some(path.clone());
-                    // self.ui_info_state.input_path_1 = Some(path.clone());
                 }
             }
             if ui.button("Open APS socket").clicked() {
@@ -261,6 +260,7 @@ impl TranscoderState {
                                     != self.ui_state.davis_output_fps
                                 || source.time_mode != self.ui_state.time_mode
                             {
+                                eprintln!("replace 260");
                                 replace_adder_transcoder(
                                     self,
                                     self.ui_info_state.input_path_0.clone(),
@@ -297,6 +297,7 @@ impl TranscoderState {
                     {
                         let current_frame =
                             source.get_video_ref().state.in_interval_count + source.frame_idx_start;
+                        eprintln!("replace 300");
                         replace_adder_transcoder(
                             self,
                             self.ui_info_state.input_path_0.clone(),
@@ -357,10 +358,12 @@ impl TranscoderState {
                     / (source.get_video_ref().state.plane.volume() as f64);
             }
             Err(SourceError::Open) => {}
-            Err(_) => {
+            Err(e) => {
+                eprintln!("Error: {:?}", e);
                 source.get_video_mut().end_write_stream()?;
                 self.ui_info_state.output_path = None;
                 self.ui_info_state.output_name = Default::default();
+                eprintln!("replace 360");
 
                 // Start video over from the beginning
                 replace_adder_transcoder(
