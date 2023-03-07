@@ -11,7 +11,6 @@ use std::path::{Path, PathBuf};
 
 use adder_codec_rs::transcoder::source::davis::TranscoderMode;
 
-use adder_codec_rs::aedat::base::ioheader_generated::Compression;
 use adder_codec_rs::davis_edi_rs::util::reconstructor::Reconstructor;
 
 use crate::transcoder::ui::{ParamsUiState, TranscoderState};
@@ -176,9 +175,6 @@ impl AdderTranscoder {
                             false,
                             false,
                             ui_state.davis_output_fps,
-                            Compression::None,
-                            346,
-                            260,
                             deblur_only,
                             events_only,
                             1000.0, // Target latency (not used)
