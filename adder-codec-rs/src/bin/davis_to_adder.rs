@@ -1,6 +1,5 @@
 use adder_codec_rs::transcoder::source::davis::Davis;
 use adder_codec_rs::transcoder::source::video::{Source, VideoBuilder};
-use aedat::base::ioheader_generated::Compression;
 use clap::Parser;
 use davis_edi_rs::util::reconstructor::Reconstructor;
 use davis_edi_rs::Args as EdiArgs;
@@ -125,9 +124,6 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         edi_args.show_display,
         edi_args.show_blurred_display,
         edi_args.output_fps,
-        Compression::None,
-        346,
-        260,
         edi_args.deblur_only,
         events_only,
         edi_args.target_latency,
@@ -148,7 +144,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         )? // TODO
         .c_thresh_pos(args.adder_c_thresh_pos)
         .c_thresh_neg(args.adder_c_thresh_neg)
-        .write_out(DavisU8, TimeMode::DeltaT, writer)?;
+        .write_out(DavisU8, TimeMode::DeltaT, writer)?; // TODO: PROBLEM IS SOMEWHERE WITH THE TIME_MODE
 
     let mut now = Instant::now();
     let start_time = std::time::Instant::now();
