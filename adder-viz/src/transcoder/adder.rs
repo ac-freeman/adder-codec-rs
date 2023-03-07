@@ -80,6 +80,7 @@ impl AdderTranscoder {
                         .auto_time_parameters(
                             ui_state.delta_t_ref as u32,
                             ui_state.delta_t_max_mult * ui_state.delta_t_ref as u32,
+                            None,
                         )?
                         .time_mode(ui_state.time_mode)
                         .show_display(false);
@@ -196,6 +197,7 @@ impl AdderTranscoder {
                                     1000000_u32,
                                     (1_000_000.0 / ui_state.davis_output_fps) as DeltaT,
                                     (1_000_000.0 * ui_state.delta_t_max_mult as f32) as u32,
+                                    Some(ui_state.time_mode),
                                 )? // TODO
                                 .c_thresh_pos(ui_state.adder_tresh as u8)
                                 .c_thresh_neg(ui_state.adder_tresh as u8);
@@ -206,6 +208,7 @@ impl AdderTranscoder {
                                 (255.0 * ui_state.davis_output_fps) as u32,
                                 255,
                                 255 * ui_state.delta_t_max_mult,
+                                Some(ui_state.time_mode),
                             )?;
                         }
 

@@ -531,8 +531,10 @@ fn side_panel_grid_contents(
         ui,
         &mut ui_state.davis_output_fps,
         &mut ui_state.davis_output_fps_slider,
-        1.0..=10000.0,
-        vec![50.0, 250.0, 500.0, 1000.0, 2500.0, 5000.0, 7500.0],
+        30.0..=10000.0,
+        vec![
+            50.0, 100.0, 250.0, 500.0, 1_000.0, 2_500.0, 5_000.0, 7_500.0, 10_000.0,
+        ],
         50.0,
     );
     ui.end_row();
