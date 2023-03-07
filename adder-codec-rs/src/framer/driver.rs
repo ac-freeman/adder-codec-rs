@@ -63,7 +63,7 @@ impl FramerBuilder {
             source: SourceType::U8,
             codec_version: 3,
             source_camera: SourceCamera::default(),
-            time_mode: TimeMode::DeltaT,
+            time_mode: TimeMode::default(),
             ref_interval: 5000,
             delta_t_max: 5000,
         }

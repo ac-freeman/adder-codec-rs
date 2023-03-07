@@ -186,7 +186,7 @@ mod tests {
         if !args.output_events_filename.is_empty() {
             let file = File::create(args.output_events_filename)?;
             let writer = BufWriter::new(file);
-            source = *source.write_out(FramedU8, TimeMode::DeltaT, writer)?;
+            source = *source.write_out(FramedU8, TimeMode::default(), writer)?;
         }
         let ref_time = source.get_ref_time();
 
@@ -197,7 +197,7 @@ mod tests {
             args.frame_count_max as i32,
             1,
             1,
-            TimeMode::DeltaT,
+            TimeMode::default(),
         )?;
 
         simul_processor.run().unwrap();

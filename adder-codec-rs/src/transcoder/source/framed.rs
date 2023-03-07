@@ -85,7 +85,7 @@ impl<W: Write + 'static> Framed<W> {
             scale,
             color_input,
             video,
-            time_mode: TimeMode::DeltaT,
+            time_mode: TimeMode::default(),
         })
     }
 

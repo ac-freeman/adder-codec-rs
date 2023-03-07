@@ -172,6 +172,7 @@ impl AdderTranscoder {
                             mode.to_string(), // TODO
                             0.15,
                             ui_state.optimize_c,
+                            ui_state.optimize_c_frequency,
                             false,
                             false,
                             false,

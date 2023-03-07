@@ -36,6 +36,8 @@ pub struct ParamsUiState {
     pub(crate) davis_output_fps: f64,
     davis_output_fps_slider: f64,
     pub(crate) optimize_c: bool,
+    pub(crate) optimize_c_frequency: u32,
+    pub(crate) optimize_c_frequency_slider: u32,
     pub(crate) time_mode: TimeMode,
 }
 
@@ -59,7 +61,9 @@ impl Default for ParamsUiState {
             davis_output_fps: 500.0,
             davis_output_fps_slider: 500.0,
             optimize_c: true,
-            time_mode: TimeMode::DeltaT,
+            optimize_c_frequency: 10,
+            optimize_c_frequency_slider: 10,
+            time_mode: TimeMode::default(),
         }
     }
 }
@@ -268,7 +272,10 @@ impl TranscoderState {
                             }
                             // let tmp = source.get_reconstructor();
                             let tmp = source.get_reconstructor_mut();
-                            tmp.set_optimize_c(self.ui_state.optimize_c);
+                            tmp.set_optimize_c(
+                                self.ui_state.optimize_c,
+                                self.ui_state.optimize_c_frequency,
+                            );
                             source
                         }
                     }
@@ -540,6 +547,19 @@ fn side_panel_grid_contents(
     ui.add_enabled(
         !enabled,
         egui::Checkbox::new(&mut ui_state.optimize_c, "Optimize θ?"),
+    );
+    ui.end_row();
+
+    ui.label("Optimize frequency:");
+    slider_pm(
+        !enabled,
+        true,
+        ui,
+        &mut ui_state.optimize_c_frequency,
+        &mut ui_state.optimize_c_frequency_slider,
+        1..=250,
+        vec![10, 25, 50, 100],
+        1,
     );
     ui.end_row();
 }

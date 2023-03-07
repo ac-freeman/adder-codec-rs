@@ -55,10 +55,10 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq)]
 pub enum TimeMode {
     /// The time is the delta time from the previous event
-    #[default]
     DeltaT,
 
     /// The time is the absolute time from the start of the recording
+    #[default]
     AbsoluteT,
 
     /// TODO
