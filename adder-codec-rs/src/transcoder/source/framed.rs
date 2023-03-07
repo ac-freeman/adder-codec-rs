@@ -112,10 +112,13 @@ impl<W: Write + 'static> Framed<W> {
         mut self,
         ref_time: DeltaT,
         delta_t_max: DeltaT,
+        time_mode: Option<TimeMode>,
     ) -> Result<Self, SourceError> {
         if delta_t_max % ref_time == 0 {
             let tps = (ref_time as f64 * self.source_fps) as DeltaT;
-            self.video = self.video.time_parameters(tps, ref_time, delta_t_max)?;
+            self.video = self
+                .video
+                .time_parameters(tps, ref_time, delta_t_max, time_mode)?;
         } else {
             return Err(SourceError::BadParams(
                 "delta_t_max must be a multiple of ref_time".to_string(),
@@ -205,9 +208,12 @@ impl<W: Write + 'static> VideoBuilder<W> for Framed<W> {
         tps: DeltaT,
         ref_time: DeltaT,
         delta_t_max: DeltaT,
+        time_mode: Option<TimeMode>,
     ) -> Result<Self, SourceError> {
         if delta_t_max % ref_time == 0 {
-            self.video = self.video.time_parameters(tps, ref_time, delta_t_max)?;
+            self.video = self
+                .video
+                .time_parameters(tps, ref_time, delta_t_max, time_mode)?;
         } else {
             eprintln!("delta_t_max must be a multiple of ref_time");
         }

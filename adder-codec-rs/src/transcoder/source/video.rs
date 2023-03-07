@@ -165,6 +165,7 @@ pub trait VideoBuilder<W> {
         tps: DeltaT,
         ref_time: DeltaT,
         delta_t_max: DeltaT,
+        time_mode: Option<TimeMode>,
     ) -> Result<Self, SourceError>
     where
         Self: std::marker::Sized;
@@ -329,6 +330,7 @@ impl<W: Write + 'static> Video<W> {
         tps: DeltaT,
         ref_time: DeltaT,
         delta_t_max: DeltaT,
+        time_mode: Option<TimeMode>,
     ) -> Result<Self, SourceError> {
         if ref_time > f32::MAX as u32 {
             eprintln!(
@@ -361,6 +363,9 @@ impl<W: Write + 'static> Video<W> {
         self.state.delta_t_max = delta_t_max;
         self.state.ref_time = ref_time;
         self.state.tps = tps;
+        self.event_pixel_trees.par_map_inplace(|px| {
+            px.time_mode(time_mode);
+        });
         Ok(self)
     }
 

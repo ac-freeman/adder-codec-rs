@@ -970,7 +970,7 @@ fn test_framed_to_adder_bunny4() {
             .unwrap()
             .contrast_thresholds(5, 5)
             .show_display(false)
-            .auto_time_parameters(5000, 240_000)
+            .auto_time_parameters(5000, 240_000, Some(DeltaT))
             .unwrap();
 
     let frame_max = 250;

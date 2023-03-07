@@ -120,6 +120,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         edi_args.mode,
         edi_args.start_c,
         edi_args.optimize_c,
+        edi_args.optimize_c_frequency,
         edi_args.optimize_controller,
         edi_args.show_display,
         edi_args.show_blurred_display,
@@ -136,13 +137,14 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let file = File::create(args.output_events_filename)?;
     let writer = BufWriter::new(file);
 
-    let mut davis_source = Davis::new(reconstructor, rt)?
+    let mut davis_source = Davis::new(reconstructor, rt, mode)?
         .optimize_adder_controller(args.optimize_adder_controller)
         .mode(mode)
         .time_parameters(
             1_000_000, // TODO
             (1_000_000.0 / edi_args.output_fps) as DeltaT,
             (1_000_000.0 * args.delta_t_max_multiplier) as u32,
+            Some(TimeMode::AbsoluteT),
         )? // TODO
         .c_thresh_pos(args.adder_c_thresh_pos)
         .c_thresh_neg(args.adder_c_thresh_neg)

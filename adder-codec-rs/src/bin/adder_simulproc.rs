@@ -69,7 +69,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             .c_thresh_pos(args.c_thresh_pos)
             .c_thresh_neg(args.c_thresh_neg)
             .show_display(args.show_display)
-            .auto_time_parameters(args.ref_time, args.delta_t_max)?;
+            .auto_time_parameters(args.ref_time, args.delta_t_max, None)?;
 
     if !args.output_events_filename.is_empty() {
         let path = Path::new(&args.output_events_filename);
@@ -182,11 +182,12 @@ mod tests {
             (args.ref_time as f64 * source_fps) as DeltaT,
             args.ref_time,
             args.delta_t_max,
+            None,
         )?;
         if !args.output_events_filename.is_empty() {
             let file = File::create(args.output_events_filename)?;
             let writer = BufWriter::new(file);
-            source = *source.write_out(FramedU8, TimeMode::default(), writer)?;
+            source = *source.write_out(FramedU8, TimeMode::DeltaT, writer)?;
         }
         let ref_time = source.get_ref_time();
 

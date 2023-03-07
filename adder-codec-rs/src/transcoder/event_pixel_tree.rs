@@ -424,6 +424,7 @@ impl PixelNode {
 
 #[cfg(test)]
 mod tests {
+    use adder_codec_core::TimeMode::DeltaT;
     use float_cmp::approx_eq;
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
@@ -438,6 +439,7 @@ mod tests {
                 c: None,
             },
         );
+        tree.time_mode(Some(DeltaT));
 
         assert_eq!(tree.arena[0].state.d, 6);
         tree.integrate(100.0, 20.0, Continuous, dtm, 20);

@@ -705,8 +705,11 @@ impl<W: Write + 'static> VideoBuilder<W> for Davis<W> {
         tps: DeltaT,
         ref_time: DeltaT,
         delta_t_max: DeltaT,
+        time_mode: Option<TimeMode>,
     ) -> Result<Self, SourceError> {
-        self.video = self.video.time_parameters(tps, ref_time, delta_t_max)?;
+        self.video = self
+            .video
+            .time_parameters(tps, ref_time, delta_t_max, time_mode)?;
         Ok(self)
     }
 
