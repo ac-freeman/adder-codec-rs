@@ -1,8 +1,7 @@
 use adder_codec_core::codec::decoder::Decoder;
 use adder_codec_core::codec::encoder::Encoder;
-use adder_codec_core::codec::raw::stream;
 use adder_codec_core::codec::raw::stream::{RawInput, RawOutput};
-use adder_codec_core::codec::{CodecMetadata, ReadCompression, WriteCompression};
+use adder_codec_core::codec::{ReadCompression, WriteCompression};
 use adder_codec_core::TimeMode;
 use adder_codec_rs::utils::stream_migration::migrate_v2;
 use bitstream_io::{BigEndian, BitReader};
@@ -11,7 +10,6 @@ use serde::Deserialize;
 use std::error;
 use std::fs::File;
 use std::io::{BufReader, BufWriter};
-use std::path::Path;
 
 #[derive(Parser, Debug, Deserialize, Default)]
 pub struct Args {
@@ -43,7 +41,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let compression = <RawInput as ReadCompression<BufReader<File>>>::new();
 
     let mut bitreader = BitReader::endian(bufreader, BigEndian);
-    let mut input_stream = Decoder::new(Box::new(compression), &mut bitreader).unwrap();
+    let input_stream = Decoder::new(Box::new(compression), &mut bitreader).unwrap();
 
     let bufwriter = BufWriter::new(File::create(args.output_events_filename).unwrap());
     let mut new_meta = input_stream.meta().clone();

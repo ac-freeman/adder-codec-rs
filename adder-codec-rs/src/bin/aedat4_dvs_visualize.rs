@@ -1,7 +1,6 @@
 use adder_codec_rs::transcoder::source::davis::get_next_image;
 use adder_codec_rs::transcoder::source::video::show_display_force;
 use adder_codec_rs::utils::viz::{encode_video_ffmpeg, write_frame_to_video};
-use aedat::base::ioheader_generated::Compression;
 use aedat::events_generated::Event;
 use clap::Parser;
 use davis_edi_rs::util::reconstructor::Reconstructor;
@@ -69,9 +68,6 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         false,
         false,
         60.0,
-        Compression::None,
-        346,
-        260,
         true,
         true,
         1.0,
