@@ -86,15 +86,9 @@ impl PixelArena {
     }
 
     /// If the integration is 0, we need to forcefully fire an event where d=254
-    fn get_zero_event(
-        &mut self,
-        idx: usize,
-        next_intensity: Option<Intensity32>,
-        mode: Mode,
-        ref_time: DeltaT,
-    ) -> Event64 {
+    fn get_zero_event(&mut self, idx: usize, next_intensity: Option<Intensity32>) -> Event64 {
         let mut node = &mut self.arena[idx];
-        let mut ret_event = Event64 {
+        let ret_event = Event64 {
             coord: self.coord,
             d: D_ZERO_INTEGRATION, // 254_u8
             delta_t: node.state.delta_t,
@@ -105,8 +99,6 @@ impl PixelArena {
             Some(intensity) => node.state.d = get_d_from_intensity(intensity),
         }
         debug_assert!(node.alt.is_none());
-
-        // let event: Event = self.delta_t_to_absolute_t(&mut ret_event, mode, ref_time);
 
         ret_event
     }
@@ -159,7 +151,7 @@ impl PixelArena {
         match root.best_event {
             None => {
                 if root.state.integration == 0.0 && root.state.delta_t > 0.0 {
-                    self.get_zero_event(0, Some(next_intensity), mode, ref_time)
+                    self.get_zero_event(0, Some(next_intensity))
                 } else {
                     // We can reach here under frame-perfect integration when approaching dtm. The new
                     // node might not have the right D set.
@@ -188,7 +180,7 @@ impl PixelArena {
                     // panic!("No best event! TODO: handle it")
                 }
             }
-            Some(mut event) => {
+            Some(event) => {
                 assert!(self.length > 1);
                 for i in 0..self.length - 1 {
                     self.arena[i] = self.arena[i + 1];
@@ -211,7 +203,7 @@ impl PixelArena {
                     if self.arena[node_idx].state.delta_t > 0.0
                         && self.arena[node_idx].state.integration == 0.0
                     {
-                        let mut event64 = self.get_zero_event(node_idx, None, mode, ref_time);
+                        let mut event64 = self.get_zero_event(node_idx, None);
                         buffer.push(self.delta_t_to_absolute_t(&mut event64, mode, ref_time));
                     }
                 }
