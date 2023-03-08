@@ -74,9 +74,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         args = toml::from_str(&content)?;
     }
 
-    println!("in prog");
     let mut edi_args: EdiArgs = EdiArgs::default();
-    println!("in prog2");
     if !args.edi_args.is_empty() {
         match std::fs::read_to_string(&args.edi_args) {
             Ok(content) => {
@@ -109,7 +107,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     };
 
     let rt = tokio::runtime::Builder::new_multi_thread()
-        .worker_threads(1)
+        .worker_threads(12)
         .enable_time()
         .build()?;
     let reconstructor = rt.block_on(Reconstructor::new(

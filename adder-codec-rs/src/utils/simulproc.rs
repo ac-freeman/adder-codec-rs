@@ -230,47 +230,47 @@ impl<W: Write + 'static> SimulProcessor<W> {
     /// Run the processor
     /// This will run until the source is exhausted
     pub fn run(&mut self) -> Result<(), Box<dyn Error>> {
-        let mut now = Instant::now();
-
-        loop {
-            match self.source.consume(1, &self.thread_pool) {
-                Ok(events) => {
-                    match self.events_tx.send(events) {
-                        Ok(_) => {}
-                        Err(_) => {
-                            break;
-                        }
-                    };
-                }
-                Err(e) => {
-                    println!("Err: {e:?}");
-                    break;
-                }
-            };
-
-            let video = self.source.get_video_ref();
-
-            if video.state.in_interval_count % 30 == 0 {
-                print!(
-                    "\rFrame {} in  {}ms",
-                    video.state.in_interval_count,
-                    now.elapsed().as_millis()
-                );
-                if io::stdout().flush().is_err() {
-                    eprintln!("Error flushing stdout");
-                    break;
-                };
-                now = Instant::now();
-            }
-            // // TODO: temp
-            // if video.state.in_interval_count == 30 {
-            //     break;
-            // }
-        }
-
-        println!("Closing stream...");
-        self.source.get_video_mut().end_write_stream()?;
-        println!("FINISHED");
+        // let mut now = Instant::now();
+        //
+        // loop {
+        //     match self.source.consume(1, &self.thread_pool) {
+        //         Ok(events) => {
+        //             match self.events_tx.send(events) {
+        //                 Ok(_) => {}
+        //                 Err(_) => {
+        //                     break;
+        //                 }
+        //             };
+        //         }
+        //         Err(e) => {
+        //             println!("Err: {e:?}");
+        //             break;
+        //         }
+        //     };
+        //
+        //     let video = self.source.get_video_ref();
+        //
+        //     if video.state.in_interval_count % 30 == 0 {
+        //         print!(
+        //             "\rFrame {} in  {}ms",
+        //             video.state.in_interval_count,
+        //             now.elapsed().as_millis()
+        //         );
+        //         if io::stdout().flush().is_err() {
+        //             eprintln!("Error flushing stdout");
+        //             break;
+        //         };
+        //         now = Instant::now();
+        //     }
+        //     // // TODO: temp
+        //     // if video.state.in_interval_count == 30 {
+        //     //     break;
+        //     // }
+        // }
+        //
+        // println!("Closing stream...");
+        // self.source.get_video_mut().end_write_stream()?;
+        // println!("FINISHED");
 
         Ok(())
     }

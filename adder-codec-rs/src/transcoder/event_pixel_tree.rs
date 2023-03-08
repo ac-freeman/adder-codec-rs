@@ -237,7 +237,8 @@ impl PixelArena {
         next_intensity: Intensity32,
         ref_time: DeltaT,
     ) -> Option<Event> {
-        // let head = &mut self.arena[0];
+        assert!(self.arena[0].best_event.is_none()); // Should only be called after popping events
+                                                     // let head = &mut self.arena[0];
         let next_d = get_d_from_intensity(next_intensity);
         let ret = if next_d < self.arena[0].state.d && self.arena[0].state.delta_t > 0.0 {
             let mut ret64 = Event64 {
@@ -786,5 +787,65 @@ mod tests {
         let dt = events[1].delta_t;
         assert_eq!(events[1].d, 7);
         assert_eq!(dt, 110);
+    }
+
+    #[test]
+    fn test_set_d_continuous_delta() {
+        let dtm = 10_000;
+        let mut tree = PixelArena::new(
+            101.0,
+            Coord {
+                x: 0,
+                y: 0,
+                c: None,
+            },
+        );
+        tree.time_mode(Some(TimeMode::DeltaT));
+
+        assert_eq!(tree.arena[0].state.d, 6);
+        tree.integrate(101.0, 20.0, Continuous, dtm, 20);
+        assert!(tree.arena[0].best_event.is_some());
+
+        tree.integrate(40.0, 30.0, Continuous, dtm, 30);
+        tree.integrate(140.0, 30.0, Continuous, dtm, 30);
+        tree.integrate(107.0, 30.0, Continuous, dtm, 30);
+
+        let mut events = Vec::new();
+        tree.pop_best_events(&mut events, Continuous, 30);
+
+        let ev = tree.set_d_for_continuous(10.0, 30).unwrap();
+        let dt = ev.delta_t;
+        assert_eq!(dt, 1);
+        assert_eq!(ev.d, 255);
+    }
+
+    #[test]
+    fn test_set_d_continuous_absolute() {
+        let dtm = 10_000;
+        let mut tree = PixelArena::new(
+            101.0,
+            Coord {
+                x: 0,
+                y: 0,
+                c: None,
+            },
+        );
+        tree.time_mode(Some(TimeMode::AbsoluteT));
+
+        assert_eq!(tree.arena[0].state.d, 6);
+        tree.integrate(101.0, 20.0, Continuous, dtm, 20);
+        assert!(tree.arena[0].best_event.is_some());
+
+        tree.integrate(40.0, 30.0, Continuous, dtm, 30);
+        tree.integrate(140.0, 30.0, Continuous, dtm, 30);
+        tree.integrate(107.0, 30.0, Continuous, dtm, 30);
+
+        let mut events = Vec::new();
+        tree.pop_best_events(&mut events, Continuous, 30);
+
+        let ev = tree.set_d_for_continuous(10.0, 30).unwrap();
+        let dt = ev.delta_t;
+        assert_eq!(dt, 110);
+        assert_eq!(ev.d, 255);
     }
 }

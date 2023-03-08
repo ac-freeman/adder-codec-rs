@@ -1,3 +1,4 @@
+use async_trait::async_trait;
 use opencv::core::{Mat, Size, CV_8U, CV_8UC3};
 use std::io::Write;
 use std::mem::swap;
@@ -25,9 +26,10 @@ use ndarray::{Array3, Axis, ShapeError};
 use rayon::iter::IntoParallelIterator;
 use rayon::iter::ParallelIterator;
 use rayon::iter::{IndexedParallelIterator, IntoParallelRefMutIterator};
-use rayon::ThreadPool;
+use rayon::{current_num_threads, ThreadPool};
 
 use thiserror::Error;
+use tokio::task::JoinError;
 
 /// Various errors that can occur during an ADΔER transcode
 #[derive(Error, Debug)]
@@ -79,6 +81,10 @@ pub enum SourceError {
     /// Plane error
     #[error("Plane error")]
     PlaneError(#[from] PlaneError),
+
+    /// Handle join error
+    #[error("Handle join error")]
+    JoinError(#[from] JoinError),
 }
 
 impl From<opencv::Error> for SourceError {

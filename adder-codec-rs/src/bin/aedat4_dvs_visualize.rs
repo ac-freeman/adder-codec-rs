@@ -102,57 +102,59 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let mut base_t = 0;
     let mut current_t = 0;
     let mut event_count: u128 = 0;
-    let mut init = None;
+    //TODO: Restore this
 
-    loop {
-        let mat_opt = rt.block_on(get_next_image(&mut reconstructor, &thread_pool_edi, true));
+    // let mut init = None;
 
-        match mat_opt {
-            Ok(None) => {
-                break;
-            }
-            Ok(Some((_, _, Some((_, _, events, _, _))))) => match init {
-                None => init = Some(()),
-                Some(()) => {
-                    for event in events {
-                        event_count += 1;
-                        if current_t > (frame_count as u128 * frame_length) + 1_000_000 {
-                            match instantaneous_frame_deque.pop_front() {
-                                None => {}
-                                Some(frame) => {
-                                    if args.show_display {
-                                        show_display_force("DVS", &frame, 1)?;
-                                    }
-                                    write_frame_to_video(&frame, &mut video_writer)?;
-                                }
-                            }
-                            frame_count += 1;
-                        }
-                        if base_t == 0 {
-                            base_t = event.t() as u128;
-                        }
-
-                        current_t = max(event.t() as u128 - base_t, current_t);
-                        let frame_idx = ((event.t() as u128 - base_t) / frame_length) as usize;
-
-                        set_instant_dvs_pixel(
-                            event,
-                            &mut instantaneous_frame_deque,
-                            frame_idx,
-                            frame_count,
-                        )?;
-                    }
-                }
-            },
-            Ok(Some((_, _, None))) => {
-                break;
-            }
-            Err(e) => {
-                println!("Error: {e:?}");
-                break;
-            }
-        }
-    }
+    // loop {
+    //     let mat_opt = rt.block_on(get_next_image(&mut reconstructor, &thread_pool_edi, true));
+    //
+    //     match mat_opt {
+    //         Ok(None) => {
+    //             break;
+    //         }
+    //         Ok(Some((_, _, Some((_, _, events, _, _))))) => match init {
+    //             None => init = Some(()),
+    //             Some(()) => {
+    //                 for event in events {
+    //                     event_count += 1;
+    //                     if current_t > (frame_count as u128 * frame_length) + 1_000_000 {
+    //                         match instantaneous_frame_deque.pop_front() {
+    //                             None => {}
+    //                             Some(frame) => {
+    //                                 if args.show_display {
+    //                                     show_display_force("DVS", &frame, 1)?;
+    //                                 }
+    //                                 write_frame_to_video(&frame, &mut video_writer)?;
+    //                             }
+    //                         }
+    //                         frame_count += 1;
+    //                     }
+    //                     if base_t == 0 {
+    //                         base_t = event.t() as u128;
+    //                     }
+    //
+    //                     current_t = max(event.t() as u128 - base_t, current_t);
+    //                     let frame_idx = ((event.t() as u128 - base_t) / frame_length) as usize;
+    //
+    //                     set_instant_dvs_pixel(
+    //                         event,
+    //                         &mut instantaneous_frame_deque,
+    //                         frame_idx,
+    //                         frame_count,
+    //                     )?;
+    //                 }
+    //             }
+    //         },
+    //         Ok(Some((_, _, None))) => {
+    //             break;
+    //         }
+    //         Err(e) => {
+    //             println!("Error: {e:?}");
+    //             break;
+    //         }
+    //     }
+    // }
 
     for frame in instantaneous_frame_deque {
         if args.show_display {

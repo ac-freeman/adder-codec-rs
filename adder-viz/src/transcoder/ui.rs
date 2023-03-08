@@ -13,6 +13,7 @@ use rayon::current_num_threads;
 use std::error::Error;
 
 use adder_codec_core::TimeMode;
+use futures::executor;
 use std::default::Default;
 use std::fs::File;
 use std::io::BufWriter;
@@ -53,8 +54,8 @@ impl Default for ParamsUiState {
             adder_tresh_slider: 10.0,
             scale: 0.5,
             scale_slider: 0.5,
-            thread_count: 4,
-            thread_count_slider: 4,
+            thread_count: rayon::current_num_threads() - 1,
+            thread_count_slider: rayon::current_num_threads() - 1,
             color: true,
             view_mode_radio_state: FramedViewMode::Intensity,
             davis_mode_radio_state: TranscoderMode::RawDavis,
@@ -253,7 +254,7 @@ impl TranscoderState {
                     }
                     Some(source) => {
                         if source.mode != self.ui_state.davis_mode_radio_state
-                            || source.get_reconstructor().output_fps
+                            || source.get_reconstructor().as_ref().unwrap().output_fps
                                 != self.ui_state.davis_output_fps
                             || source.time_mode != self.ui_state.time_mode
                         {
@@ -266,7 +267,7 @@ impl TranscoderState {
                             );
                             return;
                         }
-                        let tmp = source.get_reconstructor_mut();
+                        let tmp = source.get_reconstructor_mut().as_mut().unwrap();
                         tmp.set_optimize_c(
                             self.ui_state.optimize_c,
                             self.ui_state.optimize_c_frequency,
@@ -335,6 +336,7 @@ impl TranscoderState {
                 Some(source) => source,
             }
         };
+
         match source.consume(1, &pool) {
             Ok(events_vec_vec) => {
                 for events_vec in events_vec_vec {
