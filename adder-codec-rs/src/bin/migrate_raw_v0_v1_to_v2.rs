@@ -1,6 +1,17 @@
+use adder_codec_core::codec::decoder::Decoder;
+use adder_codec_core::codec::encoder::Encoder;
+use adder_codec_core::codec::raw::stream;
+use adder_codec_core::codec::raw::stream::{RawInput, RawOutput};
+use adder_codec_core::codec::{CodecMetadata, ReadCompression, WriteCompression};
+use adder_codec_core::TimeMode;
+use adder_codec_rs::utils::stream_migration::migrate_v2;
+use bitstream_io::{BigEndian, BitReader};
 use clap::Parser;
 use serde::Deserialize;
 use std::error;
+use std::fs::File;
+use std::io::{BufReader, BufWriter};
+use std::path::Path;
 
 #[derive(Parser, Debug, Deserialize, Default)]
 pub struct Args {
@@ -18,36 +29,31 @@ pub struct Args {
 }
 
 fn main() -> Result<(), Box<dyn error::Error>> {
-    // let args: Args = Args::parse();
-    //
-    // let time_mode = match args.time_mode.to_lowercase().as_str() {
-    //     "delta_t" => TimeMode::DeltaT,
-    //     "absolute" => TimeMode::AbsoluteT,
-    //     "mixed" => TimeMode::Mixed,
-    //     _ => panic!("Invalid time mode"),
-    // };
-    //
-    // let mut input_stream = stream::Raw::new();
-    // let file = File::open(Path::new::<String>(&args.input_events_filename))?;
-    // input_stream.set_input_stream(Some(BufReader::new(file)));
-    // input_stream.decode_header()?;
-    //
-    // let mut output_stream = stream::Raw::new();
-    // let file = File::create(Path::new::<String>(&args.output_events_filename))?;
-    // output_stream.set_output_stream(Some(BufWriter::new(file)));
-    // output_stream.encode_header(
-    //     input_stream.plane.clone(),
-    //     input_stream.tps,
-    //     input_stream.ref_interval,
-    //     input_stream.delta_t_max,
-    //     2,
-    //     Some(input_stream.source_camera),
-    //     Some(time_mode),
-    // )?;
-    //
-    // output_stream = migrate_v2(input_stream, output_stream)?;
-    //
-    // output_stream.close_writer()?;
-    // println!("Done!");
+    let args: Args = Args::parse();
+
+    let time_mode = match args.time_mode.to_lowercase().as_str() {
+        "delta_t" => TimeMode::DeltaT,
+        "absolute" => TimeMode::AbsoluteT,
+        "mixed" => TimeMode::Mixed,
+        _ => panic!("Invalid time mode"),
+    };
+
+    let tmp = File::open(args.input_events_filename).unwrap();
+    let bufreader = BufReader::new(tmp);
+    let compression = <RawInput as ReadCompression<BufReader<File>>>::new();
+
+    let mut bitreader = BitReader::endian(bufreader, BigEndian);
+    let mut input_stream = Decoder::new(Box::new(compression), &mut bitreader).unwrap();
+
+    let bufwriter = BufWriter::new(File::create(args.output_events_filename).unwrap());
+    let mut new_meta = input_stream.meta().clone();
+    new_meta.time_mode = time_mode;
+    let compression = <RawOutput<_> as WriteCompression<BufWriter<File>>>::new(new_meta, bufwriter);
+    let mut encoder: Encoder<BufWriter<File>> = Encoder::new(Box::new(compression));
+
+    encoder = migrate_v2(input_stream, &mut bitreader, encoder)?;
+
+    encoder.close_writer()?;
+    println!("Done!");
     Ok(())
 }

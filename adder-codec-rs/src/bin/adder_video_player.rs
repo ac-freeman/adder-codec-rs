@@ -19,7 +19,7 @@ use tokio::time::Instant;
 #[derive(Parser, Debug, Default)]
 #[clap(author, version, about, long_about = None)]
 pub struct MyArgs {
-    /// Input aedat4 file path
+    /// Input .adder file path
     #[clap(short, long)]
     pub(crate) input: String,
 

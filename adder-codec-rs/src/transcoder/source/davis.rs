@@ -138,7 +138,7 @@ impl<W: Write + 'static> Davis<W> {
             dvs_last_ln_val,
             optimize_adder_controller: false,
             mode: TranscoderMode::Framed,
-            time_mode: TimeMode::DeltaT,
+            time_mode: TimeMode::default(),
         };
 
         Ok(davis_source)
@@ -707,6 +707,7 @@ impl<W: Write + 'static> VideoBuilder<W> for Davis<W> {
         delta_t_max: DeltaT,
         time_mode: Option<TimeMode>,
     ) -> Result<Self, SourceError> {
+        self = self.time_mode(time_mode.unwrap_or(TimeMode::default()));
         self.video = self
             .video
             .time_parameters(tps, ref_time, delta_t_max, time_mode)?;

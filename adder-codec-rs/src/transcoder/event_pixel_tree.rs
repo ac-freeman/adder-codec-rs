@@ -92,7 +92,7 @@ impl PixelArena {
         next_intensity: Option<Intensity32>,
         mode: Mode,
         ref_time: DeltaT,
-    ) -> Event {
+    ) -> Event64 {
         let mut node = &mut self.arena[idx];
         let mut ret_event = Event64 {
             coord: self.coord,
@@ -106,9 +106,9 @@ impl PixelArena {
         }
         debug_assert!(node.alt.is_none());
 
-        let event: Event = self.delta_t_to_absolute_t(&mut ret_event, mode, ref_time);
+        // let event: Event = self.delta_t_to_absolute_t(&mut ret_event, mode, ref_time);
 
-        event
+        ret_event
     }
 
     fn delta_t_to_absolute_t(
@@ -129,6 +129,7 @@ impl PixelArena {
                 };
             }
         }
+        debug_assert!(event.delta_t < u32::MAX as f64);
         Event {
             coord: self.coord,
             d: event.d,
@@ -136,13 +137,23 @@ impl PixelArena {
         }
     }
 
-    /// Pop just the topmost event. Should be called only when dtm is reached for main node
     pub fn pop_top_event(
         &mut self,
         next_intensity: Intensity32,
         mode: Mode,
         ref_time: DeltaT,
     ) -> Event {
+        let mut event = self.pop_top_event_recursive(next_intensity, mode, ref_time);
+        self.delta_t_to_absolute_t(&mut event, mode, ref_time)
+    }
+
+    /// Pop just the topmost event. Should be called only when dtm is reached for main node
+    fn pop_top_event_recursive(
+        &mut self,
+        next_intensity: Intensity32,
+        mode: Mode,
+        ref_time: DeltaT,
+    ) -> Event64 {
         self.need_to_pop_top = false;
         let mut root = &mut self.arena[0];
         match root.best_event {
@@ -172,8 +183,8 @@ impl PixelArena {
                         self.arena.push(PixelNode::new(next_intensity));
                         self.length += 1;
                     }
-
-                    self.pop_top_event(next_intensity, mode, ref_time)
+                    let tmp = self.pop_top_event_recursive(next_intensity, mode, ref_time);
+                    tmp
                     // panic!("No best event! TODO: handle it")
                 }
             }
@@ -185,7 +196,7 @@ impl PixelArena {
                 self.length -= 1;
                 debug_assert!(self.arena[self.length - 1].alt.is_none());
 
-                self.delta_t_to_absolute_t(&mut event, mode, ref_time)
+                event
             }
         }
     }
@@ -200,7 +211,8 @@ impl PixelArena {
                     if self.arena[node_idx].state.delta_t > 0.0
                         && self.arena[node_idx].state.integration == 0.0
                     {
-                        buffer.push(self.get_zero_event(node_idx, None, mode, ref_time));
+                        let mut event64 = self.get_zero_event(node_idx, None, mode, ref_time);
+                        buffer.push(self.delta_t_to_absolute_t(&mut event64, mode, ref_time));
                     }
                 }
                 Some(mut event) => {

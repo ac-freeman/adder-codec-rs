@@ -332,6 +332,10 @@ impl<W: Write + 'static> Video<W> {
         delta_t_max: DeltaT,
         time_mode: Option<TimeMode>,
     ) -> Result<Self, SourceError> {
+        self.event_pixel_trees.par_map_inplace(|px| {
+            px.time_mode(time_mode);
+        });
+
         if ref_time > f32::MAX as u32 {
             eprintln!(
                 "Reference time {} is too large. Keeping current value of {}.",
@@ -363,9 +367,7 @@ impl<W: Write + 'static> Video<W> {
         self.state.delta_t_max = delta_t_max;
         self.state.ref_time = ref_time;
         self.state.tps = tps;
-        self.event_pixel_trees.par_map_inplace(|px| {
-            px.time_mode(time_mode);
-        });
+
         Ok(self)
     }
 
@@ -400,6 +402,7 @@ impl<W: Write + 'static> Video<W> {
         let encoder: Encoder<_> = Encoder::new(Box::new(compression));
         self.encoder = encoder;
 
+        dbg!(time_mode);
         self.event_pixel_trees.par_map_inplace(|px| {
             px.time_mode(time_mode);
         });
