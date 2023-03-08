@@ -240,22 +240,27 @@ impl PixelArena {
         self.need_to_pop_top = false;
     }
 
-    pub fn set_d_for_continuous(&mut self, next_intensity: Intensity32) -> Option<Event> {
-        let head = &mut self.arena[0];
+    pub fn set_d_for_continuous(
+        &mut self,
+        next_intensity: Intensity32,
+        ref_time: DeltaT,
+    ) -> Option<Event> {
+        // let head = &mut self.arena[0];
         let next_d = get_d_from_intensity(next_intensity);
-        let ret = if next_d < head.state.d && head.state.delta_t > 0.0 {
-            let ret = Some(Event {
+        let ret = if next_d < self.arena[0].state.d && self.arena[0].state.delta_t > 0.0 {
+            let mut ret64 = Event64 {
                 coord: self.coord,
                 d: D_EMPTY,
-                delta_t: (head.state.delta_t) as DeltaT,
-            });
-            head.state.delta_t = 0.0;
-            head.state.integration = 0.0;
-            ret
+                delta_t: self.arena[0].state.delta_t,
+            };
+            let ret = self.delta_t_to_absolute_t(&mut ret64, Mode::Continuous, ref_time);
+            self.arena[0].state.delta_t = 0.0;
+            self.arena[0].state.integration = 0.0;
+            Some(ret)
         } else {
             None
         };
-        head.state.d = next_d;
+        self.arena[0].state.d = next_d;
         ret
     }
 

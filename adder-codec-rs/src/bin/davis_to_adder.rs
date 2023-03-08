@@ -109,7 +109,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     };
 
     let rt = tokio::runtime::Builder::new_multi_thread()
-        .worker_threads(12)
+        .worker_threads(1)
         .enable_time()
         .build()?;
     let reconstructor = rt.block_on(Reconstructor::new(

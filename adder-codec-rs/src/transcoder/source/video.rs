@@ -609,7 +609,7 @@ pub fn integrate_for_px(
 
         // If continuous mode and the D value needs to be different now
         if let Continuous = state.pixel_tree_mode {
-            match px.set_d_for_continuous(intensity) {
+            match px.set_d_for_continuous(intensity, state.ref_time) {
                 None => {}
                 Some(event) => buffer.push(event),
             };

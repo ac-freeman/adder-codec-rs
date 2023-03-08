@@ -289,7 +289,10 @@ impl<W: Write + 'static> Davis<W> {
                                 px.base_val = frame_val_u8;
 
                                 // If continuous mode and the D value needs to be different now
-                                match px.set_d_for_continuous(frame_val as Intensity32) {
+                                match px.set_d_for_continuous(
+                                    frame_val as Intensity32,
+                                    self.video.state.ref_time,
+                                ) {
                                     None => {}
                                     Some(event) => buffer.push(event),
                                 };
