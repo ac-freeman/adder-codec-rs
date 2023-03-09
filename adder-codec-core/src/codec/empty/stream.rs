@@ -1,7 +1,7 @@
 use crate::codec::header::{Magic, MAGIC_RAW};
 use crate::codec::{CodecError, CodecMetadata, WriteCompression};
 use crate::Event;
-use std::io::Write;
+use std::io::{Sink, Write};
 
 /// Filler for when generated ADΔER events need not be captured
 pub struct EmptyOutput<W: Write> {
@@ -18,7 +18,7 @@ impl<W: Write> EmptyOutput<W> {
     }
 }
 
-impl<W: std::io::Write> WriteCompression<W> for EmptyOutput<Vec<u8>> {
+impl<W: std::io::Write> WriteCompression<W> for EmptyOutput<Sink> {
     fn magic(&self) -> Magic {
         MAGIC_RAW
     }
@@ -31,7 +31,7 @@ impl<W: std::io::Write> WriteCompression<W> for EmptyOutput<Vec<u8>> {
         &mut self.meta
     }
 
-    fn write_bytes(&mut self, _bytes: &[u8]) -> std::io::Result<()> {
+    fn write_bytes(&mut self, _bytes: &[u8]) -> Result<(), std::io::Error> {
         Ok(())
     }
 
@@ -39,9 +39,9 @@ impl<W: std::io::Write> WriteCompression<W> for EmptyOutput<Vec<u8>> {
         Ok(())
     }
 
-    // fn into_writer(self: Self) -> Option<Box<W>> {
-    //     None
-    // }
+    fn into_writer(&mut self) -> Option<W> {
+        None
+    }
 
     fn flush_writer(&mut self) -> std::io::Result<()> {
         Ok(())

@@ -1,6 +1,4 @@
-use crate::codec::{
-    CodecError, CodecMetadata, CompressionType, ReadCompression, ReadCompressionEnum,
-};
+use crate::codec::{CodecError, CodecMetadata, ReadCompression, ReadCompressionEnum};
 use crate::SourceType::*;
 use crate::{Event, PlaneSize, SourceCamera, SourceType};
 
@@ -10,7 +8,6 @@ use crate::codec::header::{
 };
 use crate::codec::raw::stream::RawInput;
 use crate::codec::CodecError::Deserialize;
-use crate::codec::CompressionType::{Compressed, Raw};
 use crate::SourceType::U8;
 use bincode::config::{FixintEncoding, WithOtherEndian, WithOtherIntEncoding};
 use bincode::{DefaultOptions, Options};
@@ -271,6 +268,7 @@ mod tests {
         let event = stock_event();
         encoder.ingest_event(&event).unwrap();
         let mut writer = encoder.close_writer().unwrap().unwrap();
+
         writer.flush().unwrap();
 
         writer.into_inner().unwrap()

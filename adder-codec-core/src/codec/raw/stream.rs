@@ -13,7 +13,7 @@ pub struct RawOutput<W> {
         WithOtherIntEncoding<DefaultOptions, FixintEncoding>,
         bincode::config::BigEndian,
     >,
-    pub(crate) stream: W,
+    pub(crate) stream: Option<W>,
 }
 
 /// Read uncompressed (raw) ADΔER data from a stream.
@@ -38,8 +38,26 @@ impl<W: Write> RawOutput<W> {
         Self {
             meta,
             bincode,
-            stream: writer,
+            stream: Some(writer),
         }
+    }
+    // pub fn new_empty(mut meta: CodecMetadata) -> Self {
+    //     let bincode = DefaultOptions::new()
+    //         .with_fixint_encoding()
+    //         .with_big_endian();
+    //     meta.event_size = match meta.plane.c() {
+    //         1 => bincode.serialized_size(&EventSingle::default()).unwrap() as u8,
+    //         _ => bincode.serialized_size(&Event::default()).unwrap() as u8,
+    //     };
+    //     Self {
+    //         meta,
+    //         bincode,
+    //         stream: Some(std::io::sink()),
+    //     }
+    // }
+
+    fn stream(&mut self) -> &mut W {
+        self.stream.as_mut().unwrap()
     }
 }
 
@@ -56,9 +74,9 @@ impl<W: Write> WriteCompression<W> for RawOutput<W> {
         &mut self.meta
     }
 
-    fn write_bytes(&mut self, bytes: &[u8]) -> std::io::Result<()> {
+    fn write_bytes(&mut self, bytes: &[u8]) -> Result<(), std::io::Error> {
         // Silently ignore the returned usize because we don't care about the number of bytes
-        self.stream.write(bytes).map(|_| ())
+        self.stream().write(bytes).map(|_| ())
     }
 
     // Will always be byte-aligned. Do nothing.
@@ -67,12 +85,12 @@ impl<W: Write> WriteCompression<W> for RawOutput<W> {
     }
 
     // If `self.writer` is a `BufWriter`, you'll need to flush it yourself after this.
-    // fn into_writer(self: Self) -> Option<Box<W>> {
-    //     Some(Box::new(self.stream))
-    // }
+    fn into_writer(&mut self) -> Option<W> {
+        std::mem::replace(&mut self.stream, None)
+    }
 
     fn flush_writer(&mut self) -> std::io::Result<()> {
-        self.stream.flush()
+        self.stream().flush()
     }
 
     fn compress(&self, _data: &[u8]) -> Vec<u8> {
@@ -90,11 +108,10 @@ impl<W: Write> WriteCompression<W> for RawOutput<W> {
         let output_event: EventSingle;
         if self.meta.plane.channels == 1 {
             output_event = event.into();
-            self.bincode
-                .serialize_into(&mut self.stream, &output_event)?;
+            self.bincode.serialize_into(self.stream(), &output_event)?;
             // bincode::serialize_into(&mut *stream, &output_event, my_options).unwrap();
         } else {
-            self.bincode.serialize_into(&mut self.stream, event)?;
+            self.bincode.serialize_into(self.stream(), event)?;
         }
         Ok(())
     }

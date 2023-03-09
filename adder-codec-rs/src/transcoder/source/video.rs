@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use opencv::core::{Mat, Size, CV_8U, CV_8UC3};
-use std::io::Write;
+use std::io::{sink, Write};
 use std::mem::swap;
 
 use adder_codec_core::codec::empty::stream::EmptyOutput;
@@ -276,8 +276,7 @@ impl<W: Write + 'static> Video<W> {
 
         match writer {
             None => {
-                let writer = Vec::new();
-                let encoder: Encoder<W> = Encoder::new_empty(EmptyOutput::new(meta, writer));
+                let encoder: Encoder<W> = Encoder::new_empty(EmptyOutput::new(meta, sink()));
                 Ok(Video {
                     state,
                     event_pixel_trees,
@@ -429,7 +428,7 @@ impl<W: Write + 'static> Video<W> {
     /// Returns an error if the stream writer cannot be closed cleanly.
     pub fn end_write_stream(&mut self) -> Result<(), SourceError> {
         let mut tmp: Encoder<W> =
-            Encoder::new_empty(EmptyOutput::new(CodecMetadata::default(), Vec::new()));
+            Encoder::new_empty(EmptyOutput::new(CodecMetadata::default(), sink()));
         swap(&mut self.encoder, &mut tmp);
         tmp.close_writer()?;
         Ok(())

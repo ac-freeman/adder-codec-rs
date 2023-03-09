@@ -48,7 +48,7 @@ pub enum SourceCamera {
 use crate::codec::compressed::stream::CompressedInput;
 use crate::codec::decoder::Decoder;
 use crate::codec::raw::stream::RawInput;
-use crate::codec::{CodecError, ReadCompression};
+use crate::codec::CodecError;
 use serde::{Deserialize, Serialize};
 
 /// The type of time used in the ADΔER representation

@@ -8,7 +8,7 @@ use crate::Event;
 /// Write compressed ADΔER data to a stream.
 pub struct CompressedOutput<W: Write> {
     pub(crate) meta: CodecMetadata,
-    pub(crate) stream: BitWriter<W, BigEndian>,
+    pub(crate) stream: Option<BitWriter<W, BigEndian>>,
 }
 
 /// Read compressed ADΔER data from a stream.
@@ -21,8 +21,11 @@ impl<W: Write> CompressedOutput<W> {
     pub fn new(meta: CodecMetadata, writer: W) -> Self {
         Self {
             meta,
-            stream: BitWriter::endian(writer, BigEndian),
+            stream: Some(BitWriter::endian(writer, BigEndian)),
         }
+    }
+    fn stream(&mut self) -> &mut BitWriter<W, BigEndian> {
+        self.stream.as_mut().unwrap()
     }
 }
 
@@ -39,12 +42,20 @@ impl<W: Write> WriteCompression<W> for CompressedOutput<W> {
         &mut self.meta
     }
 
-    fn write_bytes(&mut self, bytes: &[u8]) -> std::io::Result<()> {
-        self.stream.write_bytes(bytes)
+    fn write_bytes(&mut self, bytes: &[u8]) -> Result<(), std::io::Error> {
+        self.stream().write_bytes(bytes)
     }
 
     fn byte_align(&mut self) -> std::io::Result<()> {
-        self.stream.byte_align()
+        self.stream().byte_align()
+    }
+
+    fn into_writer(&mut self) -> Option<W> {
+        let tmp = std::mem::replace(&mut self.stream, None);
+        match tmp {
+            None => None,
+            Some(bitwriter) => Some(bitwriter.into_writer()),
+        }
     }
 
     // fn into_writer(self: Self) -> Option<Box<W>> {
@@ -52,7 +63,7 @@ impl<W: Write> WriteCompression<W> for CompressedOutput<W> {
     // }
 
     fn flush_writer(&mut self) -> std::io::Result<()> {
-        self.stream.flush()
+        self.stream().flush()
     }
 
     fn compress(&self, _data: &[u8]) -> Vec<u8> {

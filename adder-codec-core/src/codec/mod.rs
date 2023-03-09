@@ -5,13 +5,13 @@ use crate::{DeltaT, Event, PlaneSize, SourceCamera, TimeMode};
 use bitstream_io::{BigEndian, BitReader};
 use enum_dispatch::enum_dispatch;
 use std::io;
-use std::io::{Read, Seek, Write};
+use std::io::{Read, Seek, Sink, Write};
 
 #[enum_dispatch(WriteCompression<W>)]
 enum WriteCompressionEnum<W: Write> {
     CompressedOutput(CompressedOutput<W>),
     RawOutput(RawOutput<W>),
-    EmptyOutput(EmptyOutput<Vec<u8>>),
+    EmptyOutput(EmptyOutput<Sink>),
 }
 
 #[enum_dispatch(ReadCompression<R>)]
@@ -40,14 +40,6 @@ pub mod raw;
 ///
 /// This is the version which will be written to the header.
 pub const LATEST_CODEC_VERSION: u8 = 2;
-
-/// The compression type used in an Encoder or Decoder
-#[allow(missing_docs)]
-pub enum CompressionType {
-    Compressed,
-    Raw,
-    Empty,
-}
 
 /// The metadata which stays the same over the course of an ADΔER stream
 #[allow(missing_docs)]
@@ -97,14 +89,16 @@ pub trait WriteCompression<W: Write> {
     /// Returns a mutable reference to the metadata
     fn meta_mut(&mut self) -> &mut CodecMetadata;
 
+    // fn stream(&mut self) -> &mut W;
+
     /// Write the given bytes to the stream
-    fn write_bytes(&mut self, bytes: &[u8]) -> io::Result<()>;
+    fn write_bytes(&mut self, bytes: &[u8]) -> Result<(), std::io::Error>;
 
     /// Align the bitstream to the next byte boundary
     fn byte_align(&mut self) -> io::Result<()>;
 
     // /// Consumes the compression stream and returns the underlying writer.
-    // fn into_writer(self: Self) -> Option<Box<W>>;
+    fn into_writer(&mut self) -> Option<W>;
 
     /// Flush the `BitWriter`. Does not flush the internal `BufWriter`.
     fn flush_writer(&mut self) -> io::Result<()>;
@@ -163,6 +157,7 @@ pub trait ReadCompression<R: Read> {
 // unsafe impl<R: Read> Send for ReadCompression {}
 
 use crate::codec::compressed::stream::{CompressedInput, CompressedOutput};
+// use crate::codec::empty::stream::EmptyOutput;
 use crate::codec::empty::stream::EmptyOutput;
 use crate::codec::raw::stream::{RawInput, RawOutput};
 use thiserror::Error;

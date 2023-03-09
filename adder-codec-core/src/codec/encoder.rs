@@ -1,11 +1,9 @@
-use crate::codec::{
-    CodecError, CodecMetadata, CompressionType, WriteCompression, WriteCompressionEnum,
-};
+use crate::codec::{CodecError, CodecMetadata, WriteCompression, WriteCompressionEnum};
 use crate::SourceType::*;
 use crate::{Event, EventSingle, SourceCamera, SourceType, EOF_EVENT};
 
 use std::io;
-use std::io::Write;
+use std::io::{Sink, Write};
 
 use crate::codec::compressed::stream::CompressedOutput;
 use crate::codec::empty::stream::EmptyOutput;
@@ -17,7 +15,6 @@ use crate::codec::raw::stream::RawOutput;
 use crate::SourceType::U8;
 use bincode::config::{FixintEncoding, WithOtherEndian, WithOtherIntEncoding};
 use bincode::{DefaultOptions, Options};
-use enum_dispatch::enum_dispatch;
 
 /// Struct for encoding [`Event`]s to a stream
 pub struct Encoder<W: Write> {
@@ -29,9 +26,9 @@ pub struct Encoder<W: Write> {
 }
 
 #[allow(dead_code)]
-impl<W: Write> Encoder<W> {
+impl<W: Write + 'static> Encoder<W> {
     /// Create a new [`Encoder`] with an empty compression scheme
-    pub fn new_empty(compression: EmptyOutput<Vec<u8>>) -> Self
+    pub fn new_empty(compression: EmptyOutput<Sink>) -> Self
     where
         Self: Sized,
     {
@@ -117,11 +114,11 @@ impl<W: Write> Encoder<W> {
     }
 
     /// Close the encoder's writer and return it, consuming the encoder in the process.
-    pub fn close_writer(mut self) -> Result<Option<Box<W>>, CodecError> {
+    pub fn close_writer(mut self) -> Result<Option<W>, CodecError> {
         self.output.byte_align()?;
         self.write_eof()?;
         self.flush_writer()?;
-        todo!()
+        Ok(self.output.into_writer())
         // let compressed_output = self.compressed_output.take();
         // let raw_output = self.raw_output.take();
         //
@@ -238,7 +235,7 @@ mod tests {
             bincode: DefaultOptions::new()
                 .with_fixint_encoding()
                 .with_big_endian(),
-            stream: bufwriter,
+            stream: Some(bufwriter),
         };
         let encoder = Encoder {
             output: WriteCompressionEnum::RawOutput(compression),
