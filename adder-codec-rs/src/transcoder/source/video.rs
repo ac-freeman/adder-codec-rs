@@ -205,6 +205,8 @@ pub struct Video<W: Write> {
     /// Channel for sending events to the encoder
     pub event_sender: Sender<Vec<Event>>,
     pub(crate) encoder: Encoder<W>,
+    // TODO: Hold multiple encoder options and an enum, so that boxing isn't required.
+    // Also hold a state for whether or not to write out events at all, so that a null writer isn't required.
 }
 
 unsafe impl<W: Write> Send for Video<W> {}
@@ -271,10 +273,11 @@ impl<W: Write + 'static> Video<W> {
             event_size: 0,
             source_camera: SourceCamera::default(), // TODO: Allow for setting this
         };
+        let t = EmptyOutput::new(meta, Vec::new());
 
         match writer {
             None => {
-                let encoder = Encoder::new(Box::new(EmptyOutput::new(meta, Vec::new())));
+                let encoder = Encoder::new_empty(EmptyOutput::new(meta, Vec::new()));
                 Ok(Video {
                     state,
                     event_pixel_trees,
@@ -285,10 +288,10 @@ impl<W: Write + 'static> Video<W> {
                 })
             }
             Some(w) => {
-                let encoder = Encoder::new(Box::new(
+                let encoder = Encoder::new_raw(
                     // TODO: Allow for compressed representation (not just raw)
                     RawOutput::new(meta, w),
-                ));
+                );
                 Ok(Video {
                     state,
                     event_pixel_trees,
@@ -405,7 +408,7 @@ impl<W: Write + 'static> Video<W> {
             },
             write,
         );
-        let encoder: Encoder<_> = Encoder::new(Box::new(compression));
+        let encoder: Encoder<_> = Encoder::new_raw(compression);
         self.encoder = encoder;
 
         dbg!(time_mode);
@@ -425,10 +428,7 @@ impl<W: Write + 'static> Video<W> {
     /// # Errors
     /// Returns an error if the stream writer cannot be closed cleanly.
     pub fn end_write_stream(&mut self) -> Result<(), SourceError> {
-        let mut tmp = Encoder::new(Box::new(EmptyOutput::new(
-            CodecMetadata::default(),
-            Vec::new(),
-        )));
+        let mut tmp = Encoder::new_empty(EmptyOutput::new(CodecMetadata::default(), Vec::new()));
         swap(&mut self.encoder, &mut tmp);
         tmp.close_writer()?;
         Ok(())

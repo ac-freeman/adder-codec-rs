@@ -5,17 +5,22 @@ use crate::{Event, EventSingle, SourceCamera, SourceType, EOF_EVENT};
 use std::io;
 use std::io::Write;
 
+use crate::codec::compressed::stream::CompressedOutput;
+use crate::codec::empty::stream::EmptyOutput;
 use crate::codec::header::{
     EventStreamHeader, EventStreamHeaderExtensionV0, EventStreamHeaderExtensionV1,
     EventStreamHeaderExtensionV2,
 };
+use crate::codec::raw::stream::RawOutput;
 use crate::SourceType::U8;
 use bincode::config::{FixintEncoding, WithOtherEndian, WithOtherIntEncoding};
 use bincode::{DefaultOptions, Options};
 
 /// Struct for encoding [`Event`]s to a stream
-pub struct Encoder<W> {
-    compression: Box<dyn WriteCompression<W>>,
+pub struct Encoder<W: Write> {
+    compressed_output: Option<CompressedOutput<W>>,
+    raw_output: Option<RawOutput<W>>,
+    empty_output: Option<EmptyOutput>,
     bincode: WithOtherEndian<
         WithOtherIntEncoding<DefaultOptions, FixintEncoding>,
         bincode::config::BigEndian,
@@ -24,13 +29,15 @@ pub struct Encoder<W> {
 
 #[allow(dead_code)]
 impl<W: Write> Encoder<W> {
-    /// Create a new [`Encoder`] with the given compression scheme
-    pub fn new(compression: Box<dyn WriteCompression<W>>) -> Self
+    /// Create a new [`Encoder`] with an empty compression scheme
+    pub fn new_empty(compression: EmptyOutput) -> Self
     where
         Self: Sized,
     {
         let mut encoder = Self {
-            compression,
+            compressed_output: None,
+            raw_output: None,
+            empty_output: Some(compression),
             bincode: DefaultOptions::new()
                 .with_fixint_encoding()
                 .with_big_endian(),
@@ -39,15 +46,77 @@ impl<W: Write> Encoder<W> {
         encoder
     }
 
+    /// Create a new [`Encoder`] with the given compression scheme
+    pub fn new_compressed(compression: CompressedOutput<W>) -> Self
+    where
+        Self: Sized,
+    {
+        let mut encoder = Self {
+            compressed_output: Some(compression),
+            raw_output: None,
+            empty_output: None,
+            bincode: DefaultOptions::new()
+                .with_fixint_encoding()
+                .with_big_endian(),
+        };
+        encoder.encode_header().unwrap();
+        encoder
+    }
+
+    /// Create a new [`Encoder`] with the given raw compression scheme
+    pub fn new_raw(compression: RawOutput<W>) -> Self
+    where
+        Self: Sized,
+    {
+        let mut encoder = Self {
+            compressed_output: None,
+            raw_output: Some(compression),
+            empty_output: None,
+            bincode: DefaultOptions::new()
+                .with_fixint_encoding()
+                .with_big_endian(),
+        };
+        encoder.encode_header().unwrap();
+        encoder
+    }
+
+    #[inline(always)]
+    fn compression_handle(&self) -> &dyn WriteCompression<W> {
+        match (
+            self.compressed_output.as_ref(),
+            self.raw_output.as_ref(),
+            self.empty_output.as_ref(),
+        ) {
+            (Some(compressed_output), None, None) => compressed_output,
+            (None, Some(raw_output), None) => raw_output,
+            (None, None, Some(empty_output)) => empty_output,
+            _ => unreachable!(),
+        }
+    }
+
+    #[inline(always)]
+    fn compression_handle_mut(&mut self) -> &mut dyn WriteCompression<W> {
+        match (
+            self.compressed_output.as_mut(),
+            self.raw_output.as_mut(),
+            self.empty_output.as_mut(),
+        ) {
+            (Some(compressed_output), None, None) => compressed_output,
+            (None, Some(raw_output), None) => raw_output,
+            (None, None, Some(empty_output)) => empty_output,
+            _ => unreachable!(),
+        }
+    }
+
     /// Returns a reference to the metadata of the underlying compression scheme
     #[inline]
     pub fn meta(&self) -> &CodecMetadata {
-        self.compression.meta()
+        self.compression_handle().meta()
     }
 
     #[allow(clippy::match_same_arms)]
     fn get_source_type(&self) -> SourceType {
-        match self.compression.meta().source_camera {
+        match self.compression_handle().meta().source_camera {
             SourceCamera::FramedU8 => U8,
             SourceCamera::FramedU16 => U16,
             SourceCamera::FramedU32 => U32,
@@ -63,38 +132,46 @@ impl<W: Write> Encoder<W> {
 
     /// Signify the end of the file in a unified way
     fn write_eof(&mut self) -> Result<(), CodecError> {
-        self.compression.byte_align()?;
+        self.compression_handle_mut().byte_align()?;
         let output_event: EventSingle;
         let mut buffer = Vec::new();
-        if self.compression.meta().plane.channels == 1 {
+        if self.compression_handle().meta().plane.channels == 1 {
             output_event = (&EOF_EVENT).into();
             self.bincode.serialize_into(&mut buffer, &output_event)?;
         } else {
             self.bincode.serialize_into(&mut buffer, &EOF_EVENT)?;
         }
-        Ok(self.compression.write_bytes(&buffer)?)
+        Ok(self.compression_handle_mut().write_bytes(&buffer)?)
     }
 
     /// Flush the `BitWriter`. Does not flush the internal `BufWriter`.
     pub fn flush_writer(&mut self) -> io::Result<()> {
-        self.compression.flush_writer()
+        self.compression_handle_mut().flush_writer()
     }
 
     /// Close the encoder's writer and return it, consuming the encoder in the process.
-    pub fn close_writer(mut self) -> Result<Option<W>, CodecError> {
-        self.compression.byte_align()?;
+    pub fn close_writer(mut self) -> Result<Option<Box<W>>, CodecError> {
+        self.compression_handle_mut().byte_align()?;
         self.write_eof()?;
         self.flush_writer()?;
-        let writer = self.compression.into_writer();
-        Ok(writer)
+        let compressed_output = self.compressed_output.take();
+        let raw_output = self.raw_output.take();
+
+        if compressed_output.is_some() {
+            return Ok(compressed_output.unwrap().into_writer());
+        } else if raw_output.is_some() {
+            return Ok(raw_output.unwrap().into_writer());
+        } else {
+            unreachable!()
+        }
     }
 
     /// Encode the header and its extensions.
     fn encode_header(&mut self) -> Result<(), CodecError> {
         let mut buffer: Vec<u8> = Vec::new();
-        let meta = self.compression.meta();
+        let meta = self.compression_handle().meta();
         let header = EventStreamHeader::new(
-            self.compression.magic(),
+            self.compression_handle().magic(),
             meta.plane,
             meta.tps,
             meta.ref_interval,
@@ -106,13 +183,13 @@ impl<W: Write> Encoder<W> {
         // Encode the header extensions (for newer versions of the codec)
         buffer = self.encode_header_extension(buffer)?;
 
-        self.compression.write_bytes(&buffer)?;
-        self.compression.meta_mut().header_size = buffer.len();
+        self.compression_handle_mut().write_bytes(&buffer)?;
+        self.compression_handle_mut().meta_mut().header_size = buffer.len();
         Ok(())
     }
 
     fn encode_header_extension(&self, mut buffer: Vec<u8>) -> Result<Vec<u8>, CodecError> {
-        let meta = self.compression.meta();
+        let meta = self.compression_handle().meta();
         self.bincode
             .serialize_into(&mut buffer, &EventStreamHeaderExtensionV0 {})?;
         if meta.codec_version == 0 {
@@ -143,7 +220,7 @@ impl<W: Write> Encoder<W> {
 
     /// Ingest an event
     pub fn ingest_event(&mut self, event: &Event) -> Result<(), CodecError> {
-        self.compression.ingest_event(event)
+        self.compression_handle_mut().ingest_event(event)
     }
 
     /// Ingest an array of events

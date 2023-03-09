@@ -64,8 +64,8 @@ impl<W: Write> WriteCompression<W> for RawOutput<W> {
     }
 
     /// If `self.writer` is a `BufWriter`, you'll need to flush it yourself after this.
-    fn into_writer(self: Box<Self>) -> Option<W> {
-        Some(self.stream)
+    fn into_writer(self: Self) -> Option<Box<W>> {
+        Some(Box::new(self.stream))
     }
 
     fn flush_writer(&mut self) -> std::io::Result<()> {

@@ -132,18 +132,20 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let writer = BufWriter::new(file);
     let ref_time = (1_000_000.0 / edi_args.output_fps) as DeltaT;
 
-    let mut davis_source = Davis::new(reconstructor, rt, mode)?
-        .optimize_adder_controller(args.optimize_adder_controller)
-        .mode(mode)
-        .time_parameters(
-            1_000_000, // TODO
-            ref_time,
-            (ref_time as f64 * args.delta_t_max_multiplier) as u32,
-            Some(TimeMode::AbsoluteT),
-        )? // TODO
-        .c_thresh_pos(args.adder_c_thresh_pos)
-        .c_thresh_neg(args.adder_c_thresh_neg)
-        .write_out(DavisU8, TimeMode::AbsoluteT, writer)?; // TODO: PROBLEM IS SOMEWHERE WITH THE TIME_MODE
+    let mut davis_source = Box::new(
+        Davis::<BufWriter<Vec<u8>>>::new(reconstructor, rt, mode)?
+            .optimize_adder_controller(args.optimize_adder_controller)
+            .mode(mode)
+            .time_parameters(
+                1_000_000, // TODO
+                ref_time,
+                (ref_time as f64 * args.delta_t_max_multiplier) as u32,
+                Some(TimeMode::AbsoluteT),
+            )? // TODO
+            .c_thresh_pos(args.adder_c_thresh_pos)
+            .c_thresh_neg(args.adder_c_thresh_neg),
+    );
+    // .write_out(DavisU8, TimeMode::AbsoluteT, writer)?; // TODO: PROBLEM IS SOMEWHERE WITH THE TIME_MODE
 
     let mut now = Instant::now();
     let start_time = std::time::Instant::now();

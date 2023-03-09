@@ -32,7 +32,7 @@ impl<W: std::io::Write> WriteCompression<W> for EmptyOutput {
         Ok(())
     }
 
-    fn into_writer(self: Box<Self>) -> Option<W> {
+    fn into_writer(self: Self) -> Option<Box<W>> {
         None
     }
 

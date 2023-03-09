@@ -81,7 +81,7 @@ pub trait WriteCompression<W: Write> {
     fn byte_align(&mut self) -> io::Result<()>;
 
     /// Consumes the compression stream and returns the underlying writer.
-    fn into_writer(self: Box<Self>) -> Option<W>;
+    fn into_writer(self: Self) -> Option<Box<W>>;
 
     /// Flush the `BitWriter`. Does not flush the internal `BufWriter`.
     fn flush_writer(&mut self) -> io::Result<()>;
@@ -162,6 +162,9 @@ pub enum CodecError {
 
     #[error("Unsupported codec version (expected {LATEST_CODEC_VERSION} or lower, found {0})")]
     UnsupportedVersion(u8),
+
+    #[error("Malformed encoder")]
+    MalformedEncoder,
 
     #[error("Bincode error")]
     BincodeError(#[from] bincode::Error),
