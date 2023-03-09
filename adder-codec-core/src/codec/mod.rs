@@ -27,6 +27,14 @@ pub mod raw;
 /// This is the version which will be written to the header.
 pub const LATEST_CODEC_VERSION: u8 = 2;
 
+/// The compression type used in an Encoder or Decoder
+#[allow(missing_docs)]
+pub enum CompressionType {
+    Compressed,
+    Raw,
+    Empty,
+}
+
 /// The metadata which stays the same over the course of an ADΔER stream
 #[allow(missing_docs)]
 #[derive(Copy, Clone)]

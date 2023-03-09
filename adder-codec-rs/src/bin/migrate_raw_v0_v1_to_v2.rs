@@ -41,7 +41,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let compression = <RawInput as ReadCompression<BufReader<File>>>::new();
 
     let mut bitreader = BitReader::endian(bufreader, BigEndian);
-    let input_stream = Decoder::new(Box::new(compression), &mut bitreader).unwrap();
+    let input_stream = Decoder::new_raw(compression, &mut bitreader).unwrap();
 
     let bufwriter = BufWriter::new(File::create(args.output_events_filename).unwrap());
     let mut new_meta = input_stream.meta().clone();

@@ -58,7 +58,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let compression = <RawInput as ReadCompression<BufReader<File>>>::new();
 
     let mut bitreader = BitReader::endian(bufreader, BigEndian);
-    let mut stream = Decoder::new(Box::new(compression), &mut bitreader).unwrap();
+    let mut stream = Decoder::new_raw(compression, &mut bitreader).unwrap();
     let meta = *stream.meta();
 
     let header_bytes = stream.meta().header_size;

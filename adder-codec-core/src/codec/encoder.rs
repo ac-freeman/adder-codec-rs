@@ -1,4 +1,4 @@
-use crate::codec::{CodecError, CodecMetadata, WriteCompression};
+use crate::codec::{CodecError, CodecMetadata, CompressionType, WriteCompression};
 use crate::SourceType::*;
 use crate::{Event, EventSingle, SourceCamera, SourceType, EOF_EVENT};
 
@@ -15,12 +15,6 @@ use crate::codec::raw::stream::RawOutput;
 use crate::SourceType::U8;
 use bincode::config::{FixintEncoding, WithOtherEndian, WithOtherIntEncoding};
 use bincode::{DefaultOptions, Options};
-
-enum CompressionType {
-    Compressed,
-    Raw,
-    Empty,
-}
 
 /// Struct for encoding [`Event`]s to a stream
 pub struct Encoder<W: Write> {

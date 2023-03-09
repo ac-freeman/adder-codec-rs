@@ -13,7 +13,6 @@ use rayon::current_num_threads;
 use std::error::Error;
 
 use adder_codec_core::TimeMode;
-use futures::executor;
 use std::default::Default;
 use std::fs::File;
 use std::io::BufWriter;
