@@ -334,7 +334,7 @@ mod tests {
                 event_size: 0,
                 source_camera: Default::default(),
             },
-            stream: BitWriter::endian(bufwriter, BigEndian),
+            stream: Some(BitWriter::endian(bufwriter, BigEndian)),
         };
         let _encoder = Encoder {
             output: WriteCompressionEnum::CompressedOutput(compression),
