@@ -22,10 +22,6 @@ use enum_dispatch::enum_dispatch;
 /// Struct for encoding [`Event`]s to a stream
 pub struct Encoder<W: Write> {
     output: WriteCompressionEnum<W>,
-    // compression_type: CompressionType,
-    // compressed_output: Option<CompressedOutput<W>>,
-    // raw_output: Option<RawOutput<W>>,
-    // empty_output: Option<EmptyOutput>,
     bincode: WithOtherEndian<
         WithOtherIntEncoding<DefaultOptions, FixintEncoding>,
         bincode::config::BigEndian,

@@ -17,12 +17,13 @@ pub struct RawOutput<W> {
 }
 
 /// Read uncompressed (raw) ADΔER data from a stream.
-pub struct RawInput {
+pub struct RawInput<R: Read + Seek> {
     pub(crate) meta: CodecMetadata,
     pub(crate) bincode: WithOtherEndian<
         WithOtherIntEncoding<DefaultOptions, FixintEncoding>,
         bincode::config::BigEndian,
     >,
+    _phantom: std::marker::PhantomData<R>,
 }
 
 impl<W: Write> RawOutput<W> {
@@ -99,8 +100,8 @@ impl<W: Write> WriteCompression<W> for RawOutput<W> {
     }
 }
 
-impl<R: Read + Seek> ReadCompression<R> for RawInput {
-    fn new() -> Self
+impl<R: Read + Seek> RawInput<R> {
+    pub fn new() -> Self
     where
         Self: Sized,
     {
@@ -110,9 +111,12 @@ impl<R: Read + Seek> ReadCompression<R> for RawInput {
                 .with_fixint_encoding()
                 .with_big_endian(),
             // stream: reader,
+            _phantom: std::marker::PhantomData,
         }
     }
+}
 
+impl<R: Read + Seek> ReadCompression<R> for RawInput<R> {
     fn magic(&self) -> Magic {
         MAGIC_RAW
     }

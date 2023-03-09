@@ -499,8 +499,7 @@ pub fn open_file_decoder(
     CodecError,
 > {
     let mut bufreader = BufReader::new(File::open(file_path)?);
-    let compression = <RawInput as ReadCompression<BufReader<File>>>::new();
-
+    let compression = RawInput::new();
     let mut bitreader = BitReader::endian(bufreader, BigEndian);
 
     // First try opening the file as a raw file, then try as a compressed file
@@ -508,7 +507,7 @@ pub fn open_file_decoder(
         Ok(reader) => reader,
         Err(CodecError::WrongMagic) => {
             bufreader = BufReader::new(File::open(file_path)?);
-            let compression = <CompressedInput as ReadCompression<BufReader<File>>>::new();
+            let compression = CompressedInput::new();
             bitreader = BitReader::endian(bufreader, BigEndian);
             Decoder::new_compressed(compression, &mut bitreader)?
         }

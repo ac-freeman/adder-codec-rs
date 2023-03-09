@@ -5,13 +5,19 @@ use crate::{DeltaT, Event, PlaneSize, SourceCamera, TimeMode};
 use bitstream_io::{BigEndian, BitReader};
 use enum_dispatch::enum_dispatch;
 use std::io;
-use std::io::{Read, Write};
+use std::io::{Read, Seek, Write};
 
 #[enum_dispatch(WriteCompression<W>)]
 enum WriteCompressionEnum<W: Write> {
     CompressedOutput(CompressedOutput<W>),
     RawOutput(RawOutput<W>),
     EmptyOutput(EmptyOutput<Vec<u8>>),
+}
+
+#[enum_dispatch(ReadCompression<R>)]
+enum ReadCompressionEnum<R: Read + Seek> {
+    CompressedInput(CompressedInput<R>),
+    RawInput(RawInput<R>),
 }
 
 /// Compressed codec utilities
@@ -112,13 +118,15 @@ pub trait WriteCompression<W: Write> {
 }
 
 /// A trait for reading ADΔER data from a stream.
+///
+/// A struct implementing `ReadCompression` does not take ownership of the read handle.
+/// Subsequent calls to the compressor will pass the read handle each time. The caller is
+/// responsible for maintaining the reader.
+#[enum_dispatch]
 pub trait ReadCompression<R: Read> {
-    /// A struct implementing `ReadCompression` does not take ownership of the read handle.
-    /// Subsequent calls to the compressor will pass the read handle each time. The caller is
-    /// responsible for maintaining the reader.
-    fn new() -> Self
-    where
-        Self: Sized;
+    // fn new() -> Self
+    // where
+    //     Self: Sized;
 
     /// Returns the magic number for the codec
     fn magic(&self) -> Magic;
@@ -154,9 +162,9 @@ pub trait ReadCompression<R: Read> {
 
 // unsafe impl<R: Read> Send for ReadCompression {}
 
-use crate::codec::compressed::stream::CompressedOutput;
+use crate::codec::compressed::stream::{CompressedInput, CompressedOutput};
 use crate::codec::empty::stream::EmptyOutput;
-use crate::codec::raw::stream::RawOutput;
+use crate::codec::raw::stream::{RawInput, RawOutput};
 use thiserror::Error;
 
 #[allow(missing_docs)]

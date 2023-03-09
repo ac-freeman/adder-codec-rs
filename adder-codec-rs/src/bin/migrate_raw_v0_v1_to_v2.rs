@@ -38,7 +38,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
     let tmp = File::open(args.input_events_filename).unwrap();
     let bufreader = BufReader::new(tmp);
-    let compression = <RawInput as ReadCompression<BufReader<File>>>::new();
+    let compression = RawInput::new();
 
     let mut bitreader = BitReader::endian(bufreader, BigEndian);
     let input_stream = Decoder::new_raw(compression, &mut bitreader).unwrap();

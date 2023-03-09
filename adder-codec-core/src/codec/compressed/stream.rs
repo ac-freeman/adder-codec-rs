@@ -12,8 +12,9 @@ pub struct CompressedOutput<W: Write> {
 }
 
 /// Read compressed ADΔER data from a stream.
-pub struct CompressedInput {
+pub struct CompressedInput<R: Read> {
     pub(crate) meta: CodecMetadata,
+    _phantom: std::marker::PhantomData<R>,
 }
 
 impl<W: Write> CompressedOutput<W> {
@@ -63,8 +64,8 @@ impl<W: Write> WriteCompression<W> for CompressedOutput<W> {
     }
 }
 
-impl<R: Read> ReadCompression<R> for CompressedInput {
-    fn new() -> Self
+impl<R: Read> CompressedInput<R> {
+    pub fn new() -> Self
     where
         Self: Sized,
     {
@@ -81,9 +82,12 @@ impl<R: Read> ReadCompression<R> for CompressedInput {
                 source_camera: Default::default(),
             },
             // stream: BitReader::endian(reader, BigEndian),
+            _phantom: std::marker::PhantomData,
         }
     }
+}
 
+impl<R: Read> ReadCompression<R> for CompressedInput<R> {
     fn magic(&self) -> Magic {
         MAGIC_COMPRESSED
     }
