@@ -1,6 +1,5 @@
 use adder_codec_core::codec::decoder::Decoder;
 use adder_codec_core::codec::raw::stream::RawInput;
-use adder_codec_core::codec::ReadCompression;
 use adder_codec_core::SourceCamera;
 use adder_codec_core::D_ZERO_INTEGRATION;
 use adder_codec_rs::framer::scale_intensity::event_to_intensity;

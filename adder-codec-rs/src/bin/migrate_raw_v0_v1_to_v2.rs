@@ -1,7 +1,6 @@
 use adder_codec_core::codec::decoder::Decoder;
 use adder_codec_core::codec::encoder::Encoder;
 use adder_codec_core::codec::raw::stream::{RawInput, RawOutput};
-use adder_codec_core::codec::{ReadCompression, WriteCompression};
 use adder_codec_core::TimeMode;
 use adder_codec_rs::utils::stream_migration::migrate_v2;
 use bitstream_io::{BigEndian, BitReader};

@@ -1,4 +1,3 @@
-
 use adder_codec_rs::transcoder::source::video::show_display_force;
 use adder_codec_rs::utils::viz::{encode_video_ffmpeg, write_frame_to_video};
 use aedat::events_generated::Event;
@@ -170,6 +169,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     Ok(())
 }
 
+#[allow(dead_code)]
 fn set_instant_dvs_pixel(
     event: Event,
     frames: &mut VecDeque<Mat>,

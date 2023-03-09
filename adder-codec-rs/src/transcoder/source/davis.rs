@@ -26,7 +26,6 @@ use std::thread;
 use adder_codec_core::codec::CodecError;
 use adder_codec_core::{Event, PlaneSize, SourceCamera, SourceType, TimeMode};
 
-
 use crate::framer::scale_intensity::FrameValue;
 use crate::transcoder::event_pixel_tree::Intensity32;
 use tokio::runtime::Runtime;
@@ -584,7 +583,6 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Davis<W> {
                     // self.control_latency(opt_timestamp);
                     self.input_frame_scaled = mat;
                 } // Err(e) => return Err(SourceError::EdiError(e)),
-                _ => {}
             }
 
             let start_of_frame_timestamp = self.integration.start_of_frame_timestamp.unwrap_or(0);
