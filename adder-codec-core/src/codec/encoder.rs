@@ -16,8 +16,15 @@ use crate::SourceType::U8;
 use bincode::config::{FixintEncoding, WithOtherEndian, WithOtherIntEncoding};
 use bincode::{DefaultOptions, Options};
 
+enum CompressionType {
+    Compressed,
+    Raw,
+    Empty,
+}
+
 /// Struct for encoding [`Event`]s to a stream
 pub struct Encoder<W: Write> {
+    compression_type: CompressionType,
     compressed_output: Option<CompressedOutput<W>>,
     raw_output: Option<RawOutput<W>>,
     empty_output: Option<EmptyOutput>,
@@ -35,6 +42,7 @@ impl<W: Write> Encoder<W> {
         Self: Sized,
     {
         let mut encoder = Self {
+            compression_type: CompressionType::Empty,
             compressed_output: None,
             raw_output: None,
             empty_output: Some(compression),
@@ -52,6 +60,7 @@ impl<W: Write> Encoder<W> {
         Self: Sized,
     {
         let mut encoder = Self {
+            compression_type: CompressionType::Compressed,
             compressed_output: Some(compression),
             raw_output: None,
             empty_output: None,
@@ -69,6 +78,7 @@ impl<W: Write> Encoder<W> {
         Self: Sized,
     {
         let mut encoder = Self {
+            compression_type: CompressionType::Raw,
             compressed_output: None,
             raw_output: Some(compression),
             empty_output: None,
@@ -82,29 +92,19 @@ impl<W: Write> Encoder<W> {
 
     #[inline(always)]
     fn compression_handle(&self) -> &dyn WriteCompression<W> {
-        match (
-            self.compressed_output.as_ref(),
-            self.raw_output.as_ref(),
-            self.empty_output.as_ref(),
-        ) {
-            (Some(compressed_output), None, None) => compressed_output,
-            (None, Some(raw_output), None) => raw_output,
-            (None, None, Some(empty_output)) => empty_output,
-            _ => unreachable!(),
+        match self.compression_type {
+            CompressionType::Compressed => self.compressed_output.as_ref().unwrap(),
+            CompressionType::Raw => self.raw_output.as_ref().unwrap(),
+            CompressionType::Empty => self.empty_output.as_ref().unwrap(),
         }
     }
 
     #[inline(always)]
     fn compression_handle_mut(&mut self) -> &mut dyn WriteCompression<W> {
-        match (
-            self.compressed_output.as_mut(),
-            self.raw_output.as_mut(),
-            self.empty_output.as_mut(),
-        ) {
-            (Some(compressed_output), None, None) => compressed_output,
-            (None, Some(raw_output), None) => raw_output,
-            (None, None, Some(empty_output)) => empty_output,
-            _ => unreachable!(),
+        match self.compression_type {
+            CompressionType::Compressed => self.compressed_output.as_mut().unwrap(),
+            CompressionType::Raw => self.raw_output.as_mut().unwrap(),
+            CompressionType::Empty => self.empty_output.as_mut().unwrap(),
         }
     }
 
