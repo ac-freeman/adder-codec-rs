@@ -179,7 +179,7 @@ impl AdderTranscoder {
                             events_only,
                             1000.0, // Target latency (not used)
                             simulate_latency,
-                        ));
+                        ))?;
 
                         let output_string = output_path_opt
                             .map(|output_path| output_path.to_str().expect("Bad path").to_string());
@@ -240,6 +240,7 @@ pub(crate) fn replace_adder_transcoder(
     ui_info_state.events_ppc_total = 0.0;
     ui_info_state.events_total = 0;
     ui_info_state.events_ppc_per_sec = 0.0;
+    ui_info_state.davis_latency = 0;
     if let Some(input_path) = input_path_buf_0 {
         match AdderTranscoder::new(
             &input_path,

@@ -1,6 +1,6 @@
+use adder_codec_rs::aedat::events_generated::Event;
 use adder_codec_rs::transcoder::source::video::show_display_force;
 use adder_codec_rs::utils::viz::{encode_video_ffmpeg, write_frame_to_video};
-use aedat::events_generated::Event;
 use clap::Parser;
 use davis_edi_rs::util::reconstructor::Reconstructor;
 use opencv::core::{Mat, MatTrait, MatTraitManual, CV_8U};

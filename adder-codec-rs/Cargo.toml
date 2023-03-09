@@ -25,7 +25,6 @@ raw-codec = []
 docs-only = ["opencv/docs-only", "dep:fast-math"]
 
 [dependencies]
-aedat = "1.2.8"
 adder-codec-core = { path = "../adder-codec-core", version = "0.1.0"}
 async-trait = "0.1.66"
 bincode = "1.3.3"

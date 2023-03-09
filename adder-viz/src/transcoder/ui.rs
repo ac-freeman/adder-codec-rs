@@ -75,6 +75,7 @@ pub struct InfoUiState {
     pub events_total: u64,
     pub source_name: RichText,
     pub output_name: OutputName,
+    pub davis_latency: u128,
     pub(crate) input_path_0: Option<PathBuf>,
     pub(crate) input_path_1: Option<PathBuf>,
     pub(crate) output_path: Option<PathBuf>,
@@ -102,6 +103,7 @@ impl Default for InfoUiState {
             events_total: 0,
             source_name: RichText::new("No input file selected yet"),
             output_name: Default::default(),
+            davis_latency: 0,
             input_path_0: None,
             input_path_1: None,
             output_path: None,
@@ -233,14 +235,20 @@ impl TranscoderState {
             {:.2} events per source sec\t\
             {:.2} events PPC per source sec\t\
             {:.0} events total\t\
-            {:.0} events PPC total
-            ",
+            {:.0} events PPC total",
             1. / time.delta_seconds(),
             self.ui_info_state.events_per_sec,
             self.ui_info_state.events_ppc_per_sec,
             self.ui_info_state.events_total,
             self.ui_info_state.events_ppc_total
         ));
+
+        if self.ui_info_state.davis_latency > 0 {
+            ui.label(format!(
+                "DAVIS/DVS latency: {:} ms",
+                self.ui_info_state.davis_latency
+            ));
+        }
     }
 
     pub fn update_adder_params(&mut self) {
@@ -330,7 +338,10 @@ impl TranscoderState {
                     None => {
                         return Ok(());
                     }
-                    Some(source) => source,
+                    Some(source) => {
+                        ui_info_state.davis_latency = source.get_latency();
+                        source
+                    }
                 },
                 Some(source) => source,
             }

@@ -126,7 +126,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         events_only,
         edi_args.target_latency,
         edi_args.simulate_packet_latency,
-    ));
+    ))?;
 
     let file = File::create(args.output_events_filename)?;
     let _writer = BufWriter::new(file);

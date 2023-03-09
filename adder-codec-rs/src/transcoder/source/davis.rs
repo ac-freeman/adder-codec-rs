@@ -1,10 +1,10 @@
+use crate::aedat::events_generated::Event as DvsEvent;
 use crate::transcoder::event_pixel_tree::Mode::{Continuous, FramePerfect};
 use crate::transcoder::source::video::SourceError::BufferEmpty;
 use crate::transcoder::source::video::{
     integrate_for_px, show_display, Source, SourceError, Video, VideoBuilder,
 };
 use adder_codec_core::DeltaT;
-use aedat::events_generated::Event as DvsEvent;
 use davis_edi_rs::util::reconstructor::{IterVal, ReconstructionError, Reconstructor};
 use rayon::iter::ParallelIterator;
 use rayon::iter::{IndexedParallelIterator, IntoParallelRefMutIterator};
@@ -80,6 +80,9 @@ pub struct Davis<W: Write> {
     /// The tokio runtime
     pub rt: Runtime,
 
+    /// The latency between a DAVIS/DVS packet being sent by the camera and read by the reconstructor
+    latency: u128,
+
     cached_mat_opt: Option<Option<IterVal>>,
 
     optimize_adder_controller: bool,
@@ -150,6 +153,7 @@ impl<W: Write + 'static> Davis<W> {
                 phantom: std::marker::PhantomData,
             },
             rt,
+            latency: 0,
             cached_mat_opt: None,
 
             optimize_adder_controller: false,
@@ -215,6 +219,11 @@ impl<W: Write + 'static> Davis<W> {
     /// Get a mutable reference to the [`Reconstructor`]
     pub fn get_reconstructor_mut(&mut self) -> &mut Option<Reconstructor> {
         &mut self.reconstructor
+    }
+
+    /// Get the latency of the EDI controller, in milliseconds
+    pub fn get_latency(&self) -> u128 {
+        self.latency
     }
 }
 
@@ -563,6 +572,7 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Davis<W> {
                     mat,
                     _opt_timestamp,
                     Some((c, events_before, events_after, img_start_ts, img_end_ts)),
+                    opt_latency,
                 )) => {
                     // We get here if we're in raw mode (getting raw events from EDI, and also
                     // potentially deblurred frames)
@@ -576,8 +586,11 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Davis<W> {
                     self.integration.end_of_frame_timestamp = Some(img_end_ts);
                     self.video.state.ref_time_divisor =
                         (img_end_ts - img_start_ts) as f64 / f64::from(self.video.state.ref_time);
+                    if let Some(latency) = opt_latency {
+                        self.latency = latency;
+                    }
                 }
-                Some((mat, _opt_timestamp, None)) => {
+                Some((mat, _, None, _)) => {
                     // We get here if we're in framed mode (just getting deblurred frames from EDI,
                     // including intermediate frames)
                     // self.control_latency(opt_timestamp);
