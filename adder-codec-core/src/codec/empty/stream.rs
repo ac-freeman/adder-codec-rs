@@ -10,6 +10,7 @@ pub struct EmptyOutput<W: Write> {
 }
 
 impl<W: Write> EmptyOutput<W> {
+    /// Create a new empty output stream.
     pub fn new(meta: CodecMetadata, _writer: W) -> Self {
         Self {
             meta,

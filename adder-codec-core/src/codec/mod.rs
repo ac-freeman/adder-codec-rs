@@ -97,7 +97,7 @@ pub trait WriteCompression<W: Write> {
     /// Align the bitstream to the next byte boundary
     fn byte_align(&mut self) -> io::Result<()>;
 
-    // /// Consumes the compression stream and returns the underlying writer.
+    /// Consumes the compression stream and returns the underlying writer.
     fn into_writer(&mut self) -> Option<W>;
 
     /// Flush the `BitWriter`. Does not flush the internal `BufWriter`.

@@ -27,6 +27,7 @@ pub struct RawInput<R: Read + Seek> {
 }
 
 impl<W: Write> RawOutput<W> {
+    /// Create a new raw output stream.
     pub fn new(mut meta: CodecMetadata, writer: W) -> Self {
         let bincode = DefaultOptions::new()
             .with_fixint_encoding()
@@ -41,20 +42,6 @@ impl<W: Write> RawOutput<W> {
             stream: Some(writer),
         }
     }
-    // pub fn new_empty(mut meta: CodecMetadata) -> Self {
-    //     let bincode = DefaultOptions::new()
-    //         .with_fixint_encoding()
-    //         .with_big_endian();
-    //     meta.event_size = match meta.plane.c() {
-    //         1 => bincode.serialized_size(&EventSingle::default()).unwrap() as u8,
-    //         _ => bincode.serialized_size(&Event::default()).unwrap() as u8,
-    //     };
-    //     Self {
-    //         meta,
-    //         bincode,
-    //         stream: Some(std::io::sink()),
-    //     }
-    // }
 
     fn stream(&mut self) -> &mut W {
         self.stream.as_mut().unwrap()
@@ -118,6 +105,7 @@ impl<W: Write> WriteCompression<W> for RawOutput<W> {
 }
 
 impl<R: Read + Seek> RawInput<R> {
+    /// Create a new raw input stream.
     pub fn new() -> Self
     where
         Self: Sized,

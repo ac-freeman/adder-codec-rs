@@ -18,12 +18,16 @@ pub struct CompressedInput<R: Read> {
 }
 
 impl<W: Write> CompressedOutput<W> {
+    /// Create a new compressed output stream.
     pub fn new(meta: CodecMetadata, writer: W) -> Self {
         Self {
             meta,
             stream: Some(BitWriter::endian(writer, BigEndian)),
         }
     }
+
+    /// Convenience function to get a mutable reference to the underlying stream.
+    #[inline(always)]
     fn stream(&mut self) -> &mut BitWriter<W, BigEndian> {
         self.stream.as_mut().unwrap()
     }
@@ -76,6 +80,7 @@ impl<W: Write> WriteCompression<W> for CompressedOutput<W> {
 }
 
 impl<R: Read> CompressedInput<R> {
+    /// Create a new compressed input stream.
     pub fn new() -> Self
     where
         Self: Sized,
