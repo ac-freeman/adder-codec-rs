@@ -73,7 +73,7 @@ fn test_sample_perfect_dt() {
         reconstructed_frame_rate as u32
     );
 
-    let mut frame_sequence: FrameSequence<u8> = FramerBuilder::new(reader.meta().plane.clone(), 64)
+    let mut frame_sequence: FrameSequence<u8> = FramerBuilder::new(reader.meta().plane, 64)
         .codec_version(reader.meta().codec_version, TimeMode::DeltaT)
         .time_parameters(
             reader.meta().tps,
@@ -147,7 +147,7 @@ fn test_sample_perfect_dt_color() {
         reconstructed_frame_rate as u32
     );
 
-    let mut frame_sequence: FrameSequence<u8> = FramerBuilder::new(reader.meta().plane.clone(), 64)
+    let mut frame_sequence: FrameSequence<u8> = FramerBuilder::new(reader.meta().plane, 64)
         .codec_version(reader.meta().codec_version, TimeMode::DeltaT)
         .time_parameters(
             reader.meta().tps,
@@ -258,7 +258,7 @@ fn setup_raw_writer_v0(rand_num: u32) -> Encoder<BufWriter<File>> {
             codec_version: 0,
             header_size: 0,
             time_mode: DeltaT,
-            plane: plane,
+            plane,
             tps: 53000,
             ref_interval: 4000,
             delta_t_max: 50000,
@@ -282,7 +282,7 @@ fn setup_raw_writer_v1(rand_num: u32) -> Encoder<BufWriter<File>> {
             codec_version: 1,
             header_size: 0,
             time_mode: DeltaT,
-            plane: plane,
+            plane,
             tps: 53000,
             ref_interval: 4000,
             delta_t_max: 50000,
@@ -306,7 +306,7 @@ fn setup_raw_writer_v2(rand_num: u32) -> Encoder<BufWriter<File>> {
             codec_version: 2,
             header_size: 0,
             time_mode: DeltaT,
-            plane: plane,
+            plane,
             tps: 53000,
             ref_interval: 4000,
             delta_t_max: 50000,
@@ -832,7 +832,7 @@ fn test_sample_unordered() {
         reconstructed_frame_rate as u32
     );
 
-    let mut frame_sequence: FrameSequence<u8> = FramerBuilder::new(reader.meta().plane.clone(), 64)
+    let mut frame_sequence: FrameSequence<u8> = FramerBuilder::new(reader.meta().plane, 64)
         .codec_version(reader.meta().codec_version, TimeMode::DeltaT)
         .time_parameters(
             reader.meta().tps,
@@ -905,7 +905,7 @@ fn test_sample_ordered() {
         reconstructed_frame_rate as u32
     );
 
-    let mut frame_sequence: FrameSequence<u8> = FramerBuilder::new(reader.meta().plane.clone(), 64)
+    let mut frame_sequence: FrameSequence<u8> = FramerBuilder::new(reader.meta().plane, 64)
         .codec_version(reader.meta().codec_version, TimeMode::DeltaT)
         .time_parameters(
             reader.meta().tps,

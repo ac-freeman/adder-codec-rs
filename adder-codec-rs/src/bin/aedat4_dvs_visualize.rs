@@ -1,4 +1,4 @@
-use adder_codec_rs::transcoder::source::davis::get_next_image;
+
 use adder_codec_rs::transcoder::source::video::show_display_force;
 use adder_codec_rs::utils::viz::{encode_video_ffmpeg, write_frame_to_video};
 use aedat::events_generated::Event;
@@ -53,10 +53,10 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let rt = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(12)
         .build()?;
-    let thread_pool_edi = rayon::ThreadPoolBuilder::new()
+    let _thread_pool_edi = rayon::ThreadPoolBuilder::new()
         .num_threads(max(current_num_threads() - 4, 1))
         .build()?;
-    let mut reconstructor = rt.block_on(Reconstructor::new(
+    let _reconstructor = rt.block_on(Reconstructor::new(
         base_path.to_string(),
         aedat_filename.to_string(),
         String::new(),
@@ -97,11 +97,11 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
     let mut video_writer: BufWriter<File> = BufWriter::new(File::create(raw_path)?);
 
-    let frame_length = (1_000_000.0 / args.fps) as u128; // length in ticks
-    let mut frame_count = 0_usize;
-    let mut base_t = 0;
-    let mut current_t = 0;
-    let mut event_count: u128 = 0;
+    let _frame_length = (1_000_000.0 / args.fps) as u128; // length in ticks
+    let _frame_count = 0_usize;
+    let _base_t = 0;
+    let _current_t = 0;
+    let event_count: u128 = 0;
     //TODO: Restore this
 
     // let mut init = None;

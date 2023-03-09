@@ -25,7 +25,7 @@ use std::thread;
 
 use adder_codec_core::codec::CodecError;
 use adder_codec_core::{Event, PlaneSize, SourceCamera, SourceType, TimeMode};
-use std::time::Instant;
+
 
 use crate::framer::scale_intensity::FrameValue;
 use crate::transcoder::event_pixel_tree::Intensity32;
@@ -485,7 +485,7 @@ impl<W: Write + 'static> Integration<W> {
             };
         });
         if video.state.show_live {
-            show_display("instance", &video.instantaneous_frame, 1, &video)?;
+            show_display("instance", &video.instantaneous_frame, 1, video)?;
         }
         Ok(())
     }
@@ -562,7 +562,7 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Davis<W> {
                 }
                 Some((
                     mat,
-                    opt_timestamp,
+                    _opt_timestamp,
                     Some((c, events_before, events_after, img_start_ts, img_end_ts)),
                 )) => {
                     // We get here if we're in raw mode (getting raw events from EDI, and also
@@ -578,7 +578,7 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Davis<W> {
                     self.video.state.ref_time_divisor =
                         (img_end_ts - img_start_ts) as f64 / f64::from(self.video.state.ref_time);
                 }
-                Some((mat, opt_timestamp, None)) => {
+                Some((mat, _opt_timestamp, None)) => {
                     // We get here if we're in framed mode (just getting deblurred frames from EDI,
                     // including intermediate frames)
                     // self.control_latency(opt_timestamp);
@@ -587,10 +587,7 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Davis<W> {
                 _ => {}
             }
 
-            let start_of_frame_timestamp = match self.integration.start_of_frame_timestamp {
-                Some(t) => t,
-                None => 0,
-            };
+            let start_of_frame_timestamp = self.integration.start_of_frame_timestamp.unwrap_or(0);
             let end_of_frame_timestamp = match self.integration.end_of_frame_timestamp {
                 Some(t) => t,
                 None => self.video.state.ref_time.into(),
@@ -759,7 +756,7 @@ impl<W: Write + 'static> VideoBuilder<W> for Davis<W> {
         delta_t_max: DeltaT,
         time_mode: Option<TimeMode>,
     ) -> Result<Self, SourceError> {
-        self = self.time_mode(time_mode.unwrap_or(TimeMode::default()));
+        self = self.time_mode(time_mode.unwrap_or_default());
         self.video = self
             .video
             .time_parameters(tps, ref_time, delta_t_max, time_mode)?;

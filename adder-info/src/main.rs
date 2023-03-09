@@ -175,7 +175,7 @@ mod tests {
         {
             let cursor = Cursor::new(&mut data);
 
-            let _ = adder_info(args, cursor)?;
+            adder_info(args, cursor)?;
         }
 
         let string = String::from_utf8(data)?;

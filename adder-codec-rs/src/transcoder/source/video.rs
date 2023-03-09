@@ -1,4 +1,4 @@
-use async_trait::async_trait;
+
 use opencv::core::{Mat, Size, CV_8U, CV_8UC3};
 use std::io::{sink, Write};
 use std::mem::swap;
@@ -6,7 +6,7 @@ use std::mem::swap;
 use adder_codec_core::codec::empty::stream::EmptyOutput;
 use adder_codec_core::codec::encoder::Encoder;
 use adder_codec_core::codec::raw::stream::RawOutput;
-use adder_codec_core::codec::{CodecError, CodecMetadata, WriteCompression, LATEST_CODEC_VERSION};
+use adder_codec_core::codec::{CodecError, CodecMetadata, LATEST_CODEC_VERSION};
 use adder_codec_core::{
     Coord, DeltaT, Event, PlaneError, PlaneSize, SourceCamera, SourceType, TimeMode,
 };
@@ -26,7 +26,7 @@ use ndarray::{Array3, Axis, ShapeError};
 use rayon::iter::IntoParallelIterator;
 use rayon::iter::ParallelIterator;
 use rayon::iter::{IndexedParallelIterator, IntoParallelRefMutIterator};
-use rayon::{current_num_threads, ThreadPool};
+use rayon::{ThreadPool};
 
 use thiserror::Error;
 use tokio::task::JoinError;

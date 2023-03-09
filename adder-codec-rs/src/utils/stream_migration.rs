@@ -289,7 +289,7 @@ mod tests {
         let reconstructed_frame_rate = 30.0;
 
         let mut frame_sequence_t: FrameSequence<u8> =
-            FramerBuilder::new(input_stream_t.meta().plane.clone(), 64)
+            FramerBuilder::new(input_stream_t.meta().plane, 64)
                 .codec_version(input_stream_t.meta().codec_version, TimeMode::AbsoluteT)
                 .time_parameters(
                     input_stream_t.meta().tps,
@@ -310,7 +310,7 @@ mod tests {
         let mut input_stream_dt = Decoder::new_raw(compression, &mut bitreader_dt).unwrap();
 
         let mut frame_sequence_dt: FrameSequence<u8> =
-            FramerBuilder::new(input_stream_dt.meta().plane.clone(), 64)
+            FramerBuilder::new(input_stream_dt.meta().plane, 64)
                 .codec_version(input_stream_dt.meta().codec_version, TimeMode::DeltaT)
                 .time_parameters(
                     input_stream_dt.meta().tps,
@@ -386,7 +386,7 @@ mod tests {
         let reconstructed_frame_rate = 30.0;
 
         let mut frame_sequence_t: FrameSequence<u8> =
-            FramerBuilder::new(input_stream_t.meta().plane.clone(), 500)
+            FramerBuilder::new(input_stream_t.meta().plane, 500)
                 .codec_version(input_stream_t.meta().codec_version, TimeMode::AbsoluteT)
                 .time_parameters(
                     input_stream_t.meta().tps,
@@ -407,7 +407,7 @@ mod tests {
         let mut input_stream_dt = Decoder::new_raw(compression, &mut bitreader_dt).unwrap();
 
         let mut frame_sequence_dt: FrameSequence<u8> =
-            FramerBuilder::new(input_stream_dt.meta().plane.clone(), 500)
+            FramerBuilder::new(input_stream_dt.meta().plane, 500)
                 .codec_version(input_stream_dt.meta().codec_version, TimeMode::DeltaT)
                 .time_parameters(
                     input_stream_dt.meta().tps,

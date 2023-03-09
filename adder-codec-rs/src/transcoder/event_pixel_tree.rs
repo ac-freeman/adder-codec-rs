@@ -175,8 +175,8 @@ impl PixelArena {
                         self.arena.push(PixelNode::new(next_intensity));
                         self.length += 1;
                     }
-                    let tmp = self.pop_top_event_recursive(next_intensity, mode, ref_time);
-                    tmp
+                    
+                    self.pop_top_event_recursive(next_intensity, mode, ref_time)
                     // panic!("No best event! TODO: handle it")
                 }
             }

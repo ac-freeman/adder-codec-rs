@@ -7,7 +7,7 @@ use davis_edi_rs::Args as EdiArgs;
 use serde::Deserialize;
 
 use adder_codec_core::DeltaT;
-use adder_codec_core::SourceCamera::DavisU8;
+
 use adder_codec_core::TimeMode;
 use adder_codec_rs::transcoder::source::davis::TranscoderMode::{Framed, RawDavis, RawDvs};
 use std::fs::File;
@@ -129,7 +129,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     ));
 
     let file = File::create(args.output_events_filename)?;
-    let writer = BufWriter::new(file);
+    let _writer = BufWriter::new(file);
     let ref_time = (1_000_000.0 / edi_args.output_fps) as DeltaT;
 
     let mut davis_source = Box::new(

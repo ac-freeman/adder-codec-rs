@@ -33,7 +33,7 @@ fn main() {
     // );
 
     let mut frame_sequence: FrameSequence<u8> =
-        FramerBuilder::new(reader.meta().plane.clone(), 260)
+        FramerBuilder::new(reader.meta().plane, 260)
             .codec_version(reader.meta().codec_version, reader.meta().time_mode)
             .time_parameters(
                 reader.meta().tps,

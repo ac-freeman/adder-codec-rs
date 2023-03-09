@@ -56,10 +56,7 @@ impl<W: Write> WriteCompression<W> for CompressedOutput<W> {
 
     fn into_writer(&mut self) -> Option<W> {
         let tmp = std::mem::replace(&mut self.stream, None);
-        match tmp {
-            None => None,
-            Some(bitwriter) => Some(bitwriter.into_writer()),
-        }
+        tmp.map(|bitwriter| bitwriter.into_writer())
     }
 
     // fn into_writer(self: Self) -> Option<Box<W>> {
