@@ -25,8 +25,8 @@ pub struct RawInput {
     >,
 }
 
-impl<W: Write> WriteCompression<W> for RawOutput<W> {
-    fn new(mut meta: CodecMetadata, writer: W) -> Self {
+impl<W: Write> RawOutput<W> {
+    pub fn new(mut meta: CodecMetadata, writer: W) -> Self {
         let bincode = DefaultOptions::new()
             .with_fixint_encoding()
             .with_big_endian();
@@ -40,7 +40,9 @@ impl<W: Write> WriteCompression<W> for RawOutput<W> {
             stream: writer,
         }
     }
+}
 
+impl<W: Write> WriteCompression<W> for RawOutput<W> {
     fn magic(&self) -> Magic {
         MAGIC_RAW
     }
@@ -63,10 +65,10 @@ impl<W: Write> WriteCompression<W> for RawOutput<W> {
         Ok(())
     }
 
-    /// If `self.writer` is a `BufWriter`, you'll need to flush it yourself after this.
-    fn into_writer(self: Self) -> Option<Box<W>> {
-        Some(Box::new(self.stream))
-    }
+    // If `self.writer` is a `BufWriter`, you'll need to flush it yourself after this.
+    // fn into_writer(self: Self) -> Option<Box<W>> {
+    //     Some(Box::new(self.stream))
+    // }
 
     fn flush_writer(&mut self) -> std::io::Result<()> {
         self.stream.flush()

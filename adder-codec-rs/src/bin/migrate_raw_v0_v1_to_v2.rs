@@ -46,7 +46,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let bufwriter = BufWriter::new(File::create(args.output_events_filename).unwrap());
     let mut new_meta = input_stream.meta().clone();
     new_meta.time_mode = time_mode;
-    let compression = <RawOutput<_> as WriteCompression<BufWriter<File>>>::new(new_meta, bufwriter);
+    let compression = RawOutput::new(new_meta, bufwriter);
     let mut encoder: Encoder<BufWriter<File>> = Encoder::new_raw(compression);
 
     encoder = migrate_v2(input_stream, &mut bitreader, encoder)?;

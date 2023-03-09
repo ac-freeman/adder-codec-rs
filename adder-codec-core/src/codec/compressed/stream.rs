@@ -16,14 +16,16 @@ pub struct CompressedInput {
     pub(crate) meta: CodecMetadata,
 }
 
-impl<W: Write> WriteCompression<W> for CompressedOutput<W> {
+impl<W: Write> CompressedOutput<W> {
     fn new(meta: CodecMetadata, writer: W) -> Self {
         Self {
             meta,
             stream: BitWriter::endian(writer, BigEndian),
         }
     }
+}
 
+impl<W: Write> WriteCompression<W> for CompressedOutput<W> {
     fn magic(&self) -> Magic {
         MAGIC_COMPRESSED
     }
@@ -44,9 +46,9 @@ impl<W: Write> WriteCompression<W> for CompressedOutput<W> {
         self.stream.byte_align()
     }
 
-    fn into_writer(self: Self) -> Option<Box<W>> {
-        Some(Box::new(self.stream.into_writer()))
-    }
+    // fn into_writer(self: Self) -> Option<Box<W>> {
+    //     Some(Box::new(self.stream.into_writer()))
+    // }
 
     fn flush_writer(&mut self) -> std::io::Result<()> {
         self.stream.flush()

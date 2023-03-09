@@ -273,11 +273,11 @@ impl<W: Write + 'static> Video<W> {
             event_size: 0,
             source_camera: SourceCamera::default(), // TODO: Allow for setting this
         };
-        let t = EmptyOutput::new(meta, Vec::new());
 
         match writer {
             None => {
-                let encoder = Encoder::new_empty(EmptyOutput::new(meta, Vec::new()));
+                let writer = Vec::new();
+                let encoder: Encoder<W> = Encoder::new_empty(EmptyOutput::new(meta, writer));
                 Ok(Video {
                     state,
                     event_pixel_trees,
@@ -428,7 +428,8 @@ impl<W: Write + 'static> Video<W> {
     /// # Errors
     /// Returns an error if the stream writer cannot be closed cleanly.
     pub fn end_write_stream(&mut self) -> Result<(), SourceError> {
-        let mut tmp = Encoder::new_empty(EmptyOutput::new(CodecMetadata::default(), Vec::new()));
+        let mut tmp: Encoder<W> =
+            Encoder::new_empty(EmptyOutput::new(CodecMetadata::default(), Vec::new()));
         swap(&mut self.encoder, &mut tmp);
         tmp.close_writer()?;
         Ok(())
