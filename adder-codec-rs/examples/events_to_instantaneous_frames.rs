@@ -16,10 +16,10 @@ fn main() {
     let input_path = "/home/andrew/Downloads/tmp_events_migrated.adder";
     let tmp = File::open(input_path).unwrap();
     let bufreader = BufReader::new(tmp);
-    let compression = <RawInput as ReadCompression<BufReader<File>>>::new();
+    let compression = RawInput::new();
 
     let mut bitreader = BitReader::endian(bufreader, BigEndian);
-    let mut reader = Decoder::new(Box::new(compression), &mut bitreader).unwrap();
+    let mut reader = Decoder::new_raw(compression, &mut bitreader).unwrap();
 
     let output_path = "/home/andrew/Downloads/temppp_out";
     let mut output_stream = BufWriter::new(File::create(output_path).unwrap());

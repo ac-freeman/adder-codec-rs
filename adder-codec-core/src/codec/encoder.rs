@@ -241,7 +241,7 @@ mod tests {
             stream: bufwriter,
         };
         let encoder = Encoder {
-            compression: Box::new(compression),
+            output: WriteCompressionEnum::RawOutput(compression),
             bincode: DefaultOptions::new()
                 .with_fixint_encoding()
                 .with_big_endian(),
@@ -270,7 +270,7 @@ mod tests {
             bufwriter,
         );
         let encoder = Encoder {
-            compression: Box::new(compression),
+            output: WriteCompressionEnum::RawOutput(compression),
             bincode: DefaultOptions::new()
                 .with_fixint_encoding()
                 .with_big_endian(),
@@ -302,7 +302,7 @@ mod tests {
             },
             bufwriter,
         );
-        let mut encoder: Encoder<BufWriter<Vec<u8>>> = Encoder::new(Box::new(compression));
+        let mut encoder: Encoder<BufWriter<Vec<u8>>> = Encoder::new_raw(compression);
 
         let event = Event {
             coord: Coord {
@@ -340,7 +340,7 @@ mod tests {
             stream: BitWriter::endian(bufwriter, BigEndian),
         };
         let _encoder = Encoder {
-            compression: Box::new(compression),
+            output: WriteCompressionEnum::CompressedOutput(compression),
             bincode: DefaultOptions::new()
                 .with_fixint_encoding()
                 .with_big_endian(),
@@ -366,7 +366,7 @@ mod tests {
             bufwriter,
         );
         let _encoder = Encoder {
-            compression: Box::new(compression),
+            output: WriteCompressionEnum::CompressedOutput(compression),
             bincode: DefaultOptions::new()
                 .with_fixint_encoding()
                 .with_big_endian(),
@@ -391,6 +391,6 @@ mod tests {
             },
             bufwriter,
         );
-        let _encoder = Encoder::new(Box::new(compression));
+        let _encoder = Encoder::new_compressed(compression);
     }
 }

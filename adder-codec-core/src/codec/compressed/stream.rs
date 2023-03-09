@@ -18,7 +18,7 @@ pub struct CompressedInput<R: Read> {
 }
 
 impl<W: Write> CompressedOutput<W> {
-    fn new(meta: CodecMetadata, writer: W) -> Self {
+    pub fn new(meta: CodecMetadata, writer: W) -> Self {
         Self {
             meta,
             stream: BitWriter::endian(writer, BigEndian),

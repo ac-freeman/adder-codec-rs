@@ -114,7 +114,7 @@ mod tests {
 
         let output = Vec::new();
         let bufwriter = BufWriter::new(output);
-        let compression = <RawOutput<_> as WriteCompression<BufWriter<Vec<u8>>>>::new(
+        let compression = RawOutput::new(
             CodecMetadata {
                 codec_version: 1, // Make this a v1 stream
                 header_size: 0,
@@ -128,7 +128,7 @@ mod tests {
             },
             bufwriter,
         );
-        let mut stream = Encoder::new(Box::new(compression));
+        let mut stream = Encoder::new_raw(compression);
 
         // Encode the events
         let event: Event = Event {
@@ -158,13 +158,13 @@ mod tests {
         let bytes = writer.into_inner().unwrap();
         let tmp = Cursor::new(&*bytes);
         let bufreader = BufReader::new(tmp);
-        let compression = <RawInput as ReadCompression<BufReader<Cursor<&[u8]>>>>::new();
+        let compression = RawInput::new();
         let mut bitreader = BitReader::endian(bufreader, BigEndian);
-        let reader = Decoder::new(Box::new(compression), &mut bitreader).unwrap();
+        let reader = Decoder::new_raw(compression, &mut bitreader).unwrap();
 
         let output = Vec::new();
         let bufwriter = BufWriter::new(output);
-        let compression = <RawOutput<_> as WriteCompression<BufWriter<Vec<u8>>>>::new(
+        let compression = RawOutput::new(
             CodecMetadata {
                 codec_version: 2, // Make this a v1 stream
                 header_size: 0,
@@ -178,7 +178,7 @@ mod tests {
             },
             bufwriter,
         );
-        let mut stream = Encoder::new(Box::new(compression));
+        let mut stream = Encoder::new_raw(compression);
 
         stream = migrate_v2(reader, &mut bitreader, stream)?;
 
@@ -186,9 +186,9 @@ mod tests {
         let bytes = writer.into_inner().unwrap();
         let tmp = Cursor::new(&*bytes);
         let bufreader = BufReader::new(tmp);
-        let compression = <RawInput as ReadCompression<BufReader<Cursor<&[u8]>>>>::new();
+        let compression = RawInput::new();
         let mut bitreader = BitReader::endian(bufreader, BigEndian);
-        let mut reader = Decoder::new(Box::new(compression), &mut bitreader).unwrap();
+        let mut reader = Decoder::new_raw(compression, &mut bitreader).unwrap();
 
         /*
         Now, the events when converted to v2 with absolute_t mode should have these t values:
@@ -222,18 +222,17 @@ mod tests {
         use crate::utils::stream_migration::migrate_v2;
 
         let bufreader = BufReader::new(File::open("./tests/samples/nyc_v1_1px.adder")?);
-        let compression = <RawInput as ReadCompression<BufReader<File>>>::new();
+        let compression = RawInput::new();
         let mut bitreader = BitReader::endian(bufreader, BigEndian);
-        let reader = Decoder::new(Box::new(compression), &mut bitreader).unwrap();
+        let reader = Decoder::new_raw(compression, &mut bitreader).unwrap();
 
         let output = Vec::new();
         let bufwriter = BufWriter::new(output);
         let mut meta = *reader.meta();
         meta.codec_version = 2;
         meta.time_mode = AbsoluteT;
-        let compression =
-            <RawOutput<_> as WriteCompression<BufWriter<Vec<u8>>>>::new(meta, bufwriter);
-        let mut stream = Encoder::new(Box::new(compression));
+        let compression = RawOutput::new(meta, bufwriter);
+        let mut stream = Encoder::new_raw(compression);
 
         stream = migrate_v2(reader, &mut bitreader, stream)?;
 
@@ -241,15 +240,14 @@ mod tests {
         let bytes = writer.into_inner().unwrap();
         let tmp = Cursor::new(&*bytes);
         let bufreader = BufReader::new(tmp);
-        let compression = <RawInput as ReadCompression<BufReader<Cursor<&[u8]>>>>::new();
+        let compression = RawInput::new();
         let mut bitreader_migrate = BitReader::endian(bufreader, BigEndian);
-        let mut reader_migrate =
-            Decoder::new(Box::new(compression), &mut bitreader_migrate).unwrap();
+        let mut reader_migrate = Decoder::new_raw(compression, &mut bitreader_migrate).unwrap();
 
         let bufreader = BufReader::new(File::open("./tests/samples/nyc_source_v2_2_1px.adder")?);
-        let compression = <RawInput as ReadCompression<BufReader<File>>>::new();
+        let compression = RawInput::new();
         let mut bitreader_gt = BitReader::endian(bufreader, BigEndian);
-        let mut reader_gt = Decoder::new(Box::new(compression), &mut bitreader_gt).unwrap();
+        let mut reader_gt = Decoder::new_raw(compression, &mut bitreader_gt).unwrap();
 
         let mut event_count = 0;
         loop {
@@ -284,9 +282,9 @@ mod tests {
     #[test]
     fn test_migrate_v2_bunny_1px() -> Result<(), Box<dyn std::error::Error>> {
         let bufreader = BufReader::new(File::open("./tests/samples/bunny_v2_t.adder")?);
-        let compression = <RawInput as ReadCompression<BufReader<File>>>::new();
+        let compression = RawInput::new();
         let mut bitreader_t = BitReader::endian(bufreader, BigEndian);
-        let mut input_stream_t = Decoder::new(Box::new(compression), &mut bitreader_t).unwrap();
+        let mut input_stream_t = Decoder::new_raw(compression, &mut bitreader_t).unwrap();
 
         let reconstructed_frame_rate = 30.0;
 
@@ -307,9 +305,9 @@ mod tests {
                 .finish();
 
         let bufreader = BufReader::new(File::open("./tests/samples/bunny_v2_dt.adder")?);
-        let compression = <RawInput as ReadCompression<BufReader<File>>>::new();
+        let compression = RawInput::new();
         let mut bitreader_dt = BitReader::endian(bufreader, BigEndian);
-        let mut input_stream_dt = Decoder::new(Box::new(compression), &mut bitreader_dt).unwrap();
+        let mut input_stream_dt = Decoder::new_raw(compression, &mut bitreader_dt).unwrap();
 
         let mut frame_sequence_dt: FrameSequence<u8> =
             FramerBuilder::new(input_stream_dt.meta().plane.clone(), 64)
@@ -381,9 +379,9 @@ mod tests {
     #[test]
     fn test_migrate_v2_bunny_8() -> Result<(), Box<dyn std::error::Error>> {
         let bufreader = BufReader::new(File::open("./tests/samples/bunny_v2_t_3.adder")?);
-        let compression = <RawInput as ReadCompression<BufReader<File>>>::new();
+        let compression = RawInput::new();
         let mut bitreader_t = BitReader::endian(bufreader, BigEndian);
-        let mut input_stream_t = Decoder::new(Box::new(compression), &mut bitreader_t).unwrap();
+        let mut input_stream_t = Decoder::new_raw(compression, &mut bitreader_t).unwrap();
 
         let reconstructed_frame_rate = 30.0;
 
@@ -404,9 +402,9 @@ mod tests {
                 .finish();
 
         let bufreader = BufReader::new(File::open("./tests/samples/bunny_v2_dt_3.adder")?);
-        let compression = <RawInput as ReadCompression<BufReader<File>>>::new();
+        let compression = RawInput::new();
         let mut bitreader_dt = BitReader::endian(bufreader, BigEndian);
-        let mut input_stream_dt = Decoder::new(Box::new(compression), &mut bitreader_dt).unwrap();
+        let mut input_stream_dt = Decoder::new_raw(compression, &mut bitreader_dt).unwrap();
 
         let mut frame_sequence_dt: FrameSequence<u8> =
             FramerBuilder::new(input_stream_dt.meta().plane.clone(), 500)
