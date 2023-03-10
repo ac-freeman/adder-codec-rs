@@ -250,7 +250,7 @@ impl<W: Write + 'static> Integration<W> {
         event_check_1: F,
         frame_timestamp_2: Option<&i64>,
         event_check_2: G,
-    ) -> Result<(), CodecError> {
+    ) -> Result<Vec<DvsEvent>, CodecError> {
         // TODO: not fixed 4 chunks?
         let mut dvs_chunks: [Vec<DvsEvent>; 4] = [
             Vec::with_capacity(100_000),
@@ -266,6 +266,7 @@ impl<W: Write + 'static> Integration<W> {
         }
 
         let chunk_rows = video.state.chunk_rows;
+        let mut excluded_events: Vec<DvsEvent> = Vec::new();
         // let px_per_chunk: usize =
         //     self.video.chunk_rows * self.video.width as usize * self.video.channels as usize;
         let big_buffer: Vec<Vec<Event>> = video
@@ -410,6 +411,7 @@ impl<W: Write + 'static> Integration<W> {
                             if event_check_1(event.t(), *frame_timestamp) {
                                 eprintln!("tmp");
                             }
+                            excluded_events.push(*event);
                         }
                     }
 
@@ -428,7 +430,7 @@ impl<W: Write + 'static> Integration<W> {
         // Using a macro so that CLion still pretty prints correctly
 
         video.encoder.ingest_events_events(&big_buffer)?;
-        Ok(())
+        Ok(excluded_events)
     }
 
     #[allow(clippy::cast_possible_truncation)]
@@ -645,8 +647,14 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Davis<W> {
                     if self.mode == TranscoderMode::RawDvs {
                         self.integration.end_of_frame_timestamp = Some(img_start_ts);
                     }
+                    if self.mode == TranscoderMode::RawDavis {
+                        self.integration.end_of_frame_timestamp = Some(img_start_ts + 1);
+                    }
                     self.video.state.ref_time_divisor =
-                        (img_end_ts - img_start_ts) as f64 / f64::from(self.video.state.ref_time);
+                        (self.integration.end_of_frame_timestamp.unwrap()
+                            - self.integration.start_of_frame_timestamp.unwrap())
+                            as f64
+                            / f64::from(self.video.state.ref_time);
                     if let Some(latency) = opt_latency {
                         self.latency = latency;
                     }
@@ -671,6 +679,9 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Davis<W> {
                 self.integration.temp_first_frame_start_timestamp =
                     self.integration.start_of_frame_timestamp.unwrap_or(0);
             }
+
+            let mut excluded_events_0 = vec![];
+            let mut excluded_events_1 = vec![];
             if with_events {
                 if self.video.state.in_interval_count == 0 {
                     /* If at the very beginning of the video, then we need to initialize the
@@ -688,7 +699,7 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Davis<W> {
                         self.integration.dvs_events_last_after.clone(),
                         self.integration.end_of_last_frame_timestamp,
                     ) {
-                        self.integration.integrate_dvs_events(
+                        excluded_events_0 = self.integration.integrate_dvs_events(
                             &mut self.video,
                             &events,
                             &start_of_frame_timestamp,
@@ -698,7 +709,7 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Davis<W> {
                         )?;
                     }
 
-                    self.integration.integrate_dvs_events(
+                    excluded_events_1 = self.integration.integrate_dvs_events(
                         &mut self.video,
                         &dvs_events_before,
                         &start_of_frame_timestamp,
@@ -746,7 +757,8 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Davis<W> {
             let mat_integration_time = match self.mode {
                 TranscoderMode::Framed => self.video.state.ref_time as f32,
                 TranscoderMode::RawDavis => {
-                    (end_of_frame_timestamp - start_of_frame_timestamp) as f32
+                    // (end_of_frame_timestamp - start_of_frame_timestamp) as f32
+                    1.0
                 }
                 TranscoderMode::RawDvs => {
                     // TODO: Note how c is fixed here, since we don't have a mechanism for determining
@@ -815,6 +827,24 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Davis<W> {
                 self.integration.dvs_last_timestamps.par_map_inplace(|ts| {
                     *ts = end_of_frame_timestamp;
                 });
+
+                excluded_events_0 = self.integration.integrate_dvs_events(
+                    &mut self.video,
+                    &excluded_events_0,
+                    &end_of_frame_timestamp,
+                    check_dvs_after,
+                    None,
+                    check_dvs_after,
+                )?;
+                excluded_events_1 = self.integration.integrate_dvs_events(
+                    &mut self.video,
+                    &excluded_events_1,
+                    &end_of_frame_timestamp,
+                    check_dvs_after,
+                    None,
+                    check_dvs_after,
+                )?;
+
                 // for px in &self.video.event_pixel_trees {
                 //     let a = px.running_t as i64;
                 //     let b = self.integration.dvs_last_timestamps
