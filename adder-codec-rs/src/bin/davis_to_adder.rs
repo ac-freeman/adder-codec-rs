@@ -8,6 +8,7 @@ use serde::Deserialize;
 
 use adder_codec_core::DeltaT;
 
+use adder_codec_core::SourceCamera::DavisU8;
 use adder_codec_core::TimeMode;
 use adder_codec_rs::transcoder::source::davis::TranscoderMode::{Framed, RawDavis, RawDvs};
 use std::fs::File;
@@ -129,11 +130,11 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     ))?;
 
     let file = File::create(args.output_events_filename)?;
-    let _writer = BufWriter::new(file);
+    let writer = BufWriter::new(file);
     let ref_time = (1_000_000.0 / edi_args.output_fps) as DeltaT;
 
     let mut davis_source = Box::new(
-        Davis::<BufWriter<Vec<u8>>>::new(reconstructor, rt, mode)?
+        Davis::<BufWriter<File>>::new(reconstructor, rt, mode)?
             .optimize_adder_controller(args.optimize_adder_controller)
             .mode(mode)
             .time_parameters(
@@ -144,12 +145,12 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             )? // TODO
             .c_thresh_pos(args.adder_c_thresh_pos)
             .c_thresh_neg(args.adder_c_thresh_neg),
-    );
-    // .write_out(DavisU8, TimeMode::AbsoluteT, writer)?; // TODO: PROBLEM IS SOMEWHERE WITH THE TIME_MODE
+    )
+    .write_out(DavisU8, TimeMode::AbsoluteT, writer)?;
 
     let mut now = Instant::now();
     let start_time = std::time::Instant::now();
-    let thread_pool_integration = rayon::ThreadPoolBuilder::new().num_threads(4).build()?;
+    let thread_pool_integration = rayon::ThreadPoolBuilder::new().num_threads(1).build()?;
 
     loop {
         match davis_source.consume(1, &thread_pool_integration) {

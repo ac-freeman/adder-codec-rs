@@ -13,7 +13,7 @@ use std::io::{BufReader, BufWriter, Write};
 use std::time::Instant;
 
 fn main() {
-    let input_path = "/home/andrew/Downloads/tmp_events_migrated.adder";
+    let input_path = "/home/andrew/Downloads/tmp.adder";
     let tmp = File::open(input_path).unwrap();
     let bufreader = BufReader::new(tmp);
     let compression = RawInput::new();
@@ -32,18 +32,17 @@ fn main() {
     //     reconstructed_frame_rate as u32
     // );
 
-    let mut frame_sequence: FrameSequence<u8> =
-        FramerBuilder::new(reader.meta().plane, 260)
-            .codec_version(reader.meta().codec_version, reader.meta().time_mode)
-            .time_parameters(
-                reader.meta().tps,
-                reader.meta().ref_interval,
-                reader.meta().delta_t_max,
-                reconstructed_frame_rate,
-            )
-            .mode(INSTANTANEOUS)
-            .source(reader.get_source_type(), reader.meta().source_camera)
-            .finish();
+    let mut frame_sequence: FrameSequence<u8> = FramerBuilder::new(reader.meta().plane, 260)
+        .codec_version(reader.meta().codec_version, reader.meta().time_mode)
+        .time_parameters(
+            reader.meta().tps,
+            reader.meta().ref_interval,
+            reader.meta().delta_t_max,
+            reconstructed_frame_rate,
+        )
+        .mode(INSTANTANEOUS)
+        .source(reader.get_source_type(), reader.meta().source_camera)
+        .finish();
 
     let mut now = Instant::now();
     let mut frame_count = 0;
