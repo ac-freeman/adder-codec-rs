@@ -13,6 +13,7 @@ use rayon::current_num_threads;
 use std::error::Error;
 
 use adder_codec_core::TimeMode;
+use adder_codec_rs::transcoder::source::davis::TranscoderMode::RawDvs;
 use std::default::Default;
 use std::fs::File;
 use std::io::BufWriter;
@@ -265,6 +266,11 @@ impl TranscoderState {
                                 != self.ui_state.davis_output_fps
                             || source.time_mode != self.ui_state.time_mode
                         {
+                            if self.ui_state.davis_mode_radio_state == RawDvs {
+                                // self.ui_state.davis_output_fps = 1000000.0;
+                                // self.ui_state.davis_output_fps_slider = 1000000.0;
+                                self.ui_state.optimize_c = false;
+                            }
                             replace_adder_transcoder(
                                 self,
                                 self.ui_info_state.input_path_0.clone(),
@@ -537,30 +543,32 @@ fn side_panel_grid_contents(
     ui.end_row();
 
     ui.label("DAVIS deblurred FPS:");
+
     slider_pm(
         !enabled,
         true,
         ui,
         &mut ui_state.davis_output_fps,
         &mut ui_state.davis_output_fps_slider,
-        30.0..=10000.0,
+        30.0..=1000000.0,
         vec![
-            50.0, 100.0, 250.0, 500.0, 1_000.0, 2_500.0, 5_000.0, 7_500.0, 10_000.0,
+            50.0, 100.0, 250.0, 500.0, 1_000.0, 2_500.0, 5_000.0, 7_500.0, 10_000.0, 1000000.0,
         ],
         50.0,
     );
     ui.end_row();
 
+    let enable_optimize = !enabled && ui_state.davis_mode_radio_state != TranscoderMode::RawDvs;
     ui.label("Optimize:");
     ui.add_enabled(
-        !enabled,
+        enable_optimize,
         egui::Checkbox::new(&mut ui_state.optimize_c, "Optimize θ?"),
     );
     ui.end_row();
 
     ui.label("Optimize frequency:");
     slider_pm(
-        !enabled,
+        enable_optimize,
         true,
         ui,
         &mut ui_state.optimize_c_frequency,

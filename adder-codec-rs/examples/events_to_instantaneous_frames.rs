@@ -13,7 +13,7 @@ use std::io::{BufReader, BufWriter, Write};
 use std::time::Instant;
 
 fn main() {
-    let input_path = "/home/andrew/Downloads/tmp.adder";
+    let input_path = "/home/andrew/Downloads/tmp_events.adder";
     let tmp = File::open(input_path).unwrap();
     let bufreader = BufReader::new(tmp);
     let compression = RawInput::new();
