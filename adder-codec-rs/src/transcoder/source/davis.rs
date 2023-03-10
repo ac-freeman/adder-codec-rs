@@ -271,15 +271,15 @@ impl<W: Write + 'static> Integration<W> {
         let big_buffer: Vec<Vec<Event>> = video
             .event_pixel_trees
             .axis_chunks_iter_mut(Axis(0), chunk_rows)
-            .into_iter()
+            .into_par_iter()
             .zip(
                 self.dvs_last_ln_val
                     .axis_chunks_iter_mut(Axis(0), chunk_rows)
-                    .into_iter()
+                    .into_par_iter()
                     .zip(
                         self.dvs_last_timestamps
                             .axis_chunks_iter_mut(Axis(0), chunk_rows)
-                            .into_iter(),
+                            .into_par_iter(),
                     ),
             )
             .enumerate()
