@@ -275,11 +275,11 @@ impl<W: Write + 'static> Integration<W> {
             .zip(
                 self.dvs_last_ln_val
                     .axis_chunks_iter_mut(Axis(0), chunk_rows)
-                    .into_iter()
+                    .into_par_iter()
                     .zip(
                         self.dvs_last_timestamps
                             .axis_chunks_iter_mut(Axis(0), chunk_rows)
-                            .into_iter(),
+                            .into_par_iter(),
                     ),
             )
             .enumerate()
@@ -773,10 +773,6 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Davis<W> {
             }
 
             if with_events {
-                // let dvs_events_after = match &self.integration.dvs_events_after {
-                //     Some(events) => events.clone(),
-                //     None => return Err(SourceError::UninitializedData),
-                // };
                 self.integration.dvs_events_last_after = self.integration.dvs_events_after.clone();
                 self.integration.end_of_last_frame_timestamp =
                     self.integration.end_of_frame_timestamp.clone();
@@ -786,13 +782,13 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Davis<W> {
                     *ts = end_of_frame_timestamp;
                 });
 
-                // for px in &self.video.event_pixel_trees {
-                //     let a = px.running_t as i64;
-                //     let b = self.integration.dvs_last_timestamps
-                //         [[px.coord.y as usize, px.coord.x as usize, 0]]
-                //         - self.integration.temp_first_frame_start_timestamp;
-                //     assert_eq!(a, b);
-                // }
+                for px in &self.video.event_pixel_trees {
+                    let a = px.running_t as i64;
+                    let b = self.integration.dvs_last_timestamps
+                        [[px.coord.y as usize, px.coord.x as usize, 0]]
+                        - self.integration.temp_first_frame_start_timestamp;
+                    debug_assert_eq!(a, b);
+                }
             }
         }
 
