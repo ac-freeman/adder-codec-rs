@@ -308,11 +308,6 @@ impl<W: Write + 'static> Integration<W> {
                             let last_val = (last_val_ln.exp() - 1.0) * 255.0;
 
                             // in microseconds (1 million per second)
-
-                            let base_t = dvs_last_timestamps_chunk
-                                [[event.y() as usize % chunk_rows, event.x() as usize, 0]]
-                                - self.temp_first_frame_start_timestamp;
-
                             let delta_t_micro = event.t()
                                 - dvs_last_timestamps_chunk
                                     [[event.y() as usize % chunk_rows, event.x() as usize, 0]];
@@ -322,9 +317,7 @@ impl<W: Write + 'static> Integration<W> {
                             let ticks_per_micro = video.state.tps as f32 / 1e6;
                             let delta_t_ticks = delta_t_micro as f32 * ticks_per_micro;
                             if delta_t_ticks < 0.0 {
-                                // let tmp = event.t();
-                                // let tmpp = self.temp_first_frame_start_timestamp;
-                                // panic!("delta_t_ticks <= 0.0");
+                                // Should get here only if the event has already been processed?
                                 continue; // TODO: do better
                             }
 
