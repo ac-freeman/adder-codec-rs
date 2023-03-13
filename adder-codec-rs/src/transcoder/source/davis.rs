@@ -51,13 +51,19 @@ pub enum TranscoderMode {
 struct Integration<W> {
     dvs_c: f64,
     dvs_events_before: Option<Vec<DvsEvent>>,
+    dvs_events_last_after: Option<Vec<DvsEvent>>,
     dvs_events_after: Option<Vec<DvsEvent>>,
+
+    pub temp_first_frame_start_timestamp: i64,
 
     /// The timestamp for the start of the APS frame exposure
     pub start_of_frame_timestamp: Option<i64>,
 
     /// The timestamp for the end of the APS frame exposure
     pub end_of_frame_timestamp: Option<i64>,
+
+    pub end_of_last_frame_timestamp: Option<i64>,
+
     /// The timestamp of the last DVS event integrated for each pixel
     pub dvs_last_timestamps: Array3<i64>,
 
@@ -146,8 +152,11 @@ impl<W: Write + 'static> Davis<W> {
                 dvs_c: 0.15,
                 dvs_events_before: None,
                 dvs_events_after: None,
+                dvs_events_last_after: None,
+                temp_first_frame_start_timestamp: 0,
                 start_of_frame_timestamp: None,
                 end_of_frame_timestamp: None,
+                end_of_last_frame_timestamp: None,
                 dvs_last_timestamps,
                 dvs_last_ln_val,
                 phantom: std::marker::PhantomData,
@@ -230,13 +239,18 @@ impl<W: Write + 'static> Davis<W> {
 impl<W: Write + 'static> Integration<W> {
     /// Integrate a sequence of [DVS events](DvsEvent) into the ADΔER video model
     #[allow(clippy::cast_sign_loss)]
-    pub fn integrate_dvs_events<F: Fn(i64, i64) -> bool + Send + 'static + std::marker::Sync>(
+    pub fn integrate_dvs_events<
+        F: Fn(i64, i64) -> bool + Send + 'static + std::marker::Sync,
+        G: Fn(i64, i64) -> bool + Send + 'static + std::marker::Sync,
+    >(
         &mut self,
         video: &mut Video<W>,
         dvs_events: &Vec<DvsEvent>,
-        frame_timestamp: &i64,
-        event_check: F,
-    ) -> Result<(), CodecError> {
+        frame_timestamp: i64,
+        event_check_1: F,
+        frame_timestamp_2: Option<i64>,
+        event_check_2: G,
+    ) -> Result<Vec<DvsEvent>, CodecError> {
         // TODO: not fixed 4 chunks?
         let mut dvs_chunks: [Vec<DvsEvent>; 4] = [
             Vec::with_capacity(100_000),
@@ -252,6 +266,7 @@ impl<W: Write + 'static> Integration<W> {
         }
 
         let chunk_rows = video.state.chunk_rows;
+        let mut excluded_events: Vec<DvsEvent> = Vec::new();
         // let px_per_chunk: usize =
         //     self.video.chunk_rows * self.video.width as usize * self.video.channels as usize;
         let big_buffer: Vec<Vec<Event>> = video
@@ -279,7 +294,13 @@ impl<W: Write + 'static> Integration<W> {
                     for event in &dvs_chunks[chunk_idx] {
                         // Ignore events occuring during the deblurred frame's
                         // effective exposure time
-                        if event_check(event.t(), *frame_timestamp) {
+                        if event_check_1(event.t(), frame_timestamp)
+                            && if let Some(frame_timestamp_2) = frame_timestamp_2 {
+                                event_check_2(event.t(), frame_timestamp_2)
+                            } else {
+                                true
+                            }
+                        {
                             let px = &mut px_chunk
                                 [[(event.y() as usize) % chunk_rows, event.x() as usize, 0]];
                             let base_val = px.base_val;
@@ -289,6 +310,10 @@ impl<W: Write + 'static> Integration<W> {
 
                             // in microseconds (1 million per second)
 
+                            let base_t = dvs_last_timestamps_chunk
+                                [[event.y() as usize % chunk_rows, event.x() as usize, 0]]
+                                - self.temp_first_frame_start_timestamp;
+
                             let delta_t_micro = event.t()
                                 - dvs_last_timestamps_chunk
                                     [[event.y() as usize % chunk_rows, event.x() as usize, 0]];
@@ -297,10 +322,11 @@ impl<W: Write + 'static> Integration<W> {
                             }
                             let ticks_per_micro = video.state.tps as f32 / 1e6;
                             let delta_t_ticks = delta_t_micro as f32 * ticks_per_micro;
-                            if delta_t_ticks <= 0.0 {
+                            if delta_t_ticks < 0.0 {
+                                // Should only get here if the DVS event has been duplicated and
+                                // we've already integrated it
                                 continue; // TODO: do better
                             }
-                            assert!(delta_t_ticks > 0.0);
 
                             // First, integrate the previous value enough to fill the time since then
                             let first_integration = ((last_val as Intensity32)
@@ -315,6 +341,7 @@ impl<W: Write + 'static> Integration<W> {
                                 ));
                             }
 
+                            let running_t_before = px.running_t;
                             px.integrate(
                                 first_integration,
                                 delta_t_ticks.into(),
@@ -322,6 +349,12 @@ impl<W: Write + 'static> Integration<W> {
                                 video.state.delta_t_max,
                                 video.state.ref_time,
                             );
+                            let running_t_after = px.running_t;
+                            debug_assert_eq!(
+                                running_t_after,
+                                running_t_before + delta_t_ticks as f64
+                            );
+
                             if px.need_to_pop_top {
                                 buffer.push(px.pop_top_event(
                                     first_integration,
@@ -329,6 +362,11 @@ impl<W: Write + 'static> Integration<W> {
                                     video.state.ref_time,
                                 ));
                             }
+                            let running_t_after = px.running_t;
+                            debug_assert_eq!(
+                                running_t_after,
+                                running_t_before + delta_t_ticks as f64
+                            );
 
                             ///////////////////////////////////////////////////////
                             // Then, integrate a tiny amount of the next intensity
@@ -356,10 +394,17 @@ impl<W: Write + 'static> Integration<W> {
                                     Some(event) => buffer.push(event),
                                 };
                             }
+                            let tmpp = dvs_last_timestamps_chunk
+                                [[event.y() as usize % chunk_rows, event.x() as usize, 0]];
 
                             dvs_last_timestamps_chunk
                                 [[event.y() as usize % chunk_rows, event.x() as usize, 0]] =
                                 event.t();
+                            debug_assert!(
+                                dvs_last_timestamps_chunk
+                                    [[event.y() as usize % chunk_rows, event.x() as usize, 0]]
+                                    >= tmpp
+                            );
                         }
                     }
 
@@ -367,18 +412,9 @@ impl<W: Write + 'static> Integration<W> {
                 },
             )
             .collect();
-        // exact_chunks_iter_mut(Dim([
-        //     self.video.width as usize,
-        //     self.video.height as usize / 4,
-        //     1,
-        // ]));
-
-        // slices.
-
-        // Using a macro so that CLion still pretty prints correctly
 
         video.encoder.ingest_events_events(&big_buffer)?;
-        Ok(())
+        Ok(excluded_events)
     }
 
     #[allow(clippy::cast_possible_truncation)]
@@ -433,11 +469,6 @@ impl<W: Write + 'static> Integration<W> {
                         continue;
                     }
                     assert!(delta_t_ticks > 0.0);
-                    // assert_eq!(
-                    //     self.end_of_frame_timestamp.unwrap()
-                    //         - self.start_of_frame_timestamp.unwrap(),
-                    //     (self.video.ref_time as f32 / ticks_per_micro as f32) as i64
-                    // );
 
                     let integration = ((last_val / f64::from(video.state.ref_time))
                         * f64::from(delta_t_ticks))
@@ -460,6 +491,14 @@ impl<W: Write + 'static> Integration<W> {
                             video.state.ref_time,
                         ));
                     }
+
+                    // TODO: temporary debugging
+                    // self.dvs_last_timestamps[[px.coord.y as usize, px.coord.x as usize, 0]] +=
+                    //     delta_t_micro;
+                    // let a = px.running_t as i64;
+                    // let b = self.dvs_last_timestamps[[px.coord.y as usize, px.coord.x as usize, 0]]
+                    //     - self.temp_first_frame_start_timestamp;
+                    // debug_assert!({ a == b });
                 }
                 buffer
             })
@@ -579,32 +618,52 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Davis<W> {
                     // self.control_latency(opt_timestamp);
 
                     self.input_frame_scaled = mat;
+                    self.integration.start_of_frame_timestamp = Some(img_start_ts);
+                    self.integration.end_of_frame_timestamp = Some(img_end_ts);
+                    if self.mode == TranscoderMode::RawDvs {
+                        // assert!(events_before.is_empty());
+                        self.integration.end_of_frame_timestamp = Some(img_start_ts + 1);
+                    }
                     self.integration.dvs_c = c;
                     self.integration.dvs_events_before = Some(events_before);
                     self.integration.dvs_events_after = Some(events_after);
-                    self.integration.start_of_frame_timestamp = Some(img_start_ts);
-                    self.integration.end_of_frame_timestamp = Some(img_end_ts);
+                    
                     self.video.state.ref_time_divisor =
-                        (img_end_ts - img_start_ts) as f64 / f64::from(self.video.state.ref_time);
+                        (self.integration.end_of_frame_timestamp.unwrap()
+                            - self.integration.start_of_frame_timestamp.unwrap())
+                            as f64
+                            / f64::from(self.video.state.ref_time);
                     if let Some(latency) = opt_latency {
                         self.latency = latency;
                     }
                 }
-                Some((mat, _, None, _)) => {
+                Some((mat, _, None, opt_latency)) => {
                     // We get here if we're in framed mode (just getting deblurred frames from EDI,
                     // including intermediate frames)
                     // self.control_latency(opt_timestamp);
                     self.input_frame_scaled = mat;
+                    if let Some(latency) = opt_latency {
+                        self.latency = latency;
+                    }
                 } // Err(e) => return Err(SourceError::EdiError(e)),
             }
 
             let start_of_frame_timestamp = self.integration.start_of_frame_timestamp.unwrap_or(0);
-            let end_of_frame_timestamp = match self.integration.end_of_frame_timestamp {
-                Some(t) => t,
-                None => self.video.state.ref_time.into(),
-            };
+            let end_of_frame_timestamp = self
+                .integration
+                .end_of_frame_timestamp
+                .unwrap_or(self.video.state.ref_time.into());
+            if self.integration.temp_first_frame_start_timestamp == 0 {
+                self.integration.temp_first_frame_start_timestamp =
+                    self.integration.start_of_frame_timestamp.unwrap_or(0);
+            }
+
+            let mut excluded_events_0 = vec![];
+            let mut excluded_events_1 = vec![];
             if with_events {
                 if self.video.state.in_interval_count == 0 {
+                    /* If at the very beginning of the video, then we need to initialize the
+                    last timestamps */
                     self.integration.dvs_last_timestamps.par_map_inplace(|ts| {
                         *ts = start_of_frame_timestamp;
                     });
@@ -613,12 +672,30 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Davis<W> {
                         Some(events) => events.clone(),
                         None => return Err(SourceError::UninitializedData),
                     };
-                    self.integration.integrate_dvs_events(
+
+                    if let (Some(events), Some(end_of_last_timestamp)) = (
+                        self.integration.dvs_events_last_after.clone(),
+                        self.integration.end_of_last_frame_timestamp,
+                    ) {
+                        excluded_events_0 = self.integration.integrate_dvs_events(
+                            &mut self.video,
+                            &events,
+                            start_of_frame_timestamp,
+                            check_dvs_before,
+                            Some(end_of_last_timestamp),
+                            check_dvs_after,
+                        )?;
+                    }
+
+                    excluded_events_1 = self.integration.integrate_dvs_events(
                         &mut self.video,
                         &dvs_events_before,
-                        &start_of_frame_timestamp,
+                        start_of_frame_timestamp,
+                        check_dvs_before,
+                        None,
                         check_dvs_before,
                     )?;
+
                     self.integration.integrate_frame_gaps(&mut self.video)?;
                 }
             }
@@ -644,7 +721,8 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Davis<W> {
             let mat_integration_time = match self.mode {
                 TranscoderMode::Framed => self.video.state.ref_time as f32,
                 TranscoderMode::RawDavis => {
-                    (end_of_frame_timestamp - start_of_frame_timestamp) as f32
+                    // (end_of_frame_timestamp - start_of_frame_timestamp) as f32
+                    1.0
                 }
                 TranscoderMode::RawDvs => {
                     // TODO: Note how c is fixed here, since we don't have a mechanism for determining
@@ -668,6 +746,15 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Davis<W> {
                 self.video
                     .integrate_matrix(tmp, mat_integration_time, view_interval)
             });
+
+            // for px in &self.video.event_pixel_trees {
+            //     let a = px.running_t as i64;
+            //     let b =
+            //         start_of_frame_timestamp - self.integration.temp_first_frame_start_timestamp;
+            //     assert!(a >= b);
+            //     let c = end_of_frame_timestamp - self.integration.temp_first_frame_start_timestamp;
+            //     assert_eq!(a, c);
+            // }
 
             #[allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
             for (idx, val) in self.integration.dvs_last_ln_val.iter_mut().enumerate() {
@@ -693,20 +780,23 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Davis<W> {
             }
 
             if with_events {
-                let dvs_events_after = match &self.integration.dvs_events_after {
-                    Some(events) => events.clone(),
-                    None => return Err(SourceError::UninitializedData),
-                };
+                self.integration.dvs_events_last_after = self.integration.dvs_events_after.clone();
+                self.integration.end_of_last_frame_timestamp =
+                    self.integration.end_of_frame_timestamp.clone();
+
                 self.integration.dvs_last_timestamps.par_map_inplace(|ts| {
+                    debug_assert!(*ts < end_of_frame_timestamp);
                     *ts = end_of_frame_timestamp;
                 });
 
-                self.integration.integrate_dvs_events(
-                    &mut self.video,
-                    &dvs_events_after,
-                    &end_of_frame_timestamp,
-                    check_dvs_after,
-                )?;
+
+                for px in &self.video.event_pixel_trees {
+                    let a = px.running_t as i64;
+                    let b = self.integration.dvs_last_timestamps
+                        [[px.coord.y as usize, px.coord.x as usize, 0]]
+                        - self.integration.temp_first_frame_start_timestamp;
+                    debug_assert_eq!(a, b);
+                }
             }
         }
 

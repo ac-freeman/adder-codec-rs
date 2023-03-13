@@ -35,10 +35,10 @@ impl From<Event64> for Event {
 
 #[repr(packed)]
 #[derive(Copy, Clone, Debug)]
-struct PixelState {
+pub(crate) struct PixelState {
     d: D,
     integration: Intensity32,
-    delta_t: f64,
+    pub(crate) delta_t: f64,
 }
 
 #[repr(packed)]
@@ -47,7 +47,7 @@ pub struct PixelNode {
     /// Will have the smaller D value
     alt: Option<()>,
 
-    state: PixelState,
+    pub(crate) state: PixelState,
     pub(crate) best_event: Option<Event64>,
 }
 
@@ -57,6 +57,7 @@ pub struct PixelArena {
     pub coord: Coord,
     time_mode: TimeMode,
     last_fired_t: f64,
+    pub(crate) running_t: f64,
     length: usize,
     pub base_val: u8,
     pub need_to_pop_top: bool,
@@ -73,6 +74,7 @@ impl PixelArena {
             length: 1,
             time_mode: TimeMode::default(),
             last_fired_t: 0.0,
+            running_t: 0.0,
             base_val: 0,
             need_to_pop_top: false,
             arena,
@@ -175,7 +177,7 @@ impl PixelArena {
                         self.arena.push(PixelNode::new(next_intensity));
                         self.length += 1;
                     }
-                    
+
                     self.pop_top_event_recursive(next_intensity, mode, ref_time)
                     // panic!("No best event! TODO: handle it")
                 }
@@ -272,6 +274,7 @@ impl PixelArena {
         if tail.state.delta_t == 0.0 && tail.state.integration == 0.0 {
             tail.state.d = get_d_from_intensity(intensity);
         }
+        self.running_t += time;
 
         let mut idx = 0;
         loop {
@@ -326,7 +329,7 @@ impl PixelArena {
     /// Integrate an intensity for a given node. Returns `Some()` if the node fires an event, so
     /// that the newly-created branch's node only gets integrated with the remaining intensity.
     #[allow(clippy::similar_names)]
-    pub fn integrate_main(
+    fn integrate_main(
         &mut self,
         index: usize,
         intensity: Intensity32,
