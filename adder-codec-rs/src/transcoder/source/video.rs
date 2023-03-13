@@ -1,11 +1,12 @@
+
 use opencv::core::{Mat, Size, CV_8U, CV_8UC3};
-use std::io::Write;
+use std::io::{sink, Write};
 use std::mem::swap;
 
 use adder_codec_core::codec::empty::stream::EmptyOutput;
 use adder_codec_core::codec::encoder::Encoder;
 use adder_codec_core::codec::raw::stream::RawOutput;
-use adder_codec_core::codec::{CodecError, CodecMetadata, WriteCompression, LATEST_CODEC_VERSION};
+use adder_codec_core::codec::{CodecError, CodecMetadata, LATEST_CODEC_VERSION};
 use adder_codec_core::{
     Coord, DeltaT, Event, PlaneError, PlaneSize, SourceCamera, SourceType, TimeMode,
 };
@@ -25,9 +26,10 @@ use ndarray::{Array3, Axis, ShapeError};
 use rayon::iter::IntoParallelIterator;
 use rayon::iter::ParallelIterator;
 use rayon::iter::{IndexedParallelIterator, IntoParallelRefMutIterator};
-use rayon::ThreadPool;
+use rayon::{ThreadPool};
 
 use thiserror::Error;
+use tokio::task::JoinError;
 
 /// Various errors that can occur during an ADΔER transcode
 #[derive(Error, Debug)]
@@ -79,6 +81,10 @@ pub enum SourceError {
     /// Plane error
     #[error("Plane error")]
     PlaneError(#[from] PlaneError),
+
+    /// Handle join error
+    #[error("Handle join error")]
+    JoinError(#[from] JoinError),
 }
 
 impl From<opencv::Error> for SourceError {
@@ -165,6 +171,7 @@ pub trait VideoBuilder<W> {
         tps: DeltaT,
         ref_time: DeltaT,
         delta_t_max: DeltaT,
+        time_mode: Option<TimeMode>,
     ) -> Result<Self, SourceError>
     where
         Self: std::marker::Sized;
@@ -198,6 +205,8 @@ pub struct Video<W: Write> {
     /// Channel for sending events to the encoder
     pub event_sender: Sender<Vec<Event>>,
     pub(crate) encoder: Encoder<W>,
+    // TODO: Hold multiple encoder options and an enum, so that boxing isn't required.
+    // Also hold a state for whether or not to write out events at all, so that a null writer isn't required.
 }
 
 unsafe impl<W: Write> Send for Video<W> {}
@@ -267,7 +276,7 @@ impl<W: Write + 'static> Video<W> {
 
         match writer {
             None => {
-                let encoder = Encoder::new(Box::new(EmptyOutput::new(meta, Vec::new())));
+                let encoder: Encoder<W> = Encoder::new_empty(EmptyOutput::new(meta, sink()));
                 Ok(Video {
                     state,
                     event_pixel_trees,
@@ -278,10 +287,10 @@ impl<W: Write + 'static> Video<W> {
                 })
             }
             Some(w) => {
-                let encoder = Encoder::new(Box::new(
+                let encoder = Encoder::new_raw(
                     // TODO: Allow for compressed representation (not just raw)
                     RawOutput::new(meta, w),
-                ));
+                );
                 Ok(Video {
                     state,
                     event_pixel_trees,
@@ -329,7 +338,12 @@ impl<W: Write + 'static> Video<W> {
         tps: DeltaT,
         ref_time: DeltaT,
         delta_t_max: DeltaT,
+        time_mode: Option<TimeMode>,
     ) -> Result<Self, SourceError> {
+        self.event_pixel_trees.par_map_inplace(|px| {
+            px.time_mode(time_mode);
+        });
+
         if ref_time > f32::MAX as u32 {
             eprintln!(
                 "Reference time {} is too large. Keeping current value of {}.",
@@ -361,6 +375,7 @@ impl<W: Write + 'static> Video<W> {
         self.state.delta_t_max = delta_t_max;
         self.state.ref_time = ref_time;
         self.state.tps = tps;
+
         Ok(self)
     }
 
@@ -392,9 +407,10 @@ impl<W: Write + 'static> Video<W> {
             },
             write,
         );
-        let encoder: Encoder<_> = Encoder::new(Box::new(compression));
+        let encoder: Encoder<_> = Encoder::new_raw(compression);
         self.encoder = encoder;
 
+        dbg!(time_mode);
         self.event_pixel_trees.par_map_inplace(|px| {
             px.time_mode(time_mode);
         });
@@ -411,10 +427,8 @@ impl<W: Write + 'static> Video<W> {
     /// # Errors
     /// Returns an error if the stream writer cannot be closed cleanly.
     pub fn end_write_stream(&mut self) -> Result<(), SourceError> {
-        let mut tmp = Encoder::new(Box::new(EmptyOutput::new(
-            CodecMetadata::default(),
-            Vec::new(),
-        )));
+        let mut tmp: Encoder<W> =
+            Encoder::new_empty(EmptyOutput::new(CodecMetadata::default(), sink()));
         swap(&mut self.encoder, &mut tmp);
         tmp.close_writer()?;
         Ok(())
@@ -601,7 +615,7 @@ pub fn integrate_for_px(
 
         // If continuous mode and the D value needs to be different now
         if let Continuous = state.pixel_tree_mode {
-            match px.set_d_for_continuous(intensity) {
+            match px.set_d_for_continuous(intensity, state.ref_time) {
                 None => {}
                 Some(event) => buffer.push(event),
             };

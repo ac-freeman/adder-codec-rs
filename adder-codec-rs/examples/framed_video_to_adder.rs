@@ -13,7 +13,7 @@ use std::io::{BufWriter, Write};
 use std::time::Instant;
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let file = File::create("/home/andrew/Downloads/events.adder".to_string())?;
+    let file = File::create("/home/andrew/Downloads/events.adder")?;
     let writer = BufWriter::new(file);
 
     let mut source: Framed<BufWriter<File>> = Framed::new(
@@ -25,7 +25,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     .write_out(FramedU8, TimeMode::DeltaT, writer)?
     .contrast_thresholds(10, 10)
     .show_display(true)
-    .auto_time_parameters(255, 255 * 30)?;
+    .auto_time_parameters(255, 255 * 30, None)?;
 
     let pool = rayon::ThreadPoolBuilder::new()
         .num_threads(current_num_threads())

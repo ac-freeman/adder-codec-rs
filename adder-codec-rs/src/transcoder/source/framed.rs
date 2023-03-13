@@ -4,6 +4,7 @@ use crate::transcoder::source::video::SourceError::BufferEmpty;
 use crate::transcoder::source::video::Video;
 use crate::transcoder::source::video::{Source, VideoBuilder};
 use adder_codec_core::{DeltaT, Event, PlaneSize, SourceCamera, TimeMode};
+
 use opencv::core::{Mat, Size};
 use opencv::videoio::{VideoCapture, CAP_PROP_FPS, CAP_PROP_FRAME_COUNT, CAP_PROP_POS_FRAMES};
 use opencv::{imgproc, prelude::*, videoio, Result};
@@ -85,7 +86,7 @@ impl<W: Write + 'static> Framed<W> {
             scale,
             color_input,
             video,
-            time_mode: TimeMode::DeltaT,
+            time_mode: TimeMode::default(),
         })
     }
 
@@ -112,10 +113,13 @@ impl<W: Write + 'static> Framed<W> {
         mut self,
         ref_time: DeltaT,
         delta_t_max: DeltaT,
+        time_mode: Option<TimeMode>,
     ) -> Result<Self, SourceError> {
         if delta_t_max % ref_time == 0 {
             let tps = (ref_time as f64 * self.source_fps) as DeltaT;
-            self.video = self.video.time_parameters(tps, ref_time, delta_t_max)?;
+            self.video = self
+                .video
+                .time_parameters(tps, ref_time, delta_t_max, time_mode)?;
         } else {
             return Err(SourceError::BadParams(
                 "delta_t_max must be a multiple of ref_time".to_string(),
@@ -205,9 +209,12 @@ impl<W: Write + 'static> VideoBuilder<W> for Framed<W> {
         tps: DeltaT,
         ref_time: DeltaT,
         delta_t_max: DeltaT,
+        time_mode: Option<TimeMode>,
     ) -> Result<Self, SourceError> {
         if delta_t_max % ref_time == 0 {
-            self.video = self.video.time_parameters(tps, ref_time, delta_t_max)?;
+            self.video = self
+                .video
+                .time_parameters(tps, ref_time, delta_t_max, time_mode)?;
         } else {
             eprintln!("delta_t_max must be a multiple of ref_time");
         }

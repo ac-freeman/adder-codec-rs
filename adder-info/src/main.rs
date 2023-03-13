@@ -98,7 +98,11 @@ fn adder_info(args: MyArgs, out: impl Write) -> Result<(), Box<dyn error::Error>
                     event.coord.c_usize(),
                 ]];
                 let new_t = event.delta_t;
-                event = absolute_event_to_dt_event(event, *last_t);
+                if event.coord.x == 343 && event.coord.y == 7 {
+                    println!("{} {}", new_t, last_t);
+                } else {
+                    event = absolute_event_to_dt_event(event, *last_t);
+                }
                 *last_t = new_t;
             }
 
@@ -171,7 +175,7 @@ mod tests {
         {
             let cursor = Cursor::new(&mut data);
 
-            let _ = adder_info(args, cursor)?;
+            adder_info(args, cursor)?;
         }
 
         let string = String::from_utf8(data)?;

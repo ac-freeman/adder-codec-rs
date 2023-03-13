@@ -1,6 +1,5 @@
 use adder_codec_rs::transcoder::source::davis::Davis;
 use adder_codec_rs::transcoder::source::video::{Source, VideoBuilder};
-use aedat::base::ioheader_generated::Compression;
 use clap::Parser;
 use davis_edi_rs::util::reconstructor::Reconstructor;
 use davis_edi_rs::Args as EdiArgs;
@@ -8,6 +7,7 @@ use davis_edi_rs::Args as EdiArgs;
 use serde::Deserialize;
 
 use adder_codec_core::DeltaT;
+
 use adder_codec_core::SourceCamera::DavisU8;
 use adder_codec_core::TimeMode;
 use adder_codec_rs::transcoder::source::davis::TranscoderMode::{Framed, RawDavis, RawDvs};
@@ -75,9 +75,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         args = toml::from_str(&content)?;
     }
 
-    println!("in prog");
     let mut edi_args: EdiArgs = EdiArgs::default();
-    println!("in prog2");
     if !args.edi_args.is_empty() {
         match std::fs::read_to_string(&args.edi_args) {
             Ok(content) => {
@@ -120,37 +118,39 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         edi_args.mode,
         edi_args.start_c,
         edi_args.optimize_c,
+        edi_args.optimize_c_frequency,
         edi_args.optimize_controller,
         edi_args.show_display,
         edi_args.show_blurred_display,
         edi_args.output_fps,
-        Compression::None,
-        346,
-        260,
         edi_args.deblur_only,
         events_only,
         edi_args.target_latency,
         edi_args.simulate_packet_latency,
-    ));
+    ))?;
 
     let file = File::create(args.output_events_filename)?;
     let writer = BufWriter::new(file);
+    let ref_time = (1_000_000.0 / edi_args.output_fps) as DeltaT;
 
-    let mut davis_source = Davis::new(reconstructor, rt)?
-        .optimize_adder_controller(args.optimize_adder_controller)
-        .mode(mode)
-        .time_parameters(
-            1_000_000, // TODO
-            (1_000_000.0 / edi_args.output_fps) as DeltaT,
-            (1_000_000.0 * args.delta_t_max_multiplier) as u32,
-        )? // TODO
-        .c_thresh_pos(args.adder_c_thresh_pos)
-        .c_thresh_neg(args.adder_c_thresh_neg)
-        .write_out(DavisU8, TimeMode::DeltaT, writer)?;
+    let mut davis_source = Box::new(
+        Davis::<BufWriter<File>>::new(reconstructor, rt, mode)?
+            .optimize_adder_controller(args.optimize_adder_controller)
+            .mode(mode)
+            .time_parameters(
+                1_000_000, // TODO
+                ref_time,
+                (ref_time as f64 * args.delta_t_max_multiplier) as u32,
+                Some(TimeMode::AbsoluteT),
+            )? // TODO
+            .c_thresh_pos(args.adder_c_thresh_pos)
+            .c_thresh_neg(args.adder_c_thresh_neg),
+    )
+    .write_out(DavisU8, TimeMode::AbsoluteT, writer)?;
 
     let mut now = Instant::now();
     let start_time = std::time::Instant::now();
-    let thread_pool_integration = rayon::ThreadPoolBuilder::new().num_threads(4).build()?;
+    let thread_pool_integration = rayon::ThreadPoolBuilder::new().num_threads(1).build()?;
 
     loop {
         match davis_source.consume(1, &thread_pool_integration) {

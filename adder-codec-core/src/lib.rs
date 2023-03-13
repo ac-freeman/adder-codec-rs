@@ -48,17 +48,17 @@ pub enum SourceCamera {
 use crate::codec::compressed::stream::CompressedInput;
 use crate::codec::decoder::Decoder;
 use crate::codec::raw::stream::RawInput;
-use crate::codec::{CodecError, ReadCompression};
+use crate::codec::CodecError;
 use serde::{Deserialize, Serialize};
 
 /// The type of time used in the ADΔER representation
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq)]
 pub enum TimeMode {
     /// The time is the delta time from the previous event
-    #[default]
     DeltaT,
 
     /// The time is the absolute time from the start of the recording
+    #[default]
     AbsoluteT,
 
     /// TODO
@@ -499,18 +499,17 @@ pub fn open_file_decoder(
     CodecError,
 > {
     let mut bufreader = BufReader::new(File::open(file_path)?);
-    let compression = <RawInput as ReadCompression<BufReader<File>>>::new();
-
+    let compression = RawInput::new();
     let mut bitreader = BitReader::endian(bufreader, BigEndian);
 
     // First try opening the file as a raw file, then try as a compressed file
-    let stream = match Decoder::new(Box::new(compression), &mut bitreader) {
+    let stream = match Decoder::new_raw(compression, &mut bitreader) {
         Ok(reader) => reader,
         Err(CodecError::WrongMagic) => {
             bufreader = BufReader::new(File::open(file_path)?);
-            let compression = <CompressedInput as ReadCompression<BufReader<File>>>::new();
+            let compression = CompressedInput::new();
             bitreader = BitReader::endian(bufreader, BigEndian);
-            Decoder::new(Box::new(compression), &mut bitreader)?
+            Decoder::new_compressed(compression, &mut bitreader)?
         }
         Err(e) => {
             return Err(e);

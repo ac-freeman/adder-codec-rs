@@ -29,10 +29,10 @@ fn test_set_stream_position() {
     let input_path = "./tests/samples/sample_1_raw_events.adder";
     let tmp = File::open(input_path).unwrap();
     let bufreader = BufReader::new(tmp);
-    let compression = <RawInput as ReadCompression<BufReader<File>>>::new();
+    let compression = RawInput::new();
 
     let mut bitreader = BitReader::endian(bufreader, BigEndian);
-    let mut reader = Decoder::new(Box::new(compression), &mut bitreader).unwrap();
+    let mut reader = Decoder::new_raw(compression, &mut bitreader).unwrap();
     for i in 1..reader.meta().event_size as usize {
         assert!(reader
             .set_input_stream_position(&mut bitreader, (reader.meta().header_size + i) as u64)
@@ -58,10 +58,10 @@ fn test_sample_perfect_dt() {
     let input_path = "./tests/samples/sample_1_raw_events.adder";
     let tmp = File::open(input_path).unwrap();
     let bufreader = BufReader::new(tmp);
-    let compression = <RawInput as ReadCompression<BufReader<File>>>::new();
+    let compression = RawInput::new();
 
     let mut bitreader = BitReader::endian(bufreader, BigEndian);
-    let mut reader = Decoder::new(Box::new(compression), &mut bitreader).unwrap();
+    let mut reader = Decoder::new_raw(compression, &mut bitreader).unwrap();
 
     let output_path = Path::new("./tests/samples/temp_sample_1");
     let mut output_stream = BufWriter::new(File::create(output_path).unwrap());
@@ -73,7 +73,7 @@ fn test_sample_perfect_dt() {
         reconstructed_frame_rate as u32
     );
 
-    let mut frame_sequence: FrameSequence<u8> = FramerBuilder::new(reader.meta().plane.clone(), 64)
+    let mut frame_sequence: FrameSequence<u8> = FramerBuilder::new(reader.meta().plane, 64)
         .codec_version(reader.meta().codec_version, TimeMode::DeltaT)
         .time_parameters(
             reader.meta().tps,
@@ -132,10 +132,10 @@ fn test_sample_perfect_dt_color() {
     let input_path = "./tests/samples/sample_2_raw_events.adder";
     let tmp = File::open(input_path).unwrap();
     let bufreader = BufReader::new(tmp);
-    let compression = <RawInput as ReadCompression<BufReader<File>>>::new();
+    let compression = RawInput::new();
 
     let mut bitreader = BitReader::endian(bufreader, BigEndian);
-    let mut reader = Decoder::new(Box::new(compression), &mut bitreader).unwrap();
+    let mut reader = Decoder::new_raw(compression, &mut bitreader).unwrap();
 
     let output_path = Path::new("./tests/samples/temp_sample_2");
     let mut output_stream = BufWriter::new(File::create(output_path).unwrap());
@@ -147,7 +147,7 @@ fn test_sample_perfect_dt_color() {
         reconstructed_frame_rate as u32
     );
 
-    let mut frame_sequence: FrameSequence<u8> = FramerBuilder::new(reader.meta().plane.clone(), 64)
+    let mut frame_sequence: FrameSequence<u8> = FramerBuilder::new(reader.meta().plane, 64)
         .codec_version(reader.meta().codec_version, TimeMode::DeltaT)
         .time_parameters(
             reader.meta().tps,
@@ -258,7 +258,7 @@ fn setup_raw_writer_v0(rand_num: u32) -> Encoder<BufWriter<File>> {
             codec_version: 0,
             header_size: 0,
             time_mode: DeltaT,
-            plane: plane,
+            plane,
             tps: 53000,
             ref_interval: 4000,
             delta_t_max: 50000,
@@ -267,7 +267,7 @@ fn setup_raw_writer_v0(rand_num: u32) -> Encoder<BufWriter<File>> {
         },
         bufwriter,
     );
-    let encoder: Encoder<BufWriter<File>> = Encoder::new(Box::new(compression));
+    let encoder: Encoder<BufWriter<File>> = Encoder::new_raw(compression);
     encoder
 }
 
@@ -282,7 +282,7 @@ fn setup_raw_writer_v1(rand_num: u32) -> Encoder<BufWriter<File>> {
             codec_version: 1,
             header_size: 0,
             time_mode: DeltaT,
-            plane: plane,
+            plane,
             tps: 53000,
             ref_interval: 4000,
             delta_t_max: 50000,
@@ -291,7 +291,7 @@ fn setup_raw_writer_v1(rand_num: u32) -> Encoder<BufWriter<File>> {
         },
         bufwriter,
     );
-    let encoder: Encoder<BufWriter<File>> = Encoder::new(Box::new(compression));
+    let encoder: Encoder<BufWriter<File>> = Encoder::new_raw(compression);
     encoder
 }
 
@@ -306,7 +306,7 @@ fn setup_raw_writer_v2(rand_num: u32) -> Encoder<BufWriter<File>> {
             codec_version: 2,
             header_size: 0,
             time_mode: DeltaT,
-            plane: plane,
+            plane,
             tps: 53000,
             ref_interval: 4000,
             delta_t_max: 50000,
@@ -315,7 +315,7 @@ fn setup_raw_writer_v2(rand_num: u32) -> Encoder<BufWriter<File>> {
         },
         bufwriter,
     );
-    let encoder: Encoder<BufWriter<File>> = Encoder::new(Box::new(compression));
+    let encoder: Encoder<BufWriter<File>> = Encoder::new_raw(compression);
     encoder
 }
 
@@ -369,10 +369,10 @@ fn setup_raw_reader(
 ) {
     let tmp = File::open("./TEST_".to_owned() + rand_num.to_string().as_str() + ".addr").unwrap();
     let bufreader = BufReader::new(tmp);
-    let compression = <RawInput as ReadCompression<BufReader<File>>>::new();
+    let compression = RawInput::new();
 
     let mut bitreader = BitReader::endian(bufreader, BigEndian);
-    let reader = Decoder::new(Box::new(compression), &mut bitreader).unwrap();
+    let reader = Decoder::new_raw(compression, &mut bitreader).unwrap();
     (reader, bitreader)
 }
 
@@ -817,10 +817,10 @@ fn test_sample_unordered() {
     let input_path = "./tests/samples/sample_3_unordered.adder";
     let tmp = File::open(input_path).unwrap();
     let bufreader = BufReader::new(tmp);
-    let compression = <RawInput as ReadCompression<BufReader<File>>>::new();
+    let compression = RawInput::new();
 
     let mut bitreader = BitReader::endian(bufreader, BigEndian);
-    let mut reader = Decoder::new(Box::new(compression), &mut bitreader).unwrap();
+    let mut reader = Decoder::new_raw(compression, &mut bitreader).unwrap();
 
     let output_path = Path::new("./tests/samples/temp_sample_3_unordered");
     let mut output_stream = BufWriter::new(File::create(output_path).unwrap());
@@ -832,7 +832,7 @@ fn test_sample_unordered() {
         reconstructed_frame_rate as u32
     );
 
-    let mut frame_sequence: FrameSequence<u8> = FramerBuilder::new(reader.meta().plane.clone(), 64)
+    let mut frame_sequence: FrameSequence<u8> = FramerBuilder::new(reader.meta().plane, 64)
         .codec_version(reader.meta().codec_version, TimeMode::DeltaT)
         .time_parameters(
             reader.meta().tps,
@@ -890,10 +890,10 @@ fn test_sample_ordered() {
     let input_path = "./tests/samples/sample_3_ordered.adder";
     let tmp = File::open(input_path).unwrap();
     let bufreader = BufReader::new(tmp);
-    let compression = <RawInput as ReadCompression<BufReader<File>>>::new();
+    let compression = RawInput::new();
 
     let mut bitreader = BitReader::endian(bufreader, BigEndian);
-    let mut reader = Decoder::new(Box::new(compression), &mut bitreader).unwrap();
+    let mut reader = Decoder::new_raw(compression, &mut bitreader).unwrap();
 
     let output_path = Path::new("./tests/samples/temp_sample_3_ordered");
     let mut output_stream = BufWriter::new(File::create(output_path).unwrap());
@@ -905,7 +905,7 @@ fn test_sample_ordered() {
         reconstructed_frame_rate as u32
     );
 
-    let mut frame_sequence: FrameSequence<u8> = FramerBuilder::new(reader.meta().plane.clone(), 64)
+    let mut frame_sequence: FrameSequence<u8> = FramerBuilder::new(reader.meta().plane, 64)
         .codec_version(reader.meta().codec_version, TimeMode::DeltaT)
         .time_parameters(
             reader.meta().tps,
@@ -970,7 +970,7 @@ fn test_framed_to_adder_bunny4() {
             .unwrap()
             .contrast_thresholds(5, 5)
             .show_display(false)
-            .auto_time_parameters(5000, 240_000)
+            .auto_time_parameters(5000, 240_000, Some(DeltaT))
             .unwrap();
 
     let frame_max = 250;

@@ -11,12 +11,10 @@ use std::path::{Path, PathBuf};
 
 use adder_codec_rs::transcoder::source::davis::TranscoderMode;
 
-use adder_codec_rs::aedat::base::ioheader_generated::Compression;
 use adder_codec_rs::davis_edi_rs::util::reconstructor::Reconstructor;
 
 use crate::transcoder::ui::{ParamsUiState, TranscoderState};
 use adder_codec_core::SourceCamera::{DavisU8, FramedU8};
-use adder_codec_core::TimeMode;
 use adder_codec_rs::transcoder::source::video::VideoBuilder;
 use bevy_egui::egui::{Color32, RichText};
 use opencv::Result;
@@ -51,6 +49,7 @@ impl Error for AdderTranscoderError {}
 impl AdderTranscoder {
     pub(crate) fn new(
         input_path_buf: &Path,
+        input_path_buf_1: &Option<PathBuf>,
         output_path_opt: Option<PathBuf>,
         ui_state: &mut ParamsUiState,
         current_frame: u32,
@@ -80,6 +79,7 @@ impl AdderTranscoder {
                         .auto_time_parameters(
                             ui_state.delta_t_ref as u32,
                             ui_state.delta_t_max_mult * ui_state.delta_t_ref as u32,
+                            None,
                         )?
                         .time_mode(ui_state.time_mode)
                         .show_display(false);
@@ -115,7 +115,7 @@ impl AdderTranscoder {
                         // }
                     }
 
-                    Some("aedat4") => {
+                    Some(ext) if ext == "aedat4" || ext == "sock" => {
                         let events_only = match &ui_state.davis_mode_radio_state {
                             TranscoderMode::Framed => false,
                             TranscoderMode::RawDavis => false,
@@ -137,53 +137,81 @@ impl AdderTranscoder {
                             .to_str()
                             .expect("Bad path")
                             .to_string();
-                        let filename = input_path_buf
+                        let filename_0 = input_path_buf
                             .file_name()
                             .expect("File must exist")
                             .to_str()
                             .expect("Bad filename")
                             .to_string();
-                        eprintln!("{filename}");
+
+                        let mut mode = "file";
+                        let mut simulate_latency = true;
+                        if ext == "sock" {
+                            mode = "socket";
+                            simulate_latency = false;
+                        }
+
+                        let filename_1 = match input_path_buf_1 {
+                            None => None,
+                            Some(input_path_buf_1) => Some(
+                                input_path_buf_1
+                                    .file_name()
+                                    .expect("File must exist")
+                                    .to_str()
+                                    .expect("Bad filename")
+                                    .to_string(),
+                            ),
+                        };
+
                         let reconstructor = rt.block_on(Reconstructor::new(
                             dir + "/",
-                            filename,
-                            "".to_string(),
-                            "file".to_string(), // TODO
+                            filename_0,
+                            filename_1.unwrap_or("".to_string()),
+                            mode.to_string(), // TODO
                             0.15,
                             ui_state.optimize_c,
+                            ui_state.optimize_c_frequency,
                             false,
                             false,
                             false,
                             ui_state.davis_output_fps,
-                            Compression::None,
-                            346,
-                            260,
                             deblur_only,
                             events_only,
                             1000.0, // Target latency (not used)
-                            true,
-                        ));
+                            simulate_latency,
+                        ))?;
 
                         let output_string = output_path_opt
                             .map(|output_path| output_path.to_str().expect("Bad path").to_string());
 
                         let mut davis_source: Davis<BufWriter<File>> =
-                            Davis::new(reconstructor, rt)?
+                            Davis::new(reconstructor, rt, ui_state.davis_mode_radio_state)?
                                 .optimize_adder_controller(false) // TODO
                                 .mode(ui_state.davis_mode_radio_state)
                                 .time_mode(ui_state.time_mode)
                                 .time_parameters(
-                                    1000000_u32, // TODO
+                                    1000000_u32,
                                     (1_000_000.0 / ui_state.davis_output_fps) as DeltaT,
-                                    (1_000_000.0 * ui_state.delta_t_max_mult as f32) as u32, // TODO
+                                    (1_000_000.0 * ui_state.delta_t_max_mult as f32) as u32,
+                                    Some(ui_state.time_mode),
                                 )? // TODO
                                 .c_thresh_pos(ui_state.adder_tresh as u8)
                                 .c_thresh_neg(ui_state.adder_tresh as u8);
 
+                        // Override time parameters if we're in framed mode
+                        if ui_state.davis_mode_radio_state == TranscoderMode::Framed {
+                            davis_source = davis_source.time_parameters(
+                                (255.0 * ui_state.davis_output_fps) as u32,
+                                255,
+                                255 * ui_state.delta_t_max_mult,
+                                Some(ui_state.time_mode),
+                            )?;
+                        }
+
                         if let Some(output_string) = output_string {
                             let writer = BufWriter::new(File::create(&output_string)?);
                             davis_source =
-                                *davis_source.write_out(DavisU8, TimeMode::DeltaT, writer)?;
+                                *davis_source.write_out(DavisU8, ui_state.time_mode, writer)?;
                         }
 
                         Ok(AdderTranscoder {
@@ -202,7 +230,8 @@ impl AdderTranscoder {
 
 pub(crate) fn replace_adder_transcoder(
     transcoder_state: &mut TranscoderState,
-    input_path_buf: Option<PathBuf>,
+    input_path_buf_0: Option<PathBuf>,
+    input_path_buf_1: Option<PathBuf>,
     output_path_opt: Option<PathBuf>,
     current_frame: u32,
 ) {
@@ -211,9 +240,11 @@ pub(crate) fn replace_adder_transcoder(
     ui_info_state.events_ppc_total = 0.0;
     ui_info_state.events_total = 0;
     ui_info_state.events_ppc_per_sec = 0.0;
-    if let Some(input_path) = input_path_buf {
+    ui_info_state.davis_latency = 0;
+    if let Some(input_path) = input_path_buf_0 {
         match AdderTranscoder::new(
             &input_path,
+            &input_path_buf_1,
             output_path_opt.clone(),
             &mut transcoder_state.ui_state,
             current_frame,

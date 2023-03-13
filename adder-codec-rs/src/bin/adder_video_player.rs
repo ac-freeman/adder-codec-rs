@@ -1,6 +1,5 @@
 use adder_codec_core::codec::decoder::Decoder;
 use adder_codec_core::codec::raw::stream::RawInput;
-use adder_codec_core::codec::ReadCompression;
 use adder_codec_core::SourceCamera;
 use adder_codec_core::D_ZERO_INTEGRATION;
 use adder_codec_rs::framer::scale_intensity::event_to_intensity;
@@ -19,7 +18,7 @@ use tokio::time::Instant;
 #[derive(Parser, Debug, Default)]
 #[clap(author, version, about, long_about = None)]
 pub struct MyArgs {
-    /// Input aedat4 file path
+    /// Input .adder file path
     #[clap(short, long)]
     pub(crate) input: String,
 
@@ -55,10 +54,10 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let bufreader = BufReader::new(File::open(file_path)?);
 
-    let compression = <RawInput as ReadCompression<BufReader<File>>>::new();
+    let compression = RawInput::new();
 
     let mut bitreader = BitReader::endian(bufreader, BigEndian);
-    let mut stream = Decoder::new(Box::new(compression), &mut bitreader).unwrap();
+    let mut stream = Decoder::new_raw(compression, &mut bitreader).unwrap();
     let meta = *stream.meta();
 
     let header_bytes = stream.meta().header_size;

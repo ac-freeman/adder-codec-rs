@@ -1,6 +1,6 @@
 [package]
 name = "adder-codec-core"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
 authors = ["Andrew C. Freeman"]
 description = """Core library for encoding/decoding ADΔER events
@@ -16,6 +16,7 @@ categories = ["multimedia::encoding", "multimedia::video", "science"]
 [dependencies]
 bincode = "1.3.3"
 bitstream-io = "1.6.0"
+enum_dispatch = "0.3.11"
 num-traits = "0.2.15"
 serde = { version = "1.0.140", features = ["derive"] }
 serde_bytes = "0.11.6"
