@@ -271,15 +271,15 @@ impl<W: Write + 'static> Integration<W> {
         let big_buffer: Vec<Vec<Event>> = video
             .event_pixel_trees
             .axis_chunks_iter_mut(Axis(0), chunk_rows)
-            .into_iter()
+            .into_par_iter()
             .zip(
                 self.dvs_last_ln_val
                     .axis_chunks_iter_mut(Axis(0), chunk_rows)
-                    .into_iter()
+                    .into_par_iter()
                     .zip(
                         self.dvs_last_timestamps
                             .axis_chunks_iter_mut(Axis(0), chunk_rows)
-                            .into_iter(),
+                            .into_par_iter(),
                     ),
             )
             .enumerate()
@@ -406,22 +406,6 @@ impl<W: Write + 'static> Integration<W> {
                                     [[event.y() as usize % chunk_rows, event.x() as usize, 0]]
                                     >= tmpp
                             );
-                            // let a = px.running_t as i64;
-                            // let b = event.t() - self.temp_first_frame_start_timestamp;
-                            // debug_assert!({ a == b });
-                            // if px.coord.x == 151 && px.coord.y == 87 {
-                            //     eprintln!("tmp");
-                            // }
-                            // assert!(event_check_1(
-                            //     px.running_t as i64 + self.temp_first_frame_start_timestamp,
-                            //     *frame_timestamp,
-                            // ));
-                        } else {
-                            let tmp = event.t();
-                            if event_check_1(event.t(), frame_timestamp) {
-                                eprintln!("tmp");
-                            }
-                            // dbg!(tmp, frame_timestamp, frame_timestamp_2.unwrap());
                         }
                     }
 
@@ -429,15 +413,6 @@ impl<W: Write + 'static> Integration<W> {
                 },
             )
             .collect();
-        // exact_chunks_iter_mut(Dim([
-        //     self.video.width as usize,
-        //     self.video.height as usize / 4,
-        //     1,
-        // ]));
-
-        // slices.
-
-        // Using a macro so that CLion still pretty prints correctly
 
         video.encoder.ingest_events_events(&big_buffer)?;
         Ok(())
@@ -715,9 +690,6 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Davis<W> {
                             check_dvs_after,
                         )?;
                     }
-                    eprintln!("done integrate dvs_events_last_after");
-
-                    // dbg!(dvs_events_before.clone());
 
                     self.integration.integrate_dvs_events(
                         &mut self.video,
@@ -727,14 +699,13 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Davis<W> {
                         None,
                         check_dvs_before,
                     )?;
-                    eprintln!("done integrate dvs_events_before");
 
                     for px in &self.video.event_pixel_trees {
                         let a = px.running_t as i64;
                         let b = start_of_frame_timestamp
                             - self.integration.temp_first_frame_start_timestamp;
-                        assert!(a <= b);
-                        assert!(a <= start_of_frame_timestamp);
+                        debug_assert!(a <= b);
+                        debug_assert!(a <= start_of_frame_timestamp);
                     }
 
                     self.integration.integrate_frame_gaps(&mut self.video)?;
@@ -742,8 +713,8 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Davis<W> {
                         let a = px.running_t as i64;
                         let b = start_of_frame_timestamp
                             - self.integration.temp_first_frame_start_timestamp;
-                        assert!(a <= b);
-                        assert!(a > b - 1000);
+                        debug_assert!(a <= b);
+                        debug_assert!(a > b - 1000);
                     }
                 }
             }
