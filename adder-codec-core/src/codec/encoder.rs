@@ -210,7 +210,7 @@ mod tests {
     use super::*;
     use crate::codec::compressed::stream::CompressedOutput;
     use crate::codec::raw::stream::RawOutput;
-    use crate::codec::{CodecMetadata, WriteCompression, LATEST_CODEC_VERSION};
+    use crate::codec::{CodecMetadata, LATEST_CODEC_VERSION};
 
     use crate::{Coord, PlaneSize};
     use bitstream_io::{BigEndian, BitWriter};

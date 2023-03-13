@@ -228,7 +228,6 @@ mod tests {
     use crate::codec::compressed::stream::{CompressedInput, CompressedOutput};
     use crate::codec::encoder::Encoder;
     use crate::codec::raw::stream::{RawInput, RawOutput};
-    use crate::codec::WriteCompression;
 
     use crate::Coord;
     use std::io::{BufReader, BufWriter, Cursor, Write};
