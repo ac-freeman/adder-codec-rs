@@ -49,11 +49,21 @@ jobs:
       - name: run llvm-cov test
         # should test with --all-features if gpu support.
         run: cargo llvm-cov --workspace --lcov --output-path lcov.info
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
+#       - name: Upload coverage to Codecov
+#         uses: codecov/codecov-action@v3
+#         with:
+#           files: lcov.info
+#           fail_ci_if_error: true
+
+  codecov:
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: actions/checkout@master
+      - uses: codecov/codecov-action@v3
         with:
-          files: lcov.info
-          fail_ci_if_error: true
+          name: codecov-umbrella # optional
+          fail_ci_if_error: true # optional (default = false)
+          verbose: true # optional (default = false)
 
   docs-rs:
       runs-on: ubuntu-20.04
