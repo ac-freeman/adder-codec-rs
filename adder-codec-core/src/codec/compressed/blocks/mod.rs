@@ -1,5 +1,6 @@
 #![allow(non_upper_case_globals)]
 
+mod adu;
 pub mod block;
 mod prediction;
 
