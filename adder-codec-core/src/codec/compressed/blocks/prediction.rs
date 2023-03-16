@@ -112,7 +112,7 @@ impl PredictionModel {
                             self.t_memory[next_idx + idx + 1] =
                                 ((self.t_memory[next_idx + idx + 1] / dt_ref) + 1) * dt_ref;
                         }
-                        self.t_recon[idx] = self.t_memory[idx];
+                        self.t_recon[next_idx + idx + 1] = self.t_memory[next_idx + idx + 1];
                         self.event_memory[next_idx + idx + 1] = *next;
                         if t_resid.abs() > max_t_resid {
                             max_t_resid = t_resid.abs();
