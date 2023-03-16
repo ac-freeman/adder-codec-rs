@@ -71,7 +71,13 @@ impl PredictionModel {
         mut sparam: u8,
         dt_ref: DeltaT,
         events: &BlockEvents,
-    ) -> (&[DResidual; 256], &[i16; 256], u8) {
+    ) -> (
+        AbsoluteT,
+        D,
+        &[DResidual; BLOCK_SIZE_AREA],
+        &[i16; BLOCK_SIZE_AREA],
+        u8,
+    ) {
         self.reset_residuals();
         self.reset_memory();
         let mut init = false;
@@ -84,8 +90,8 @@ impl PredictionModel {
                 // If this is the first event encountered, then encode it directly
                 if !init {
                     init = true;
-                    self.d_residuals[idx] = prev.d as DResidual;
-                    self.dt_pred_residuals[idx] = prev.t() as DeltaTResidual;
+                    // self.d_residuals[idx] = prev.d as DResidual;
+                    // self.dt_pred_residuals[idx] = prev.t() as DeltaTResidual;
                     self.t_memory[idx] = prev.t();
                     if self.time_modulation_mode == FramePerfect && self.t_memory[idx] % dt_ref != 0
                     {
@@ -139,7 +145,13 @@ impl PredictionModel {
             *t_resid_i16 = (*t_resid >> sparam) as i16;
         }
 
-        (&self.d_residuals, &self.dt_pred_residuals_i16, sparam)
+        (
+            start.delta_t,
+            start.d,
+            &self.d_residuals,
+            &self.dt_pred_residuals_i16,
+            sparam,
+        )
     }
 
     /// Get a block of inter-prediction residuals. `t_memory` should hold the previous absolute t
