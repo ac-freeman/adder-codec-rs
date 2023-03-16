@@ -13,6 +13,7 @@ use rayon::current_num_threads;
 use std::error::Error;
 
 use adder_codec_core::TimeMode;
+use adder_codec_rs::transcoder::source::davis::TranscoderMode::RawDvs;
 use std::default::Default;
 use std::fs::File;
 use std::io::BufWriter;
@@ -36,6 +37,8 @@ pub struct ParamsUiState {
     pub(crate) davis_output_fps: f64,
     davis_output_fps_slider: f64,
     pub(crate) optimize_c: bool,
+    pub(crate) optimize_c_frequency: u32,
+    pub(crate) optimize_c_frequency_slider: u32,
     pub(crate) time_mode: TimeMode,
 }
 
@@ -51,15 +54,17 @@ impl Default for ParamsUiState {
             adder_tresh_slider: 10.0,
             scale: 0.5,
             scale_slider: 0.5,
-            thread_count: 4,
-            thread_count_slider: 4,
+            thread_count: rayon::current_num_threads() - 1,
+            thread_count_slider: rayon::current_num_threads() - 1,
             color: true,
             view_mode_radio_state: FramedViewMode::Intensity,
             davis_mode_radio_state: TranscoderMode::RawDavis,
             davis_output_fps: 500.0,
             davis_output_fps_slider: 500.0,
             optimize_c: true,
-            time_mode: TimeMode::DeltaT,
+            optimize_c_frequency: 10,
+            optimize_c_frequency_slider: 10,
+            time_mode: TimeMode::default(),
         }
     }
 }
@@ -71,7 +76,9 @@ pub struct InfoUiState {
     pub events_total: u64,
     pub source_name: RichText,
     pub output_name: OutputName,
-    pub(crate) input_path: Option<PathBuf>,
+    pub davis_latency: u128,
+    pub(crate) input_path_0: Option<PathBuf>,
+    pub(crate) input_path_1: Option<PathBuf>,
     pub(crate) output_path: Option<PathBuf>,
     pub view_mode_radio_state: FramedViewMode, // TODO: Move to different struct
 }
@@ -97,7 +104,9 @@ impl Default for InfoUiState {
             events_total: 0,
             source_name: RichText::new("No input file selected yet"),
             output_name: Default::default(),
-            input_path: None,
+            davis_latency: 0,
+            input_path_0: None,
+            input_path_1: None,
             output_path: None,
             view_mode_radio_state: FramedViewMode::Intensity,
         }
@@ -148,10 +157,12 @@ impl TranscoderState {
                     .add_filter("DVS/DAVIS video", &["aedat4"])
                     .pick_file()
                 {
-                    self.ui_info_state.input_path = Some(path.clone());
+                    self.ui_info_state.input_path_0 = Some(path.clone());
+                    self.ui_info_state.input_path_1 = None;
                     replace_adder_transcoder(
                         self,
                         Some(path),
+                        None,
                         self.ui_info_state.output_path.clone(),
                         0,
                     );
@@ -161,6 +172,39 @@ impl TranscoderState {
             ui.label("OR drag and drop your source file here (.mp4, .aedat4)");
         });
 
+        ui.horizontal(|ui| {
+            if ui.button("Open DVS socket").clicked() {
+                if let Some(path) = rfd::FileDialog::new()
+                    .set_directory("/tmp")
+                    .add_filter("DVS/DAVIS video", &["sock"])
+                    .pick_file()
+                {
+                    self.ui_info_state.input_path_0 = Some(path.clone());
+                }
+            }
+            if ui.button("Open APS socket").clicked() {
+                if let Some(path) = rfd::FileDialog::new()
+                    .set_directory("/tmp")
+                    .add_filter("DVS/DAVIS video", &["sock"])
+                    .pick_file()
+                {
+                    self.ui_info_state.input_path_1 = Some(path.clone());
+                }
+            }
+            if ui.button("Go!").clicked() {
+                if self.ui_info_state.input_path_0.is_some()
+                    && self.ui_info_state.input_path_1.is_some()
+                {
+                    replace_adder_transcoder(
+                        self,
+                        self.ui_info_state.input_path_0.clone(),
+                        self.ui_info_state.input_path_1.clone(),
+                        self.ui_info_state.output_path.clone(),
+                        0,
+                    );
+                }
+            }
+        });
         ui.label(self.ui_info_state.source_name.clone());
 
         if ui.button("Save file").clicked() {
@@ -177,7 +221,8 @@ impl TranscoderState {
                 };
                 replace_adder_transcoder(
                     self,
-                    self.ui_info_state.input_path.clone(),
+                    self.ui_info_state.input_path_0.clone(),
+                    self.ui_info_state.input_path_1.clone(),
                     Some(path),
                     0,
                 );
@@ -191,46 +236,58 @@ impl TranscoderState {
             {:.2} events per source sec\t\
             {:.2} events PPC per source sec\t\
             {:.0} events total\t\
-            {:.0} events PPC total
-            ",
+            {:.0} events PPC total",
             1. / time.delta_seconds(),
             self.ui_info_state.events_per_sec,
             self.ui_info_state.events_ppc_per_sec,
             self.ui_info_state.events_total,
             self.ui_info_state.events_ppc_total
         ));
+
+        if self.ui_info_state.davis_latency > 0 {
+            ui.label(format!(
+                "DAVIS/DVS latency: {:} ms",
+                self.ui_info_state.davis_latency
+            ));
+        }
     }
 
     pub fn update_adder_params(&mut self) {
         // TODO: do conditionals on the sliders themselves
         let source: &mut dyn Source<BufWriter<File>> = {
             match &mut self.transcoder.framed_source {
-                None => {
-                    match &mut self.transcoder.davis_source {
-                        None => {
+                None => match &mut self.transcoder.davis_source {
+                    None => {
+                        return;
+                    }
+                    Some(source) => {
+                        if source.mode != self.ui_state.davis_mode_radio_state
+                            || source.get_reconstructor().as_ref().unwrap().output_fps
+                                != self.ui_state.davis_output_fps
+                            || source.time_mode != self.ui_state.time_mode
+                        {
+                            if self.ui_state.davis_mode_radio_state == RawDvs {
+                                // self.ui_state.davis_output_fps = 1000000.0;
+                                // self.ui_state.davis_output_fps_slider = 1000000.0;
+                                self.ui_state.optimize_c = false;
+                            }
+                            replace_adder_transcoder(
+                                self,
+                                self.ui_info_state.input_path_0.clone(),
+                                self.ui_info_state.input_path_1.clone(),
+                                self.ui_info_state.output_path.clone(),
+                                0,
+                            );
                             return;
                         }
-                        Some(source) => {
-                            if source.mode != self.ui_state.davis_mode_radio_state
-                                || source.get_reconstructor().output_fps
-                                    != self.ui_state.davis_output_fps
-                                || source.time_mode != self.ui_state.time_mode
-                            {
-                                replace_adder_transcoder(
-                                    self,
-                                    self.ui_info_state.input_path.clone(),
-                                    self.ui_info_state.output_path.clone(),
-                                    0,
-                                );
-                                return;
-                            }
-                            // let tmp = source.get_reconstructor();
-                            let tmp = source.get_reconstructor_mut();
-                            tmp.set_optimize_c(self.ui_state.optimize_c);
-                            source
-                        }
+                        let tmp = source.get_reconstructor_mut().as_mut().unwrap();
+                        tmp.set_optimize_c(
+                            self.ui_state.optimize_c,
+                            self.ui_state.optimize_c_frequency,
+                        );
+                        source
                     }
-                }
+                },
                 Some(source) => {
                     if source.scale != self.ui_state.scale
                         || source.get_ref_time() != self.ui_state.delta_t_ref as u32
@@ -250,7 +307,8 @@ impl TranscoderState {
                             source.get_video_ref().state.in_interval_count + source.frame_idx_start;
                         replace_adder_transcoder(
                             self,
-                            self.ui_info_state.input_path.clone(),
+                            self.ui_info_state.input_path_0.clone(),
+                            self.ui_info_state.input_path_1.clone(),
                             self.ui_info_state.output_path.clone(),
                             current_frame,
                         );
@@ -286,11 +344,15 @@ impl TranscoderState {
                     None => {
                         return Ok(());
                     }
-                    Some(source) => source,
+                    Some(source) => {
+                        ui_info_state.davis_latency = source.get_latency();
+                        source
+                    }
                 },
                 Some(source) => source,
             }
         };
+
         match source.consume(1, &pool) {
             Ok(events_vec_vec) => {
                 for events_vec in events_vec_vec {
@@ -306,13 +368,20 @@ impl TranscoderState {
                     / (source.get_video_ref().state.plane.volume() as f64);
             }
             Err(SourceError::Open) => {}
-            Err(_) => {
+            Err(e) => {
+                eprintln!("Error: {:?}", e);
                 source.get_video_mut().end_write_stream()?;
                 self.ui_info_state.output_path = None;
                 self.ui_info_state.output_name = Default::default();
 
                 // Start video over from the beginning
-                replace_adder_transcoder(self, self.ui_info_state.input_path.clone(), None, 0);
+                replace_adder_transcoder(
+                    self,
+                    self.ui_info_state.input_path_0.clone(),
+                    self.ui_info_state.input_path_1.clone(),
+                    None,
+                    0,
+                );
                 return Ok(());
             }
         };
@@ -474,22 +543,39 @@ fn side_panel_grid_contents(
     ui.end_row();
 
     ui.label("DAVIS deblurred FPS:");
+
     slider_pm(
         !enabled,
-        false,
+        true,
         ui,
         &mut ui_state.davis_output_fps,
         &mut ui_state.davis_output_fps_slider,
-        1.0..=10000.0,
-        vec![2500.0, 5000.0, 7500.0],
+        30.0..=1000000.0,
+        vec![
+            50.0, 100.0, 250.0, 500.0, 1_000.0, 2_500.0, 5_000.0, 7_500.0, 10_000.0, 1000000.0,
+        ],
         50.0,
     );
     ui.end_row();
 
+    let enable_optimize = !enabled && ui_state.davis_mode_radio_state != TranscoderMode::RawDvs;
     ui.label("Optimize:");
     ui.add_enabled(
-        !enabled,
+        enable_optimize,
         egui::Checkbox::new(&mut ui_state.optimize_c, "Optimize θ?"),
+    );
+    ui.end_row();
+
+    ui.label("Optimize frequency:");
+    slider_pm(
+        enable_optimize,
+        true,
+        ui,
+        &mut ui_state.optimize_c_frequency,
+        &mut ui_state.optimize_c_frequency_slider,
+        1..=250,
+        vec![10, 25, 50, 100],
+        1,
     );
     ui.end_row();
 }

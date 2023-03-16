@@ -8,22 +8,32 @@ use crate::Event;
 /// Write compressed ADΔER data to a stream.
 pub struct CompressedOutput<W: Write> {
     pub(crate) meta: CodecMetadata,
-    pub(crate) stream: BitWriter<W, BigEndian>,
+    pub(crate) stream: Option<BitWriter<W, BigEndian>>,
 }
 
 /// Read compressed ADΔER data from a stream.
-pub struct CompressedInput {
+pub struct CompressedInput<R: Read> {
     pub(crate) meta: CodecMetadata,
+    _phantom: std::marker::PhantomData<R>,
 }
 
-impl<W: Write> WriteCompression<W> for CompressedOutput<W> {
-    fn new(meta: CodecMetadata, writer: W) -> Self {
+impl<W: Write> CompressedOutput<W> {
+    /// Create a new compressed output stream.
+    pub fn new(meta: CodecMetadata, writer: W) -> Self {
         Self {
             meta,
-            stream: BitWriter::endian(writer, BigEndian),
+            stream: Some(BitWriter::endian(writer, BigEndian)),
         }
     }
 
+    /// Convenience function to get a mutable reference to the underlying stream.
+    #[inline(always)]
+    fn stream(&mut self) -> &mut BitWriter<W, BigEndian> {
+        self.stream.as_mut().unwrap()
+    }
+}
+
+impl<W: Write> WriteCompression<W> for CompressedOutput<W> {
     fn magic(&self) -> Magic {
         MAGIC_COMPRESSED
     }
@@ -36,20 +46,25 @@ impl<W: Write> WriteCompression<W> for CompressedOutput<W> {
         &mut self.meta
     }
 
-    fn write_bytes(&mut self, bytes: &[u8]) -> std::io::Result<()> {
-        self.stream.write_bytes(bytes)
+    fn write_bytes(&mut self, bytes: &[u8]) -> Result<(), std::io::Error> {
+        self.stream().write_bytes(bytes)
     }
 
     fn byte_align(&mut self) -> std::io::Result<()> {
-        self.stream.byte_align()
+        self.stream().byte_align()
     }
 
-    fn into_writer(self: Box<Self>) -> Option<W> {
-        Some(self.stream.into_writer())
+    fn into_writer(&mut self) -> Option<W> {
+        let tmp = std::mem::replace(&mut self.stream, None);
+        tmp.map(|bitwriter| bitwriter.into_writer())
     }
+
+    // fn into_writer(self: Self) -> Option<Box<W>> {
+    //     Some(Box::new(self.stream.into_writer()))
+    // }
 
     fn flush_writer(&mut self) -> std::io::Result<()> {
-        self.stream.flush()
+        self.stream().flush()
     }
 
     fn compress(&self, _data: &[u8]) -> Vec<u8> {
@@ -61,8 +76,9 @@ impl<W: Write> WriteCompression<W> for CompressedOutput<W> {
     }
 }
 
-impl<R: Read> ReadCompression<R> for CompressedInput {
-    fn new() -> Self
+impl<R: Read> CompressedInput<R> {
+    /// Create a new compressed input stream.
+    pub fn new() -> Self
     where
         Self: Sized,
     {
@@ -79,9 +95,12 @@ impl<R: Read> ReadCompression<R> for CompressedInput {
                 source_camera: Default::default(),
             },
             // stream: BitReader::endian(reader, BigEndian),
+            _phantom: std::marker::PhantomData,
         }
     }
+}
 
+impl<R: Read> ReadCompression<R> for CompressedInput<R> {
     fn magic(&self) -> Magic {
         MAGIC_COMPRESSED
     }

@@ -3,8 +3,22 @@
 use crate::codec::header::Magic;
 use crate::{DeltaT, Event, PlaneSize, SourceCamera, TimeMode};
 use bitstream_io::{BigEndian, BitReader};
+use enum_dispatch::enum_dispatch;
 use std::io;
-use std::io::{Read, Write};
+use std::io::{Read, Seek, Sink, Write};
+
+#[enum_dispatch(WriteCompression<W>)]
+enum WriteCompressionEnum<W: Write> {
+    CompressedOutput(CompressedOutput<W>),
+    RawOutput(RawOutput<W>),
+    EmptyOutput(EmptyOutput<Sink>),
+}
+
+#[enum_dispatch(ReadCompression<R>)]
+enum ReadCompressionEnum<R: Read + Seek> {
+    CompressedInput(CompressedInput<R>),
+    RawInput(RawInput<R>),
+}
 
 /// Compressed codec_old utilities
 pub mod compressed;
@@ -59,11 +73,12 @@ impl Default for CodecMetadata {
 }
 
 /// A trait for writing ADΔER data to a stream.
+#[enum_dispatch]
 pub trait WriteCompression<W: Write> {
-    /// A struct implementing `WriteCompression` should take ownership of the `writer`.
-    fn new(meta: CodecMetadata, writer: W) -> Self
-    where
-        Self: Sized;
+    // /// A struct implementing `WriteCompression` should take ownership of the `writer`.
+    // fn new(meta: CodecMetadata, writer: W) -> Self
+    // where
+    //     Self: Sized;
 
     /// The magic number for this compression format.
     fn magic(&self) -> Magic;
@@ -74,14 +89,16 @@ pub trait WriteCompression<W: Write> {
     /// Returns a mutable reference to the metadata
     fn meta_mut(&mut self) -> &mut CodecMetadata;
 
+    // fn stream(&mut self) -> &mut W;
+
     /// Write the given bytes to the stream
-    fn write_bytes(&mut self, bytes: &[u8]) -> io::Result<()>;
+    fn write_bytes(&mut self, bytes: &[u8]) -> Result<(), std::io::Error>;
 
     /// Align the bitstream to the next byte boundary
     fn byte_align(&mut self) -> io::Result<()>;
 
     /// Consumes the compression stream and returns the underlying writer.
-    fn into_writer(self: Box<Self>) -> Option<W>;
+    fn into_writer(&mut self) -> Option<W>;
 
     /// Flush the `BitWriter`. Does not flush the internal `BufWriter`.
     fn flush_writer(&mut self) -> io::Result<()>;
@@ -95,13 +112,15 @@ pub trait WriteCompression<W: Write> {
 }
 
 /// A trait for reading ADΔER data from a stream.
+///
+/// A struct implementing `ReadCompression` does not take ownership of the read handle.
+/// Subsequent calls to the compressor will pass the read handle each time. The caller is
+/// responsible for maintaining the reader.
+#[enum_dispatch]
 pub trait ReadCompression<R: Read> {
-    /// A struct implementing `ReadCompression` does not take ownership of the read handle.
-    /// Subsequent calls to the compressor will pass the read handle each time. The caller is
-    /// responsible for maintaining the reader.
-    fn new() -> Self
-    where
-        Self: Sized;
+    // fn new() -> Self
+    // where
+    //     Self: Sized;
 
     /// Returns the magic number for the codec_old
     fn magic(&self) -> Magic;
@@ -137,6 +156,10 @@ pub trait ReadCompression<R: Read> {
 
 // unsafe impl<R: Read> Send for ReadCompression {}
 
+use crate::codec::compressed::stream::{CompressedInput, CompressedOutput};
+// use crate::codec::empty::stream::EmptyOutput;
+use crate::codec::empty::stream::EmptyOutput;
+use crate::codec::raw::stream::{RawInput, RawOutput};
 use thiserror::Error;
 
 #[allow(missing_docs)]
@@ -162,6 +185,9 @@ pub enum CodecError {
 
     #[error("Unsupported codec_old version (expected {LATEST_CODEC_VERSION} or lower, found {0})")]
     UnsupportedVersion(u8),
+
+    #[error("Malformed encoder")]
+    MalformedEncoder,
 
     #[error("Bincode error")]
     BincodeError(#[from] bincode::Error),

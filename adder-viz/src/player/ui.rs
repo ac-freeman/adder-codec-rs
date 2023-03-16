@@ -187,7 +187,7 @@ impl PlayerState {
             ui,
             &mut self.ui_state.ui_sliders.playback_speed,
             &mut self.ui_state.ui_sliders_drag.playback_speed,
-            0.1..=15.0,
+            0.1..=10000.0,
             vec![1.0, 2.0, 5.0, 10.0],
             0.1,
         );

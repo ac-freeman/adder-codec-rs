@@ -13,20 +13,22 @@ pub struct RawOutput<W> {
         WithOtherIntEncoding<DefaultOptions, FixintEncoding>,
         bincode::config::BigEndian,
     >,
-    pub(crate) stream: W,
+    pub(crate) stream: Option<W>,
 }
 
 /// Read uncompressed (raw) ADΔER data from a stream.
-pub struct RawInput {
+pub struct RawInput<R: Read + Seek> {
     pub(crate) meta: CodecMetadata,
     pub(crate) bincode: WithOtherEndian<
         WithOtherIntEncoding<DefaultOptions, FixintEncoding>,
         bincode::config::BigEndian,
     >,
+    _phantom: std::marker::PhantomData<R>,
 }
 
-impl<W: Write> WriteCompression<W> for RawOutput<W> {
-    fn new(mut meta: CodecMetadata, writer: W) -> Self {
+impl<W: Write> RawOutput<W> {
+    /// Create a new raw output stream.
+    pub fn new(mut meta: CodecMetadata, writer: W) -> Self {
         let bincode = DefaultOptions::new()
             .with_fixint_encoding()
             .with_big_endian();
@@ -37,10 +39,16 @@ impl<W: Write> WriteCompression<W> for RawOutput<W> {
         Self {
             meta,
             bincode,
-            stream: writer,
+            stream: Some(writer),
         }
     }
 
+    fn stream(&mut self) -> &mut W {
+        self.stream.as_mut().unwrap()
+    }
+}
+
+impl<W: Write> WriteCompression<W> for RawOutput<W> {
     fn magic(&self) -> Magic {
         MAGIC_RAW
     }
@@ -53,9 +61,9 @@ impl<W: Write> WriteCompression<W> for RawOutput<W> {
         &mut self.meta
     }
 
-    fn write_bytes(&mut self, bytes: &[u8]) -> std::io::Result<()> {
+    fn write_bytes(&mut self, bytes: &[u8]) -> Result<(), std::io::Error> {
         // Silently ignore the returned usize because we don't care about the number of bytes
-        self.stream.write(bytes).map(|_| ())
+        self.stream().write(bytes).map(|_| ())
     }
 
     // Will always be byte-aligned. Do nothing.
@@ -63,13 +71,13 @@ impl<W: Write> WriteCompression<W> for RawOutput<W> {
         Ok(())
     }
 
-    /// If `self.writer` is a `BufWriter`, you'll need to flush it yourself after this.
-    fn into_writer(self: Box<Self>) -> Option<W> {
-        Some(self.stream)
+    // If `self.writer` is a `BufWriter`, you'll need to flush it yourself after this.
+    fn into_writer(&mut self) -> Option<W> {
+        std::mem::replace(&mut self.stream, None)
     }
 
     fn flush_writer(&mut self) -> std::io::Result<()> {
-        self.stream.flush()
+        self.stream().flush()
     }
 
     fn compress(&self, _data: &[u8]) -> Vec<u8> {
@@ -87,18 +95,18 @@ impl<W: Write> WriteCompression<W> for RawOutput<W> {
         let output_event: EventSingle;
         if self.meta.plane.channels == 1 {
             output_event = event.into();
-            self.bincode
-                .serialize_into(&mut self.stream, &output_event)?;
+            self.bincode.serialize_into(self.stream(), &output_event)?;
             // bincode::serialize_into(&mut *stream, &output_event, my_options).unwrap();
         } else {
-            self.bincode.serialize_into(&mut self.stream, event)?;
+            self.bincode.serialize_into(self.stream(), event)?;
         }
         Ok(())
     }
 }
 
-impl<R: Read + Seek> ReadCompression<R> for RawInput {
-    fn new() -> Self
+impl<R: Read + Seek> RawInput<R> {
+    /// Create a new raw input stream.
+    pub fn new() -> Self
     where
         Self: Sized,
     {
@@ -108,9 +116,12 @@ impl<R: Read + Seek> ReadCompression<R> for RawInput {
                 .with_fixint_encoding()
                 .with_big_endian(),
             // stream: reader,
+            _phantom: std::marker::PhantomData,
         }
     }
+}
 
+impl<R: Read + Seek> ReadCompression<R> for RawInput<R> {
     fn magic(&self) -> Magic {
         MAGIC_RAW
     }
