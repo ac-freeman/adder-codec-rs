@@ -739,7 +739,9 @@ impl Frame {
 
 #[cfg(test)]
 mod tests {
-    use crate::codec::compressed::blocks::adu::AduIntraBlock;
+    use crate::codec::compressed::blocks::adu::{
+        Adu, AduChannel, AduChannelType, AduCube, AduInterBlock, AduIntraBlock,
+    };
     use crate::codec::compressed::blocks::block::Frame;
     use crate::codec::compressed::blocks::{BLOCK_SIZE, BLOCK_SIZE_AREA};
     use crate::codec::decoder::Decoder;
@@ -1809,7 +1811,9 @@ mod tests {
         let dtm = reader.meta().delta_t_max;
         let base_sparam = 4;
 
-        for mut cube in &mut frame.cubes {
+        let mut adu = Adu::new();
+
+        for (cube_idx, cube) in frame.cubes.iter_mut().enumerate() {
             let mut block = &mut cube.blocks_r[0];
             let mut inter_model = &mut cube.inter_model_r;
 
@@ -1819,14 +1823,22 @@ mod tests {
             let (start_t, start_d, d_residuals, dt_residuals, sparam) =
                 inter_model.forward_intra_prediction(0, dt_ref, &block.events);
 
-            // let adu_intra_block = AduIntraBlock {
-            //     head_event_t: dt_residuals[0] as AbsoluteT,
-            //     head_event_d: 0,
-            //     shift_loss_param: 0,
-            //     d_residuals: [],
-            //     dt_residuals: [],
-            //     event_count: 0,
-            // }
+            if cube_idx == 0 {
+                adu.head_event_t = start_t;
+            }
+
+            let intra_block = AduIntraBlock {
+                head_event_t: start_t,
+                head_event_d: start_d,
+                shift_loss_param: sparam,
+                d_residuals: d_residuals.clone(),
+                dt_residuals: dt_residuals.clone(),
+            };
+            let mut adu_cube = AduCube::from_intra_block(
+                intra_block,
+                cube.cube_idx_y as u16,
+                cube.cube_idx_x as u16,
+            );
 
             let d_resids = d_residuals.clone();
             let dt_resids = dt_residuals.clone();
@@ -1876,6 +1888,13 @@ mod tests {
             for block in cube.blocks_r.iter_mut().skip(1) {
                 let (d_residuals, t_residuals, sparam) =
                     inter_model.forward_inter_prediction(base_sparam, dtm, dt_ref, &block.events);
+
+                adu_cube.add_inter_block(AduInterBlock {
+                    shift_loss_param: sparam,
+                    d_residuals: d_residuals.clone(),
+                    t_residuals: t_residuals.clone(),
+                });
+
                 let d_resid_clone = d_residuals.clone();
                 let t_resid_clone = t_residuals.clone();
 
@@ -1920,6 +1939,8 @@ mod tests {
                     }
                 }
             }
+
+            adu.add_cube(adu_cube, AduChannelType::R);
         }
         let mut writer = encoder.close_writer().unwrap().unwrap();
         writer.flush().unwrap();
