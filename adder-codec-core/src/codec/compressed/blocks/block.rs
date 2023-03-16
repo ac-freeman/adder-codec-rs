@@ -739,10 +739,10 @@ impl Frame {
 
 #[cfg(test)]
 mod tests {
-    use crate::codec::compressed::blocks::adu::{
+    use crate::codec::compressed::blocks::block::Frame;
+    use crate::codec::compressed::blocks::frame::{
         Adu, AduChannel, AduChannelType, AduCube, AduInterBlock, AduIntraBlock,
     };
-    use crate::codec::compressed::blocks::block::Frame;
     use crate::codec::compressed::blocks::{BLOCK_SIZE, BLOCK_SIZE_AREA};
     use crate::codec::decoder::Decoder;
     use crate::codec::encoder::Encoder;
