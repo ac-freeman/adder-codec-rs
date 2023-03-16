@@ -1,6 +1,6 @@
 pub mod blocks;
 pub mod compression;
-mod fenwick;
+pub mod fenwick;
 
 /// Sketch of idea for compressed AVU format
 ///

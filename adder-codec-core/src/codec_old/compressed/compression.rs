@@ -27,13 +27,14 @@ pub const DELTA_T_RESIDUAL_NO_EVENT: DeltaTResidual = DeltaTResidual::MAX; // TO
 
 // static D_RESIDUAL_DEFAULT_WEIGHTS: Weights = d_residual_default_weights();
 
-fn d_residual_default_weights() -> Weights {
+pub fn d_residual_default_weights() -> Weights {
+    // todo: what about d_no_event... 256?
     // The maximum positive d residual is d = 0 --> d = 255      [255]
     // The maximum negative d residual is d = 255 --> d = 0      [-255]
     // No d values in range (D_MAX, D_NO_EVENT) --> (173, 253)
 
-    // Span the range [-255, 255]
-    let mut counts: [u64; 511] = [1; 511];
+    // Span the range [-255, 256]
+    let mut counts: [u64; 512] = [1; 512];
 
     // Give high probability to range [-20, 20]
     let mut idx = 0;
@@ -48,10 +49,15 @@ fn d_residual_default_weights() -> Weights {
             235..=275 | 490..=510 | 0..=20 => {
                 counts[idx] = 10;
             }
+
+            // give high probability to d_no_event
+            511 => {
+                counts[idx] = 20;
+            }
             _ => {}
         }
 
-        if idx == 510 {
+        if idx == 511 {
             break;
         }
 
@@ -61,7 +67,7 @@ fn d_residual_default_weights() -> Weights {
     Weights::new_with_counts(counts.len(), &Vec::from(counts))
 }
 
-fn dt_residual_default_weights(delta_t_max: DeltaT, delta_t_ref: DeltaT) -> Weights {
+pub fn dt_residual_default_weights(delta_t_max: DeltaT, delta_t_ref: DeltaT) -> Weights {
     let min: usize = delta_t_max as usize;
     let mut counts: Vec<u64> = vec![1; (delta_t_max * 2) as usize + 1];
 
@@ -75,13 +81,13 @@ fn dt_residual_default_weights(delta_t_max: DeltaT, delta_t_ref: DeltaT) -> Weig
     Weights::new_with_counts(counts.len(), &counts)
 }
 
-struct Contexts {
-    d_context: usize,
-    dt_context: usize,
+pub struct Contexts {
+    pub(crate) d_context: usize,
+    pub(crate) dt_context: usize,
 }
 
 impl Contexts {
-    fn new(d_context: usize, dt_context: usize) -> Contexts {
+    pub fn new(d_context: usize, dt_context: usize) -> Contexts {
         // Initialize weights for d_context
 
         Contexts {
@@ -219,13 +225,22 @@ impl<W: std::io::Write + std::fmt::Debug> CompressionModelEncoder<W> {
 }
 
 #[inline(always)]
-fn d_resid_offset(d_resid: DResidual) -> usize {
+pub fn d_resid_offset(d_resid: DResidual) -> usize {
     (d_resid + 255) as usize
 }
 
 #[inline(always)]
-fn dt_resid_offset(dt_resid: DeltaTResidual, delta_t_max: DeltaT) -> usize {
+pub fn dt_resid_offset(dt_resid: DeltaTResidual, delta_t_max: DeltaT) -> usize {
     (dt_resid + delta_t_max as i64) as usize
+}
+
+#[inline(always)]
+pub fn dt_resid_offset_i16(dt_resid: i16, delta_t_max: DeltaT) -> usize {
+    if delta_t_max < i16::MAX as DeltaT {
+        (dt_resid as i64 + delta_t_max as i64) as usize
+    } else {
+        (dt_resid as i64 - i16::MIN as i64) as usize
+    }
 }
 
 pub struct CompressionModelDecoder<R: std::io::Read> {
