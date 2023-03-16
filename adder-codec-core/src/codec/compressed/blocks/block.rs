@@ -1107,8 +1107,8 @@ mod tests {
         let mut bufreader =
             BufReader::new(File::open("/home/andrew/Downloads/test_abs.adder").unwrap());
         let mut bitreader = BitReader::endian(bufreader, BigEndian);
-        let compression = <RawInput as ReadCompression<BufReader<File>>>::new();
-        let mut reader = Decoder::new(Box::new(compression), &mut bitreader).unwrap();
+        let compression = RawInput::new();
+        let mut reader = Decoder::new_raw(compression, &mut bitreader).unwrap();
         let mut events = Vec::new();
         loop {
             match reader.digest_event(&mut bitreader) {
@@ -1123,11 +1123,8 @@ mod tests {
 
         let bufwriter =
             BufWriter::new(File::create("/home/andrew/Downloads/test_abs_recon.adder").unwrap());
-        let compression = <RawOutput<_> as WriteCompression<BufWriter<File>>>::new(
-            reader.meta().clone(),
-            bufwriter,
-        );
-        let mut encoder: Encoder<BufWriter<File>> = Encoder::new(Box::new(compression));
+        let compression = RawOutput::new(reader.meta().clone(), bufwriter);
+        let mut encoder: Encoder<BufWriter<File>> = Encoder::new_raw(compression);
 
         let mut frame = setup_frame(
             events.clone(),
@@ -1621,8 +1618,8 @@ mod tests {
         let mut bufreader =
             BufReader::new(File::open("/home/andrew/Downloads/test_abs2.adder").unwrap());
         let mut bitreader = BitReader::endian(bufreader, BigEndian);
-        let compression = <RawInput as ReadCompression<BufReader<File>>>::new();
-        let mut reader = Decoder::new(Box::new(compression), &mut bitreader).unwrap();
+        let compression = RawInput::new();
+        let mut reader = Decoder::new_raw(compression, &mut bitreader).unwrap();
         let mut events = Vec::new();
         loop {
             match reader.digest_event(&mut bitreader) {
@@ -1637,15 +1634,12 @@ mod tests {
 
         let bufwriter =
             BufWriter::new(File::create("/home/andrew/Downloads/test_abs_recon2.adder").unwrap());
-        let compression = <RawOutput<_> as WriteCompression<BufWriter<File>>>::new(
-            reader.meta().clone(),
-            bufwriter,
-        );
+        let compression = RawOutput::new(reader.meta().clone(), bufwriter);
 
         let mut bufrawriter = BufWriter::new(
             File::create("/home/andrew/Downloads/test_abs_compressed_raw.adder").unwrap(),
         );
-        let mut encoder: Encoder<BufWriter<File>> = Encoder::new(Box::new(compression));
+        let mut encoder: Encoder<BufWriter<File>> = Encoder::new_raw(compression);
 
         let mut frame = setup_frame(
             events.clone(),
