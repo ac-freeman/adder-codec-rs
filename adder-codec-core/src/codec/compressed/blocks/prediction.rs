@@ -5,7 +5,7 @@ use crate::codec::compressed::blocks::{
 use crate::Mode::FramePerfect;
 use crate::{AbsoluteT, DeltaT, EventCoordless, Mode, D};
 
-static D_RESIDUALS_EMPTY: [DResidual; BLOCK_SIZE_AREA] = [D_ENCODE_NO_EVENT; BLOCK_SIZE_AREA];
+pub static D_RESIDUALS_EMPTY: [DResidual; BLOCK_SIZE_AREA] = [D_ENCODE_NO_EVENT; BLOCK_SIZE_AREA];
 
 /// Keeps track of the actual and predicted (reconstructed) times of past events, and gets the next
 /// prediction residual

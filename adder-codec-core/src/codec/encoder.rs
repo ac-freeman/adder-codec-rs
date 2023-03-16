@@ -334,6 +334,8 @@ mod tests {
                 event_size: 0,
                 source_camera: Default::default(),
             },
+            arithmetic_coder: None,
+            contexts: None,
             stream: Some(BitWriter::endian(bufwriter, BigEndian)),
         };
         let _encoder = Encoder {

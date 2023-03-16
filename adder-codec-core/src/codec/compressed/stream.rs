@@ -1,13 +1,22 @@
 use crate::codec::{CodecError, CodecMetadata, ReadCompression, WriteCompression};
+use arithmetic_coding::Encoder;
 use bitstream_io::{BigEndian, BitRead, BitReader, BitWrite, BitWriter};
+use std::cmp::min;
 use std::io::{Read, Write};
 
 use crate::codec::header::{Magic, MAGIC_COMPRESSED};
+use crate::codec_old::compressed::compression::{
+    d_residual_default_weights, dt_residual_default_weights, Contexts,
+};
+use crate::codec_old::compressed::fenwick::context_switching::FenwickModel;
 use crate::Event;
 
 /// Write compressed ADΔER data to a stream.
 pub struct CompressedOutput<W: Write> {
     pub(crate) meta: CodecMetadata,
+    pub(crate) arithmetic_coder:
+        Option<arithmetic_coding::Encoder<FenwickModel, BitWriter<W, BigEndian>>>,
+    pub(crate) contexts: Option<Contexts>,
     pub(crate) stream: Option<BitWriter<W, BigEndian>>,
 }
 
@@ -20,8 +29,28 @@ pub struct CompressedInput<R: Read> {
 impl<W: Write> CompressedOutput<W> {
     /// Create a new compressed output stream.
     pub fn new(meta: CodecMetadata, writer: W) -> Self {
+        let mut source_model = FenwickModel::with_symbols(
+            min(meta.delta_t_max as usize * 2, u16::MAX as usize),
+            1 << 30,
+        );
+
+        // D context. Only need to account for range [-255, 255]
+        let d_context_idx = source_model.push_context_with_weights(d_residual_default_weights());
+
+        // Delta_t context. Need to account for range [-delta_t_max, delta_t_max]
+        let dt_context_idx = source_model.push_context_with_weights(dt_residual_default_weights(
+            meta.delta_t_max,
+            meta.ref_interval,
+        ));
+
+        let arithmetic_coder = Encoder::new(source_model);
+
+        let contexts = Contexts::new(d_context_idx, dt_context_idx);
+
         Self {
             meta,
+            arithmetic_coder: Some(arithmetic_coder),
+            contexts: Some(contexts),
             stream: Some(BitWriter::endian(writer, BigEndian)),
         }
     }
