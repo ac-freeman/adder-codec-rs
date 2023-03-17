@@ -1,5 +1,5 @@
 use crate::codec::{CodecError, CodecMetadata, ReadCompression, WriteCompression};
-use arithmetic_coding::Encoder;
+use arithmetic_coding::{Decoder, Encoder};
 use bitstream_io::{BigEndian, BitRead, BitReader, BitWrite, BitWriter};
 use std::cmp::min;
 use std::io::{Read, Write};
@@ -9,7 +9,8 @@ use crate::codec_old::compressed::compression::{
     d_residual_default_weights, dt_residual_default_weights, Contexts,
 };
 use crate::codec_old::compressed::fenwick::context_switching::FenwickModel;
-use crate::Event;
+use crate::codec_old::compressed::fenwick::Weights;
+use crate::{DeltaT, Event};
 
 /// Write compressed ADΔER data to a stream.
 pub struct CompressedOutput<W: Write> {
@@ -23,6 +24,9 @@ pub struct CompressedOutput<W: Write> {
 /// Read compressed ADΔER data from a stream.
 pub struct CompressedInput<R: Read> {
     pub(crate) meta: CodecMetadata,
+    pub(crate) arithmetic_coder:
+        Option<arithmetic_coding::Decoder<FenwickModel, BitReader<R, BigEndian>>>,
+    pub(crate) contexts: Option<Contexts>,
     _phantom: std::marker::PhantomData<R>,
 }
 
@@ -43,9 +47,12 @@ impl<W: Write> CompressedOutput<W> {
             meta.ref_interval,
         ));
 
+        let eof_context_idx =
+            source_model.push_context_with_weights(Weights::new_with_counts(1, &vec![1]));
+
         let arithmetic_coder = Encoder::new(source_model);
 
-        let contexts = Contexts::new(d_context_idx, dt_context_idx);
+        let contexts = Contexts::new(d_context_idx, dt_context_idx, eof_context_idx);
 
         Self {
             meta,
@@ -57,7 +64,7 @@ impl<W: Write> CompressedOutput<W> {
 
     /// Convenience function to get a mutable reference to the underlying stream.
     #[inline(always)]
-    fn stream(&mut self) -> &mut BitWriter<W, BigEndian> {
+    pub(crate) fn stream(&mut self) -> &mut BitWriter<W, BigEndian> {
         self.stream.as_mut().unwrap()
     }
 }
@@ -84,6 +91,24 @@ impl<W: Write> WriteCompression<W> for CompressedOutput<W> {
     }
 
     fn into_writer(&mut self) -> Option<W> {
+        self.arithmetic_coder
+            .as_mut()
+            .unwrap()
+            .model
+            .set_context(self.contexts.as_ref().unwrap().eof_context);
+        self.arithmetic_coder
+            .as_mut()
+            .unwrap()
+            .encode(None, self.stream.as_mut().unwrap())
+            .unwrap();
+        // Must flush the encoder to the bitwriter before flushing the bitwriter itself
+        self.arithmetic_coder
+            .as_mut()
+            .unwrap()
+            .flush(&mut self.stream.as_mut().unwrap())
+            .unwrap();
+        self.stream().byte_align().unwrap();
+        self.flush_writer().unwrap();
         let tmp = std::mem::replace(&mut self.stream, None);
         tmp.map(|bitwriter| bitwriter.into_writer())
     }
@@ -107,10 +132,27 @@ impl<W: Write> WriteCompression<W> for CompressedOutput<W> {
 
 impl<R: Read> CompressedInput<R> {
     /// Create a new compressed input stream.
-    pub fn new() -> Self
+    pub fn new(delta_t_max: DeltaT, ref_interval: DeltaT) -> Self
     where
         Self: Sized,
     {
+        let mut source_model =
+            FenwickModel::with_symbols(min(delta_t_max as usize * 2, u16::MAX as usize), 1 << 30);
+
+        // D context. Only need to account for range [-255, 255]
+        let d_context_idx = source_model.push_context_with_weights(d_residual_default_weights());
+
+        // Delta_t context. Need to account for range [-delta_t_max, delta_t_max]
+        let dt_context_idx = source_model
+            .push_context_with_weights(dt_residual_default_weights(delta_t_max, ref_interval));
+
+        let eof_context_idx =
+            source_model.push_context_with_weights(Weights::new_with_counts(1, &vec![1]));
+
+        let arithmetic_coder = Decoder::new(source_model);
+
+        let contexts = Contexts::new(d_context_idx, dt_context_idx, eof_context_idx);
+
         Self {
             meta: CodecMetadata {
                 codec_version: 0,
@@ -118,11 +160,13 @@ impl<R: Read> CompressedInput<R> {
                 time_mode: Default::default(),
                 plane: Default::default(),
                 tps: 0,
-                ref_interval: 0,
-                delta_t_max: 0,
+                ref_interval,
+                delta_t_max,
                 event_size: 0,
                 source_camera: Default::default(),
             },
+            arithmetic_coder: Some(arithmetic_coder),
+            contexts: Some(contexts),
             // stream: BitReader::endian(reader, BigEndian),
             _phantom: std::marker::PhantomData,
         }
