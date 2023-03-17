@@ -7,17 +7,17 @@ use bitstream_io::{BigEndian, BitReader};
 use std::io::{Error, Read, Write};
 
 pub struct AduCube {
-    idx_y: u16,
+    pub(crate) idx_y: u16,
 
-    idx_x: u16,
+    pub(crate) idx_x: u16,
 
-    intra_block: AduIntraBlock,
+    pub(crate) intra_block: AduIntraBlock,
 
     /// The number of inter blocks in the ADU.
-    num_inter_blocks: u16,
+    pub(crate) num_inter_blocks: u16,
 
     /// The inter blocks in the ADU.
-    inter_blocks: Vec<AduInterBlock>,
+    pub(crate) inter_blocks: Vec<AduInterBlock>,
 }
 
 impl AduCube {
@@ -197,7 +197,8 @@ mod tests {
         let output_len = written_data.len();
         let input_len = 1028 * 11; // Rough approximation
         assert!(output_len < input_len);
-        eprintln!("Written data: {:?}", written_data);
+        eprintln!("Output length: {}", output_len);
+        eprintln!("Input length: {}", input_len);
     }
 
     #[test]
