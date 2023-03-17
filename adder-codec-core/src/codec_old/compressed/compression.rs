@@ -23,6 +23,7 @@ use crate::{DeltaT, EventCoordless, D};
 
 pub type DResidual = i16;
 pub type DeltaTResidual = i64;
+pub type DeltaTResidualSmall = i16;
 pub const DELTA_T_RESIDUAL_NO_EVENT: DeltaTResidual = DeltaTResidual::MAX; // TODO: document and test
 
 // static D_RESIDUAL_DEFAULT_WEIGHTS: Weights = d_residual_default_weights();
@@ -69,7 +70,7 @@ pub fn d_residual_default_weights() -> Weights {
 
 pub fn dt_residual_default_weights(delta_t_max: DeltaT, delta_t_ref: DeltaT) -> Weights {
     let min: usize = delta_t_max as usize;
-    let mut counts: Vec<u64> = vec![1; (delta_t_max * 2) as usize + 1];
+    let mut counts: Vec<u64> = vec![1; (delta_t_max * 2) as usize + 2]; // +1 for 0, +1 for EOF
 
     // Give high probability to range [-delta_t_ref, delta_t_ref]
     let slice =
@@ -78,21 +79,25 @@ pub fn dt_residual_default_weights(delta_t_max: DeltaT, delta_t_ref: DeltaT) -> 
         *count = 20;
     }
 
-    Weights::new_with_counts(counts.len(), &counts)
+    let tmp = Weights::new_with_counts(counts.len(), &counts);
+    assert_eq!(tmp.range(None), 0..1);
+    tmp
 }
 
 pub struct Contexts {
     pub(crate) d_context: usize,
     pub(crate) dt_context: usize,
+    pub(crate) eof_context: usize,
 }
 
 impl Contexts {
-    pub fn new(d_context: usize, dt_context: usize) -> Contexts {
+    pub fn new(d_context: usize, dt_context: usize, eof_context: usize) -> Contexts {
         // Initialize weights for d_context
 
         Contexts {
             d_context,
             dt_context,
+            eof_context,
         }
     }
 }
@@ -126,7 +131,10 @@ impl<W: std::io::Write + std::fmt::Debug> CompressionModelEncoder<W> {
         let dt_context_idx = source_model
             .push_context_with_weights(dt_residual_default_weights(delta_t_max, delta_t_ref));
 
-        let contexts = Contexts::new(d_context_idx, dt_context_idx);
+        let eof_context_idx =
+            source_model.push_context_with_weights(Weights::new_with_counts(1, &vec![1]));
+
+        let contexts = Contexts::new(d_context_idx, dt_context_idx, eof_context_idx);
 
         let encoder = Encoder::new(source_model);
 
@@ -224,9 +232,16 @@ impl<W: std::io::Write + std::fmt::Debug> CompressionModelEncoder<W> {
     }
 }
 
+/// Takes a d_resid value and shifts it to be an index for the probability table
 #[inline(always)]
 pub fn d_resid_offset(d_resid: DResidual) -> usize {
     (d_resid + 255) as usize
+}
+
+/// Takes a decoded d_resid symbol and returns the actual d_resid value
+#[inline(always)]
+pub fn d_resid_offset_inverse(d_resid_symbol: usize) -> DResidual {
+    (d_resid_symbol as i64 - 255) as DResidual
 }
 
 #[inline(always)]
@@ -234,12 +249,26 @@ pub fn dt_resid_offset(dt_resid: DeltaTResidual, delta_t_max: DeltaT) -> usize {
     (dt_resid + delta_t_max as i64) as usize
 }
 
+/// Takes a dt_resid value and shifts it to be an index for the probability table
 #[inline(always)]
-pub fn dt_resid_offset_i16(dt_resid: i16, delta_t_max: DeltaT) -> usize {
+pub fn dt_resid_offset_i16(dt_resid: DeltaTResidualSmall, delta_t_max: DeltaT) -> usize {
     if delta_t_max < i16::MAX as DeltaT {
         (dt_resid as i64 + delta_t_max as i64) as usize
     } else {
         (dt_resid as i64 - i16::MIN as i64) as usize
+    }
+}
+
+/// Takes a decoded dt_resid symbol and returns the actual dt_resid value
+#[inline(always)]
+pub fn dt_resid_offset_i16_inverse(
+    dt_resid_symbol: usize,
+    delta_t_max: DeltaT,
+) -> DeltaTResidualSmall {
+    if delta_t_max < i16::MAX as DeltaT {
+        (dt_resid_symbol as i64 - delta_t_max as i64) as DeltaTResidualSmall
+    } else {
+        (dt_resid_symbol as i64 + i16::MIN as i64) as DeltaTResidualSmall
     }
 }
 
@@ -266,7 +295,10 @@ impl<R: std::io::Read> CompressionModelDecoder<R> {
         let dt_context_idx = source_model
             .push_context_with_weights(dt_residual_default_weights(delta_t_max, delta_t_ref));
 
-        let contexts = Contexts::new(d_context_idx, dt_context_idx);
+        let eof_context_idx =
+            source_model.push_context_with_weights(Weights::new_with_counts(1, &vec![1]));
+
+        let contexts = Contexts::new(d_context_idx, dt_context_idx, eof_context_idx);
 
         let decoder = Decoder::new(source_model);
 

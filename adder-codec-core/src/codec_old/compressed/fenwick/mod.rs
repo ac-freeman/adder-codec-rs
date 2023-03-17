@@ -59,7 +59,7 @@ impl Weights {
     }
 
     /// Returns the probability range for the given symbol
-    fn range(&self, i: Option<usize>) -> Range<u64> {
+    pub(crate) fn range(&self, i: Option<usize>) -> Range<u64> {
         // Increment the symbol index by one to account for the EOF?
         let index = i.map(|i| i + 1).unwrap_or_default();
 

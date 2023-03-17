@@ -345,7 +345,7 @@ mod tests {
         let output = setup_encoded_compressed(0);
         let tmp = Cursor::new(&*output);
         let bufreader = BufReader::new(tmp);
-        let compression = CompressedInput::new();
+        let compression = CompressedInput::new(255, 255);
 
         let mut bitreader = BitReader::endian(bufreader, BigEndian);
         let reader = Decoder::new_compressed(compression, &mut bitreader).unwrap();
@@ -357,7 +357,7 @@ mod tests {
         let output = setup_encoded_compressed(1);
         let tmp = Cursor::new(&*output);
         let bufreader = BufReader::new(tmp);
-        let compression = CompressedInput::new();
+        let compression = CompressedInput::new(255, 255);
 
         let mut bitreader = BitReader::endian(bufreader, BigEndian);
         let reader = Decoder::new_compressed(compression, &mut bitreader).unwrap();
@@ -369,7 +369,7 @@ mod tests {
         let output = setup_encoded_compressed(2);
         let tmp = Cursor::new(&*output);
         let bufreader = BufReader::new(tmp);
-        let compression = CompressedInput::new();
+        let compression = CompressedInput::new(255, 255);
 
         let mut bitreader = BitReader::endian(bufreader, BigEndian);
         let reader = Decoder::new_compressed(compression, &mut bitreader).unwrap();
