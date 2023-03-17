@@ -10,7 +10,7 @@ use crate::codec_old::compressed::compression::{
 use crate::codec_old::compressed::fenwick::context_switching::FenwickModel;
 use crate::{AbsoluteT, DeltaT, D};
 use arithmetic_coding::{Decoder, Encoder};
-use bitstream_io::{BigEndian, BitReader, BitWriter};
+use bitstream_io::{BigEndian, BitReader, BitWrite, BitWriter};
 use rand::prelude::StdRng;
 use rand::{Rng, SeedableRng};
 use std::cmp::min;
@@ -40,18 +40,28 @@ pub struct AduIntraBlock {
 
 impl AduCompression for AduIntraBlock {
     fn compress<W: Write>(&self, output: &mut CompressedOutput<W>) -> Result<(), std::io::Error> {
-        // Write the head event
-        output.write_bytes(&self.head_event_t.to_be_bytes())?;
-        output.write_bytes(&self.head_event_d.to_be_bytes())?;
-
-        // Write the shift loss param
-        output.write_bytes(&[self.shift_loss_param])?;
-
         // Get the context references
         let mut encoder = output.arithmetic_coder.as_mut().unwrap();
         let mut d_context = output.contexts.as_mut().unwrap().d_context;
         let mut dt_context = output.contexts.as_mut().unwrap().dt_context;
+        let mut u8_context = output.contexts.as_mut().unwrap().u8_general_context;
         let mut stream = output.stream.as_mut().unwrap();
+
+        encoder.model.set_context(u8_context);
+
+        // Write the head event
+        for byte in self.head_event_t.to_be_bytes().iter() {
+            encoder.encode(Some(&(*byte as usize)), stream).unwrap();
+        }
+
+        encoder
+            .encode(Some(&(self.head_event_d as usize)), stream)
+            .unwrap();
+
+        // Write the shift loss param
+        encoder
+            .encode(Some(&(self.shift_loss_param as usize)), stream)
+            .unwrap();
 
         // Write the d_residuals
         compress_d_residuals(&self.d_residuals, encoder, d_context, stream);
@@ -81,24 +91,25 @@ impl AduCompression for AduIntraBlock {
             dt_residuals: [0; BLOCK_SIZE_AREA],
         };
 
-        // Read the head event
-        let mut bytes = [0; mem::size_of::<AbsoluteT>()];
-        input.read_bytes(&mut bytes, stream).unwrap();
-        intra_block.head_event_t = AbsoluteT::from_be_bytes(bytes);
-
-        let mut bytes = [0; mem::size_of::<D>()];
-        input.read_bytes(&mut bytes, stream).unwrap();
-        intra_block.head_event_d = D::from_be_bytes(bytes);
-
-        // Read the shift loss param
-        let mut bytes = [0; 1];
-        input.read_bytes(&mut bytes, stream).unwrap();
-        intra_block.shift_loss_param = bytes[0];
-
         // Get the context references
         let mut decoder = input.arithmetic_coder.as_mut().unwrap();
         let mut d_context = input.contexts.as_mut().unwrap().d_context;
         let mut dt_context = input.contexts.as_mut().unwrap().dt_context;
+        let mut u8_context = input.contexts.as_mut().unwrap().u8_general_context;
+
+        decoder.model.set_context(u8_context);
+
+        // Read the head event
+        let mut bytes = [0; mem::size_of::<AbsoluteT>()];
+        for byte in bytes.iter_mut() {
+            *byte = decoder.decode(stream).unwrap().unwrap() as u8;
+        }
+        intra_block.head_event_t = AbsoluteT::from_be_bytes(bytes);
+
+        intra_block.head_event_d = decoder.decode(stream).unwrap().unwrap() as D;
+
+        // Read the shift loss param
+        intra_block.shift_loss_param = decoder.decode(stream).unwrap().unwrap() as u8;
 
         // Read the d_residuals
         decompress_d_residuals(&mut intra_block.d_residuals, decoder, d_context, stream);

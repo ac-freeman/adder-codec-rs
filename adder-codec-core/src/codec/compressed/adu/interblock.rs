@@ -6,7 +6,7 @@ use crate::codec::compressed::blocks::prediction::D_RESIDUALS_EMPTY;
 use crate::codec::compressed::blocks::{DResidual, BLOCK_SIZE_AREA};
 use crate::codec::compressed::stream::{CompressedInput, CompressedOutput};
 use crate::codec::{ReadCompression, WriteCompression};
-use bitstream_io::{BigEndian, BitRead, BitReader};
+use bitstream_io::{BigEndian, BitRead, BitReader, BitWrite};
 use std::io::{Error, Read, Write};
 
 pub struct AduInterBlock {
@@ -22,14 +22,19 @@ pub struct AduInterBlock {
 
 impl AduCompression for AduInterBlock {
     fn compress<W: Write>(&self, output: &mut CompressedOutput<W>) -> Result<(), Error> {
-        // Write the shift loss parameter.
-        output.write_bytes(&[self.shift_loss_param])?;
-
         // Get the context references
         let mut encoder = output.arithmetic_coder.as_mut().unwrap();
         let mut d_context = output.contexts.as_mut().unwrap().d_context;
         let mut dt_context = output.contexts.as_mut().unwrap().dt_context;
         let mut stream = output.stream.as_mut().unwrap();
+        let mut u8_context = output.contexts.as_mut().unwrap().u8_general_context;
+
+        encoder.model.set_context(u8_context);
+
+        // Write the shift loss parameter.
+        encoder
+            .encode(Some(&(self.shift_loss_param as usize)), stream)
+            .unwrap();
 
         // Write the d_residuals
         compress_d_residuals(&self.d_residuals, encoder, d_context, stream);
@@ -57,15 +62,16 @@ impl AduCompression for AduInterBlock {
             t_residuals: [0; BLOCK_SIZE_AREA],
         };
 
-        // Read the shift loss parameter.
-        let mut bytes = [0; 1];
-        input.read_bytes(&mut bytes, stream).unwrap();
-        inter_block.shift_loss_param = bytes[0];
-
         // Get the context references
         let mut decoder = input.arithmetic_coder.as_mut().unwrap();
         let mut d_context = input.contexts.as_mut().unwrap().d_context;
         let mut dt_context = input.contexts.as_mut().unwrap().dt_context;
+        let mut u8_context = input.contexts.as_mut().unwrap().u8_general_context;
+
+        decoder.model.set_context(u8_context);
+
+        // Read the shift loss parameter.
+        inter_block.shift_loss_param = decoder.decode(stream).unwrap().unwrap() as u8;
 
         // Read the d_residuals
         decompress_d_residuals(&mut inter_block.d_residuals, decoder, d_context, stream);
