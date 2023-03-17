@@ -12,6 +12,7 @@ use arithmetic_coding::Decoder;
 use bitstream_io::{BigEndian, BitReader};
 use rand::prelude::StdRng;
 use rand::{Rng, SeedableRng};
+use std::cmp::min;
 use std::io::Read;
 use std::mem;
 
@@ -141,11 +142,13 @@ fn gen_random_intra_block(min_t: AbsoluteT, dtm: DeltaT, seed: Option<u64>) -> A
         dt_residuals,
     };
 
+    let end = min(dtm, i16::MAX as DeltaT);
     // skip the first event index
     for i in 1..BLOCK_SIZE_AREA {
         block.d_residuals[i] = rng.gen_range(-255..=255);
+
         block.dt_residuals[i] =
-            rng.gen_range(-(dtm as DeltaTResidualSmall)..=(dtm as DeltaTResidualSmall));
+            rng.gen_range(-(end as DeltaTResidualSmall)..=(end as DeltaTResidualSmall));
     }
 
     block
@@ -172,8 +175,30 @@ mod tests {
         crate::codec::compressed::stream::CompressedOutput::new(meta, Vec::new())
     }
 
+    fn setup_encoder_bigdtm() -> crate::codec::compressed::stream::CompressedOutput<Vec<u8>> {
+        let meta = CodecMetadata {
+            delta_t_max: 10000000,
+            ref_interval: 100,
+            ..Default::default()
+        };
+        // By building the CompressedOutput directly (rather than calling Encoder::new_compressed),
+        // we can avoid writing the header and stuff for testing purposes.
+        crate::codec::compressed::stream::CompressedOutput::new(meta, Vec::new())
+    }
+
     fn compress_intra_block() -> Result<(AduIntraBlock, Vec<u8>), Box<dyn Error>> {
         let mut encoder = setup_encoder();
+        let intra_block = gen_random_intra_block(1234, encoder.meta.delta_t_max, Some(7));
+
+        assert!(intra_block.compress(&mut encoder).is_ok());
+
+        let written_data = encoder.into_writer().unwrap();
+
+        Ok((intra_block, written_data))
+    }
+
+    fn compress_intra_block_bigdtm() -> Result<(AduIntraBlock, Vec<u8>), Box<dyn Error>> {
+        let mut encoder = setup_encoder_bigdtm();
         let intra_block = gen_random_intra_block(1234, encoder.meta.delta_t_max, Some(7));
 
         assert!(intra_block.compress(&mut encoder).is_ok());
@@ -202,6 +227,42 @@ mod tests {
             bitstream_io::BitReader::endian(&mut bufreader, bitstream_io::BigEndian);
 
         let mut decoder = CompressedInput::new(100, 100);
+
+        let decoded_intra_block = AduIntraBlock::decompress(&mut bitreader, &mut decoder);
+
+        decoder
+            .arithmetic_coder
+            .as_mut()
+            .unwrap()
+            .model
+            .set_context(decoder.contexts.as_mut().unwrap().eof_context);
+        let eof = decoder
+            .arithmetic_coder
+            .as_mut()
+            .unwrap()
+            .decode(&mut bitreader)
+            .unwrap();
+        assert!(eof.is_none());
+        assert_eq!(intra_block.head_event_t, decoded_intra_block.head_event_t);
+        assert_eq!(intra_block.head_event_d, decoded_intra_block.head_event_d);
+        assert_eq!(
+            intra_block.shift_loss_param,
+            decoded_intra_block.shift_loss_param
+        );
+        assert_eq!(intra_block.d_residuals, decoded_intra_block.d_residuals);
+        assert_eq!(intra_block.dt_residuals, decoded_intra_block.dt_residuals);
+    }
+
+    #[test]
+    fn test_decompress_intra_block_bigdtm() {
+        let (intra_block, written_data) = compress_intra_block_bigdtm().unwrap();
+        let tmp_len = written_data.len();
+
+        let mut bufreader = BufReader::new(written_data.as_slice());
+        let mut bitreader =
+            bitstream_io::BitReader::endian(&mut bufreader, bitstream_io::BigEndian);
+
+        let mut decoder = CompressedInput::new(10000000, 100);
 
         let decoded_intra_block = AduIntraBlock::decompress(&mut bitreader, &mut decoder);
 
