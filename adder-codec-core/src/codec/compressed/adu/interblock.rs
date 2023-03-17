@@ -88,8 +88,10 @@ mod tests {
     use crate::codec::compressed::adu::interblock::AduInterBlock;
     use crate::codec::compressed::adu::intrablock::gen_random_intra_block;
     use crate::codec::compressed::adu::AduCompression;
+    use crate::codec::compressed::stream::CompressedInput;
     use crate::codec::{CodecMetadata, WriteCompression};
     use std::error::Error;
+    use std::io::BufReader;
 
     fn setup_encoder() -> crate::codec::compressed::stream::CompressedOutput<Vec<u8>> {
         let meta = CodecMetadata {
@@ -126,5 +128,39 @@ mod tests {
         let input_len = 1028; // Rough approximation
         assert!(output_len < input_len);
         eprintln!("Written data: {:?}", written_data);
+    }
+
+    #[test]
+    fn test_decompress_inter_block() {
+        let (inter_block, written_data) = compress_inter_block().unwrap();
+        let tmp_len = written_data.len();
+
+        let mut bufreader = BufReader::new(written_data.as_slice());
+        let mut bitreader =
+            bitstream_io::BitReader::endian(&mut bufreader, bitstream_io::BigEndian);
+
+        let mut decoder = CompressedInput::new(100, 100);
+
+        let decoded_inter_block = AduInterBlock::decompress(&mut bitreader, &mut decoder);
+
+        decoder
+            .arithmetic_coder
+            .as_mut()
+            .unwrap()
+            .model
+            .set_context(decoder.contexts.as_mut().unwrap().eof_context);
+        let eof = decoder
+            .arithmetic_coder
+            .as_mut()
+            .unwrap()
+            .decode(&mut bitreader)
+            .unwrap();
+        assert!(eof.is_none());
+        assert_eq!(
+            inter_block.shift_loss_param,
+            decoded_inter_block.shift_loss_param
+        );
+        assert_eq!(inter_block.d_residuals, decoded_inter_block.d_residuals);
+        assert_eq!(inter_block.t_residuals, decoded_inter_block.t_residuals);
     }
 }
