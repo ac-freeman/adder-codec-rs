@@ -7,7 +7,7 @@ pub mod frame;
 pub mod interblock;
 pub mod intrablock;
 
-trait AduCompression {
+pub trait AduCompression {
     fn compress<W: Write>(&self, output: &mut CompressedOutput<W>) -> Result<(), std::io::Error>;
     fn decompress<R: Read>(
         stream: &mut BitReader<R, BigEndian>,

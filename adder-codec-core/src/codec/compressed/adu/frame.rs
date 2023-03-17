@@ -37,6 +37,8 @@ impl AduCompression for AduChannel {
             encoder.encode(Some(&(*byte as usize)), &mut stream);
         }
 
+        println!("num_cubes: {}", self.num_cubes);
+
         // Write the cubes
         for cube in self.cubes.iter() {
             cube.compress(output)?;
@@ -79,9 +81,9 @@ pub struct Adu {
     /// The timestamp of the first event in the ADU.
     pub(crate) head_event_t: AbsoluteT,
 
-    cubes_r: AduChannel,
-    cubes_g: AduChannel,
-    cubes_b: AduChannel,
+    pub(crate) cubes_r: AduChannel,
+    pub(crate) cubes_g: AduChannel,
+    pub(crate) cubes_b: AduChannel,
 }
 
 pub enum AduChannelType {
@@ -187,7 +189,7 @@ impl AduCompression for Adu {
 #[cfg(test)]
 mod tests {
     use crate::codec::compressed::adu::cube::AduCube;
-    use crate::codec::compressed::adu::frame::{Adu, AduChannel};
+    use crate::codec::compressed::adu::frame::{compare_channels, Adu, AduChannel};
     use crate::codec::compressed::adu::interblock::AduInterBlock;
     use crate::codec::compressed::adu::intrablock::gen_random_intra_block;
     use crate::codec::compressed::adu::AduCompression;
@@ -342,41 +344,6 @@ mod tests {
         eprintln!("Input length: {}", input_len);
     }
 
-    fn compare_channels(channel: &AduChannel, decoded_channel: &AduChannel) {
-        assert_eq!(channel.num_cubes, decoded_channel.num_cubes);
-
-        for (cube, decoded_cube) in channel.cubes.iter().zip(decoded_channel.cubes.iter()) {
-            assert_eq!(cube.idx_y, decoded_cube.idx_y);
-            assert_eq!(cube.idx_x, decoded_cube.idx_x);
-            assert_eq!(
-                cube.intra_block.head_event_t,
-                decoded_cube.intra_block.head_event_t
-            );
-            assert_eq!(
-                cube.intra_block.head_event_d,
-                decoded_cube.intra_block.head_event_d
-            );
-            assert_eq!(
-                cube.intra_block.shift_loss_param,
-                decoded_cube.intra_block.shift_loss_param
-            );
-            assert_eq!(
-                cube.intra_block.d_residuals,
-                decoded_cube.intra_block.d_residuals
-            );
-            assert_eq!(
-                cube.intra_block.dt_residuals,
-                decoded_cube.intra_block.dt_residuals
-            );
-            assert_eq!(cube.num_inter_blocks, decoded_cube.num_inter_blocks);
-            for (block, decoded_block) in cube.inter_blocks.iter().zip(&decoded_cube.inter_blocks) {
-                assert_eq!(block.shift_loss_param, decoded_block.shift_loss_param);
-                assert_eq!(block.d_residuals, decoded_block.d_residuals);
-                assert_eq!(block.t_residuals, decoded_block.t_residuals);
-            }
-        }
-    }
-
     #[test]
     fn test_decompress_adu() {
         let (adu, written_data) = compress_adu().unwrap();
@@ -408,5 +375,41 @@ mod tests {
         compare_channels(&adu.cubes_r, &decoded_adu.cubes_r);
         compare_channels(&adu.cubes_g, &decoded_adu.cubes_g);
         compare_channels(&adu.cubes_b, &decoded_adu.cubes_b);
+    }
+}
+
+/// Helper function for test code
+pub fn compare_channels(channel: &AduChannel, decoded_channel: &AduChannel) {
+    assert_eq!(channel.num_cubes, decoded_channel.num_cubes);
+
+    for (cube, decoded_cube) in channel.cubes.iter().zip(decoded_channel.cubes.iter()) {
+        assert_eq!(cube.idx_y, decoded_cube.idx_y);
+        assert_eq!(cube.idx_x, decoded_cube.idx_x);
+        assert_eq!(
+            cube.intra_block.head_event_t,
+            decoded_cube.intra_block.head_event_t
+        );
+        assert_eq!(
+            cube.intra_block.head_event_d,
+            decoded_cube.intra_block.head_event_d
+        );
+        assert_eq!(
+            cube.intra_block.shift_loss_param,
+            decoded_cube.intra_block.shift_loss_param
+        );
+        assert_eq!(
+            cube.intra_block.d_residuals,
+            decoded_cube.intra_block.d_residuals
+        );
+        assert_eq!(
+            cube.intra_block.dt_residuals,
+            decoded_cube.intra_block.dt_residuals
+        );
+        assert_eq!(cube.num_inter_blocks, decoded_cube.num_inter_blocks);
+        for (block, decoded_block) in cube.inter_blocks.iter().zip(&decoded_cube.inter_blocks) {
+            assert_eq!(block.shift_loss_param, decoded_block.shift_loss_param);
+            assert_eq!(block.d_residuals, decoded_block.d_residuals);
+            assert_eq!(block.t_residuals, decoded_block.t_residuals);
+        }
     }
 }
