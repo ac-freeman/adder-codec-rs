@@ -17,6 +17,7 @@ use std::io::{BufReader, BufWriter};
 // Get the residual between the pixel's current delta_t and the expected delta_t. Encode that
 
 use crate::codec::compressed::blocks::D_ENCODE_NO_EVENT;
+use crate::codec::CodecMetadata;
 use crate::codec_old::compressed::blocks::{Block, ZigZag, ZIGZAG_ORDER};
 use crate::codec_old::compressed::fenwick::{context_switching::FenwickModel, Weights};
 use crate::{DeltaT, EventCoordless, D};
@@ -87,16 +88,42 @@ pub fn dt_residual_default_weights(delta_t_max: DeltaT, delta_t_ref: DeltaT) -> 
 pub struct Contexts {
     pub(crate) d_context: usize,
     pub(crate) dt_context: usize,
+    pub(crate) u8_general_context: usize,
+    // pub(crate) u16_general_context: usize,
+    // pub(crate) u32_general_context: usize,
     pub(crate) eof_context: usize,
 }
 
 impl Contexts {
-    pub fn new(d_context: usize, dt_context: usize, eof_context: usize) -> Contexts {
-        // Initialize weights for d_context
+    pub fn new(source_model: &mut FenwickModel, meta: CodecMetadata) -> Contexts {
+        // D context. Only need to account for range [-255, 255]
+        let d_context = source_model.push_context_with_weights(d_residual_default_weights());
+
+        // Delta_t context. Need to account for range [-delta_t_max, delta_t_max]
+        let dt_context = source_model.push_context_with_weights(dt_residual_default_weights(
+            meta.delta_t_max,
+            meta.ref_interval,
+        ));
+
+        let u8_general_context = source_model.push_context_with_weights(Weights::new_with_counts(
+            (u8::MAX) as usize + 1,
+            &vec![1; (u8::MAX) as usize + 1],
+        ));
+
+        // let u16_general_context = source_model.push_context_with_weights(Weights::new_with_counts(
+        //     (u16::MAX) as usize + 1,
+        //     &vec![1; (u16::MAX) as usize + 1],
+        // ));
+
+        let eof_context =
+            source_model.push_context_with_weights(Weights::new_with_counts(1, &vec![1]));
 
         Contexts {
             d_context,
             dt_context,
+            u8_general_context,
+            // u16_general_context,
+            // u32_general_context,
             eof_context,
         }
     }
@@ -124,17 +151,20 @@ impl<W: std::io::Write + std::fmt::Debug> CompressionModelEncoder<W> {
 
         let mut source_model = FenwickModel::with_symbols(delta_t_max as usize * 2, 1 << 30);
 
-        // D context. Only need to account for range [-255, 255]
-        let d_context_idx = source_model.push_context_with_weights(d_residual_default_weights());
-
-        // Delta_t context. Need to account for range [-delta_t_max, delta_t_max]
-        let dt_context_idx = source_model
-            .push_context_with_weights(dt_residual_default_weights(delta_t_max, delta_t_ref));
-
-        let eof_context_idx =
-            source_model.push_context_with_weights(Weights::new_with_counts(1, &vec![1]));
-
-        let contexts = Contexts::new(d_context_idx, dt_context_idx, eof_context_idx);
+        let contexts = Contexts::new(
+            &mut source_model,
+            CodecMetadata {
+                codec_version: 0,
+                header_size: 0,
+                time_mode: Default::default(),
+                plane: Default::default(),
+                tps: 0,
+                ref_interval: 0,
+                delta_t_max,
+                event_size: 0,
+                source_camera: Default::default(),
+            },
+        );
 
         let encoder = Encoder::new(source_model);
 
@@ -288,17 +318,20 @@ impl<R: std::io::Read> CompressionModelDecoder<R> {
 
         let mut source_model = FenwickModel::with_symbols(delta_t_max as usize * 2, 1 << 30);
 
-        // D context. Only need to account for range [-255, 255]
-        let d_context_idx = source_model.push_context_with_weights(d_residual_default_weights());
-
-        // Delta_t context. Need to account for range [-delta_t_max, delta_t_max]
-        let dt_context_idx = source_model
-            .push_context_with_weights(dt_residual_default_weights(delta_t_max, delta_t_ref));
-
-        let eof_context_idx =
-            source_model.push_context_with_weights(Weights::new_with_counts(1, &vec![1]));
-
-        let contexts = Contexts::new(d_context_idx, dt_context_idx, eof_context_idx);
+        let contexts = Contexts::new(
+            &mut source_model,
+            CodecMetadata {
+                codec_version: 0,
+                header_size: 0,
+                time_mode: Default::default(),
+                plane: Default::default(),
+                tps: 0,
+                ref_interval: 0,
+                delta_t_max,
+                event_size: 0,
+                source_camera: Default::default(),
+            },
+        );
 
         let decoder = Decoder::new(source_model);
 

@@ -38,21 +38,9 @@ impl<W: Write> CompressedOutput<W> {
             1 << 30,
         );
 
-        // D context. Only need to account for range [-255, 255]
-        let d_context_idx = source_model.push_context_with_weights(d_residual_default_weights());
-
-        // Delta_t context. Need to account for range [-delta_t_max, delta_t_max]
-        let dt_context_idx = source_model.push_context_with_weights(dt_residual_default_weights(
-            meta.delta_t_max,
-            meta.ref_interval,
-        ));
-
-        let eof_context_idx =
-            source_model.push_context_with_weights(Weights::new_with_counts(1, &vec![1]));
+        let contexts = Contexts::new(&mut source_model, meta);
 
         let arithmetic_coder = Encoder::new(source_model);
-
-        let contexts = Contexts::new(d_context_idx, dt_context_idx, eof_context_idx);
 
         Self {
             meta,
@@ -139,19 +127,22 @@ impl<R: Read> CompressedInput<R> {
         let mut source_model =
             FenwickModel::with_symbols(min(delta_t_max as usize * 2, u16::MAX as usize), 1 << 30);
 
-        // D context. Only need to account for range [-255, 255]
-        let d_context_idx = source_model.push_context_with_weights(d_residual_default_weights());
-
-        // Delta_t context. Need to account for range [-delta_t_max, delta_t_max]
-        let dt_context_idx = source_model
-            .push_context_with_weights(dt_residual_default_weights(delta_t_max, ref_interval));
-
-        let eof_context_idx =
-            source_model.push_context_with_weights(Weights::new_with_counts(1, &vec![1]));
+        let contexts = Contexts::new(
+            &mut source_model,
+            CodecMetadata {
+                codec_version: 0,
+                header_size: 0,
+                time_mode: Default::default(),
+                plane: Default::default(),
+                tps: 0,
+                ref_interval,
+                delta_t_max,
+                event_size: 0,
+                source_camera: Default::default(),
+            },
+        ); // TODO refactor and clean this up
 
         let arithmetic_coder = Decoder::new(source_model);
-
-        let contexts = Contexts::new(d_context_idx, dt_context_idx, eof_context_idx);
 
         Self {
             meta: CodecMetadata {
