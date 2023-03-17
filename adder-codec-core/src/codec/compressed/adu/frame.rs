@@ -11,6 +11,7 @@ use crate::codec::compressed::stream::{CompressedInput, CompressedOutput};
 use crate::{AbsoluteT, D};
 use bitstream_io::{BigEndian, BitRead, BitReader};
 use std::io::{Error, Read, Write};
+use std::mem;
 
 pub struct AduChannel {
     /// The number of cubes in the ADU.
@@ -124,20 +125,69 @@ impl Adu {
             }
         }
     }
+}
 
-    fn compress() -> Vec<u8> {
-        todo!()
+impl AduCompression for Adu {
+    fn compress<W: Write>(&self, output: &mut CompressedOutput<W>) -> Result<(), Error> {
+        // Get the context references
+        let mut encoder = output.arithmetic_coder.as_mut().unwrap();
+        let mut d_context = output.contexts.as_mut().unwrap().d_context;
+        let mut dt_context = output.contexts.as_mut().unwrap().dt_context;
+        let mut u8_context = output.contexts.as_mut().unwrap().u8_general_context;
+        let mut stream = output.stream.as_mut().unwrap();
+
+        encoder.model.set_context(u8_context);
+
+        // Write the head event timestamp
+        for byte in self.head_event_t.to_be_bytes().iter() {
+            encoder.encode(Some(&(*byte as usize)), &mut stream);
+        }
+
+        // Write the cubes
+        self.cubes_r.compress(output)?;
+        self.cubes_g.compress(output)?;
+        self.cubes_b.compress(output)?;
+
+        Ok(())
     }
 
-    fn decompress() -> Self {
-        todo!()
+    fn decompress<R: Read>(
+        stream: &mut BitReader<R, BigEndian>,
+        input: &mut CompressedInput<R>,
+    ) -> Self {
+        // Get the context references
+        let mut decoder = input.arithmetic_coder.as_mut().unwrap();
+        let mut d_context = input.contexts.as_mut().unwrap().d_context;
+        let mut dt_context = input.contexts.as_mut().unwrap().dt_context;
+        let mut u8_context = input.contexts.as_mut().unwrap().u8_general_context;
+
+        decoder.model.set_context(u8_context);
+
+        // Read the head event timestamp
+        let mut bytes = [0; mem::size_of::<AbsoluteT>()];
+        for byte in bytes.iter_mut() {
+            *byte = decoder.decode(stream).unwrap().unwrap() as u8;
+        }
+        let head_event_t = AbsoluteT::from_be_bytes(bytes);
+
+        // Read the cubes
+        let cubes_r = AduChannel::decompress(stream, input);
+        let cubes_g = AduChannel::decompress(stream, input);
+        let cubes_b = AduChannel::decompress(stream, input);
+
+        Self {
+            head_event_t,
+            cubes_r,
+            cubes_g,
+            cubes_b,
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use crate::codec::compressed::adu::cube::AduCube;
-    use crate::codec::compressed::adu::frame::AduChannel;
+    use crate::codec::compressed::adu::frame::{Adu, AduChannel};
     use crate::codec::compressed::adu::interblock::AduInterBlock;
     use crate::codec::compressed::adu::intrablock::gen_random_intra_block;
     use crate::codec::compressed::adu::AduCompression;
@@ -159,13 +209,11 @@ mod tests {
         crate::codec::compressed::stream::CompressedOutput::new(meta, Vec::new())
     }
 
-    fn setup_channel(encoder: &mut CompressedOutput<Vec<u8>>, seed: Option<u64>) -> AduChannel {
-        let mut rng = match seed {
-            None => StdRng::from_rng(rand::thread_rng()).unwrap(),
-            Some(num) => StdRng::seed_from_u64(num),
-        };
-
-        let mut encoder = setup_encoder();
+    fn gen_rand_channel(
+        encoder: &mut CompressedOutput<Vec<u8>>,
+        seed: Option<u64>,
+        mut rng: StdRng,
+    ) -> AduChannel {
         let mut cubes = Vec::new();
         for _ in 0..10 {
             let intra_block = gen_random_intra_block(1234, encoder.meta.delta_t_max, seed);
@@ -195,6 +243,15 @@ mod tests {
         channel
     }
 
+    fn setup_channel(encoder: &mut CompressedOutput<Vec<u8>>, seed: Option<u64>) -> AduChannel {
+        let mut rng = match seed {
+            None => StdRng::from_rng(rand::thread_rng()).unwrap(),
+            Some(num) => StdRng::seed_from_u64(num),
+        };
+
+        gen_rand_channel(encoder, seed, rng)
+    }
+
     fn compress_channel() -> Result<(AduChannel, Vec<u8>), Box<dyn Error>> {
         let mut encoder = setup_encoder();
         let channel = setup_channel(&mut encoder, Some(7));
@@ -204,6 +261,36 @@ mod tests {
         let written_data = encoder.into_writer().unwrap();
 
         Ok((channel, written_data))
+    }
+
+    fn setup_adu(encoder: &mut CompressedOutput<Vec<u8>>, seed: Option<u64>) -> Adu {
+        let mut rng = match seed {
+            None => StdRng::from_rng(rand::thread_rng()).unwrap(),
+            Some(num) => StdRng::seed_from_u64(num),
+        };
+
+        let cubes_r = gen_rand_channel(encoder, seed, rng.clone());
+        let cubes_g = gen_rand_channel(encoder, seed, rng.clone());
+        let cubes_b = gen_rand_channel(encoder, seed, rng.clone());
+
+        Adu {
+            head_event_t: rng.gen(),
+            cubes_r,
+            cubes_g,
+            cubes_b,
+        }
+    }
+
+    fn compress_adu() -> Result<(Adu, Vec<u8>), Box<dyn Error>> {
+        let mut encoder = setup_encoder();
+
+        let adu = setup_adu(&mut encoder, Some(7));
+
+        assert!(adu.compress(&mut encoder).is_ok());
+
+        let written_data = encoder.into_writer().unwrap();
+
+        Ok((adu, written_data))
     }
 
     #[test]
@@ -242,6 +329,20 @@ mod tests {
             .decode(&mut bitreader)
             .unwrap();
         assert!(eof.is_none());
+        compare_channels(&channel, &decoded_channel);
+    }
+
+    #[test]
+    fn test_compress_adu() {
+        let (_, written_data) = compress_adu().unwrap();
+        let output_len = written_data.len();
+        let input_len = 1028 * 11 * 10 * 3; // Rough approximation
+        assert!(output_len < input_len);
+        eprintln!("Output length: {}", output_len);
+        eprintln!("Input length: {}", input_len);
+    }
+
+    fn compare_channels(channel: &AduChannel, decoded_channel: &AduChannel) {
         assert_eq!(channel.num_cubes, decoded_channel.num_cubes);
 
         for (cube, decoded_cube) in channel.cubes.iter().zip(decoded_channel.cubes.iter()) {
@@ -274,5 +375,38 @@ mod tests {
                 assert_eq!(block.t_residuals, decoded_block.t_residuals);
             }
         }
+    }
+
+    #[test]
+    fn test_decompress_adu() {
+        let (adu, written_data) = compress_adu().unwrap();
+        let tmp_len = written_data.len();
+
+        let mut bufreader = BufReader::new(written_data.as_slice());
+        let mut bitreader =
+            bitstream_io::BitReader::endian(&mut bufreader, bitstream_io::BigEndian);
+
+        let mut decoder = CompressedInput::new(100, 100);
+
+        let decoded_adu = Adu::decompress(&mut bitreader, &mut decoder);
+
+        decoder
+            .arithmetic_coder
+            .as_mut()
+            .unwrap()
+            .model
+            .set_context(decoder.contexts.as_mut().unwrap().eof_context);
+        let eof = decoder
+            .arithmetic_coder
+            .as_mut()
+            .unwrap()
+            .decode(&mut bitreader)
+            .unwrap();
+        assert!(eof.is_none());
+        assert_eq!(adu.head_event_t, decoded_adu.head_event_t);
+
+        compare_channels(&adu.cubes_r, &decoded_adu.cubes_r);
+        compare_channels(&adu.cubes_g, &decoded_adu.cubes_g);
+        compare_channels(&adu.cubes_b, &decoded_adu.cubes_b);
     }
 }
