@@ -740,14 +740,17 @@ impl Frame {
 #[cfg(test)]
 mod tests {
     use crate::codec::compressed::adu::cube::AduCube;
-    use crate::codec::compressed::adu::frame::{Adu, AduChannelType};
+    use crate::codec::compressed::adu::frame::{compare_channels, Adu, AduChannelType};
     use crate::codec::compressed::adu::interblock::AduInterBlock;
     use crate::codec::compressed::adu::intrablock::AduIntraBlock;
+    use crate::codec::compressed::adu::AduCompression;
     use crate::codec::compressed::blocks::block::Frame;
     use crate::codec::compressed::blocks::{BLOCK_SIZE, BLOCK_SIZE_AREA};
+    use crate::codec::compressed::stream::CompressedInput;
     use crate::codec::decoder::Decoder;
     use crate::codec::encoder::Encoder;
     use crate::codec::raw::stream::{RawInput, RawOutput};
+    use crate::codec::CompressedOutput;
     use crate::codec::{CodecError, ReadCompression, WriteCompression};
     use crate::Mode::{Continuous, FramePerfect};
     use crate::{Coord, DeltaT, Event, EventCoordless, Mode};
@@ -1797,9 +1800,6 @@ mod tests {
             BufWriter::new(File::create("/home/andrew/Downloads/test_abs_recon2.adder").unwrap());
         let compression = RawOutput::new(reader.meta().clone(), bufwriter);
 
-        let mut bufrawriter = BufWriter::new(
-            File::create("/home/andrew/Downloads/test_abs_compressed_raw.adder").unwrap(),
-        );
         let mut encoder: Encoder<BufWriter<File>> = Encoder::new_raw(compression);
 
         let mut frame = setup_frame(
@@ -1943,11 +1943,58 @@ mod tests {
 
             adu.add_cube(adu_cube, AduChannelType::R);
         }
+        println!("Done writing reconstructed video");
+        let meta = encoder.meta().clone();
         let mut writer = encoder.close_writer().unwrap().unwrap();
         writer.flush().unwrap();
 
         writer.into_inner().unwrap();
 
-        bufrawriter.flush().unwrap();
+        // Below is code for arithmetic-coding of the adu we generated
+        {
+            let mut encoder = CompressedOutput::new(meta, Vec::new());
+
+            assert!(adu.compress(&mut encoder).is_ok());
+
+            let written_data = encoder.into_writer().unwrap();
+
+            let output_len = written_data.len();
+            eprintln!("Output length: {}", output_len);
+            eprintln!(
+                "Input length: {}",
+                File::open("/home/andrew/Downloads/test_abs_recon2.adder")
+                    .unwrap()
+                    .metadata()
+                    .unwrap()
+                    .len()
+            );
+
+            let mut bufreader = BufReader::new(written_data.as_slice());
+            let mut bitreader =
+                bitstream_io::BitReader::endian(&mut bufreader, bitstream_io::BigEndian);
+
+            let mut decoder = CompressedInput::new(meta.delta_t_max, meta.ref_interval);
+
+            let decoded_adu = Adu::decompress(&mut bitreader, &mut decoder);
+
+            decoder
+                .arithmetic_coder
+                .as_mut()
+                .unwrap()
+                .model
+                .set_context(decoder.contexts.as_mut().unwrap().eof_context);
+            let eof = decoder
+                .arithmetic_coder
+                .as_mut()
+                .unwrap()
+                .decode(&mut bitreader)
+                .unwrap();
+            assert!(eof.is_none());
+            assert_eq!(adu.head_event_t, decoded_adu.head_event_t);
+
+            compare_channels(&adu.cubes_r, &decoded_adu.cubes_r);
+            compare_channels(&adu.cubes_g, &decoded_adu.cubes_g);
+            compare_channels(&adu.cubes_b, &decoded_adu.cubes_b);
+        }
     }
 }
