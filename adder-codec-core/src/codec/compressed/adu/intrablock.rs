@@ -1,3 +1,4 @@
+use crate::codec::compressed::adu::AduCompression;
 use crate::codec::compressed::blocks::prediction::D_RESIDUALS_EMPTY;
 use crate::codec::compressed::blocks::{DResidual, BLOCK_SIZE_AREA, D_ENCODE_NO_EVENT};
 use crate::codec::compressed::stream::{CompressedInput, CompressedOutput};
@@ -8,12 +9,12 @@ use crate::codec_old::compressed::compression::{
 };
 use crate::codec_old::compressed::fenwick::context_switching::FenwickModel;
 use crate::{AbsoluteT, DeltaT, D};
-use arithmetic_coding::Decoder;
-use bitstream_io::{BigEndian, BitReader};
+use arithmetic_coding::{Decoder, Encoder};
+use bitstream_io::{BigEndian, BitReader, BitWriter};
 use rand::prelude::StdRng;
 use rand::{Rng, SeedableRng};
 use std::cmp::min;
-use std::io::Read;
+use std::io::{Read, Write};
 use std::mem;
 
 pub struct AduIntraBlock {
@@ -37,8 +38,8 @@ pub struct AduIntraBlock {
     pub(crate) dt_residuals: [DeltaTResidualSmall; BLOCK_SIZE_AREA],
 }
 
-impl AduIntraBlock {
-    fn compress(&self, output: &mut CompressedOutput<Vec<u8>>) -> Result<(), std::io::Error> {
+impl AduCompression for AduIntraBlock {
+    fn compress<W: Write>(&self, output: &mut CompressedOutput<W>) -> Result<(), std::io::Error> {
         // Write the head event
         output.write_bytes(&self.head_event_t.to_be_bytes())?;
         output.write_bytes(&self.head_event_d.to_be_bytes())?;
@@ -53,23 +54,16 @@ impl AduIntraBlock {
         let mut stream = output.stream.as_mut().unwrap();
 
         // Write the d_residuals
-        encoder.model.set_context(d_context);
-        for d_residual in self.d_residuals.iter() {
-            encoder
-                .encode(Some(&d_resid_offset(*d_residual)), stream)
-                .unwrap();
-        }
+        compress_d_residuals(&self.d_residuals, encoder, d_context, stream);
 
         // Write the dt_residuals
-        encoder.model.set_context(dt_context);
-        for dt_residual in self.dt_residuals.iter() {
-            encoder
-                .encode(
-                    Some(&dt_resid_offset_i16(*dt_residual, output.meta.delta_t_max)),
-                    stream,
-                )
-                .unwrap();
-        }
+        compress_dt_residuals(
+            &self.dt_residuals,
+            encoder,
+            dt_context,
+            stream,
+            output.meta.delta_t_max,
+        );
 
         Ok(())
     }
@@ -107,25 +101,82 @@ impl AduIntraBlock {
         let mut dt_context = input.contexts.as_mut().unwrap().dt_context;
 
         // Read the d_residuals
-        decoder.model.set_context(d_context);
-        for d_residual in intra_block.d_residuals.iter_mut() {
-            let symbol = decoder.decode(stream).unwrap();
-            *d_residual = d_resid_offset_inverse(symbol.unwrap());
-        }
+        decompress_d_residuals(&mut intra_block.d_residuals, decoder, d_context, stream);
 
         // Read the dt_residuals
-        decoder.model.set_context(dt_context);
-        for dt_residual in intra_block.dt_residuals.iter_mut() {
-            let symbol = decoder.decode(stream).unwrap();
-            *dt_residual = dt_resid_offset_i16_inverse(symbol.unwrap(), input.meta.delta_t_max);
-        }
+        decompress_dt_residuals(
+            &mut intra_block.dt_residuals,
+            decoder,
+            dt_context,
+            stream,
+            input.meta.delta_t_max,
+        );
 
         intra_block
     }
 }
 
+pub fn compress_d_residuals<W: Write>(
+    d_residuals: &[DResidual; BLOCK_SIZE_AREA],
+    encoder: &mut Encoder<FenwickModel, BitWriter<W, BigEndian>>,
+    d_context: usize,
+    stream: &mut BitWriter<W, BigEndian>,
+) {
+    encoder.model.set_context(d_context);
+    for d_residual in d_residuals.iter() {
+        encoder
+            .encode(Some(&d_resid_offset(*d_residual)), stream)
+            .unwrap();
+    }
+}
+
+pub fn decompress_d_residuals<R: Read>(
+    d_residuals: &mut [DResidual; BLOCK_SIZE_AREA],
+    decoder: &mut Decoder<FenwickModel, BitReader<R, BigEndian>>,
+    d_context: usize,
+    stream: &mut BitReader<R, BigEndian>,
+) {
+    decoder.model.set_context(d_context);
+    for d_residual in d_residuals.iter_mut() {
+        let symbol = decoder.decode(stream).unwrap();
+        *d_residual = d_resid_offset_inverse(symbol.unwrap());
+    }
+}
+
+pub fn compress_dt_residuals<W: Write>(
+    dt_residuals: &[DeltaTResidualSmall; BLOCK_SIZE_AREA],
+    encoder: &mut Encoder<FenwickModel, BitWriter<W, BigEndian>>,
+    dt_context: usize,
+    stream: &mut BitWriter<W, BigEndian>,
+    delta_t_max: DeltaT,
+) {
+    encoder.model.set_context(dt_context);
+    for dt_residual in dt_residuals.iter() {
+        encoder
+            .encode(
+                Some(&dt_resid_offset_i16(*dt_residual, delta_t_max)),
+                stream,
+            )
+            .unwrap();
+    }
+}
+
+pub fn decompress_dt_residuals<R: Read>(
+    dt_residuals: &mut [DeltaTResidualSmall; BLOCK_SIZE_AREA],
+    decoder: &mut Decoder<FenwickModel, BitReader<R, BigEndian>>,
+    dt_context: usize,
+    stream: &mut BitReader<R, BigEndian>,
+    delta_t_max: DeltaT,
+) {
+    decoder.model.set_context(dt_context);
+    for dt_residual in dt_residuals.iter_mut() {
+        let symbol = decoder.decode(stream).unwrap();
+        *dt_residual = dt_resid_offset_i16_inverse(symbol.unwrap(), delta_t_max);
+    }
+}
+
 /// Generate an intra block with random event data
-fn gen_random_intra_block(min_t: AbsoluteT, dtm: DeltaT, seed: Option<u64>) -> AduIntraBlock {
+pub fn gen_random_intra_block(min_t: AbsoluteT, dtm: DeltaT, seed: Option<u64>) -> AduIntraBlock {
     let mut rng = match seed {
         None => StdRng::from_rng(rand::thread_rng()).unwrap(),
         Some(num) => StdRng::seed_from_u64(num),
@@ -157,6 +208,7 @@ fn gen_random_intra_block(min_t: AbsoluteT, dtm: DeltaT, seed: Option<u64>) -> A
 #[cfg(test)]
 mod tests {
     use crate::codec::compressed::adu::intrablock::{gen_random_intra_block, AduIntraBlock};
+    use crate::codec::compressed::adu::AduCompression;
     use crate::codec::compressed::blocks::BLOCK_SIZE_AREA;
     use crate::codec::compressed::stream::CompressedInput;
     use crate::codec::{CodecMetadata, WriteCompression};
