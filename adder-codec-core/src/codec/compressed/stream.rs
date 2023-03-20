@@ -89,9 +89,6 @@ impl<W: Write> CompressedOutput<W> {
             let mut block = &mut cube.blocks_r[0];
             let mut inter_model = &mut cube.inter_model_r;
 
-            let mut event_memory_inverse: [EventCoordless; BLOCK_SIZE_AREA] =
-                [Default::default(); BLOCK_SIZE_AREA];
-
             let (start_t, start_d, d_residuals, dt_residuals, sparam) = inter_model
                 .forward_intra_prediction(
                     0,
@@ -119,8 +116,6 @@ impl<W: Write> CompressedOutput<W> {
 
             let base_sparam = 4; // TODO: Dynamic control of this parameter
 
-            let mut tmp_event_memory;
-            let mut tmp_t_recon;
             for block in cube.blocks_r.iter_mut().skip(1) {
                 let (d_residuals, t_residuals, sparam) = inter_model.forward_inter_prediction(
                     base_sparam,
@@ -134,11 +129,6 @@ impl<W: Write> CompressedOutput<W> {
                     d_residuals: *d_residuals,
                     t_residuals: *t_residuals,
                 });
-
-                tmp_event_memory = inter_model.event_memory.clone();
-                tmp_t_recon = inter_model.t_recon.clone();
-
-                eprint!("{}", sparam);
             }
 
             self.adu.add_cube(adu_cube, AduChannelType::R);
@@ -226,7 +216,8 @@ impl<W: Write> WriteCompression<W> for CompressedOutput<W> {
         let tmp_dt = event.delta_t;
         if tmp_dt == u32::MAX {
             self.compress_events()?;
-            panic!("temp");
+            return Ok(());
+            // panic!("temp");
         }
 
         if let (true, _) = self.frame.add_event(event, self.meta.delta_t_max)? {

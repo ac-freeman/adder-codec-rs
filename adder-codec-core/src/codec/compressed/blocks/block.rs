@@ -2063,10 +2063,24 @@ mod tests {
         let mut start_event_t = 0;
         let mut compress = false;
         let mut ev_t = 0;
+        let mut count = 0;
         loop {
             match reader.digest_event(&mut bitreader) {
                 Ok(ev) => {
+                    count += 1;
                     encoder.ingest_event(ev).unwrap();
+
+                    if count % 10000000 == 0 {
+                        encoder.ingest_event(Event {
+                            coord: Coord {
+                                x: 0,
+                                y: 0,
+                                c: None,
+                            },
+                            d: 0,
+                            delta_t: u32::MAX,
+                        });
+                    }
                 }
                 Err(_) => {
                     break;
