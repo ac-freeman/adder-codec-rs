@@ -184,14 +184,16 @@ impl<W: Write + 'static> Encoder<W> {
     }
 
     /// Ingest an event
-    pub fn ingest_event(&mut self, event: &Event) -> Result<(), CodecError> {
+    pub fn ingest_event(&mut self, event: Event) -> Result<(), CodecError> {
         self.output.ingest_event(event)
     }
 
     /// Ingest an array of events
+    ///
+    /// TODO: Make this move events, not by reference
     pub fn ingest_events(&mut self, events: &[Event]) -> Result<(), CodecError> {
         for event in events {
-            self.ingest_event(event)?;
+            self.ingest_event(*event)?;
         }
         Ok(())
     }
@@ -311,7 +313,7 @@ mod tests {
             delta_t: 0,
         };
 
-        encoder.ingest_event(&event).unwrap();
+        encoder.ingest_event(event).unwrap();
         let mut writer = encoder.close_writer().unwrap().unwrap();
         writer.flush().unwrap();
         let output = writer.into_inner().unwrap();
@@ -334,6 +336,7 @@ mod tests {
                 event_size: 0,
                 source_camera: Default::default(),
             },
+            frame: Default::default(),
             arithmetic_coder: None,
             contexts: None,
             stream: Some(BitWriter::endian(bufwriter, BigEndian)),

@@ -87,18 +87,18 @@ impl<W: Write> WriteCompression<W> for RawOutput<W> {
     /// Ingest an event into the codec_old.
     ///
     /// This will always write the event immediately to the underlying writer.
-    fn ingest_event(&mut self, event: &Event) -> Result<(), CodecError> {
+    fn ingest_event(&mut self, event: Event) -> Result<(), CodecError> {
         // NOTE: for speed, the following checks only run in debug builds. It's entirely
         // possibly to encode nonsensical events if you want to.
         debug_assert!(event.coord.x < self.meta.plane.width || event.coord.x == EOF_PX_ADDRESS);
         debug_assert!(event.coord.y < self.meta.plane.height || event.coord.y == EOF_PX_ADDRESS);
         let output_event: EventSingle;
         if self.meta.plane.channels == 1 {
-            output_event = event.into();
+            output_event = (&event).into();
             self.bincode.serialize_into(self.stream(), &output_event)?;
             // bincode::serialize_into(&mut *stream, &output_event, my_options).unwrap();
         } else {
-            self.bincode.serialize_into(self.stream(), event)?;
+            self.bincode.serialize_into(self.stream(), &event)?;
         }
         Ok(())
     }

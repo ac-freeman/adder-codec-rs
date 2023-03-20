@@ -108,7 +108,7 @@ pub trait WriteCompression<W: Write> {
 
     /// Take in an event and process it. May or may not write to the output, depending on the state
     /// of the stream (Is it ready to write events? Is it accumulating/reorganizing events? etc.)
-    fn ingest_event(&mut self, event: &Event) -> Result<(), CodecError>;
+    fn ingest_event(&mut self, event: Event) -> Result<(), CodecError>;
 }
 
 /// A trait for reading ADΔER data from a stream.
@@ -197,4 +197,7 @@ pub enum CodecError {
 
     #[error("Plane error")]
     PlaneError(#[from] crate::PlaneError),
+
+    #[error("Blocking error")]
+    BlockError(#[from] crate::codec::compressed::blocks::block::BlockError),
 }

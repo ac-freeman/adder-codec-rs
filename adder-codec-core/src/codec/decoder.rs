@@ -265,7 +265,7 @@ mod tests {
         let mut encoder: Encoder<BufWriter<Vec<u8>>> = Encoder::new_raw(compression);
 
         let event = stock_event();
-        encoder.ingest_event(&event).unwrap();
+        encoder.ingest_event(event).unwrap();
         let mut writer = encoder.close_writer().unwrap().unwrap();
 
         writer.flush().unwrap();

@@ -52,7 +52,7 @@ impl<W: std::io::Write> WriteCompression<W> for EmptyOutput<Sink> {
         vec![]
     }
 
-    fn ingest_event(&mut self, _event: &Event) -> Result<(), CodecError> {
+    fn ingest_event(&mut self, _event: Event) -> Result<(), CodecError> {
         Ok(())
     }
 }

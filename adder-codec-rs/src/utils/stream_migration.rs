@@ -82,7 +82,7 @@ pub fn migrate_v2<W: Write + 'static, R: Read + Seek>(
             }
         }
 
-        output_stream.ingest_event(&event)?;
+        output_stream.ingest_event(event)?;
     }
     Ok(output_stream)
 }
