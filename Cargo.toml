@@ -27,7 +27,7 @@ overflow-checks = false
 opt-level = 3
 
 [profile.dev]
-opt-level = 3
+opt-level = 0
 
 
 [profile.test]

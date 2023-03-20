@@ -169,8 +169,9 @@ pub const D_ZERO_INTEGRATION: D = 254;
 /// Special symbol signifying no [`Event`] exists
 // pub const D_NO_EVENT: D = 253;
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Default)]
 pub enum Mode {
+    #[default]
     FramePerfect,
     Continuous,
 }

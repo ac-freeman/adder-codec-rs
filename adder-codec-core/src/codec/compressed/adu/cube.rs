@@ -191,7 +191,14 @@ mod tests {
         let mut encoder = setup_encoder();
         let cube = setup_cube(&mut encoder, Some(7));
 
-        assert!(cube.compress(&mut encoder).is_ok());
+        assert!(cube
+            .compress(
+                encoder.arithmetic_coder.as_mut().unwrap(),
+                encoder.contexts.as_mut().unwrap(),
+                encoder.stream.as_mut().unwrap(),
+                encoder.meta.delta_t_max
+            )
+            .is_ok());
 
         let written_data = encoder.into_writer().unwrap();
 

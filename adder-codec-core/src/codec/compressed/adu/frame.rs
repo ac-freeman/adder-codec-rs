@@ -266,7 +266,14 @@ mod tests {
         let mut encoder = setup_encoder();
         let channel = setup_channel(&mut encoder, Some(7));
 
-        assert!(channel.compress(&mut encoder).is_ok());
+        assert!(channel
+            .compress(
+                encoder.arithmetic_coder.as_mut().unwrap(),
+                encoder.contexts.as_mut().unwrap(),
+                encoder.stream.as_mut().unwrap(),
+                encoder.meta.delta_t_max
+            )
+            .is_ok());
 
         let written_data = encoder.into_writer().unwrap();
 
@@ -296,7 +303,14 @@ mod tests {
 
         let adu = setup_adu(&mut encoder, Some(7));
 
-        assert!(adu.compress(&mut encoder).is_ok());
+        assert!(adu
+            .compress(
+                encoder.arithmetic_coder.as_mut().unwrap(),
+                encoder.contexts.as_mut().unwrap(),
+                encoder.stream.as_mut().unwrap(),
+                encoder.meta.delta_t_max
+            )
+            .is_ok());
 
         let written_data = encoder.into_writer().unwrap();
 

@@ -249,7 +249,14 @@ mod tests {
         let mut encoder = setup_encoder();
         let intra_block = gen_random_intra_block(1234, encoder.meta.delta_t_max, Some(7));
 
-        assert!(intra_block.compress(&mut encoder).is_ok());
+        assert!(intra_block
+            .compress(
+                encoder.arithmetic_coder.as_mut().unwrap(),
+                encoder.contexts.as_mut().unwrap(),
+                encoder.stream.as_mut().unwrap(),
+                encoder.meta.delta_t_max
+            )
+            .is_ok());
 
         let written_data = encoder.into_writer().unwrap();
 
@@ -260,7 +267,14 @@ mod tests {
         let mut encoder = setup_encoder_bigdtm();
         let intra_block = gen_random_intra_block(1234, encoder.meta.delta_t_max, Some(7));
 
-        assert!(intra_block.compress(&mut encoder).is_ok());
+        assert!(intra_block
+            .compress(
+                encoder.arithmetic_coder.as_mut().unwrap(),
+                encoder.contexts.as_mut().unwrap(),
+                encoder.stream.as_mut().unwrap(),
+                encoder.meta.delta_t_max
+            )
+            .is_ok());
 
         let written_data = encoder.into_writer().unwrap();
 

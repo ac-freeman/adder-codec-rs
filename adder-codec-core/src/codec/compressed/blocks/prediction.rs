@@ -70,6 +70,7 @@ impl PredictionModel {
         &mut self,
         mut sparam: u8,
         dt_ref: DeltaT,
+        dtm: DeltaT,
         events: &BlockEvents,
     ) -> (
         AbsoluteT,
@@ -122,6 +123,7 @@ impl PredictionModel {
                         self.event_memory[next_idx + idx + 1] = *next;
                         if t_resid.abs() > max_t_resid {
                             max_t_resid = t_resid.abs();
+                            assert!(max_t_resid <= dtm as i64);
                         }
                         break;
                     }
@@ -213,6 +215,7 @@ impl PredictionModel {
             .zip(self.dt_pred_residuals_i16.iter_mut())
         {
             *t_resid_i16 = (*t_resid >> sparam) as i16;
+            assert!(t_resid_i16.abs() <= dtm as i16);
         }
 
         self.reconstruct_t_values(sparam, dtm, dt_ref);

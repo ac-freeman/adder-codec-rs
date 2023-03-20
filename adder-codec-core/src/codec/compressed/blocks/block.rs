@@ -595,6 +595,7 @@ pub struct Frame {
     pub cube_height: usize,
     pub color: bool,
     start_event_t: DeltaT,
+    time_modulation_mode: Mode,
 
     /// Maps event coordinates to their cube index and block index
     index_hashmap: HashMap<Coord, FrameToBlockIndexMap>,
@@ -642,7 +643,20 @@ impl Frame {
             cube_height,
             color,
             start_event_t: 0,
+            time_modulation_mode,
             index_hashmap,
+        }
+    }
+
+    pub(crate) fn reset(&mut self) {
+        self.cubes.clear();
+        self.start_event_t = 0;
+        // self.index_hashmap.clear();
+        for y in 0..self.cube_height {
+            for x in 0..self.cube_width {
+                let cube = Cube::new(y, x, 0, self.time_modulation_mode);
+                self.cubes.push(cube);
+            }
         }
     }
 
@@ -666,14 +680,19 @@ impl Frame {
     /// assert_eq!(frame.add_event(event,).unwrap(), 1); // added to cube with idx=1
     /// ```
     pub fn add_event(&mut self, event: Event, dtm: DeltaT) -> Result<(bool, usize), BlockError> {
+        // Used to determine if the frame is big enough that we can / need to compress it now
+        let ev_t = event.delta_t;
+
+        // if ev_t > self.start_event_t + dtm {
+        //     // self.start_event_t = a;
+        //     return Ok((true, 0));
+        // }
+
         if !self.index_hashmap.contains_key(&event.coord) {
             self.index_hashmap
                 .insert(event.coord, self.event_coord_to_block_idx(&event));
         }
         let index_map = self.index_hashmap.get(&event.coord).unwrap();
-
-        // Used to determine if the frame is big enough that we can / need to compress it now
-        let ev_t = event.delta_t;
 
         // self.event_coord_to_block_idx(&event);
         self.cubes[index_map.cube_idx].set_event(event, index_map.block_idx)?;
@@ -683,10 +702,10 @@ impl Frame {
                 self.start_event_t = a;
                 Ok((false, index_map.cube_idx))
             }
-            a if a > self.start_event_t + dtm => {
-                self.start_event_t = a;
-                Ok((true, index_map.cube_idx))
-            }
+            // a if a > self.start_event_t + dtm => {
+            //     self.start_event_t = a;
+            //     Ok((true, index_map.cube_idx))
+            // }
             _ => Ok((false, index_map.cube_idx)),
         }
     }
@@ -1566,7 +1585,7 @@ mod tests {
 
             assert!(block.fill_count <= BLOCK_SIZE_AREA as u16);
             let (start_t, start_d, d_residuals, dt_residuals, sparam) =
-                inter_model.forward_intra_prediction(0, dt_ref, &block.events);
+                inter_model.forward_intra_prediction(0, dt_ref, dtm, &block.events);
 
             let d_resids = d_residuals.clone();
             let dt_resids = dt_residuals.clone();
@@ -1685,7 +1704,7 @@ mod tests {
                 [Default::default(); BLOCK_SIZE_AREA];
 
             let (start_t, start_d, d_residuals, dt_residuals, sparam) =
-                inter_model.forward_intra_prediction(0, dt_ref, &block.events);
+                inter_model.forward_intra_prediction(0, dt_ref, dtm, &block.events);
 
             // let adu_intra_block = AduIntraBlock {
             //     head_event_t: dt_residuals[0] as AbsoluteT,
@@ -1843,7 +1862,7 @@ mod tests {
                 [Default::default(); BLOCK_SIZE_AREA];
 
             let (start_t, start_d, d_residuals, dt_residuals, sparam) =
-                inter_model.forward_intra_prediction(0, dt_ref, &block.events);
+                inter_model.forward_intra_prediction(0, dt_ref, dtm, &block.events);
 
             if cube_idx == 0 {
                 adu.head_event_t = start_t;
@@ -1975,7 +1994,14 @@ mod tests {
         {
             let mut encoder = CompressedOutput::new(meta, Vec::new());
 
-            assert!(adu.compress(&mut encoder).is_ok());
+            assert!(adu
+                .compress(
+                    encoder.arithmetic_coder.as_mut().unwrap(),
+                    encoder.contexts.as_mut().unwrap(),
+                    encoder.stream.as_mut().unwrap(),
+                    encoder.meta.delta_t_max
+                )
+                .is_ok());
 
             let written_data = encoder.into_writer().unwrap();
 
@@ -2047,5 +2073,15 @@ mod tests {
                 }
             }
         }
+        // TODO: temporary. make output private again
+        encoder.ingest_event(Event {
+            coord: Coord {
+                x: 0,
+                y: 0,
+                c: None,
+            },
+            d: 0,
+            delta_t: u32::MAX,
+        });
     }
 }
