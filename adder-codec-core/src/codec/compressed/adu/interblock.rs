@@ -120,7 +120,14 @@ mod tests {
             t_residuals: intra_block.dt_residuals,
         };
 
-        assert!(inter_block.compress(&mut encoder).is_ok());
+        assert!(inter_block
+            .compress(
+                encoder.arithmetic_coder.as_mut().unwrap(),
+                encoder.contexts.as_mut().unwrap(),
+                encoder.stream.as_mut().unwrap(),
+                encoder.meta.delta_t_max
+            )
+            .is_ok());
 
         let written_data = encoder.into_writer().unwrap();
 

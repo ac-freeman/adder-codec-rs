@@ -92,8 +92,13 @@ impl<W: Write> CompressedOutput<W> {
             let mut event_memory_inverse: [EventCoordless; BLOCK_SIZE_AREA] =
                 [Default::default(); BLOCK_SIZE_AREA];
 
-            let (start_t, start_d, d_residuals, dt_residuals, sparam) =
-                inter_model.forward_intra_prediction(0, self.meta.ref_interval, &block.events);
+            let (start_t, start_d, d_residuals, dt_residuals, sparam) = inter_model
+                .forward_intra_prediction(
+                    0,
+                    self.meta.ref_interval,
+                    self.meta.delta_t_max,
+                    &block.events,
+                );
 
             if cube_idx == 0 {
                 self.adu.head_event_t = start_t;
@@ -140,7 +145,7 @@ impl<W: Write> CompressedOutput<W> {
         }
     }
 
-    fn compress_events(&mut self) -> Result<(), CodecError> {
+    pub fn compress_events(&mut self) -> Result<(), CodecError> {
         self.organize_adus();
         match (
             self.arithmetic_coder.as_mut(),
@@ -150,6 +155,8 @@ impl<W: Write> CompressedOutput<W> {
             (Some(encoder), Some(contexts), Some(stream)) => {
                 self.adu
                     .compress(encoder, contexts, stream, self.meta.delta_t_max)?;
+                self.frame.reset();
+                self.adu = Adu::new();
             }
             (_, _, _) => {
                 return Err(CodecError::MalformedEncoder);
@@ -216,8 +223,15 @@ impl<W: Write> WriteCompression<W> for CompressedOutput<W> {
     }
 
     fn ingest_event(&mut self, event: Event) -> Result<(), CodecError> {
-        if let (true, _) = self.frame.add_event(event, self.meta.delta_t_max)? {
+        let tmp_dt = event.delta_t;
+        if tmp_dt == u32::MAX {
             self.compress_events()?;
+            panic!("temp");
+        }
+
+        if let (true, _) = self.frame.add_event(event, self.meta.delta_t_max)? {
+            // self.compress_events()?;
+            // self.frame.add_event(event, self.meta.delta_t_max)?;
         };
         Ok(())
     }

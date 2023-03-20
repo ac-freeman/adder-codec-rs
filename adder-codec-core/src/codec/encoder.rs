@@ -214,6 +214,7 @@ mod tests {
     use crate::codec::raw::stream::RawOutput;
     use crate::codec::{CodecMetadata, LATEST_CODEC_VERSION};
 
+    use crate::codec::compressed::adu::frame::Adu;
     use crate::{Coord, PlaneSize};
     use bitstream_io::{BigEndian, BitWriter};
     use std::io::BufWriter;
@@ -337,6 +338,7 @@ mod tests {
                 source_camera: Default::default(),
             },
             frame: Default::default(),
+            adu: Adu::new(),
             arithmetic_coder: None,
             contexts: None,
             stream: Some(BitWriter::endian(bufwriter, BigEndian)),
