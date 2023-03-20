@@ -136,6 +136,7 @@ impl<W: Write> CompressedOutput<W> {
     }
 
     pub fn compress_events(&mut self) -> Result<(), CodecError> {
+        eprintln!("Compressing events...");
         self.organize_adus();
         match (
             self.arithmetic_coder.as_mut(),
@@ -213,16 +214,9 @@ impl<W: Write> WriteCompression<W> for CompressedOutput<W> {
     }
 
     fn ingest_event(&mut self, event: Event) -> Result<(), CodecError> {
-        let tmp_dt = event.delta_t;
-        if tmp_dt == u32::MAX {
-            self.compress_events()?;
-            return Ok(());
-            // panic!("temp");
-        }
-
         if let (true, _) = self.frame.add_event(event, self.meta.delta_t_max)? {
-            // self.compress_events()?;
-            // self.frame.add_event(event, self.meta.delta_t_max)?;
+            self.compress_events()?;
+            self.frame.add_event(event, self.meta.delta_t_max)?;
         };
         Ok(())
     }

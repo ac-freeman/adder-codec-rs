@@ -682,11 +682,14 @@ impl Frame {
     pub fn add_event(&mut self, event: Event, dtm: DeltaT) -> Result<(bool, usize), BlockError> {
         // Used to determine if the frame is big enough that we can / need to compress it now
         let ev_t = event.delta_t;
+        if self.start_event_t == 0 {
+            self.start_event_t = ev_t;
+        }
 
-        // if ev_t > self.start_event_t + dtm {
-        //     // self.start_event_t = a;
-        //     return Ok((true, 0));
-        // }
+        if ev_t > self.start_event_t + dtm {
+            // self.start_event_t = a;
+            return Ok((true, 0));
+        }
 
         if !self.index_hashmap.contains_key(&event.coord) {
             self.index_hashmap
@@ -2063,39 +2066,15 @@ mod tests {
         let mut start_event_t = 0;
         let mut compress = false;
         let mut ev_t = 0;
-        let mut count = 0;
         loop {
             match reader.digest_event(&mut bitreader) {
                 Ok(ev) => {
-                    count += 1;
                     encoder.ingest_event(ev).unwrap();
-
-                    if count % 10000000 == 0 {
-                        encoder.ingest_event(Event {
-                            coord: Coord {
-                                x: 0,
-                                y: 0,
-                                c: None,
-                            },
-                            d: 0,
-                            delta_t: u32::MAX,
-                        });
-                    }
                 }
                 Err(_) => {
                     break;
                 }
             }
         }
-        // TODO: temporary. make output private again
-        encoder.ingest_event(Event {
-            coord: Coord {
-                x: 0,
-                y: 0,
-                c: None,
-            },
-            d: 0,
-            delta_t: u32::MAX,
-        });
     }
 }
