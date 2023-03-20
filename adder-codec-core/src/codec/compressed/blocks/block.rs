@@ -2051,7 +2051,7 @@ mod tests {
     #[test]
     fn test_real_data_tshift_inter_refactor_adu_cast_direct_compressor() {
         let mut bufreader =
-            BufReader::new(File::open("/home/andrew/Downloads/test_abs2.adder").unwrap());
+            BufReader::new(File::open("/home/andrew/Downloads/bunny_test.adder").unwrap());
         let mut bitreader = BitReader::endian(bufreader, BigEndian);
         let compression = RawInput::new();
         let mut reader = Decoder::new_raw(compression, &mut bitreader).unwrap();
@@ -2076,5 +2076,25 @@ mod tests {
                 }
             }
         }
+
+        let mut writer = encoder.close_writer().unwrap().unwrap();
+        writer.flush().unwrap();
+
+        eprintln!(
+            "Output length: {}",
+            File::open("/home/andrew/Downloads/test_abs_recon2.adder")
+                .unwrap()
+                .metadata()
+                .unwrap()
+                .len()
+        );
+        eprintln!(
+            "Input length: {}",
+            File::open("/home/andrew/Downloads/bunny_test.adder")
+                .unwrap()
+                .metadata()
+                .unwrap()
+                .len()
+        );
     }
 }
