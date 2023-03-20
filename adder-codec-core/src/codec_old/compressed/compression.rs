@@ -89,8 +89,8 @@ pub fn dt_residual_default_weights_whole_range(
     delta_t_max: DeltaT,
     delta_t_ref: DeltaT,
 ) -> Weights {
-    let min: usize = -(i16::MIN as i64) as usize;
-    let mut counts: Vec<u64> = vec![1; i16::MAX as usize * 2 + 1];
+    let min: usize = delta_t_max as usize * 2;
+    let mut counts: Vec<u64> = vec![1; delta_t_max as usize * 4 + 1];
 
     // Give high probability to range [-delta_t_ref, delta_t_ref]
     let slice =
@@ -125,7 +125,7 @@ impl Contexts {
             meta.ref_interval,
         ));
 
-        // Delta_t context with whole range. Need to account for range [i16::MIN, i16::MAX]
+        // Delta_t context with whole range. Need to account for range [-2 dtm, 2 dtm]
         let dt_context_whole_range = source_model.push_context_with_weights(
             dt_residual_default_weights_whole_range(meta.delta_t_max, meta.ref_interval),
         );
@@ -336,7 +336,7 @@ pub fn dt_resid_offset_i16_whole_range(
     dt_resid: DeltaTResidualSmall,
     delta_t_max: DeltaT,
 ) -> usize {
-    let ret = (dt_resid as i64 - i16::MIN as i64) as usize;
+    let ret = (dt_resid as i64 + (delta_t_max as i64 * 2)) as usize;
     ret
 }
 
@@ -346,7 +346,7 @@ pub fn dt_resid_offset_i16_inverse_whole_range(
     dt_resid_symbol: usize,
     delta_t_max: DeltaT,
 ) -> DeltaTResidualSmall {
-    (dt_resid_symbol as i64 + i16::MIN as i64) as DeltaTResidualSmall
+    (dt_resid_symbol as i64 - (delta_t_max as i64 * 2)) as DeltaTResidualSmall
 }
 
 pub struct CompressionModelDecoder<R: std::io::Read> {
