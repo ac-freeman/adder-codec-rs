@@ -114,7 +114,7 @@ impl<W: Write> CompressedOutput<W> {
                 cube.cube_idx_x as u16,
             );
 
-            let base_sparam = 4; // TODO: Dynamic control of this parameter
+            let base_sparam = 7; // TODO: Dynamic control of this parameter
 
             for block in cube.blocks_r.iter_mut().skip(1) {
                 let (d_residuals, t_residuals, sparam) = inter_model.forward_inter_prediction(
