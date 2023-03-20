@@ -1,15 +1,15 @@
-use crate::codec::compressed::adu::intrablock::{
-    compress_d_residuals, compress_dt_residuals, decompress_d_residuals, decompress_dt_residuals,
-};
+use crate::codec::compressed::adu::intrablock::{compress_d_residuals, decompress_d_residuals};
 use crate::codec::compressed::adu::AduCompression;
 use crate::codec::compressed::blocks::prediction::D_RESIDUALS_EMPTY;
 use crate::codec::compressed::blocks::{DResidual, BLOCK_SIZE_AREA};
 use crate::codec::compressed::stream::{CompressedInput, CompressedOutput};
 use crate::codec::{CodecError, ReadCompression, WriteCompression};
-use crate::codec_old::compressed::compression::Contexts;
+use crate::codec_old::compressed::compression::{
+    dt_resid_offset_i16, dt_resid_offset_i16_inverse, Contexts, DeltaTResidualSmall,
+};
 use crate::codec_old::compressed::fenwick::context_switching::FenwickModel;
 use crate::DeltaT;
-use arithmetic_coding::Encoder;
+use arithmetic_coding::{Decoder, Encoder};
 use bitstream_io::{BigEndian, BitRead, BitReader, BitWrite, BitWriter};
 use std::io::{Error, Read, Write};
 
@@ -86,6 +86,37 @@ impl AduCompression for AduInterBlock {
         );
 
         inter_block
+    }
+}
+
+fn compress_dt_residuals<W: Write>(
+    dt_residuals: &[DeltaTResidualSmall; BLOCK_SIZE_AREA],
+    encoder: &mut Encoder<FenwickModel, BitWriter<W, BigEndian>>,
+    dt_context: usize,
+    stream: &mut BitWriter<W, BigEndian>,
+    delta_t_max: DeltaT,
+) -> Result<(), CodecError> {
+    encoder.model.set_context(dt_context);
+    for dt_residual in dt_residuals.iter() {
+        encoder.encode(
+            Some(&dt_resid_offset_i16(*dt_residual, delta_t_max)),
+            stream,
+        )?;
+    }
+    Ok(())
+}
+
+fn decompress_dt_residuals<R: Read>(
+    dt_residuals: &mut [DeltaTResidualSmall; BLOCK_SIZE_AREA],
+    decoder: &mut Decoder<FenwickModel, BitReader<R, BigEndian>>,
+    dt_context: usize,
+    stream: &mut BitReader<R, BigEndian>,
+    delta_t_max: DeltaT,
+) {
+    decoder.model.set_context(dt_context);
+    for dt_residual in dt_residuals.iter_mut() {
+        let symbol = decoder.decode(stream).unwrap();
+        *dt_residual = dt_resid_offset_i16_inverse(symbol.unwrap(), delta_t_max);
     }
 }
 

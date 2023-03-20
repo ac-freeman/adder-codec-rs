@@ -85,9 +85,29 @@ pub fn dt_residual_default_weights(delta_t_max: DeltaT, delta_t_ref: DeltaT) -> 
     tmp
 }
 
+pub fn dt_residual_default_weights_whole_range(
+    delta_t_max: DeltaT,
+    delta_t_ref: DeltaT,
+) -> Weights {
+    let min: usize = -(i16::MIN as i64) as usize;
+    let mut counts: Vec<u64> = vec![1; i16::MAX as usize * 2 + 1];
+
+    // Give high probability to range [-delta_t_ref, delta_t_ref]
+    let slice =
+        &mut counts[(-(delta_t_ref as i64) + min as i64) as usize..(delta_t_ref as usize) + min];
+    for count in slice {
+        *count = 20;
+    }
+
+    let tmp = Weights::new_with_counts(counts.len(), &counts);
+    assert_eq!(tmp.range(None), 0..1);
+    tmp
+}
+
 pub struct Contexts {
     pub(crate) d_context: usize,
     pub(crate) dt_context: usize,
+    pub(crate) dt_context_whole_range: usize,
     pub(crate) u8_general_context: usize,
     // pub(crate) u16_general_context: usize,
     // pub(crate) u32_general_context: usize,
@@ -105,6 +125,11 @@ impl Contexts {
             meta.ref_interval,
         ));
 
+        // Delta_t context with whole range. Need to account for range [i16::MIN, i16::MAX]
+        let dt_context_whole_range = source_model.push_context_with_weights(
+            dt_residual_default_weights_whole_range(meta.delta_t_max, meta.ref_interval),
+        );
+
         let u8_general_context = source_model.push_context_with_weights(Weights::new_with_counts(
             (u8::MAX) as usize + 1,
             &vec![1; (u8::MAX) as usize + 1],
@@ -121,6 +146,7 @@ impl Contexts {
         Contexts {
             d_context,
             dt_context,
+            dt_context_whole_range,
             u8_general_context,
             // u16_general_context,
             // u32_general_context,
@@ -282,11 +308,13 @@ pub fn dt_resid_offset(dt_resid: DeltaTResidual, delta_t_max: DeltaT) -> usize {
 /// Takes a dt_resid value and shifts it to be an index for the probability table
 #[inline(always)]
 pub fn dt_resid_offset_i16(dt_resid: DeltaTResidualSmall, delta_t_max: DeltaT) -> usize {
-    if delta_t_max < i16::MAX as DeltaT {
+    let ret = if delta_t_max < i16::MAX as DeltaT {
         (dt_resid as i64 + delta_t_max as i64) as usize
     } else {
         (dt_resid as i64 - i16::MIN as i64) as usize
-    }
+    };
+    assert!(ret < 10000000);
+    ret
 }
 
 /// Takes a decoded dt_resid symbol and returns the actual dt_resid value
@@ -300,6 +328,25 @@ pub fn dt_resid_offset_i16_inverse(
     } else {
         (dt_resid_symbol as i64 + i16::MIN as i64) as DeltaTResidualSmall
     }
+}
+
+/// Takes a dt_resid value and shifts it to be an index for the probability table
+#[inline(always)]
+pub fn dt_resid_offset_i16_whole_range(
+    dt_resid: DeltaTResidualSmall,
+    delta_t_max: DeltaT,
+) -> usize {
+    let ret = (dt_resid as i64 - i16::MIN as i64) as usize;
+    ret
+}
+
+/// Takes a decoded dt_resid symbol and returns the actual dt_resid value
+#[inline(always)]
+pub fn dt_resid_offset_i16_inverse_whole_range(
+    dt_resid_symbol: usize,
+    delta_t_max: DeltaT,
+) -> DeltaTResidualSmall {
+    (dt_resid_symbol as i64 + i16::MIN as i64) as DeltaTResidualSmall
 }
 
 pub struct CompressionModelDecoder<R: std::io::Read> {

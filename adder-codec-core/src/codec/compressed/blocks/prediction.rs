@@ -93,13 +93,20 @@ impl PredictionModel {
                     init = true;
                     // self.d_residuals[idx] = prev.d as DResidual;
                     // self.dt_pred_residuals[idx] = prev.t() as DeltaTResidual;
+
+                    // self.event_memory[idx] = *prev;
+                    // self.event_memory[idx].delta_t -= self.t_memory[idx];
                     self.t_memory[idx] = prev.t();
                     if self.time_modulation_mode == FramePerfect && self.t_memory[idx] % dt_ref != 0
                     {
                         self.t_memory[idx] = ((self.t_memory[idx] / dt_ref) + 1) * dt_ref;
                     }
+
                     self.t_recon[idx] = self.t_memory[idx];
-                    self.event_memory[idx] = *prev;
+
+                    // // convert absolute t to delta_t
+                    // self.event_memory[idx].delta_t -= prev.delta_t;
+
                     start = *prev;
                 }
 
@@ -112,6 +119,11 @@ impl PredictionModel {
 
                         self.d_residuals[next_idx + idx + 1] = d_resid;
                         self.dt_pred_residuals[next_idx + idx + 1] = t_resid;
+
+                        // self.event_memory[next_idx + idx + 1] = *next;
+                        // self.event_memory[next_idx + idx + 1].delta_t -=
+                        //     self.t_memory[next_idx + idx + 1];
+
                         self.t_memory[next_idx + idx + 1] = next.t();
                         if self.time_modulation_mode == FramePerfect
                             && self.t_memory[next_idx + idx + 1] % dt_ref != 0
@@ -120,10 +132,22 @@ impl PredictionModel {
                                 ((self.t_memory[next_idx + idx + 1] / dt_ref) + 1) * dt_ref;
                         }
                         self.t_recon[next_idx + idx + 1] = self.t_memory[next_idx + idx + 1];
-                        self.event_memory[next_idx + idx + 1] = *next;
+
+                        // convert absolute t to delta_t
+                        // if self.event_memory[next_idx + idx + 1].delta_t > dtm {
+                        //     self.event_memory[next_idx + idx + 1].delta_t -= start.delta_t;
+                        // }
+
                         if t_resid.abs() > max_t_resid {
                             max_t_resid = t_resid.abs();
-                            assert!(max_t_resid <= dtm as i64);
+                            if max_t_resid > dtm as i64 {
+                                eprintln!(
+                                    "max_t_resid: {}, next_dt: {}, start_dt: {}, ",
+                                    max_t_resid, next.delta_t, start.delta_t
+                                );
+                            }
+                            // assert!(max_t_resid <= dtm as i64);
+                            // assert!(max_t_resid < 100000000);
                         }
                         break;
                     }
@@ -183,6 +207,7 @@ impl PredictionModel {
 
                 // The true delta_t
                 let delta_t = next.t() - self.t_memory[idx];
+
                 assert!(delta_t <= dtm);
 
                 self.t_memory[idx] = next.t();
@@ -193,11 +218,14 @@ impl PredictionModel {
 
                 let dt_pred = predict_delta_t(event_mem, d_resid, dtm);
 
+                // event_mem.delta_t = delta_t; // ???? TODO
+
                 let dt_pred_residual = delta_t as DeltaTResidual - dt_pred as DeltaTResidual;
                 self.dt_pred_residuals[idx] = dt_pred_residual;
                 if dt_pred_residual.abs() > max_t_resid {
                     max_t_resid = dt_pred_residual.abs();
                     assert!(max_t_resid <= dtm as DeltaTResidual);
+                    assert!(max_t_resid < 100000000);
                 }
             }
         }
@@ -215,7 +243,7 @@ impl PredictionModel {
             .zip(self.dt_pred_residuals_i16.iter_mut())
         {
             *t_resid_i16 = (*t_resid >> sparam) as i16;
-            assert!(t_resid_i16.abs() <= dtm as i16);
+            // assert!(t_resid_i16.abs() <= dtm as i16);
         }
 
         self.reconstruct_t_values(sparam, dtm, dt_ref);
@@ -302,6 +330,7 @@ impl PredictionModel {
                     &mut self.t_recon[idx],
                     dt_pred,
                     dt_pred_residual,
+                    dtm,
                 );
 
                 if self.time_modulation_mode == FramePerfect && self.t_recon[idx] % dt_ref != 0 {
@@ -356,10 +385,12 @@ fn update_values_from_prediction(
     t_recon: &mut AbsoluteT,
     dt_pred: DeltaT,
     dt_pred_residual: DeltaTResidual,
+    dtm: DeltaT,
 ) {
     let recon_t =
         (*t_recon as DeltaTResidual + dt_pred as DeltaTResidual + dt_pred_residual) as AbsoluteT;
     event_memory.delta_t = recon_t - *t_recon;
+    assert!(event_memory.delta_t <= dtm);
     // self.event_memory[idx].d = d; TODO?
     *t_recon = recon_t;
 }
