@@ -513,8 +513,8 @@ pub struct Cube {
     pub inter_model_r: PredictionModel,
     pub blocks_g: Vec<Block>,
     pub blocks_b: Vec<Block>,
-    cube_idx_y: usize,
-    cube_idx_x: usize,
+    pub(crate) cube_idx_y: usize,
+    pub(crate) cube_idx_x: usize,
     // cube_idx_c: usize,
     /// Keeps track of the block vec index that is currently being written to for each coordinate.
     block_idx_map_r: [usize; BLOCK_SIZE_AREA],
@@ -588,11 +588,13 @@ fn set_event_for_channel(
     }
 }
 
+#[derive(Default)]
 pub struct Frame {
     pub cubes: Vec<Cube>,
     pub cube_width: usize,
     pub cube_height: usize,
     pub color: bool,
+    start_event_t: DeltaT,
 
     /// Maps event coordinates to their cube index and block index
     index_hashmap: HashMap<Coord, FrameToBlockIndexMap>,
@@ -639,6 +641,7 @@ impl Frame {
             cube_width,
             cube_height,
             color,
+            start_event_t: 0,
             index_hashmap,
         }
     }
@@ -660,18 +663,32 @@ impl Frame {
     ///             delta_t: 100,
     ///         };
     /// let mut frame = Frame::new(640, 480, true);
-    /// assert_eq!(frame.add_event(event).unwrap(), 1); // added to cube with idx=1
+    /// assert_eq!(frame.add_event(event,).unwrap(), 1); // added to cube with idx=1
     /// ```
-    pub fn add_event(&mut self, event: Event) -> Result<usize, BlockError> {
+    pub fn add_event(&mut self, event: Event, dtm: DeltaT) -> Result<(bool, usize), BlockError> {
         if !self.index_hashmap.contains_key(&event.coord) {
             self.index_hashmap
                 .insert(event.coord, self.event_coord_to_block_idx(&event));
         }
         let index_map = self.index_hashmap.get(&event.coord).unwrap();
 
+        // Used to determine if the frame is big enough that we can / need to compress it now
+        let ev_t = event.delta_t;
+
         // self.event_coord_to_block_idx(&event);
         self.cubes[index_map.cube_idx].set_event(event, index_map.block_idx)?;
-        Ok(index_map.cube_idx)
+
+        match ev_t {
+            a if self.start_event_t == 0 => {
+                self.start_event_t = a;
+                Ok((false, index_map.cube_idx))
+            }
+            a if a > self.start_event_t + dtm => {
+                self.start_event_t = a;
+                Ok((true, index_map.cube_idx))
+            }
+            _ => Ok((false, index_map.cube_idx)),
+        }
     }
 
     /// Add an event that's given in delta_t mode, converting it to absolute_t mode in the process.
@@ -765,11 +782,12 @@ mod tests {
         width: usize,
         height: usize,
         time_modulation_mode: Mode,
+        delta_t_max: DeltaT,
     ) -> Frame {
         let mut frame = Frame::new(width, height, true, time_modulation_mode);
 
         for event in events {
-            frame.add_event(event).unwrap();
+            frame.add_event(event, delta_t_max).unwrap();
         }
         frame
     }
@@ -819,14 +837,14 @@ mod tests {
     #[test]
     fn test_setup_frame() {
         let events = get_random_events(None, 10000, 640, 480, 3, 25500);
-        let frame = setup_frame(events, 640, 480, Continuous);
+        let frame = setup_frame(events, 640, 480, Continuous, 25500);
     }
 
     /// Test that cubes are growing correctlly, according to the incoming events.
     #[test]
     fn test_cube_growth() {
         let events = get_random_events(None, 100000, 640, 480, 3, 25500);
-        let frame = setup_frame(events.clone(), 640, 480, Continuous);
+        let frame = setup_frame(events.clone(), 640, 480, Continuous, 25500);
 
         let mut cube_counts_r = vec![0; frame.cubes.len()];
         let mut cube_counts_g = vec![0; frame.cubes.len()];
@@ -881,7 +899,7 @@ mod tests {
             1,
             dtm,
         );
-        let mut frame = setup_frame(events.clone(), BLOCK_SIZE, BLOCK_SIZE, Continuous);
+        let mut frame = setup_frame(events.clone(), BLOCK_SIZE, BLOCK_SIZE, Continuous, dtm);
         for mut cube in &mut frame.cubes {
             for block in &mut cube.blocks_r {
                 assert!(block.fill_count <= BLOCK_SIZE_AREA as u16);
@@ -929,7 +947,7 @@ mod tests {
             1,
             dtm,
         );
-        let mut frame = setup_frame(events.clone(), BLOCK_SIZE, BLOCK_SIZE, Continuous);
+        let mut frame = setup_frame(events.clone(), BLOCK_SIZE, BLOCK_SIZE, Continuous, dtm);
         for mut cube in &mut frame.cubes {
             for block in &mut cube.blocks_r {
                 assert!(block.fill_count <= BLOCK_SIZE_AREA as u16);
@@ -977,7 +995,7 @@ mod tests {
             1,
             dtm,
         );
-        let mut frame = setup_frame(events.clone(), BLOCK_SIZE, BLOCK_SIZE, Continuous);
+        let mut frame = setup_frame(events.clone(), BLOCK_SIZE, BLOCK_SIZE, Continuous, dtm);
         for mut cube in &mut frame.cubes {
             for block in &mut cube.blocks_r {
                 assert!(block.fill_count <= BLOCK_SIZE_AREA as u16);
@@ -1026,7 +1044,7 @@ mod tests {
             1,
             dtm,
         );
-        let mut frame = setup_frame(events.clone(), BLOCK_SIZE, BLOCK_SIZE, Continuous);
+        let mut frame = setup_frame(events.clone(), BLOCK_SIZE, BLOCK_SIZE, Continuous, dtm);
         for mut cube in &mut frame.cubes {
             for block in &mut cube.blocks_r {
                 assert!(block.fill_count <= BLOCK_SIZE_AREA as u16);
@@ -1068,7 +1086,7 @@ mod tests {
     fn test_intra_compression_lossy_1_big_frame() {
         let dtm = 255000;
         let events = get_random_events(Some(743822), 10000, 640, 480, 1, dtm);
-        let mut frame = setup_frame(events.clone(), 640, 480, Continuous);
+        let mut frame = setup_frame(events.clone(), 640, 480, Continuous, dtm);
         for mut cube in &mut frame.cubes {
             for block in &mut cube.blocks_r {
                 assert!(block.fill_count <= BLOCK_SIZE_AREA as u16);
@@ -1135,6 +1153,7 @@ mod tests {
             reader.meta().plane.w_usize(),
             reader.meta().plane.h_usize(),
             FramePerfect,
+            reader.meta().delta_t_max,
         );
         let qp = 6;
         for mut cube in &mut frame.cubes {
@@ -1167,7 +1186,7 @@ mod tests {
                             d: event.unwrap().d,
                             delta_t: event.unwrap().delta_t,
                         };
-                        encoder.ingest_event(&event_coord).unwrap();
+                        encoder.ingest_event(event_coord).unwrap();
                     }
                 }
 
@@ -1652,6 +1671,7 @@ mod tests {
             reader.meta().plane.w_usize(),
             reader.meta().plane.h_usize(),
             FramePerfect,
+            reader.meta().delta_t_max,
         );
         let dt_ref = reader.meta().ref_interval;
         let dtm = reader.meta().delta_t_max;
@@ -1715,7 +1735,7 @@ mod tests {
                         d: event.unwrap().d,
                         delta_t: event.unwrap().delta_t,
                     };
-                    encoder.ingest_event(&event_coord).unwrap();
+                    encoder.ingest_event(event_coord).unwrap();
                 }
             }
 
@@ -1764,7 +1784,7 @@ mod tests {
                             d: event.unwrap().d,
                             delta_t: event.unwrap().delta_t,
                         };
-                        encoder.ingest_event(&event_coord).unwrap();
+                        encoder.ingest_event(event_coord).unwrap();
                     }
                 }
             }
@@ -1807,6 +1827,7 @@ mod tests {
             reader.meta().plane.w_usize(),
             reader.meta().plane.h_usize(),
             FramePerfect,
+            reader.meta().delta_t_max,
         );
         let dt_ref = reader.meta().ref_interval;
         let dtm = reader.meta().delta_t_max;
@@ -1880,7 +1901,7 @@ mod tests {
                         d: event.unwrap().d,
                         delta_t: event.unwrap().delta_t,
                     };
-                    encoder.ingest_event(&event_coord).unwrap();
+                    encoder.ingest_event(event_coord).unwrap();
                 }
             }
 
@@ -1936,7 +1957,7 @@ mod tests {
                             d: event.unwrap().d,
                             delta_t: event.unwrap().delta_t,
                         };
-                        encoder.ingest_event(&event_coord).unwrap();
+                        encoder.ingest_event(event_coord).unwrap();
                     }
                 }
             }
@@ -1995,6 +2016,36 @@ mod tests {
             compare_channels(&adu.cubes_r, &decoded_adu.cubes_r);
             compare_channels(&adu.cubes_g, &decoded_adu.cubes_g);
             compare_channels(&adu.cubes_b, &decoded_adu.cubes_b);
+        }
+    }
+
+    #[test]
+    fn test_real_data_tshift_inter_refactor_adu_cast_direct_compressor() {
+        let mut bufreader =
+            BufReader::new(File::open("/home/andrew/Downloads/test_abs2.adder").unwrap());
+        let mut bitreader = BitReader::endian(bufreader, BigEndian);
+        let compression = RawInput::new();
+        let mut reader = Decoder::new_raw(compression, &mut bitreader).unwrap();
+
+        let bufwriter =
+            BufWriter::new(File::create("/home/andrew/Downloads/test_abs_recon2.adder").unwrap());
+        let compression = CompressedOutput::new(reader.meta().clone(), bufwriter);
+
+        let dtm = compression.meta.delta_t_max;
+        let mut encoder: Encoder<BufWriter<File>> = Encoder::new_compressed(compression);
+
+        let mut start_event_t = 0;
+        let mut compress = false;
+        let mut ev_t = 0;
+        loop {
+            match reader.digest_event(&mut bitreader) {
+                Ok(ev) => {
+                    encoder.ingest_event(ev).unwrap();
+                }
+                Err(_) => {
+                    break;
+                }
+            }
         }
     }
 }
