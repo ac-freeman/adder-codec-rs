@@ -2,8 +2,12 @@ use crate::codec::compressed::adu::interblock::AduInterBlock;
 use crate::codec::compressed::adu::intrablock::AduIntraBlock;
 use crate::codec::compressed::adu::AduCompression;
 use crate::codec::compressed::stream::{CompressedInput, CompressedOutput};
-use crate::codec::{ReadCompression, WriteCompression};
-use bitstream_io::{BigEndian, BitReader};
+use crate::codec::{CodecError, ReadCompression, WriteCompression};
+use crate::codec_old::compressed::compression::Contexts;
+use crate::codec_old::compressed::fenwick::context_switching::FenwickModel;
+use crate::DeltaT;
+use arithmetic_coding::Encoder;
+use bitstream_io::{BigEndian, BitReader, BitWriter};
 use std::io::{Error, Read, Write};
 
 pub struct AduCube {
@@ -38,35 +42,38 @@ impl AduCube {
 }
 
 impl AduCompression for AduCube {
-    fn compress<W: Write>(&self, output: &mut CompressedOutput<W>) -> Result<(), Error> {
+    fn compress<W: Write>(
+        &self,
+        encoder: &mut Encoder<FenwickModel, BitWriter<W, BigEndian>>,
+        contexts: &mut Contexts,
+        stream: &mut BitWriter<W, BigEndian>,
+        dtm: DeltaT,
+    ) -> Result<(), CodecError> {
         // Get the context references
-        let mut encoder = output.arithmetic_coder.as_mut().unwrap();
-        let mut u8_context = output.contexts.as_mut().unwrap().u8_general_context;
+        let mut u8_context = contexts.u8_general_context;
 
         encoder.model.set_context(u8_context);
 
         // Write the cube coordinates
         for byte in self.idx_y.to_be_bytes().iter() {
-            encoder.encode(Some(&(*byte as usize)), output.stream.as_mut().unwrap());
+            encoder.encode(Some(&(*byte as usize)), stream)?;
         }
         for byte in self.idx_x.to_be_bytes().iter() {
-            encoder.encode(Some(&(*byte as usize)), output.stream.as_mut().unwrap());
+            encoder.encode(Some(&(*byte as usize)), stream)?;
         }
 
         // Write the intra block
-        self.intra_block.compress(output)?;
-
-        let mut encoder = output.arithmetic_coder.as_mut().unwrap();
+        self.intra_block.compress(encoder, contexts, stream, dtm)?;
 
         // Write the number of inter blocks
         encoder.model.set_context(u8_context);
         for byte in self.num_inter_blocks.to_be_bytes().iter() {
-            encoder.encode(Some(&(*byte as usize)), output.stream.as_mut().unwrap());
+            encoder.encode(Some(&(*byte as usize)), stream)?;
         }
 
         // Write the inter blocks
         for inter_block in &self.inter_blocks {
-            inter_block.compress(output)?;
+            inter_block.compress(encoder, contexts, stream, dtm)?;
         }
 
         Ok(())

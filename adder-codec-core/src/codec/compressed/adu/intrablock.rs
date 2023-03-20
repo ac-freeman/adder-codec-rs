@@ -2,10 +2,10 @@ use crate::codec::compressed::adu::AduCompression;
 use crate::codec::compressed::blocks::prediction::D_RESIDUALS_EMPTY;
 use crate::codec::compressed::blocks::{DResidual, BLOCK_SIZE_AREA, D_ENCODE_NO_EVENT};
 use crate::codec::compressed::stream::{CompressedInput, CompressedOutput};
-use crate::codec::{ReadCompression, WriteCompression};
+use crate::codec::{CodecError, ReadCompression, WriteCompression};
 use crate::codec_old::compressed::compression::{
     d_resid_offset, d_resid_offset_inverse, dt_resid_offset, dt_resid_offset_i16,
-    dt_resid_offset_i16_inverse, DeltaTResidual, DeltaTResidualSmall,
+    dt_resid_offset_i16_inverse, Contexts, DeltaTResidual, DeltaTResidualSmall,
 };
 use crate::codec_old::compressed::fenwick::context_switching::FenwickModel;
 use crate::{AbsoluteT, DeltaT, D};
@@ -39,13 +39,17 @@ pub struct AduIntraBlock {
 }
 
 impl AduCompression for AduIntraBlock {
-    fn compress<W: Write>(&self, output: &mut CompressedOutput<W>) -> Result<(), std::io::Error> {
+    fn compress<W: Write>(
+        &self,
+        encoder: &mut Encoder<FenwickModel, BitWriter<W, BigEndian>>,
+        contexts: &mut Contexts,
+        stream: &mut BitWriter<W, BigEndian>,
+        dtm: DeltaT,
+    ) -> Result<(), CodecError> {
         // Get the context references
-        let mut encoder = output.arithmetic_coder.as_mut().unwrap();
-        let mut d_context = output.contexts.as_mut().unwrap().d_context;
-        let mut dt_context = output.contexts.as_mut().unwrap().dt_context;
-        let mut u8_context = output.contexts.as_mut().unwrap().u8_general_context;
-        let mut stream = output.stream.as_mut().unwrap();
+        let mut d_context = contexts.d_context;
+        let mut dt_context = contexts.dt_context;
+        let mut u8_context = contexts.u8_general_context;
 
         encoder.model.set_context(u8_context);
 
@@ -67,13 +71,7 @@ impl AduCompression for AduIntraBlock {
         compress_d_residuals(&self.d_residuals, encoder, d_context, stream);
 
         // Write the dt_residuals
-        compress_dt_residuals(
-            &self.dt_residuals,
-            encoder,
-            dt_context,
-            stream,
-            output.meta.delta_t_max,
-        );
+        compress_dt_residuals(&self.dt_residuals, encoder, dt_context, stream, dtm);
 
         Ok(())
     }
@@ -132,13 +130,12 @@ pub fn compress_d_residuals<W: Write>(
     encoder: &mut Encoder<FenwickModel, BitWriter<W, BigEndian>>,
     d_context: usize,
     stream: &mut BitWriter<W, BigEndian>,
-) {
+) -> Result<(), CodecError> {
     encoder.model.set_context(d_context);
     for d_residual in d_residuals.iter() {
-        encoder
-            .encode(Some(&d_resid_offset(*d_residual)), stream)
-            .unwrap();
+        encoder.encode(Some(&d_resid_offset(*d_residual)), stream)?;
     }
+    Ok(())
 }
 
 pub fn decompress_d_residuals<R: Read>(
@@ -160,16 +157,15 @@ pub fn compress_dt_residuals<W: Write>(
     dt_context: usize,
     stream: &mut BitWriter<W, BigEndian>,
     delta_t_max: DeltaT,
-) {
+) -> Result<(), CodecError> {
     encoder.model.set_context(dt_context);
     for dt_residual in dt_residuals.iter() {
-        encoder
-            .encode(
-                Some(&dt_resid_offset_i16(*dt_residual, delta_t_max)),
-                stream,
-            )
-            .unwrap();
+        encoder.encode(
+            Some(&dt_resid_offset_i16(*dt_residual, delta_t_max)),
+            stream,
+        )?;
     }
+    Ok(())
 }
 
 pub fn decompress_dt_residuals<R: Read>(

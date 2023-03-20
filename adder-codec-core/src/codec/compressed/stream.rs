@@ -8,6 +8,7 @@ use crate::codec::compressed::adu::cube::AduCube;
 use crate::codec::compressed::adu::frame::{Adu, AduChannelType};
 use crate::codec::compressed::adu::interblock::AduInterBlock;
 use crate::codec::compressed::adu::intrablock::AduIntraBlock;
+use crate::codec::compressed::adu::AduCompression;
 use crate::codec::compressed::blocks::block::Frame;
 use crate::codec::compressed::blocks::{BLOCK_SIZE, BLOCK_SIZE_AREA};
 use crate::codec::header::{Magic, MAGIC_COMPRESSED};
@@ -83,7 +84,7 @@ impl<W: Write> CompressedOutput<W> {
         self.stream.as_mut().unwrap()
     }
 
-    fn compress_events(&mut self) {
+    fn organize_adus(&mut self) {
         for (cube_idx, cube) in self.frame.cubes.iter_mut().enumerate() {
             let mut block = &mut cube.blocks_r[0];
             let mut inter_model = &mut cube.inter_model_r;
@@ -137,6 +138,24 @@ impl<W: Write> CompressedOutput<W> {
 
             self.adu.add_cube(adu_cube, AduChannelType::R);
         }
+    }
+
+    fn compress_events(&mut self) -> Result<(), CodecError> {
+        self.organize_adus();
+        match (
+            self.arithmetic_coder.as_mut(),
+            self.contexts.as_mut(),
+            self.stream.as_mut(),
+        ) {
+            (Some(encoder), Some(contexts), Some(stream)) => {
+                self.adu
+                    .compress(encoder, contexts, stream, self.meta.delta_t_max)?;
+            }
+            (_, _, _) => {
+                return Err(CodecError::MalformedEncoder);
+            }
+        }
+        Ok(())
     }
 }
 
@@ -198,7 +217,7 @@ impl<W: Write> WriteCompression<W> for CompressedOutput<W> {
 
     fn ingest_event(&mut self, event: Event) -> Result<(), CodecError> {
         if let (true, _) = self.frame.add_event(event, self.meta.delta_t_max)? {
-            self.compress_events();
+            self.compress_events()?;
         };
         Ok(())
     }
