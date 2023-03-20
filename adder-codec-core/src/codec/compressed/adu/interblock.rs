@@ -5,8 +5,12 @@ use crate::codec::compressed::adu::AduCompression;
 use crate::codec::compressed::blocks::prediction::D_RESIDUALS_EMPTY;
 use crate::codec::compressed::blocks::{DResidual, BLOCK_SIZE_AREA};
 use crate::codec::compressed::stream::{CompressedInput, CompressedOutput};
-use crate::codec::{ReadCompression, WriteCompression};
-use bitstream_io::{BigEndian, BitRead, BitReader, BitWrite};
+use crate::codec::{CodecError, ReadCompression, WriteCompression};
+use crate::codec_old::compressed::compression::Contexts;
+use crate::codec_old::compressed::fenwick::context_switching::FenwickModel;
+use crate::DeltaT;
+use arithmetic_coding::Encoder;
+use bitstream_io::{BigEndian, BitRead, BitReader, BitWrite, BitWriter};
 use std::io::{Error, Read, Write};
 
 pub struct AduInterBlock {
@@ -21,32 +25,28 @@ pub struct AduInterBlock {
 }
 
 impl AduCompression for AduInterBlock {
-    fn compress<W: Write>(&self, output: &mut CompressedOutput<W>) -> Result<(), Error> {
+    fn compress<W: Write>(
+        &self,
+        encoder: &mut Encoder<FenwickModel, BitWriter<W, BigEndian>>,
+        contexts: &mut Contexts,
+        stream: &mut BitWriter<W, BigEndian>,
+        dtm: DeltaT,
+    ) -> Result<(), CodecError> {
         // Get the context references
-        let mut encoder = output.arithmetic_coder.as_mut().unwrap();
-        let mut d_context = output.contexts.as_mut().unwrap().d_context;
-        let mut dt_context = output.contexts.as_mut().unwrap().dt_context;
-        let mut stream = output.stream.as_mut().unwrap();
-        let mut u8_context = output.contexts.as_mut().unwrap().u8_general_context;
+        let mut d_context = contexts.d_context;
+        let mut dt_context = contexts.dt_context;
+        let mut u8_context = contexts.u8_general_context;
 
         encoder.model.set_context(u8_context);
 
         // Write the shift loss parameter.
-        encoder
-            .encode(Some(&(self.shift_loss_param as usize)), stream)
-            .unwrap();
+        encoder.encode(Some(&(self.shift_loss_param as usize)), stream)?;
 
         // Write the d_residuals
         compress_d_residuals(&self.d_residuals, encoder, d_context, stream);
 
         // Write the dt_residuals
-        compress_dt_residuals(
-            &self.t_residuals,
-            encoder,
-            dt_context,
-            stream,
-            output.meta.delta_t_max,
-        );
+        compress_dt_residuals(&self.t_residuals, encoder, dt_context, stream, dtm);
 
         Ok(())
     }

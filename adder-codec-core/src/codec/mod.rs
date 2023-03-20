@@ -160,6 +160,7 @@ use crate::codec::compressed::stream::{CompressedInput, CompressedOutput};
 // use crate::codec::empty::stream::EmptyOutput;
 use crate::codec::empty::stream::EmptyOutput;
 use crate::codec::raw::stream::{RawInput, RawOutput};
+use crate::codec_old::compressed::fenwick::ValueError;
 use thiserror::Error;
 
 #[allow(missing_docs)]
@@ -200,4 +201,7 @@ pub enum CodecError {
 
     #[error("Blocking error")]
     BlockError(#[from] crate::codec::compressed::blocks::block::BlockError),
+
+    #[error("Arithmetic coding error")]
+    ArithmeticCodingError(#[from] arithmetic_coding::Error),
 }

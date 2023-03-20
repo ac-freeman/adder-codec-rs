@@ -8,8 +8,12 @@ use crate::codec::compressed::adu::cube::AduCube;
 use crate::codec::compressed::adu::AduCompression;
 use crate::codec::compressed::blocks::{DResidual, BLOCK_SIZE_AREA};
 use crate::codec::compressed::stream::{CompressedInput, CompressedOutput};
-use crate::{AbsoluteT, D};
-use bitstream_io::{BigEndian, BitRead, BitReader};
+use crate::codec::CodecError;
+use crate::codec_old::compressed::compression::Contexts;
+use crate::codec_old::compressed::fenwick::context_switching::FenwickModel;
+use crate::{AbsoluteT, DeltaT, D};
+use arithmetic_coding::Encoder;
+use bitstream_io::{BigEndian, BitRead, BitReader, BitWriter};
 use std::io::{Error, Read, Write};
 use std::mem;
 
@@ -22,26 +26,28 @@ pub struct AduChannel {
 }
 
 impl AduCompression for AduChannel {
-    fn compress<W: Write>(&self, output: &mut CompressedOutput<W>) -> Result<(), Error> {
+    fn compress<W: Write>(
+        &self,
+        encoder: &mut Encoder<FenwickModel, BitWriter<W, BigEndian>>,
+        contexts: &mut Contexts,
+        stream: &mut BitWriter<W, BigEndian>,
+        dtm: DeltaT,
+    ) -> Result<(), CodecError> {
         // Get the context references
-        let mut encoder = output.arithmetic_coder.as_mut().unwrap();
-        let mut d_context = output.contexts.as_mut().unwrap().d_context;
-        let mut dt_context = output.contexts.as_mut().unwrap().dt_context;
-        let mut u8_context = output.contexts.as_mut().unwrap().u8_general_context;
-        let mut stream = output.stream.as_mut().unwrap();
+        let mut u8_context = contexts.u8_general_context;
 
         encoder.model.set_context(u8_context);
 
         // Write the number of cubes
         for byte in self.num_cubes.to_be_bytes().iter() {
-            encoder.encode(Some(&(*byte as usize)), &mut stream);
+            encoder.encode(Some(&(*byte as usize)), stream)?;
         }
 
         println!("num_cubes: {}", self.num_cubes);
 
         // Write the cubes
         for cube in self.cubes.iter() {
-            cube.compress(output)?;
+            cube.compress(encoder, contexts, stream, dtm)?;
         }
 
         Ok(())
@@ -130,25 +136,27 @@ impl Adu {
 }
 
 impl AduCompression for Adu {
-    fn compress<W: Write>(&self, output: &mut CompressedOutput<W>) -> Result<(), Error> {
+    fn compress<W: Write>(
+        &self,
+        encoder: &mut Encoder<FenwickModel, BitWriter<W, BigEndian>>,
+        contexts: &mut Contexts,
+        stream: &mut BitWriter<W, BigEndian>,
+        dtm: DeltaT,
+    ) -> Result<(), CodecError> {
         // Get the context references
-        let mut encoder = output.arithmetic_coder.as_mut().unwrap();
-        let mut d_context = output.contexts.as_mut().unwrap().d_context;
-        let mut dt_context = output.contexts.as_mut().unwrap().dt_context;
-        let mut u8_context = output.contexts.as_mut().unwrap().u8_general_context;
-        let mut stream = output.stream.as_mut().unwrap();
+        let mut u8_context = contexts.u8_general_context;
 
         encoder.model.set_context(u8_context);
 
         // Write the head event timestamp
         for byte in self.head_event_t.to_be_bytes().iter() {
-            encoder.encode(Some(&(*byte as usize)), &mut stream);
+            encoder.encode(Some(&(*byte as usize)), stream)?;
         }
 
         // Write the cubes
-        self.cubes_r.compress(output)?;
-        self.cubes_g.compress(output)?;
-        self.cubes_b.compress(output)?;
+        self.cubes_r.compress(encoder, contexts, stream, dtm)?;
+        self.cubes_g.compress(encoder, contexts, stream, dtm)?;
+        self.cubes_b.compress(encoder, contexts, stream, dtm)?;
 
         Ok(())
     }

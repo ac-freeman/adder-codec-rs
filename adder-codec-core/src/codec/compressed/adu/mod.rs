@@ -1,5 +1,10 @@
 use crate::codec::compressed::stream::{CompressedInput, CompressedOutput};
-use bitstream_io::{BigEndian, BitReader};
+use crate::codec::CodecError;
+use crate::codec_old::compressed::compression::Contexts;
+use crate::codec_old::compressed::fenwick::context_switching::FenwickModel;
+use crate::DeltaT;
+use arithmetic_coding::Encoder;
+use bitstream_io::{BigEndian, BitReader, BitWriter};
 use std::io::{Read, Write};
 
 pub mod cube;
@@ -8,7 +13,13 @@ pub mod interblock;
 pub mod intrablock;
 
 pub trait AduCompression {
-    fn compress<W: Write>(&self, output: &mut CompressedOutput<W>) -> Result<(), std::io::Error>;
+    fn compress<W: Write>(
+        &self,
+        encoder: &mut Encoder<FenwickModel, BitWriter<W, BigEndian>>,
+        contexts: &mut Contexts,
+        stream: &mut BitWriter<W, BigEndian>,
+        dtm: DeltaT,
+    ) -> Result<(), CodecError>;
     fn decompress<R: Read>(
         stream: &mut BitReader<R, BigEndian>,
         input: &mut CompressedInput<R>,
