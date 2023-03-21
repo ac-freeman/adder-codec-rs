@@ -193,24 +193,24 @@ impl<W: Write> WriteCompression<W> for CompressedOutput<W> {
     }
 
     fn into_writer(&mut self) -> Option<W> {
-        self.arithmetic_coder
-            .as_mut()
-            .unwrap()
-            .model
-            .set_context(self.contexts.as_ref().unwrap().eof_context);
-        self.arithmetic_coder
-            .as_mut()
-            .unwrap()
-            .encode(None, self.stream.as_mut().unwrap())
-            .unwrap();
-        // Must flush the encoder to the bitwriter before flushing the bitwriter itself
-        self.arithmetic_coder
-            .as_mut()
-            .unwrap()
-            .flush(&mut self.stream.as_mut().unwrap())
-            .unwrap();
-        self.stream().byte_align().unwrap();
-        self.flush_writer().unwrap();
+        // self.arithmetic_coder
+        //     .as_mut()
+        //     .unwrap()
+        //     .model
+        //     .set_context(self.contexts.as_ref().unwrap().eof_context);
+        // self.arithmetic_coder
+        //     .as_mut()
+        //     .unwrap()
+        //     .encode(None, self.stream.as_mut().unwrap())
+        //     .unwrap();
+        // // Must flush the encoder to the bitwriter before flushing the bitwriter itself
+        // self.arithmetic_coder
+        //     .as_mut()
+        //     .unwrap()
+        //     .flush(&mut self.stream.as_mut().unwrap())
+        //     .unwrap();
+        // self.stream().byte_align().unwrap();
+        // self.flush_writer().unwrap();
         let tmp = std::mem::replace(&mut self.stream, None);
         tmp.map(|bitwriter| bitwriter.into_writer())
     }
