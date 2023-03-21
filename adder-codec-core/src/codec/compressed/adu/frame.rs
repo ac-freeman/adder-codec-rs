@@ -176,8 +176,9 @@ impl AduCompression for Adu {
 
         encoder.model.set_context(contexts.eof_context);
         encoder.encode(None, stream)?;
-        // stream.byte_align()?;
-        // stream.flush()?;
+        encoder.flush(stream).unwrap();
+        stream.byte_align()?;
+        stream.flush()?;
 
         Ok(())
     }
@@ -294,7 +295,8 @@ impl AduCompression for Adu {
         decoder.model.set_context(eof_context);
         assert!(decoder.decode(stream).unwrap().is_none());
 
-        // stream.byte_align();
+        stream.read_bit().unwrap();
+        stream.byte_align();
 
         Self {
             head_event_t,
@@ -313,11 +315,13 @@ mod tests {
     use crate::codec::compressed::adu::intrablock::gen_random_intra_block;
     use crate::codec::compressed::adu::AduCompression;
     use crate::codec::compressed::stream::{CompressedInput, CompressedOutput};
+    use crate::codec::decoder::Decoder;
     use crate::codec::{CodecMetadata, WriteCompression};
+    use bitstream_io::{BigEndian, BitReader};
     use rand::prelude::StdRng;
     use rand::{Rng, SeedableRng};
     use std::error::Error;
-    use std::io::BufReader;
+    use std::io::{BufReader, Cursor};
 
     fn setup_encoder() -> crate::codec::compressed::stream::CompressedOutput<Vec<u8>> {
         let meta = CodecMetadata {
@@ -508,6 +512,89 @@ mod tests {
         compare_channels(&adu.cubes_r, &decoded_adu.cubes_r);
         compare_channels(&adu.cubes_g, &decoded_adu.cubes_g);
         compare_channels(&adu.cubes_b, &decoded_adu.cubes_b);
+    }
+
+    #[test]
+    fn test_chained_streams_eof() {
+        let bufwriter = Vec::new();
+        let mut output = CompressedOutput::new(
+            CodecMetadata {
+                codec_version: 0,
+                header_size: 0,
+                time_mode: Default::default(),
+                plane: Default::default(),
+                tps: 0,
+                ref_interval: 255,
+                delta_t_max: 10200,
+                event_size: 0,
+                source_camera: Default::default(),
+            },
+            bufwriter,
+        );
+
+        let num1: i32 = 123456789;
+        let num2: i32 = 987654321;
+        let mut stream = output.stream.as_mut().unwrap();
+        let mut encoder = output.arithmetic_coder.as_mut().unwrap();
+        {
+            let mut u8_context = output.contexts.as_mut().unwrap().u8_general_context;
+            let mut eof_context = output.contexts.as_mut().unwrap().eof_context;
+            // encode the data
+            encoder.model.set_context(u8_context);
+
+            for byte in num1.to_be_bytes().iter() {
+                encoder.encode(Some(&(*byte as usize)), stream).unwrap();
+            }
+            encoder.encode(None, stream).unwrap();
+
+            for byte in num2.to_be_bytes().iter() {
+                encoder.encode(Some(&(*byte as usize)), stream).unwrap();
+            }
+            encoder.encode(None, stream).unwrap();
+        }
+
+        {
+            // flush the data
+            encoder.flush(stream).unwrap();
+            stream.flush().unwrap();
+        }
+
+        let dtm = output.meta.delta_t_max;
+        let ref_interval = output.meta.ref_interval;
+
+        let mut written_data = output.into_writer().unwrap();
+        let output_len = written_data.len();
+
+        let mut bufreader = BufReader::new(Cursor::new(written_data));
+        let mut bitreader = BitReader::endian(bufreader, BigEndian);
+        let mut input: CompressedInput<BufReader<Cursor<Vec<u8>>>> =
+            CompressedInput::new(dtm, ref_interval);
+
+        {
+            // Decode the data
+            let mut decoder = input.arithmetic_coder.as_mut().unwrap();
+            let mut u8_context = input.contexts.as_mut().unwrap().u8_general_context;
+
+            decoder.model.set_context(u8_context);
+
+            let mut bytes = [0; 4];
+            for byte in bytes.iter_mut() {
+                *byte = decoder.decode(&mut bitreader).unwrap().unwrap() as u8;
+            }
+            let sym1 = i32::from_be_bytes(bytes);
+            assert_eq!(sym1, num1);
+
+            assert!(decoder.decode(&mut bitreader).unwrap().is_none());
+
+            let mut bytes = [0; 4];
+            for byte in bytes.iter_mut() {
+                *byte = decoder.decode(&mut bitreader).unwrap().unwrap() as u8;
+            }
+            let sym2 = i32::from_be_bytes(bytes);
+            assert_eq!(sym2, num2);
+
+            assert!(decoder.decode(&mut bitreader).unwrap().is_none());
+        }
     }
 }
 
