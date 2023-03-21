@@ -2,6 +2,7 @@ use crate::codec::{CodecError, CodecMetadata, ReadCompression, ReadCompressionEn
 use crate::SourceType::*;
 use crate::{Event, PlaneSize, SourceCamera, SourceType};
 
+use crate::codec::compressed::adu::frame::Adu;
 use crate::codec::compressed::stream::CompressedInput;
 use crate::codec::header::{
     EventStreamHeader, EventStreamHeaderExtensionV1, EventStreamHeaderExtensionV2,
@@ -186,6 +187,16 @@ impl<R: Read + Seek> Decoder<R> {
         reader: &mut BitReader<R, BigEndian>,
     ) -> Result<Event, CodecError> {
         self.input.digest_event(reader)
+    }
+
+    /// Read and decode the next event from the input stream
+    #[inline]
+    pub fn digest_event_debug(
+        &mut self,
+        reader: &mut BitReader<R, BigEndian>,
+        adu: &Adu,
+    ) -> Result<Event, CodecError> {
+        self.input.digest_event_debug(reader, adu)
     }
 
     /// Sets the input stream position to the given absolute byte position

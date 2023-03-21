@@ -1,3 +1,4 @@
+use crate::codec::compressed::adu::frame::Adu;
 use crate::codec::compressed::stream::{CompressedInput, CompressedOutput};
 use crate::codec::CodecError;
 use crate::codec_old::compressed::compression::Contexts;
@@ -23,5 +24,11 @@ pub trait AduCompression {
     fn decompress<R: Read>(
         stream: &mut BitReader<R, BigEndian>,
         input: &mut CompressedInput<R>,
+    ) -> Self;
+
+    fn decompress_debug<R: Read>(
+        stream: &mut BitReader<R, BigEndian>,
+        input: &mut CompressedInput<R>,
+        reference_adu: &Adu,
     ) -> Self;
 }
