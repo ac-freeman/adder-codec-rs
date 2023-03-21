@@ -2067,19 +2067,25 @@ mod tests {
         let mut compress = false;
         let mut ev_t = 0;
         let mut first_adu = None;
+        let mut second_adu = None;
 
-        let first_adu = loop {
+        loop {
             match reader.digest_event(&mut bitreader) {
                 Ok(ev) => {
                     if let Some(adu) = encoder.ingest_event_debug(ev).unwrap() {
-                        break adu;
+                        if first_adu.is_none() {
+                            first_adu = Some(adu);
+                        } else if second_adu.is_none() {
+                            second_adu = Some(adu);
+                            break;
+                        }
                     }
                 }
                 Err(_) => {
                     panic!("temp")
                 }
             }
-        };
+        }
 
         let mut written_data = encoder.close_writer().unwrap().unwrap();
         // let mut writer = encoder.close_writer().unwrap().unwrap();
@@ -2104,9 +2110,9 @@ mod tests {
         let mut decoder = Decoder::new_compressed(compression, &mut bitreader).unwrap();
 
         // todo: temporary
-        let mut count = 0;
         // loop {
-        decoder.digest_event_debug(&mut bitreader, &first_adu);
+        decoder.digest_event_debug(&mut bitreader, &first_adu.unwrap());
+        decoder.digest_event_debug(&mut bitreader, &second_adu.unwrap());
         // count += 1;
         // }
     }
