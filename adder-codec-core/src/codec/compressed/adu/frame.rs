@@ -317,9 +317,12 @@ mod tests {
     use crate::codec::compressed::stream::{CompressedInput, CompressedOutput};
     use crate::codec::decoder::Decoder;
     use crate::codec::{CodecMetadata, WriteCompression};
-    use bitstream_io::{BigEndian, BitReader};
+    use crate::codec_old::compressed::fenwick::context_switching::FenwickModel;
+    use arithmetic_coding::Encoder;
+    use bitstream_io::{BigEndian, BitRead, BitReader, BitWrite};
     use rand::prelude::StdRng;
     use rand::{Rng, SeedableRng};
+    use std::cmp::min;
     use std::error::Error;
     use std::io::{BufReader, Cursor};
 
@@ -532,6 +535,9 @@ mod tests {
             bufwriter,
         );
 
+        let dtm = output.meta.delta_t_max;
+        let ref_interval = output.meta.ref_interval;
+
         let num1: i32 = 123456789;
         let num2: i32 = 987654321;
         let mut stream = output.stream.as_mut().unwrap();
@@ -545,12 +551,30 @@ mod tests {
             for byte in num1.to_be_bytes().iter() {
                 encoder.encode(Some(&(*byte as usize)), stream).unwrap();
             }
-            encoder.encode(None, stream).unwrap();
+            encoder.encode(Some(&255), stream).unwrap();
+
+            {
+                // flush the data
+                encoder.flush(stream).unwrap();
+                stream.byte_align();
+            }
+            // Write a raw byte, for testing
+            for _ in 0..8 {
+                stream.write_bytes(&[255]).unwrap();
+            }
+            // Junk symbol, to test end of segment
+            stream.write_bytes(&[0]).unwrap();
+
+            // Reset the arithmetic encoder
+            let mut source_model =
+                FenwickModel::with_symbols(min(dtm as usize * 2, u16::MAX as usize), 1 << 30);
+            *encoder = Encoder::new(source_model);
 
             for byte in num2.to_be_bytes().iter() {
                 encoder.encode(Some(&(*byte as usize)), stream).unwrap();
             }
-            encoder.encode(None, stream).unwrap();
+            encoder.encode(Some(&255), stream).unwrap()
+            // encoder.encode(None, stream).unwrap();
         }
 
         {
@@ -558,9 +582,6 @@ mod tests {
             encoder.flush(stream).unwrap();
             stream.flush().unwrap();
         }
-
-        let dtm = output.meta.delta_t_max;
-        let ref_interval = output.meta.ref_interval;
 
         let mut written_data = output.into_writer().unwrap();
         let output_len = written_data.len();
@@ -584,8 +605,27 @@ mod tests {
             let sym1 = i32::from_be_bytes(bytes);
             assert_eq!(sym1, num1);
 
-            assert!(decoder.decode(&mut bitreader).unwrap().is_none());
+            // assert!(decoder.decode(&mut bitreader).unwrap().is_none());
+            assert_eq!(decoder.decode(&mut bitreader).unwrap(), Some(255));
 
+            // loop {
+            //     eprintln!("{}", bitreader.read_bit().unwrap());
+            // }
+
+            // loop {
+            //     eprintln!("{}", bitreader.read_bit().unwrap());
+            // }
+            bitreader.byte_align();
+            while bitreader.read_to_vec(1).unwrap() == vec![255] {}
+            // let next_byte = bitreader.read_to_vec(1).unwrap();
+            // assert_eq!(next_byte, vec![255]);
+
+            // Reset the arithmetic decoder
+            let mut source_model =
+                FenwickModel::with_symbols(min(dtm as usize * 2, u16::MAX as usize), 1 << 30);
+            *decoder = arithmetic_coding::Decoder::new(source_model);
+
+            // assert_eq!(next_byte, vec![255]);
             let mut bytes = [0; 4];
             for byte in bytes.iter_mut() {
                 *byte = decoder.decode(&mut bitreader).unwrap().unwrap() as u8;
@@ -593,7 +633,8 @@ mod tests {
             let sym2 = i32::from_be_bytes(bytes);
             assert_eq!(sym2, num2);
 
-            assert!(decoder.decode(&mut bitreader).unwrap().is_none());
+            // assert!(decoder.decode(&mut bitreader).unwrap().is_none());
+            assert_eq!(decoder.decode(&mut bitreader).unwrap(), Some(255));
         }
     }
 }
