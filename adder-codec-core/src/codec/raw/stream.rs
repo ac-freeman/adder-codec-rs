@@ -1,3 +1,4 @@
+use crate::codec::compressed::adu::frame::Adu;
 use crate::codec::header::{Magic, MAGIC_RAW};
 use crate::codec::{CodecError, CodecMetadata, ReadCompression, WriteCompression};
 use crate::{Event, EventSingle, EOF_PX_ADDRESS};
@@ -80,10 +81,6 @@ impl<W: Write> WriteCompression<W> for RawOutput<W> {
         self.stream().flush()
     }
 
-    fn compress(&self, _data: &[u8]) -> Vec<u8> {
-        todo!()
-    }
-
     /// Ingest an event into the codec_old.
     ///
     /// This will always write the event immediately to the underlying writer.
@@ -101,6 +98,10 @@ impl<W: Write> WriteCompression<W> for RawOutput<W> {
             self.bincode.serialize_into(self.stream(), &event)?;
         }
         Ok(())
+    }
+
+    fn ingest_event_debug(&mut self, event: Event) -> Result<Option<Adu>, CodecError> {
+        todo!()
     }
 }
 
@@ -171,6 +172,14 @@ impl<R: Read + Seek> ReadCompression<R> for RawInput<R> {
             return Err(CodecError::Eof);
         }
         Ok(event)
+    }
+
+    fn digest_event_debug(
+        &mut self,
+        reader: &mut BitReader<R, BigEndian>,
+        adu: &Adu,
+    ) -> Result<Event, CodecError> {
+        todo!()
     }
 
     fn set_input_stream_position(

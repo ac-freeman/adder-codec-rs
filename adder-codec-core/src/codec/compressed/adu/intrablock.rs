@@ -1,3 +1,4 @@
+use crate::codec::compressed::adu::frame::Adu;
 use crate::codec::compressed::adu::AduCompression;
 use crate::codec::compressed::blocks::prediction::D_RESIDUALS_EMPTY;
 use crate::codec::compressed::blocks::{DResidual, BLOCK_SIZE_AREA, D_ENCODE_NO_EVENT};
@@ -18,6 +19,7 @@ use std::cmp::min;
 use std::io::{Read, Write};
 use std::mem;
 
+#[derive(Debug, Clone, PartialEq)]
 pub struct AduIntraBlock {
     /// The timestamp of the first event in the ADU.
     pub(crate) head_event_t: AbsoluteT,
@@ -131,6 +133,14 @@ impl AduCompression for AduIntraBlock {
         );
 
         intra_block
+    }
+
+    fn decompress_debug<R: Read>(
+        stream: &mut BitReader<R, BigEndian>,
+        input: &mut CompressedInput<R>,
+        reference_adu: &Adu,
+    ) -> Self {
+        todo!()
     }
 }
 

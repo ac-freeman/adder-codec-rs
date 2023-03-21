@@ -1,7 +1,8 @@
+use crate::codec::compressed::adu::frame::Adu;
 use crate::codec::compressed::adu::intrablock::{compress_d_residuals, decompress_d_residuals};
 use crate::codec::compressed::adu::AduCompression;
 use crate::codec::compressed::blocks::prediction::D_RESIDUALS_EMPTY;
-use crate::codec::compressed::blocks::{DResidual, BLOCK_SIZE_AREA};
+use crate::codec::compressed::blocks::{DResidual, BLOCK_SIZE_AREA, D_ENCODE_NO_EVENT};
 use crate::codec::compressed::stream::{CompressedInput, CompressedOutput};
 use crate::codec::{CodecError, ReadCompression, WriteCompression};
 use crate::codec_old::compressed::compression::{
@@ -13,6 +14,7 @@ use arithmetic_coding::{Decoder, Encoder};
 use bitstream_io::{BigEndian, BitRead, BitReader, BitWrite, BitWriter};
 use std::io::{Error, Read, Write};
 
+#[derive(Debug, Clone, PartialEq)]
 pub struct AduInterBlock {
     /// How many bits the dt_residuals are shifted by.
     pub(crate) shift_loss_param: u8,
@@ -46,7 +48,14 @@ impl AduCompression for AduInterBlock {
         compress_d_residuals(&self.d_residuals, encoder, d_context, stream);
 
         // Write the dt_residuals
-        compress_dt_residuals(&self.t_residuals, encoder, dt_context, stream, dtm);
+        compress_dt_residuals(
+            &self.t_residuals,
+            &self.d_residuals,
+            encoder,
+            dt_context,
+            stream,
+            dtm,
+        );
 
         Ok(())
     }
@@ -79,6 +88,7 @@ impl AduCompression for AduInterBlock {
         // Read the dt_residuals
         decompress_dt_residuals(
             &mut inter_block.t_residuals,
+            &inter_block.d_residuals,
             decoder,
             dt_context,
             stream,
@@ -87,36 +97,50 @@ impl AduCompression for AduInterBlock {
 
         inter_block
     }
+
+    fn decompress_debug<R: Read>(
+        stream: &mut BitReader<R, BigEndian>,
+        input: &mut CompressedInput<R>,
+        reference_adu: &Adu,
+    ) -> Self {
+        todo!()
+    }
 }
 
 fn compress_dt_residuals<W: Write>(
     dt_residuals: &[DeltaTResidualSmall; BLOCK_SIZE_AREA],
+    d_residuals: &[DResidual; BLOCK_SIZE_AREA],
     encoder: &mut Encoder<FenwickModel, BitWriter<W, BigEndian>>,
     dt_context: usize,
     stream: &mut BitWriter<W, BigEndian>,
     delta_t_max: DeltaT,
 ) -> Result<(), CodecError> {
     encoder.model.set_context(dt_context);
-    for dt_residual in dt_residuals.iter() {
-        encoder.encode(
-            Some(&dt_resid_offset_i16(*dt_residual, delta_t_max)),
-            stream,
-        )?;
+    for (dt_residual, d_residual) in dt_residuals.iter().zip(d_residuals.iter()) {
+        if *d_residual != D_ENCODE_NO_EVENT {
+            encoder.encode(
+                Some(&dt_resid_offset_i16(*dt_residual, delta_t_max)),
+                stream,
+            )?;
+        }
     }
     Ok(())
 }
 
 fn decompress_dt_residuals<R: Read>(
     dt_residuals: &mut [DeltaTResidualSmall; BLOCK_SIZE_AREA],
+    d_residuals: &[DResidual; BLOCK_SIZE_AREA],
     decoder: &mut Decoder<FenwickModel, BitReader<R, BigEndian>>,
     dt_context: usize,
     stream: &mut BitReader<R, BigEndian>,
     delta_t_max: DeltaT,
 ) {
     decoder.model.set_context(dt_context);
-    for dt_residual in dt_residuals.iter_mut() {
-        let symbol = decoder.decode(stream).unwrap();
-        *dt_residual = dt_resid_offset_i16_inverse(symbol.unwrap(), delta_t_max);
+    for (dt_residual, d_residual) in dt_residuals.iter_mut().zip(d_residuals.iter()) {
+        if *d_residual != D_ENCODE_NO_EVENT {
+            let symbol = decoder.decode(stream).unwrap();
+            *dt_residual = dt_resid_offset_i16_inverse(symbol.unwrap(), delta_t_max);
+        }
     }
 }
 
@@ -125,7 +149,9 @@ mod tests {
     use crate::codec::compressed::adu::interblock::AduInterBlock;
     use crate::codec::compressed::adu::intrablock::gen_random_intra_block;
     use crate::codec::compressed::adu::AduCompression;
-    use crate::codec::compressed::stream::CompressedInput;
+    use crate::codec::compressed::blocks::{BLOCK_SIZE_AREA, D_ENCODE_NO_EVENT};
+    use crate::codec::compressed::stream::{CompressedInput, CompressedOutput};
+    use crate::codec::encoder::Encoder;
     use crate::codec::{CodecMetadata, WriteCompression};
     use std::error::Error;
     use std::io::BufReader;
@@ -206,5 +232,77 @@ mod tests {
         );
         assert_eq!(inter_block.d_residuals, decoded_inter_block.d_residuals);
         assert_eq!(inter_block.t_residuals, decoded_inter_block.t_residuals);
+    }
+
+    #[test]
+    fn test_decompress_mostly_empty_interblock() {
+        let mut encoder = CompressedOutput::new(
+            CodecMetadata {
+                codec_version: 0,
+                header_size: 0,
+                time_mode: Default::default(),
+                plane: Default::default(),
+                tps: 0,
+                ref_interval: 255,
+                delta_t_max: 102000,
+                event_size: 0,
+                source_camera: Default::default(),
+            },
+            Vec::new(),
+        );
+
+        let dtm = encoder.meta.delta_t_max;
+        let ref_interval = encoder.meta.ref_interval;
+        // let mut encoder: Encoder<Vec<u8>> = Encoder::new_compressed(compression);
+
+        let mut d_residuals = [D_ENCODE_NO_EVENT; BLOCK_SIZE_AREA];
+        d_residuals[39] = -2;
+
+        let mut t_residuals = [0; BLOCK_SIZE_AREA];
+        t_residuals[39] = -1;
+        let reference_block = AduInterBlock {
+            shift_loss_param: 7,
+            d_residuals,
+            t_residuals,
+        };
+
+        assert!(reference_block
+            .compress(
+                encoder.arithmetic_coder.as_mut().unwrap(),
+                encoder.contexts.as_mut().unwrap(),
+                encoder.stream.as_mut().unwrap(),
+                encoder.meta.delta_t_max
+            )
+            .is_ok());
+
+        let written_data = encoder.into_writer().unwrap();
+
+        let mut bufreader = BufReader::new(written_data.as_slice());
+        let mut bitreader =
+            bitstream_io::BitReader::endian(&mut bufreader, bitstream_io::BigEndian);
+
+        let mut decoder = CompressedInput::new(dtm, ref_interval);
+
+        let decoded_inter_block = AduInterBlock::decompress(&mut bitreader, &mut decoder);
+
+        decoder
+            .arithmetic_coder
+            .as_mut()
+            .unwrap()
+            .model
+            .set_context(decoder.contexts.as_mut().unwrap().eof_context);
+        let eof = decoder
+            .arithmetic_coder
+            .as_mut()
+            .unwrap()
+            .decode(&mut bitreader)
+            .unwrap();
+        assert!(eof.is_none());
+        assert_eq!(
+            reference_block.shift_loss_param,
+            decoded_inter_block.shift_loss_param
+        );
+        assert_eq!(reference_block.d_residuals, decoded_inter_block.d_residuals);
+        assert_eq!(reference_block.t_residuals, decoded_inter_block.t_residuals);
     }
 }

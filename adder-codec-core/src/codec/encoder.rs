@@ -5,6 +5,7 @@ use crate::{Event, EventSingle, SourceCamera, SourceType, EOF_EVENT};
 use std::io;
 use std::io::{Sink, Write};
 
+use crate::codec::compressed::adu::frame::Adu;
 use crate::codec::compressed::stream::CompressedOutput;
 use crate::codec::empty::stream::EmptyOutput;
 use crate::codec::header::{
@@ -115,9 +116,9 @@ impl<W: Write + 'static> Encoder<W> {
 
     /// Close the encoder's writer and return it, consuming the encoder in the process.
     pub fn close_writer(mut self) -> Result<Option<W>, CodecError> {
-        self.output.byte_align()?;
-        self.write_eof()?;
-        self.flush_writer()?;
+        // self.output.byte_align()?;
+        // self.write_eof()?;
+        // self.flush_writer()?;
         Ok(self.output.into_writer())
         // let compressed_output = self.compressed_output.take();
         // let raw_output = self.raw_output.take();
@@ -186,6 +187,10 @@ impl<W: Write + 'static> Encoder<W> {
     /// Ingest an event
     pub fn ingest_event(&mut self, event: Event) -> Result<(), CodecError> {
         self.output.ingest_event(event)
+    }
+    /// Ingest an event
+    pub fn ingest_event_debug(&mut self, event: Event) -> Result<Option<Adu>, CodecError> {
+        self.output.ingest_event_debug(event)
     }
 
     /// Ingest an array of events

@@ -2,6 +2,7 @@ use crate::codec::{CodecError, CodecMetadata, ReadCompression, WriteCompression}
 use arithmetic_coding::{Decoder, Encoder};
 use bitstream_io::{BigEndian, BitRead, BitReader, BitWrite, BitWriter};
 use std::cmp::min;
+use std::collections::VecDeque;
 use std::io::{Read, Write};
 
 use crate::codec::compressed::adu::cube::AduCube;
@@ -37,6 +38,10 @@ pub struct CompressedInput<R: Read> {
     pub(crate) arithmetic_coder:
         Option<arithmetic_coding::Decoder<FenwickModel, BitReader<R, BigEndian>>>,
     pub(crate) contexts: Option<Contexts>,
+
+    // Stores the decoded events so they can be read one by one. They're put into reverse order
+    // (todo) when the ADU is decoded, so that they can be popped off the end of the vector.
+    decoded_event_queue: Vec<Event>,
     _phantom: std::marker::PhantomData<R>,
 }
 
@@ -135,9 +140,10 @@ impl<W: Write> CompressedOutput<W> {
         }
     }
 
-    pub fn compress_events(&mut self) -> Result<(), CodecError> {
+    pub fn compress_events(&mut self) -> Result<Adu, CodecError> {
         eprintln!("Compressing events...");
         self.organize_adus();
+        let adu_debug = self.adu.clone();
         match (
             self.arithmetic_coder.as_mut(),
             self.contexts.as_mut(),
@@ -148,12 +154,20 @@ impl<W: Write> CompressedOutput<W> {
                     .compress(encoder, contexts, stream, self.meta.delta_t_max)?;
                 self.frame.reset();
                 self.adu = Adu::new();
+
+                // TODO: Temporary! Write a function to just reset the probability tables
+                // let mut source_model = FenwickModel::with_symbols(
+                //     min(self.meta.delta_t_max as usize * 2, u16::MAX as usize),
+                //     1 << 30,
+                // );
+                // *contexts = Contexts::new(&mut source_model, self.meta.clone());
+                // *encoder = Encoder::new(source_model);
             }
             (_, _, _) => {
                 return Err(CodecError::MalformedEncoder);
             }
         }
-        Ok(())
+        Ok(adu_debug)
     }
 }
 
@@ -209,16 +223,20 @@ impl<W: Write> WriteCompression<W> for CompressedOutput<W> {
         self.stream().flush()
     }
 
-    fn compress(&self, _data: &[u8]) -> Vec<u8> {
-        todo!()
-    }
-
     fn ingest_event(&mut self, event: Event) -> Result<(), CodecError> {
         if let (true, _) = self.frame.add_event(event, self.meta.delta_t_max)? {
             self.compress_events()?;
             self.frame.add_event(event, self.meta.delta_t_max)?;
         };
         Ok(())
+    }
+    fn ingest_event_debug(&mut self, event: Event) -> Result<Option<Adu>, CodecError> {
+        if let (true, _) = self.frame.add_event(event, self.meta.delta_t_max)? {
+            let adu = self.compress_events()?;
+            self.frame.add_event(event, self.meta.delta_t_max)?;
+            return Ok(Some(adu));
+        };
+        Ok(None)
     }
 }
 
@@ -262,6 +280,7 @@ impl<R: Read> CompressedInput<R> {
             },
             arithmetic_coder: Some(arithmetic_coder),
             contexts: Some(contexts),
+            decoded_event_queue: Vec::new(),
             // stream: BitReader::endian(reader, BigEndian),
             _phantom: std::marker::PhantomData,
         }
@@ -295,7 +314,66 @@ impl<R: Read> ReadCompression<R> for CompressedInput<R> {
 
     #[allow(unused_variables)]
     fn digest_event(&mut self, reader: &mut BitReader<R, BigEndian>) -> Result<Event, CodecError> {
-        todo!()
+        if self.decoded_event_queue.is_empty() {
+            // Reset the probability tables
+            // self.frame.reset();
+
+            // TODO: Temporary! Write a function to just reset the probability tables
+            let mut source_model = FenwickModel::with_symbols(
+                min(self.meta.delta_t_max as usize * 2, u16::MAX as usize),
+                1 << 30,
+            );
+            *self.contexts.as_mut().unwrap() = Contexts::new(&mut source_model, self.meta.clone());
+            *self.arithmetic_coder.as_mut().unwrap() = Decoder::new(source_model);
+
+            // Then read and decode the next ADU
+            let decoded_adu = Adu::decompress(reader, self);
+            for cube in decoded_adu.cubes_r.cubes {
+                // intra residual tshifts inverse
+
+                // for each inter block, inter residual tshifts inverse
+            }
+        }
+
+        // Then return the next event from the queue
+        match self.decoded_event_queue.pop() {
+            Some(event) => Ok(event),
+            None => Err(CodecError::Eof),
+        }
+    }
+
+    #[allow(unused_variables)]
+    fn digest_event_debug(
+        &mut self,
+        reader: &mut BitReader<R, BigEndian>,
+        adu: &Adu,
+    ) -> Result<Event, CodecError> {
+        if self.decoded_event_queue.is_empty() {
+            // Reset the probability tables
+            // self.frame.reset();
+
+            // TODO: Temporary! Write a function to just reset the probability tables
+            // let mut source_model = FenwickModel::with_symbols(
+            //     min(self.meta.delta_t_max as usize * 2, u16::MAX as usize),
+            //     1 << 30,
+            // );
+            // *self.contexts.as_mut().unwrap() = Contexts::new(&mut source_model, self.meta.clone());
+            // *self.arithmetic_coder.as_mut().unwrap() = Decoder::new(source_model);
+
+            // Then read and decode the next ADU
+            let decoded_adu = Adu::decompress_debug(reader, self, adu);
+            for cube in decoded_adu.cubes_r.cubes {
+                // intra residual tshifts inverse
+
+                // for each inter block, inter residual tshifts inverse
+            }
+        }
+
+        // Then return the next event from the queue
+        match self.decoded_event_queue.pop() {
+            Some(event) => Ok(event),
+            None => Err(CodecError::Eof),
+        }
     }
 
     #[allow(unused_variables)]

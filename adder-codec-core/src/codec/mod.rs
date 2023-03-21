@@ -103,12 +103,10 @@ pub trait WriteCompression<W: Write> {
     /// Flush the `BitWriter`. Does not flush the internal `BufWriter`.
     fn flush_writer(&mut self) -> io::Result<()>;
 
-    /// Compress the given bytes.
-    fn compress(&self, data: &[u8]) -> Vec<u8>;
-
     /// Take in an event and process it. May or may not write to the output, depending on the state
     /// of the stream (Is it ready to write events? Is it accumulating/reorganizing events? etc.)
     fn ingest_event(&mut self, event: Event) -> Result<(), CodecError>;
+    fn ingest_event_debug(&mut self, event: Event) -> Result<Option<Adu>, CodecError>;
 }
 
 /// A trait for reading ADΔER data from a stream.
@@ -142,6 +140,12 @@ pub trait ReadCompression<R: Read> {
     /// Read the next event from the stream. Returns `None` if the stream is exhausted.
     fn digest_event(&mut self, reader: &mut BitReader<R, BigEndian>) -> Result<Event, CodecError>;
 
+    fn digest_event_debug(
+        &mut self,
+        reader: &mut BitReader<R, BigEndian>,
+        adu: &Adu,
+    ) -> Result<Event, CodecError>;
+
     /// Set the input stream position to the given byte offset.
     fn set_input_stream_position(
         &mut self,
@@ -158,6 +162,7 @@ pub trait ReadCompression<R: Read> {
 
 use crate::codec::compressed::stream::{CompressedInput, CompressedOutput};
 // use crate::codec::empty::stream::EmptyOutput;
+use crate::codec::compressed::adu::frame::Adu;
 use crate::codec::empty::stream::EmptyOutput;
 use crate::codec::raw::stream::{RawInput, RawOutput};
 use crate::codec_old::compressed::fenwick::ValueError;

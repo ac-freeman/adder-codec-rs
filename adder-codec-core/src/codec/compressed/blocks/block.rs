@@ -797,7 +797,7 @@ mod tests {
     use rand::prelude::StdRng;
     use rand::{Rng, SeedableRng};
     use std::fs::File;
-    use std::io::{BufReader, BufWriter, Write};
+    use std::io::{BufReader, BufWriter, Cursor, Write};
 
     fn setup_frame(
         events: Vec<Event>,
@@ -2056,38 +2056,38 @@ mod tests {
         let compression = RawInput::new();
         let mut reader = Decoder::new_raw(compression, &mut bitreader).unwrap();
 
-        let bufwriter =
-            BufWriter::new(File::create("/home/andrew/Downloads/test_abs_recon2.adder").unwrap());
+        let bufwriter = Vec::new();
         let compression = CompressedOutput::new(reader.meta().clone(), bufwriter);
 
         let dtm = compression.meta.delta_t_max;
-        let mut encoder: Encoder<BufWriter<File>> = Encoder::new_compressed(compression);
+        let ref_interval = compression.meta.ref_interval;
+        let mut encoder: Encoder<Vec<u8>> = Encoder::new_compressed(compression);
 
         let mut start_event_t = 0;
         let mut compress = false;
         let mut ev_t = 0;
-        loop {
+        let mut first_adu = None;
+
+        let first_adu = loop {
             match reader.digest_event(&mut bitreader) {
                 Ok(ev) => {
-                    encoder.ingest_event(ev).unwrap();
+                    if let Some(adu) = encoder.ingest_event_debug(ev).unwrap() {
+                        break adu;
+                    }
                 }
                 Err(_) => {
-                    break;
+                    panic!("temp")
                 }
             }
-        }
+        };
 
-        let mut writer = encoder.close_writer().unwrap().unwrap();
-        writer.flush().unwrap();
+        let mut written_data = encoder.close_writer().unwrap().unwrap();
+        // let mut writer = encoder.close_writer().unwrap().unwrap();
+        // writer.flush().unwrap();
+        // let written_data = writer.into_inner().unwrap();
+        let output_len = written_data.len();
 
-        eprintln!(
-            "Output length: {}",
-            File::open("/home/andrew/Downloads/test_abs_recon2.adder")
-                .unwrap()
-                .metadata()
-                .unwrap()
-                .len()
-        );
+        eprintln!("Output length: {}", output_len);
         eprintln!(
             "Input length: {}",
             File::open("/home/andrew/Downloads/bunny_test.adder")
@@ -2096,5 +2096,18 @@ mod tests {
                 .unwrap()
                 .len()
         );
+
+        // Decode the compressed file
+        let mut bufreader = BufReader::new(Cursor::new(written_data));
+        let mut bitreader = BitReader::endian(bufreader, BigEndian);
+        let compression = CompressedInput::new(dtm, ref_interval);
+        let mut decoder = Decoder::new_compressed(compression, &mut bitreader).unwrap();
+
+        // todo: temporary
+        let mut count = 0;
+        // loop {
+        decoder.digest_event_debug(&mut bitreader, &first_adu);
+        // count += 1;
+        // }
     }
 }

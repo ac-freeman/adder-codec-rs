@@ -1,3 +1,4 @@
+use crate::codec::compressed::adu::frame::Adu;
 use crate::codec::header::{Magic, MAGIC_RAW};
 use crate::codec::{CodecError, CodecMetadata, WriteCompression};
 use crate::Event;
@@ -48,11 +49,11 @@ impl<W: std::io::Write> WriteCompression<W> for EmptyOutput<Sink> {
         Ok(())
     }
 
-    fn compress(&self, _data: &[u8]) -> Vec<u8> {
-        vec![]
-    }
-
     fn ingest_event(&mut self, _event: Event) -> Result<(), CodecError> {
         Ok(())
+    }
+
+    fn ingest_event_debug(&mut self, event: Event) -> Result<Option<Adu>, CodecError> {
+        todo!()
     }
 }

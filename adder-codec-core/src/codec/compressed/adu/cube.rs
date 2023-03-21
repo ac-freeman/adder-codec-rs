@@ -1,3 +1,4 @@
+use crate::codec::compressed::adu::frame::Adu;
 use crate::codec::compressed::adu::interblock::AduInterBlock;
 use crate::codec::compressed::adu::intrablock::AduIntraBlock;
 use crate::codec::compressed::adu::AduCompression;
@@ -10,6 +11,7 @@ use arithmetic_coding::Encoder;
 use bitstream_io::{BigEndian, BitReader, BitWriter};
 use std::io::{Error, Read, Write};
 
+#[derive(Debug, Clone)]
 pub struct AduCube {
     pub(crate) idx_y: u16,
 
@@ -131,6 +133,14 @@ impl AduCompression for AduCube {
         }
 
         cube
+    }
+
+    fn decompress_debug<R: Read>(
+        stream: &mut BitReader<R, BigEndian>,
+        input: &mut CompressedInput<R>,
+        reference_adu: &Adu,
+    ) -> Self {
+        todo!()
     }
 }
 
