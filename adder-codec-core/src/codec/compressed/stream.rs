@@ -319,12 +319,12 @@ impl<R: Read> ReadCompression<R> for CompressedInput<R> {
             // self.frame.reset();
 
             // TODO: Temporary! Write a function to just reset the probability tables
-            let mut source_model = FenwickModel::with_symbols(
-                min(self.meta.delta_t_max as usize * 2, u16::MAX as usize),
-                1 << 30,
-            );
-            *self.contexts.as_mut().unwrap() = Contexts::new(&mut source_model, self.meta.clone());
-            *self.arithmetic_coder.as_mut().unwrap() = Decoder::new(source_model);
+            // let mut source_model = FenwickModel::with_symbols(
+            //     min(self.meta.delta_t_max as usize * 2, u16::MAX as usize),
+            //     1 << 30,
+            // );
+            // *self.contexts.as_mut().unwrap() = Contexts::new(&mut source_model, self.meta.clone());
+            // *self.arithmetic_coder.as_mut().unwrap() = Decoder::new(source_model);
 
             // Then read and decode the next ADU
             let decoded_adu = Adu::decompress(reader, self);

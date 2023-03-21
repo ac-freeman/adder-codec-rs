@@ -13,7 +13,7 @@ use crate::codec_old::compressed::compression::Contexts;
 use crate::codec_old::compressed::fenwick::context_switching::FenwickModel;
 use crate::{AbsoluteT, DeltaT, D};
 use arithmetic_coding::Encoder;
-use bitstream_io::{BigEndian, BitRead, BitReader, BitWriter};
+use bitstream_io::{BigEndian, BitRead, BitReader, BitWrite, BitWriter};
 use std::io::{Error, Read, Write};
 use std::mem;
 
@@ -176,11 +176,8 @@ impl AduCompression for Adu {
 
         encoder.model.set_context(contexts.eof_context);
         encoder.encode(None, stream)?;
-        encoder.encode(None, stream)?;
-        encoder.encode(None, stream)?;
-        encoder.encode(None, stream)?;
-        encoder.encode(None, stream)?;
-        encoder.encode(None, stream)?;
+        // stream.byte_align()?;
+        // stream.flush()?;
 
         Ok(())
     }
@@ -220,6 +217,7 @@ impl AduCompression for Adu {
         let mut decoder = input.arithmetic_coder.as_mut().unwrap();
         decoder.model.set_context(eof_context);
         assert!(decoder.decode(stream).unwrap().is_none());
+        // stream.byte_align();
 
         Self {
             head_event_t,
@@ -295,6 +293,8 @@ impl AduCompression for Adu {
         let mut decoder = input.arithmetic_coder.as_mut().unwrap();
         decoder.model.set_context(eof_context);
         assert!(decoder.decode(stream).unwrap().is_none());
+
+        // stream.byte_align();
 
         Self {
             head_event_t,
