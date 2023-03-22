@@ -20,18 +20,14 @@ pub trait AduCompression {
         contexts: &mut Contexts,
         stream: &mut BitWriter<W, BigEndian>,
         dtm: DeltaT,
+        ref_interval: DeltaT,
     ) -> Result<(), CodecError>;
     fn decompress<R: Read>(
         decoder: &mut Decoder<FenwickModel, BitReader<Cursor<Vec<u8>>, BigEndian>>,
         contexts: &mut Contexts,
         stream: &mut BitReader<R, BigEndian>,
         dtm: DeltaT,
-    ) -> Self;
-
-    fn decompress_debug<R: Read>(
-        stream: &mut BitReader<R, BigEndian>,
-        input: &mut CompressedInput<R>,
-        reference_adu: &Adu,
+        ref_interval: DeltaT,
     ) -> Self;
 }
 
@@ -48,12 +44,6 @@ pub trait AduComponentCompression {
         contexts: &mut Contexts,
         stream: &mut BitReader<Cursor<Vec<u8>>, BigEndian>,
         dtm: DeltaT,
-    ) -> Self;
-
-    fn decompress_debug<R: Read>(
-        stream: &mut BitReader<R, BigEndian>,
-        input: &mut CompressedInput<R>,
-        reference_adu: &Adu,
     ) -> Self;
 }
 

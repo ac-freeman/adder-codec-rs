@@ -128,14 +128,6 @@ impl AduComponentCompression for AduCube {
 
         cube
     }
-
-    fn decompress_debug<R: Read>(
-        stream: &mut BitReader<R, BigEndian>,
-        input: &mut CompressedInput<R>,
-        reference_adu: &Adu,
-    ) -> Self {
-        todo!()
-    }
 }
 
 #[cfg(test)]

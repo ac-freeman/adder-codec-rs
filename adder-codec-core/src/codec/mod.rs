@@ -140,12 +140,6 @@ pub trait ReadCompression<R: Read> {
     /// Read the next event from the stream. Returns `None` if the stream is exhausted.
     fn digest_event(&mut self, reader: &mut BitReader<R, BigEndian>) -> Result<Event, CodecError>;
 
-    fn digest_event_debug(
-        &mut self,
-        reader: &mut BitReader<R, BigEndian>,
-        adu: &Adu,
-    ) -> Result<Event, CodecError>;
-
     /// Set the input stream position to the given byte offset.
     fn set_input_stream_position(
         &mut self,

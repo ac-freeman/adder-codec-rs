@@ -98,14 +98,6 @@ impl AduComponentCompression for AduInterBlock {
 
         inter_block
     }
-
-    fn decompress_debug<R: Read>(
-        stream: &mut BitReader<R, BigEndian>,
-        input: &mut CompressedInput<R>,
-        reference_adu: &Adu,
-    ) -> Self {
-        todo!()
-    }
 }
 
 fn compress_dt_residuals<W: Write>(

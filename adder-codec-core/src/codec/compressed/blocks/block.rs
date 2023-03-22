@@ -776,1344 +776,1344 @@ impl Frame {
     }
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use crate::codec::compressed::adu::cube::AduCube;
-//     use crate::codec::compressed::adu::frame::{compare_channels, Adu, AduChannelType};
-//     use crate::codec::compressed::adu::interblock::AduInterBlock;
-//     use crate::codec::compressed::adu::intrablock::AduIntraBlock;
-//     use crate::codec::compressed::adu::AduCompression;
-//     use crate::codec::compressed::blocks::block::Frame;
-//     use crate::codec::compressed::blocks::{BLOCK_SIZE, BLOCK_SIZE_AREA};
-//     use crate::codec::compressed::stream::CompressedInput;
-//     use crate::codec::decoder::Decoder;
-//     use crate::codec::encoder::Encoder;
-//     use crate::codec::raw::stream::{RawInput, RawOutput};
-//     use crate::codec::CompressedOutput;
-//     use crate::codec::{CodecError, ReadCompression, WriteCompression};
-//     use crate::Mode::{Continuous, FramePerfect};
-//     use crate::{Coord, DeltaT, Event, EventCoordless, Mode};
-//     use bitstream_io::{BigEndian, BitReader};
-//     use rand::prelude::StdRng;
-//     use rand::{Rng, SeedableRng};
-//     use std::fs::File;
-//     use std::io::{BufReader, BufWriter, Cursor, Write};
-//
-//     fn setup_frame(
-//         events: Vec<Event>,
-//         width: usize,
-//         height: usize,
-//         time_modulation_mode: Mode,
-//         delta_t_max: DeltaT,
-//     ) -> Frame {
-//         let mut frame = Frame::new(width, height, true, time_modulation_mode);
-//
-//         for event in events {
-//             frame.add_event(event, delta_t_max).unwrap();
-//         }
-//         frame
-//     }
-//
-//     fn setup_frame_dt_to_abs_t(
-//         events: Vec<Event>,
-//         width: usize,
-//         height: usize,
-//         time_modulation_mode: Mode,
-//     ) -> Frame {
-//         let mut frame = Frame::new(width, height, true, time_modulation_mode);
-//
-//         for event in events {
-//             frame.add_event_dt_to_abs_t(event).unwrap();
-//         }
-//         frame
-//     }
-//
-//     fn get_random_events(
-//         seed: Option<u64>,
-//         num: usize,
-//         width: u16,
-//         height: u16,
-//         channels: u8,
-//         dtm: DeltaT,
-//     ) -> Vec<Event> {
-//         let mut rng = match seed {
-//             None => StdRng::from_rng(rand::thread_rng()).unwrap(),
-//             Some(num) => StdRng::seed_from_u64(num),
-//         };
-//         let mut events = Vec::with_capacity(num);
-//         for _ in 0..num {
-//             let event = Event {
-//                 coord: Coord {
-//                     x: rng.gen::<u16>() % width,
-//                     y: rng.gen::<u16>() % height,
-//                     c: Some(rng.gen::<u8>() % channels),
-//                 },
-//                 d: rng.gen::<u8>(),
-//                 delta_t: rng.gen::<u32>() % dtm,
-//             };
-//             events.push(event);
-//         }
-//         events
-//     }
-//
-//     #[test]
-//     fn test_setup_frame() {
-//         let events = get_random_events(None, 10000, 640, 480, 3, 25500);
-//         let frame = setup_frame(events, 640, 480, Continuous, 25500);
-//     }
-//
-//     /// Test that cubes are growing correctlly, according to the incoming events.
-//     #[test]
-//     fn test_cube_growth() {
-//         let events = get_random_events(None, 100000, 640, 480, 3, 25500);
-//         let frame = setup_frame(events.clone(), 640, 480, Continuous, 25500);
-//
-//         let mut cube_counts_r = vec![0; frame.cubes.len()];
-//         let mut cube_counts_g = vec![0; frame.cubes.len()];
-//         let mut cube_counts_b = vec![0; frame.cubes.len()];
-//
-//         for event in events {
-//             let cube_idx = frame.event_coord_to_block_idx(&event).cube_idx;
-//             let cube_counts = match event.coord.c.unwrap_or(0) {
-//                 0 => &mut cube_counts_r,
-//                 1 => &mut cube_counts_g,
-//                 2 => &mut cube_counts_b,
-//                 _ => panic!("Invalid color"),
-//             };
-//             cube_counts[cube_idx] += 1;
-//         }
-//
-//         for (cube_idx, cube) in frame.cubes.iter().enumerate() {
-//             // total fill count for r blocks
-//             let mut fill_count_r = 0;
-//             for block in &cube.blocks_r {
-//                 assert!(block.fill_count <= BLOCK_SIZE_AREA as u16);
-//                 fill_count_r += block.fill_count;
-//             }
-//             assert_eq!(fill_count_r, cube_counts_r[cube_idx]);
-//
-//             // total fill count for g blocks
-//             let mut fill_count_g = 0;
-//             for block in &cube.blocks_g {
-//                 assert!(block.fill_count <= BLOCK_SIZE_AREA as u16);
-//                 fill_count_g += block.fill_count;
-//             }
-//             assert_eq!(fill_count_g, cube_counts_g[cube_idx]);
-//
-//             // total fill count for b blocks
-//             let mut fill_count_b = 0;
-//             for block in &cube.blocks_b {
-//                 assert!(block.fill_count <= BLOCK_SIZE_AREA as u16);
-//                 fill_count_b += block.fill_count;
-//             }
-//             assert_eq!(fill_count_b, cube_counts_b[cube_idx]);
-//         }
-//     }
-//
-//     #[test]
-//     fn test_intra_compression_lossless_1() {
-//         let dtm = 25500;
-//         let events = get_random_events(
-//             Some(743822),
-//             10,
-//             BLOCK_SIZE as u16,
-//             BLOCK_SIZE as u16,
-//             1,
-//             dtm,
-//         );
-//         let mut frame = setup_frame(events.clone(), BLOCK_SIZE, BLOCK_SIZE, Continuous, dtm);
-//         for mut cube in &mut frame.cubes {
-//             for block in &mut cube.blocks_r {
-//                 assert!(block.fill_count <= BLOCK_SIZE_AREA as u16);
-//                 let (d_residuals, start_dt, dt_residuals, qp_dt) =
-//                     block.get_intra_residual_transforms(None, dtm);
-//                 // dbg!(d_residuals);
-//                 // dbg!(dt_residuals);
-//                 let events = block.get_intra_residual_inverse(
-//                     None,
-//                     dtm,
-//                     d_residuals,
-//                     start_dt,
-//                     dt_residuals,
-//                     qp_dt,
-//                 );
-//
-//                 let epsilon = 100;
-//                 for (idx, recon_event) in events.iter().enumerate() {
-//                     let orig_event = block.events[idx];
-//                     if recon_event.is_some() && orig_event.is_some() {
-//                         assert_eq!(recon_event.unwrap().d, orig_event.unwrap().d);
-//                         assert!(
-//                             recon_event.unwrap().delta_t + epsilon > orig_event.unwrap().delta_t
-//                                 && recon_event.unwrap().delta_t - epsilon
-//                                     < orig_event.unwrap().delta_t
-//                         );
-//                     } else {
-//                         assert!(recon_event.is_none() && orig_event.is_none());
-//                     }
-//                     // assert_eq!(*recon_event, orig_event);
-//                 }
-//             }
-//         }
-//     }
-//
-//     // Note: it's not perfectly lossless, because of the large dtm value.
-//     #[test]
-//     fn test_intra_compression_lossless_2() {
-//         let dtm = 25500;
-//         let events = get_random_events(
-//             Some(743822),
-//             10000,
-//             BLOCK_SIZE as u16,
-//             BLOCK_SIZE as u16,
-//             1,
-//             dtm,
-//         );
-//         let mut frame = setup_frame(events.clone(), BLOCK_SIZE, BLOCK_SIZE, Continuous, dtm);
-//         for mut cube in &mut frame.cubes {
-//             for block in &mut cube.blocks_r {
-//                 assert!(block.fill_count <= BLOCK_SIZE_AREA as u16);
-//                 let (d_residuals, start_dt, dt_residuals, qp_dt) =
-//                     block.get_intra_residual_transforms(None, dtm);
-//                 // dbg!(d_residuals);
-//                 // dbg!(dt_residuals);
-//                 let events = block.get_intra_residual_inverse(
-//                     None,
-//                     dtm,
-//                     d_residuals,
-//                     start_dt,
-//                     dt_residuals,
-//                     qp_dt,
-//                 );
-//
-//                 let epsilon = 2000;
-//                 for (idx, recon_event) in events.iter().enumerate() {
-//                     let orig_event = block.events[idx];
-//                     if recon_event.is_some() && orig_event.is_some() {
-//                         assert_eq!(recon_event.unwrap().d, orig_event.unwrap().d);
-//                         assert!(
-//                             recon_event.unwrap().delta_t + epsilon > orig_event.unwrap().delta_t
-//                                 && recon_event.unwrap().delta_t.saturating_sub(epsilon)
-//                                     < orig_event.unwrap().delta_t
-//                         );
-//                     } else {
-//                         assert!(recon_event.is_none() && orig_event.is_none());
-//                     }
-//                     // assert_eq!(*recon_event, orig_event);
-//                 }
-//             }
-//         }
-//     }
-//
-//     // Note: it's not perfectly lossless, because of the large dtm value.
-//     #[test]
-//     fn test_intra_compression_lossless_3() {
-//         let dtm = 255000;
-//         let events = get_random_events(
-//             Some(743822),
-//             10000,
-//             BLOCK_SIZE as u16,
-//             BLOCK_SIZE as u16,
-//             1,
-//             dtm,
-//         );
-//         let mut frame = setup_frame(events.clone(), BLOCK_SIZE, BLOCK_SIZE, Continuous, dtm);
-//         for mut cube in &mut frame.cubes {
-//             for block in &mut cube.blocks_r {
-//                 assert!(block.fill_count <= BLOCK_SIZE_AREA as u16);
-//                 let (d_residuals, start_dt, dt_residuals, qp_dt) =
-//                     block.get_intra_residual_transforms(None, dtm);
-//                 // dbg!(d_residuals);
-//                 // dbg!(dt_residuals);
-//                 let events = block.get_intra_residual_inverse(
-//                     None,
-//                     dtm,
-//                     d_residuals,
-//                     start_dt,
-//                     dt_residuals,
-//                     qp_dt,
-//                 );
-//
-//                 // As our delta_t_max value increases, we can get more loss. Increase epsilon to allow for more slop.
-//                 let epsilon = 5000;
-//                 for (idx, recon_event) in events.iter().enumerate() {
-//                     let orig_event = block.events[idx];
-//                     if recon_event.is_some() && orig_event.is_some() {
-//                         assert_eq!(recon_event.unwrap().d, orig_event.unwrap().d);
-//                         let recon_dt = recon_event.unwrap().delta_t;
-//                         let orig_dt = orig_event.unwrap().delta_t;
-//                         assert!(
-//                             recon_dt + epsilon > orig_dt
-//                                 && recon_dt.saturating_sub(epsilon) < orig_dt
-//                         );
-//                     } else {
-//                         assert!(recon_event.is_none() && orig_event.is_none());
-//                     }
-//                     // assert_eq!(*recon_event, orig_event);
-//                 }
-//             }
-//         }
-//     }
-//
-//     #[test]
-//     fn test_intra_compression_lossy_1() {
-//         let dtm = 255000;
-//         let events = get_random_events(
-//             Some(743822),
-//             10000,
-//             BLOCK_SIZE as u16,
-//             BLOCK_SIZE as u16,
-//             1,
-//             dtm,
-//         );
-//         let mut frame = setup_frame(events.clone(), BLOCK_SIZE, BLOCK_SIZE, Continuous, dtm);
-//         for mut cube in &mut frame.cubes {
-//             for block in &mut cube.blocks_r {
-//                 assert!(block.fill_count <= BLOCK_SIZE_AREA as u16);
-//                 let (d_residuals, start_dt, dt_residuals, qp_dt) =
-//                     block.get_intra_residual_transforms(Some(30), dtm);
-//                 // dbg!(d_residuals);
-//                 // dbg!(dt_residuals);
-//                 let events = block.get_intra_residual_inverse(
-//                     Some(30),
-//                     dtm,
-//                     d_residuals,
-//                     start_dt,
-//                     dt_residuals,
-//                     qp_dt,
-//                 );
-//
-//                 // As our delta_t_max value increases, we can get more loss. Increase epsilon to allow for more slop.
-//                 let epsilon = 5000;
-//                 for (idx, recon_event) in events.iter().enumerate() {
-//                     let orig_event = block.events[idx];
-//                     if recon_event.is_some() && orig_event.is_some() {
-//                         assert_eq!(recon_event.unwrap().d, orig_event.unwrap().d);
-//                         let recon_dt = recon_event.unwrap().delta_t;
-//                         let orig_dt = orig_event.unwrap().delta_t;
-//                         assert!(
-//                             recon_dt + epsilon > orig_dt
-//                                 && recon_dt.saturating_sub(epsilon) < orig_dt
-//                         );
-//                     } else {
-//                         assert!(recon_event.is_none() && orig_event.is_none());
-//                     }
-//                     // assert_eq!(*recon_event, orig_event);
-//                 }
-//             }
-//         }
-//     }
-//
-//     #[test]
-//     fn test_intra_compression_lossy_1_big_frame() {
-//         let dtm = 255000;
-//         let events = get_random_events(Some(743822), 10000, 640, 480, 1, dtm);
-//         let mut frame = setup_frame(events.clone(), 640, 480, Continuous, dtm);
-//         for mut cube in &mut frame.cubes {
-//             for block in &mut cube.blocks_r {
-//                 assert!(block.fill_count <= BLOCK_SIZE_AREA as u16);
-//                 let (d_residuals, start_dt, dt_residuals, qp_dt) =
-//                     block.get_intra_residual_transforms(Some(30), dtm);
-//                 // dbg!(d_residuals);
-//                 // dbg!(dt_residuals);
-//                 let events = block.get_intra_residual_inverse(
-//                     Some(30),
-//                     dtm,
-//                     d_residuals,
-//                     start_dt,
-//                     dt_residuals,
-//                     qp_dt,
-//                 );
-//
-//                 // As our delta_t_max value increases, we can get more loss. Increase epsilon to allow for more slop.
-//                 let epsilon = 50000;
-//                 for (idx, recon_event) in events.iter().enumerate() {
-//                     let orig_event = block.events[idx];
-//                     if recon_event.is_some() && orig_event.is_some() {
-//                         assert_eq!(recon_event.unwrap().d, orig_event.unwrap().d);
-//                         let recon_dt = recon_event.unwrap().delta_t;
-//                         let orig_dt = orig_event.unwrap().delta_t;
-//                         assert!(
-//                             recon_dt + epsilon > orig_dt
-//                                 && recon_dt.saturating_sub(epsilon) < orig_dt
-//                         );
-//                     } else {
-//                         assert!(recon_event.is_none() && orig_event.is_none());
-//                     }
-//                     // assert_eq!(*recon_event, orig_event);
-//                 }
-//             }
-//         }
-//     }
-//
-//     #[test]
-//     fn test_real_data() {
-//         let mut bufreader =
-//             BufReader::new(File::open("/home/andrew/Downloads/test_abs.adder").unwrap());
-//         let mut bitreader = BitReader::endian(bufreader, BigEndian);
-//         let compression = RawInput::new();
-//         let mut reader = Decoder::new_raw(compression, &mut bitreader).unwrap();
-//         let mut events = Vec::new();
-//         loop {
-//             match reader.digest_event(&mut bitreader) {
-//                 Ok(ev) => {
-//                     events.push(ev);
-//                 }
-//                 Err(_) => {
-//                     break;
-//                 }
-//             }
-//         }
-//
-//         let bufwriter =
-//             BufWriter::new(File::create("/home/andrew/Downloads/test_abs_recon.adder").unwrap());
-//         let compression = RawOutput::new(reader.meta().clone(), bufwriter);
-//         let mut encoder: Encoder<BufWriter<File>> = Encoder::new_raw(compression);
-//
-//         let mut frame = setup_frame(
-//             events.clone(),
-//             reader.meta().plane.w_usize(),
-//             reader.meta().plane.h_usize(),
-//             FramePerfect,
-//             reader.meta().delta_t_max,
-//         );
-//         let qp = 6;
-//         for mut cube in &mut frame.cubes {
-//             for block in &mut cube.blocks_r {
-//                 assert!(block.fill_count <= BLOCK_SIZE_AREA as u16);
-//                 let (d_residuals, start_dt, dt_residuals, qp_dt) =
-//                     block.get_intra_residual_transforms(None, reader.meta().delta_t_max);
-//                 // dbg!(d_residuals);
-//                 // dbg!(dt_residuals);
-//                 let events = block.get_intra_residual_inverse(
-//                     None,
-//                     reader.meta().delta_t_max,
-//                     d_residuals,
-//                     start_dt,
-//                     dt_residuals,
-//                     qp_dt,
-//                 );
-//                 for (idx, event) in events.iter().enumerate() {
-//                     if event.is_some() {
-//                         let event_coord = Event {
-//                             coord: Coord {
-//                                 x: (cube.cube_idx_x * BLOCK_SIZE as usize
-//                                     + (idx % BLOCK_SIZE as usize))
-//                                     as u16,
-//                                 y: (cube.cube_idx_y * BLOCK_SIZE as usize
-//                                     + (idx / BLOCK_SIZE as usize))
-//                                     as u16,
-//                                 c: None,
-//                             },
-//                             d: event.unwrap().d,
-//                             delta_t: event.unwrap().delta_t,
-//                         };
-//                         encoder.ingest_event(event_coord).unwrap();
-//                     }
-//                 }
-//
-//                 // As our delta_t_max value increases, we can get more loss. Increase epsilon to allow for more slop.
-//                 let epsilon = 50000;
-//             }
-//         }
-//         let mut writer = encoder.close_writer().unwrap().unwrap();
-//         writer.flush().unwrap();
-//
-//         writer.into_inner().unwrap();
-//     }
-//
-//     #[test]
-//     fn test_real_data_tshift() {
-//         // let mut bufreader =
-//         //     BufReader::new(File::open("/home/andrew/Downloads/test_abs2.adder").unwrap());
-//         // let mut bitreader = BitReader::endian(bufreader, BigEndian);
-//         // let compression = <RawInput as ReadCompression<BufReader<File>>>::new();
-//         // let mut reader = Decoder::new(Box::new(compression), &mut bitreader).unwrap();
-//         // let mut events = Vec::new();
-//         // loop {
-//         //     match reader.digest_event(&mut bitreader) {
-//         //         Ok(ev) => {
-//         //             events.push(ev);
-//         //         }
-//         //         Err(_) => {
-//         //             break;
-//         //         }
-//         //     }
-//         // }
-//         //
-//         // let bufwriter =
-//         //     BufWriter::new(File::create("/home/andrew/Downloads/test_abs_recon2.adder").unwrap());
-//         // let compression = <RawOutput<_> as WriteCompression<BufWriter<File>>>::new(
-//         //     reader.meta().clone(),
-//         //     bufwriter,
-//         // );
-//         // let mut encoder: Encoder<BufWriter<File>> = Encoder::new(Box::new(compression));
-//         //
-//         // let mut frame = setup_frame(
-//         //     events.clone(),
-//         //     reader.meta().plane.w_usize(),
-//         //     reader.meta().plane.h_usize(),
-//         //     FramePerfect,
-//         // );
-//         // for mut cube in &mut frame.cubes {
-//         //     for block in &mut cube.blocks_r {
-//         //         assert!(block.fill_count <= BLOCK_SIZE_AREA as u16);
-//         //         let (d_residuals, start_dt, dt_residuals, sparam) =
-//         //             block.get_intra_residual_tshifts(0, reader.meta().delta_t_max);
-//         //
-//         //         let events = block.get_intra_residual_tshifts_inverse(
-//         //             sparam,
-//         //             reader.meta().delta_t_max,
-//         //             d_residuals,
-//         //             start_dt,
-//         //             dt_residuals,
-//         //         );
-//         //
-//         //         for (idx, event) in events.iter().enumerate() {
-//         //             if event.is_some() {
-//         //                 let event_coord = Event {
-//         //                     coord: Coord {
-//         //                         x: (cube.cube_idx_x * BLOCK_SIZE as usize
-//         //                             + (idx % BLOCK_SIZE as usize))
-//         //                             as u16,
-//         //                         y: (cube.cube_idx_y * BLOCK_SIZE as usize
-//         //                             + (idx / BLOCK_SIZE as usize))
-//         //                             as u16,
-//         //                         c: None,
-//         //                     },
-//         //                     d: event.unwrap().d,
-//         //                     delta_t: event.unwrap().delta_t,
-//         //                 };
-//         //                 encoder.ingest_event(&event_coord).unwrap();
-//         //             }
-//         //         }
-//         //
-//         //         // As our delta_t_max value increases, we can get more loss. Increase epsilon to allow for more slop.
-//         //         let epsilon = 5000;
-//         //     }
-//         // }
-//         // let mut writer = encoder.close_writer().unwrap().unwrap();
-//         // writer.flush().unwrap();
-//         //
-//         // writer.into_inner().unwrap();
-//     }
-//
-//     #[test]
-//     fn test_inter_compression_lossless_tshift() {
-//         // let dtm = 2550;
-//         // let events = get_random_events(
-//         //     Some(743822),
-//         //     1000,
-//         //     BLOCK_SIZE as u16,
-//         //     BLOCK_SIZE as u16,
-//         //     1,
-//         //     dtm,
-//         // );
-//         // let mut frame = setup_frame_dt_to_abs_t(events.clone(), BLOCK_SIZE, BLOCK_SIZE, Continuous);
-//         // for mut cube in &mut frame.cubes {
-//         //     let mut block = &mut cube.blocks_r[0];
-//         //
-//         //     let mut event_memory: [EventCoordless; BLOCK_SIZE_AREA] =
-//         //         [Default::default(); BLOCK_SIZE_AREA];
-//         //     let mut t_memory: [DeltaT; BLOCK_SIZE_AREA] = [0; BLOCK_SIZE_AREA];
-//         //     let mut t_recon = t_memory.clone();
-//         //
-//         //     let mut event_memory_inverse: [EventCoordless; BLOCK_SIZE_AREA] =
-//         //         [Default::default(); BLOCK_SIZE_AREA];
-//         //     let mut t_memory_inverse: [DeltaT; BLOCK_SIZE_AREA] = [0; BLOCK_SIZE_AREA];
-//         //     let mut t_recon_inverse = t_memory_inverse.clone();
-//         //     for (idx, event) in block.events.iter().enumerate() {
-//         //         // Should only be None on the block margins beyond the frame plane
-//         //         if let Some(ev) = event {
-//         //             event_memory[idx] = *ev;
-//         //             t_memory[idx] = ev.delta_t;
-//         //             t_recon[idx] = ev.delta_t;
-//         //         }
-//         //     }
-//         //     t_memory_inverse = t_memory.clone();
-//         //     event_memory_inverse = event_memory.clone();
-//         //     t_recon_inverse = t_recon.clone();
-//         //
-//         //     assert!(block.fill_count <= BLOCK_SIZE_AREA as u16);
-//         //     let (d_residuals, start_dt, dt_residuals, sparam) =
-//         //         block.get_intra_residual_tshifts(0, dtm);
-//         //
-//         //     let events = block.get_intra_residual_tshifts_inverse(
-//         //         sparam,
-//         //         dtm,
-//         //         d_residuals,
-//         //         start_dt,
-//         //         dt_residuals,
-//         //     );
-//         //
-//         //     let epsilon = 100;
-//         //     for (idx, recon_event) in events.iter().enumerate() {
-//         //         let orig_event = block.events[idx];
-//         //         if recon_event.is_some() && orig_event.is_some() {
-//         //             assert_eq!(recon_event.unwrap().d, orig_event.unwrap().d);
-//         //             assert!(
-//         //                 recon_event.unwrap().delta_t + epsilon > orig_event.unwrap().delta_t
-//         //                     && recon_event.unwrap().delta_t.saturating_sub(epsilon)
-//         //                         < orig_event.unwrap().delta_t
-//         //             );
-//         //         } else {
-//         //             assert!(recon_event.is_none() && orig_event.is_none());
-//         //         }
-//         //         // assert_eq!(*recon_event, orig_event);
-//         //     }
-//         //
-//         //     for (block_idx, block) in cube.blocks_r.iter_mut().skip(1).enumerate() {
-//         //         let (d_residuals, start_dt, t_residuals, sparam) = block
-//         //             .get_inter_residual_tshifts(
-//         //                 &mut event_memory,
-//         //                 &mut t_memory,
-//         //                 &mut t_recon,
-//         //                 0,
-//         //                 dtm,
-//         //                 255,
-//         //             );
-//         //
-//         //         assert!(sparam == 0);
-//         //         // t_memory_inverse = t_memory.clone();
-//         //         // event_memory_inverse = event_memory.clone();
-//         //         // t_recon_inverse = t_recon.clone();
-//         //         eprint!("{}", sparam);
-//         //
-//         //         let events = block.get_inter_residual_tshifts_inverse(
-//         //             &mut event_memory_inverse,
-//         //             &mut t_recon_inverse,
-//         //             sparam,
-//         //             d_residuals,
-//         //             t_residuals,
-//         //             dtm,
-//         //             255,
-//         //             Continuous,
-//         //         );
-//         //         for (idx, recon_event) in events.iter().enumerate() {
-//         //             let orig_event = block.events[idx];
-//         //             if recon_event.is_some() && orig_event.is_some() {
-//         //                 assert_eq!(recon_event.unwrap().d, orig_event.unwrap().d);
-//         //                 // assert!(
-//         //                 //     recon_event.unwrap().delta_t + epsilon > orig_event.unwrap().delta_t
-//         //                 //         && recon_event.unwrap().delta_t.saturating_sub(epsilon)
-//         //                 //             < orig_event.unwrap().delta_t
-//         //                 // );
-//         //             } else {
-//         //                 assert!(recon_event.is_none() && orig_event.is_none());
-//         //             }
-//         //             // assert_eq!(*recon_event, orig_event);
-//         //         }
-//         //     }
-//         // }
-//     }
-//
-//     #[test]
-//     fn test_real_data_tshift_inter() {
-//         // let mut bufreader =
-//         //     BufReader::new(File::open("/home/andrew/Downloads/test_out_abs.adder").unwrap());
-//         // let mut bitreader = BitReader::endian(bufreader, BigEndian);
-//         // let compression = <RawInput as ReadCompression<BufReader<File>>>::new();
-//         // let mut reader = Decoder::new(Box::new(compression), &mut bitreader).unwrap();
-//         // let mut events = Vec::new();
-//         // loop {
-//         //     match reader.digest_event(&mut bitreader) {
-//         //         Ok(ev) => {
-//         //             events.push(ev);
-//         //         }
-//         //         Err(_) => {
-//         //             break;
-//         //         }
-//         //     }
-//         // }
-//         //
-//         // let bufwriter =
-//         //     BufWriter::new(File::create("/home/andrew/Downloads/test_abs_recon2.adder").unwrap());
-//         // let compression = <RawOutput<_> as WriteCompression<BufWriter<File>>>::new(
-//         //     reader.meta().clone(),
-//         //     bufwriter,
-//         // );
-//         //
-//         // let mut bufrawriter = BufWriter::new(
-//         //     File::create("/home/andrew/Downloads/test_abs_compressed_raw.adder").unwrap(),
-//         // );
-//         // let mut encoder: Encoder<BufWriter<File>> = Encoder::new(Box::new(compression));
-//         //
-//         // let mut frame = setup_frame(
-//         //     events.clone(),
-//         //     reader.meta().plane.w_usize(),
-//         //     reader.meta().plane.h_usize(),
-//         //     FramePerfect,
-//         // );
-//         // let dt_ref = reader.meta().ref_interval;
-//         // let base_sparam = 4;
-//         //
-//         // for mut cube in &mut frame.cubes {
-//         //     let mut block = &mut cube.blocks_r[0];
-//         //
-//         //     let mut event_memory: [EventCoordless; BLOCK_SIZE_AREA] =
-//         //         [Default::default(); BLOCK_SIZE_AREA];
-//         //     let mut t_memory: [DeltaT; BLOCK_SIZE_AREA] = [0; BLOCK_SIZE_AREA];
-//         //     let mut t_recon = t_memory.clone();
-//         //
-//         //     let mut event_memory_inverse: [EventCoordless; BLOCK_SIZE_AREA] =
-//         //         [Default::default(); BLOCK_SIZE_AREA];
-//         //     let mut t_memory_inverse: [DeltaT; BLOCK_SIZE_AREA] = [0; BLOCK_SIZE_AREA];
-//         //     let mut t_recon_inverse = t_memory_inverse.clone();
-//         //     for (idx, event) in block.events.iter().enumerate() {
-//         //         // Should only be None on the block margins beyond the frame plane
-//         //         if let Some(ev) = event {
-//         //             event_memory[idx] = *ev;
-//         //             t_memory[idx] = ev.delta_t;
-//         //             if t_memory[idx] % dt_ref != 0 {
-//         //                 // TODO: only do this adjustment for framed sources
-//         //                 t_memory[idx] = ((t_memory[idx] / dt_ref) + 1) * dt_ref;
-//         //             }
-//         //             t_recon[idx] = t_memory[idx];
-//         //         }
-//         //     }
-//         //     t_memory_inverse = t_memory.clone();
-//         //     event_memory_inverse = event_memory.clone();
-//         //     t_recon_inverse = t_recon.clone();
-//         //
-//         //     assert!(block.fill_count <= BLOCK_SIZE_AREA as u16);
-//         //     let (d_residuals, start_dt, dt_residuals, sparam) =
-//         //         block.get_intra_residual_tshifts(base_sparam, reader.meta().delta_t_max);
-//         //     for (d_resid, dt_resid) in d_residuals.iter().zip(dt_residuals.iter()) {
-//         //         bufrawriter.write(&d_resid.to_be_bytes()).unwrap();
-//         //         bufrawriter.write(&dt_resid.to_be_bytes()).unwrap();
-//         //     }
-//         //
-//         //     let events = block.get_intra_residual_tshifts_inverse(
-//         //         sparam,
-//         //         reader.meta().delta_t_max,
-//         //         d_residuals,
-//         //         start_dt,
-//         //         dt_residuals,
-//         //     );
-//         //
-//         //     for (idx, event) in events.iter().enumerate() {
-//         //         if event.is_some() {
-//         //             let event_coord = Event {
-//         //                 coord: Coord {
-//         //                     x: (cube.cube_idx_x * BLOCK_SIZE as usize + (idx % BLOCK_SIZE as usize))
-//         //                         as u16,
-//         //                     y: (cube.cube_idx_y * BLOCK_SIZE as usize + (idx / BLOCK_SIZE as usize))
-//         //                         as u16,
-//         //                     c: None,
-//         //                 },
-//         //                 d: event.unwrap().d,
-//         //                 delta_t: event.unwrap().delta_t,
-//         //             };
-//         //             encoder.ingest_event(&event_coord).unwrap();
-//         //         }
-//         //     }
-//         //
-//         //     for block in cube.blocks_r.iter_mut().skip(1) {
-//         //         let (d_residuals, start_dt, t_residuals, sparam) = block
-//         //             .get_inter_residual_tshifts(
-//         //                 &mut event_memory,
-//         //                 &mut t_memory,
-//         //                 &mut t_recon,
-//         //                 base_sparam,
-//         //                 reader.meta().delta_t_max,
-//         //                 dt_ref,
-//         //             );
-//         //         for (d_resid, dt_resid) in d_residuals.iter().zip(dt_residuals.iter()) {
-//         //             bufrawriter.write(&d_resid.to_be_bytes()).unwrap();
-//         //             bufrawriter.write(&dt_resid.to_be_bytes()).unwrap();
-//         //         }
-//         //
-//         //         // t_memory_inverse = t_memory.clone();
-//         //         // event_memory_inverse = event_memory.clone();
-//         //         // t_recon_inverse = t_recon.clone();
-//         //         eprint!("{}", sparam);
-//         //
-//         //         let events = block.get_inter_residual_tshifts_inverse(
-//         //             &mut event_memory_inverse,
-//         //             &mut t_recon_inverse,
-//         //             sparam,
-//         //             d_residuals,
-//         //             t_residuals,
-//         //             reader.meta().delta_t_max,
-//         //             dt_ref,
-//         //             FramePerfect,
-//         //         );
-//         //         for (idx, event) in events.iter().enumerate() {
-//         //             if event.is_some() {
-//         //                 let event_coord = Event {
-//         //                     coord: Coord {
-//         //                         x: (cube.cube_idx_x * BLOCK_SIZE as usize
-//         //                             + (idx % BLOCK_SIZE as usize))
-//         //                             as u16,
-//         //                         y: (cube.cube_idx_y * BLOCK_SIZE as usize
-//         //                             + (idx / BLOCK_SIZE as usize))
-//         //                             as u16,
-//         //                         c: None,
-//         //                     },
-//         //                     d: event.unwrap().d,
-//         //                     delta_t: event.unwrap().delta_t,
-//         //                 };
-//         //                 encoder.ingest_event(&event_coord).unwrap();
-//         //             }
-//         //         }
-//         //     }
-//         // }
-//         // let mut writer = encoder.close_writer().unwrap().unwrap();
-//         // writer.flush().unwrap();
-//         //
-//         // writer.into_inner().unwrap();
-//         //
-//         // bufrawriter.flush().unwrap();
-//     }
-//
-//     #[test]
-//     fn test_inter_compression_lossless_tshift_refactor() {
-//         let dtm = 2550;
-//         let dt_ref = 255;
-//         let events = get_random_events(
-//             Some(743822),
-//             1000,
-//             BLOCK_SIZE as u16,
-//             BLOCK_SIZE as u16,
-//             1,
-//             dtm,
-//         );
-//         let mut frame = setup_frame_dt_to_abs_t(events.clone(), BLOCK_SIZE, BLOCK_SIZE, Continuous);
-//         for mut cube in &mut frame.cubes {
-//             let mut block = &mut cube.blocks_r[0];
-//             let mut inter_model = &mut cube.inter_model_r;
-//
-//             let mut event_memory_inverse: [EventCoordless; BLOCK_SIZE_AREA] =
-//                 [Default::default(); BLOCK_SIZE_AREA];
-//
-//             assert!(block.fill_count <= BLOCK_SIZE_AREA as u16);
-//             let (start_t, start_d, d_residuals, dt_residuals, sparam) =
-//                 inter_model.forward_intra_prediction(0, dt_ref, dtm, &block.events);
-//
-//             let d_resids = d_residuals.clone();
-//             let dt_resids = dt_residuals.clone();
-//             let mut t_memory_inverse = inter_model.t_memory.clone();
-//             let mut event_memory_inverse = inter_model.event_memory.clone();
-//             let mut t_recon_inverse = inter_model.t_recon.clone();
-//
-//             let events = block.get_intra_residual_tshifts_inverse(
-//                 sparam, dtm, start_t, start_d, d_resids, dt_resids,
-//             );
-//
-//             let epsilon = 100;
-//             for (idx, recon_event) in events.iter().enumerate() {
-//                 let orig_event = block.events[idx];
-//                 if recon_event.is_some() && orig_event.is_some() {
-//                     assert_eq!(recon_event.unwrap().d, orig_event.unwrap().d);
-//                     assert!(
-//                         recon_event.unwrap().delta_t + epsilon > orig_event.unwrap().delta_t
-//                             && recon_event.unwrap().delta_t.saturating_sub(epsilon)
-//                                 < orig_event.unwrap().delta_t
-//                     );
-//                 } else {
-//                     assert!(recon_event.is_none() && orig_event.is_none());
-//                 }
-//                 // assert_eq!(*recon_event, orig_event);
-//             }
-//
-//             let mut tmp_event_memory;
-//             let mut tmp_t_recon;
-//
-//             for (block_idx, block) in cube.blocks_r.iter_mut().skip(1).enumerate() {
-//                 let (d_residuals, t_residuals, sparam) =
-//                     inter_model.forward_inter_prediction(0, dtm, dt_ref, &block.events);
-//                 let d_resid_clone = d_residuals.clone();
-//                 let t_resid_clone = t_residuals.clone();
-//
-//                 tmp_event_memory = inter_model.event_memory.clone();
-//                 tmp_t_recon = inter_model.t_recon.clone();
-//
-//                 assert!(sparam == 0);
-//                 // t_memory_inverse = t_memory.clone();
-//                 // event_memory_inverse = event_memory.clone();
-//                 // t_recon_inverse = t_recon.clone();
-//                 eprint!("{}", sparam);
-//
-//                 inter_model.override_memory(event_memory_inverse, t_recon_inverse);
-//
-//                 let events = inter_model.inverse_inter_prediction(sparam, dtm, dt_ref);
-//
-//                 event_memory_inverse = inter_model.event_memory.clone();
-//                 t_recon_inverse = inter_model.t_recon.clone();
-//                 inter_model.override_memory(tmp_event_memory, tmp_t_recon);
-//
-//                 for (idx, recon_event) in events.iter().enumerate() {
-//                     let orig_event = block.events[idx];
-//                     if recon_event.is_some() && orig_event.is_some() {
-//                         assert_eq!(recon_event.unwrap().d, orig_event.unwrap().d);
-//                         // assert!(
-//                         //     recon_event.unwrap().delta_t + epsilon > orig_event.unwrap().delta_t
-//                         //         && recon_event.unwrap().delta_t.saturating_sub(epsilon)
-//                         //             < orig_event.unwrap().delta_t
-//                         // );
-//                     } else {
-//                         assert!(recon_event.is_none() && orig_event.is_none());
-//                     }
-//                     // assert_eq!(*recon_event, orig_event);
-//                 }
-//             }
-//         }
-//     }
-//
-//     #[test]
-//     fn test_real_data_tshift_inter_refactor() {
-//         let mut bufreader =
-//             BufReader::new(File::open("/home/andrew/Downloads/test_abs2.adder").unwrap());
-//         let mut bitreader = BitReader::endian(bufreader, BigEndian);
-//         let compression = RawInput::new();
-//         let mut reader = Decoder::new_raw(compression, &mut bitreader).unwrap();
-//         let mut events = Vec::new();
-//         loop {
-//             match reader.digest_event(&mut bitreader) {
-//                 Ok(ev) => {
-//                     events.push(ev);
-//                 }
-//                 Err(_) => {
-//                     break;
-//                 }
-//             }
-//         }
-//
-//         let bufwriter =
-//             BufWriter::new(File::create("/home/andrew/Downloads/test_abs_recon2.adder").unwrap());
-//         let compression = RawOutput::new(reader.meta().clone(), bufwriter);
-//
-//         let mut bufrawriter = BufWriter::new(
-//             File::create("/home/andrew/Downloads/test_abs_compressed_raw.adder").unwrap(),
-//         );
-//         let mut encoder: Encoder<BufWriter<File>> = Encoder::new_raw(compression);
-//
-//         let mut frame = setup_frame(
-//             events.clone(),
-//             reader.meta().plane.w_usize(),
-//             reader.meta().plane.h_usize(),
-//             FramePerfect,
-//             reader.meta().delta_t_max,
-//         );
-//         let dt_ref = reader.meta().ref_interval;
-//         let dtm = reader.meta().delta_t_max;
-//         let base_sparam = 4;
-//
-//         for mut cube in &mut frame.cubes {
-//             let mut block = &mut cube.blocks_r[0];
-//             let mut inter_model = &mut cube.inter_model_r;
-//
-//             let mut event_memory_inverse: [EventCoordless; BLOCK_SIZE_AREA] =
-//                 [Default::default(); BLOCK_SIZE_AREA];
-//
-//             let (start_t, start_d, d_residuals, dt_residuals, sparam) =
-//                 inter_model.forward_intra_prediction(0, dt_ref, dtm, &block.events);
-//
-//             // let adu_intra_block = AduIntraBlock {
-//             //     head_event_t: dt_residuals[0] as AbsoluteT,
-//             //     head_event_d: 0,
-//             //     shift_loss_param: 0,
-//             //     d_residuals: [],
-//             //     dt_residuals: [],
-//             //     event_count: 0,
-//             // }
-//
-//             let d_resids = d_residuals.clone();
-//             let dt_resids = dt_residuals.clone();
-//             let mut t_memory_inverse = inter_model.t_memory.clone();
-//             let mut event_memory_inverse = inter_model.event_memory.clone();
-//             let mut t_recon_inverse = inter_model.t_recon.clone();
-//
-//             let events = block.get_intra_residual_tshifts_inverse(
-//                 sparam, dtm, start_t, start_d, d_resids, dt_resids,
-//             );
-//
-//             let epsilon = 0;
-//             for (idx, recon_event) in events.iter().enumerate() {
-//                 let orig_event = block.events[idx];
-//                 if recon_event.is_some() && orig_event.is_some() {
-//                     assert_eq!(recon_event.unwrap().d, orig_event.unwrap().d);
-//                     assert!(
-//                         recon_event.unwrap().delta_t + epsilon >= orig_event.unwrap().delta_t
-//                             && recon_event.unwrap().delta_t.saturating_sub(epsilon)
-//                                 <= orig_event.unwrap().delta_t
-//                     );
-//                 } else {
-//                     assert!(recon_event.is_none() && orig_event.is_none());
-//                 }
-//                 // assert_eq!(*recon_event, orig_event);
-//             }
-//
-//             for (idx, event) in events.iter().enumerate() {
-//                 if event.is_some() {
-//                     let event_coord = Event {
-//                         coord: Coord {
-//                             x: (cube.cube_idx_x * BLOCK_SIZE as usize + (idx % BLOCK_SIZE as usize))
-//                                 as u16,
-//                             y: (cube.cube_idx_y * BLOCK_SIZE as usize + (idx / BLOCK_SIZE as usize))
-//                                 as u16,
-//                             c: None,
-//                         },
-//                         d: event.unwrap().d,
-//                         delta_t: event.unwrap().delta_t,
-//                     };
-//                     encoder.ingest_event(event_coord).unwrap();
-//                 }
-//             }
-//
-//             let mut tmp_event_memory;
-//             let mut tmp_t_recon;
-//             for block in cube.blocks_r.iter_mut().skip(1) {
-//                 let (d_residuals, t_residuals, sparam) =
-//                     inter_model.forward_inter_prediction(base_sparam, dtm, dt_ref, &block.events);
-//                 let d_resid_clone = d_residuals.clone();
-//                 let t_resid_clone = t_residuals.clone();
-//
-//                 tmp_event_memory = inter_model.event_memory.clone();
-//                 tmp_t_recon = inter_model.t_recon.clone();
-//
-//                 // for (d_resid, dt_resid) in d_residuals.iter().zip(dt_residuals.iter()) {
-//                 //     bufrawriter.write(&d_resid.to_be_bytes()).unwrap();
-//                 //     bufrawriter.write(&dt_resid.to_be_bytes()).unwrap();
-//                 // }
-//
-//                 // t_memory_inverse = t_memory.clone();
-//                 // event_memory_inverse = event_memory.clone();
-//                 // t_recon_inverse = t_recon.clone();
-//                 eprint!("{}", sparam);
-//
-//                 inter_model.override_memory(event_memory_inverse, t_recon_inverse);
-//
-//                 let events =
-//                     inter_model.inverse_inter_prediction(sparam, reader.meta().delta_t_max, dt_ref);
-//
-//                 event_memory_inverse = inter_model.event_memory.clone();
-//                 t_recon_inverse = inter_model.t_recon.clone();
-//                 inter_model.override_memory(tmp_event_memory, tmp_t_recon);
-//
-//                 for (idx, event) in events.iter().enumerate() {
-//                     if event.is_some() {
-//                         let event_coord = Event {
-//                             coord: Coord {
-//                                 x: (cube.cube_idx_x * BLOCK_SIZE as usize
-//                                     + (idx % BLOCK_SIZE as usize))
-//                                     as u16,
-//                                 y: (cube.cube_idx_y * BLOCK_SIZE as usize
-//                                     + (idx / BLOCK_SIZE as usize))
-//                                     as u16,
-//                                 c: None,
-//                             },
-//                             d: event.unwrap().d,
-//                             delta_t: event.unwrap().delta_t,
-//                         };
-//                         encoder.ingest_event(event_coord).unwrap();
-//                     }
-//                 }
-//             }
-//         }
-//         let mut writer = encoder.close_writer().unwrap().unwrap();
-//         writer.flush().unwrap();
-//
-//         writer.into_inner().unwrap();
-//
-//         bufrawriter.flush().unwrap();
-//     }
-//
-//     #[test]
-//     fn test_real_data_tshift_inter_refactor_adu_cast() {
-//         let mut bufreader =
-//             BufReader::new(File::open("/home/andrew/Downloads/test_abs2.adder").unwrap());
-//         let mut bitreader = BitReader::endian(bufreader, BigEndian);
-//         let compression = RawInput::new();
-//         let mut reader = Decoder::new_raw(compression, &mut bitreader).unwrap();
-//         let mut events = Vec::new();
-//         loop {
-//             match reader.digest_event(&mut bitreader) {
-//                 Ok(ev) => {
-//                     events.push(ev);
-//                 }
-//                 Err(_) => {
-//                     break;
-//                 }
-//             }
-//         }
-//
-//         let bufwriter =
-//             BufWriter::new(File::create("/home/andrew/Downloads/test_abs_recon2.adder").unwrap());
-//         let compression = RawOutput::new(reader.meta().clone(), bufwriter);
-//
-//         let mut encoder: Encoder<BufWriter<File>> = Encoder::new_raw(compression);
-//
-//         let mut frame = setup_frame(
-//             events.clone(),
-//             reader.meta().plane.w_usize(),
-//             reader.meta().plane.h_usize(),
-//             FramePerfect,
-//             reader.meta().delta_t_max,
-//         );
-//         let dt_ref = reader.meta().ref_interval;
-//         let dtm = reader.meta().delta_t_max;
-//         let base_sparam = 4;
-//
-//         let mut adu = Adu::new();
-//
-//         for (cube_idx, cube) in frame.cubes.iter_mut().enumerate() {
-//             let mut block = &mut cube.blocks_r[0];
-//             let mut inter_model = &mut cube.inter_model_r;
-//
-//             let mut event_memory_inverse: [EventCoordless; BLOCK_SIZE_AREA] =
-//                 [Default::default(); BLOCK_SIZE_AREA];
-//
-//             let (start_t, start_d, d_residuals, dt_residuals, sparam) =
-//                 inter_model.forward_intra_prediction(0, dt_ref, dtm, &block.events);
-//
-//             if cube_idx == 0 {
-//                 adu.head_event_t = start_t;
-//             }
-//
-//             let intra_block = AduIntraBlock {
-//                 head_event_t: start_t,
-//                 head_event_d: start_d,
-//                 shift_loss_param: sparam,
-//                 d_residuals: d_residuals.clone(),
-//                 dt_residuals: dt_residuals.clone(),
-//             };
-//             let mut adu_cube = AduCube::from_intra_block(
-//                 intra_block,
-//                 cube.cube_idx_y as u16,
-//                 cube.cube_idx_x as u16,
-//             );
-//
-//             let d_resids = d_residuals.clone();
-//             let dt_resids = dt_residuals.clone();
-//             let mut t_memory_inverse = inter_model.t_memory.clone();
-//             let mut event_memory_inverse = inter_model.event_memory.clone();
-//             let mut t_recon_inverse = inter_model.t_recon.clone();
-//
-//             let events = block.get_intra_residual_tshifts_inverse(
-//                 sparam, dtm, start_t, start_d, d_resids, dt_resids,
-//             );
-//
-//             let epsilon = 0;
-//             for (idx, recon_event) in events.iter().enumerate() {
-//                 let orig_event = block.events[idx];
-//                 if recon_event.is_some() && orig_event.is_some() {
-//                     assert_eq!(recon_event.unwrap().d, orig_event.unwrap().d);
-//                     assert!(
-//                         recon_event.unwrap().delta_t + epsilon >= orig_event.unwrap().delta_t
-//                             && recon_event.unwrap().delta_t.saturating_sub(epsilon)
-//                                 <= orig_event.unwrap().delta_t
-//                     );
-//                 } else {
-//                     assert!(recon_event.is_none() && orig_event.is_none());
-//                 }
-//                 // assert_eq!(*recon_event, orig_event);
-//             }
-//
-//             for (idx, event) in events.iter().enumerate() {
-//                 if event.is_some() {
-//                     let event_coord = Event {
-//                         coord: Coord {
-//                             x: (cube.cube_idx_x * BLOCK_SIZE as usize + (idx % BLOCK_SIZE as usize))
-//                                 as u16,
-//                             y: (cube.cube_idx_y * BLOCK_SIZE as usize + (idx / BLOCK_SIZE as usize))
-//                                 as u16,
-//                             c: None,
-//                         },
-//                         d: event.unwrap().d,
-//                         delta_t: event.unwrap().delta_t,
-//                     };
-//                     encoder.ingest_event(event_coord).unwrap();
-//                 }
-//             }
-//
-//             let mut tmp_event_memory;
-//             let mut tmp_t_recon;
-//             for block in cube.blocks_r.iter_mut().skip(1) {
-//                 let (d_residuals, t_residuals, sparam) =
-//                     inter_model.forward_inter_prediction(base_sparam, dtm, dt_ref, &block.events);
-//
-//                 adu_cube.add_inter_block(AduInterBlock {
-//                     shift_loss_param: sparam,
-//                     d_residuals: d_residuals.clone(),
-//                     t_residuals: t_residuals.clone(),
-//                 });
-//
-//                 let d_resid_clone = d_residuals.clone();
-//                 let t_resid_clone = t_residuals.clone();
-//
-//                 tmp_event_memory = inter_model.event_memory.clone();
-//                 tmp_t_recon = inter_model.t_recon.clone();
-//
-//                 // for (d_resid, dt_resid) in d_residuals.iter().zip(dt_residuals.iter()) {
-//                 //     bufrawriter.write(&d_resid.to_be_bytes()).unwrap();
-//                 //     bufrawriter.write(&dt_resid.to_be_bytes()).unwrap();
-//                 // }
-//
-//                 // t_memory_inverse = t_memory.clone();
-//                 // event_memory_inverse = event_memory.clone();
-//                 // t_recon_inverse = t_recon.clone();
-//                 eprint!("{}", sparam);
-//
-//                 inter_model.override_memory(event_memory_inverse, t_recon_inverse);
-//
-//                 let events =
-//                     inter_model.inverse_inter_prediction(sparam, reader.meta().delta_t_max, dt_ref);
-//
-//                 event_memory_inverse = inter_model.event_memory.clone();
-//                 t_recon_inverse = inter_model.t_recon.clone();
-//                 inter_model.override_memory(tmp_event_memory, tmp_t_recon);
-//
-//                 for (idx, event) in events.iter().enumerate() {
-//                     if event.is_some() {
-//                         let event_coord = Event {
-//                             coord: Coord {
-//                                 x: (cube.cube_idx_x * BLOCK_SIZE as usize
-//                                     + (idx % BLOCK_SIZE as usize))
-//                                     as u16,
-//                                 y: (cube.cube_idx_y * BLOCK_SIZE as usize
-//                                     + (idx / BLOCK_SIZE as usize))
-//                                     as u16,
-//                                 c: None,
-//                             },
-//                             d: event.unwrap().d,
-//                             delta_t: event.unwrap().delta_t,
-//                         };
-//                         encoder.ingest_event(event_coord).unwrap();
-//                     }
-//                 }
-//             }
-//
-//             adu.add_cube(adu_cube, AduChannelType::R);
-//         }
-//         println!("Done writing reconstructed video");
-//         let meta = encoder.meta().clone();
-//         let mut writer = encoder.close_writer().unwrap().unwrap();
-//         writer.flush().unwrap();
-//
-//         writer.into_inner().unwrap();
-//
-//         // Below is code for arithmetic-coding of the adu we generated
-//         {
-//             let mut encoder = CompressedOutput::new(meta, Vec::new());
-//
-//             assert!(adu
-//                 .compress(
-//                     encoder.arithmetic_coder.as_mut().unwrap(),
-//                     encoder.contexts.as_mut().unwrap(),
-//                     encoder.stream.as_mut().unwrap(),
-//                     encoder.meta.delta_t_max
-//                 )
-//                 .is_ok());
-//
-//             let written_data = encoder.into_writer().unwrap();
-//
-//             let output_len = written_data.len();
-//             eprintln!("Output length: {}", output_len);
-//             eprintln!(
-//                 "Input length: {}",
-//                 File::open("/home/andrew/Downloads/test_abs_recon2.adder")
-//                     .unwrap()
-//                     .metadata()
-//                     .unwrap()
-//                     .len()
-//             );
-//
-//             let mut bufreader = BufReader::new(written_data.as_slice());
-//             let mut bitreader =
-//                 bitstream_io::BitReader::endian(&mut bufreader, bitstream_io::BigEndian);
-//
-//             let mut decoder = CompressedInput::new(meta.delta_t_max, meta.ref_interval);
-//
-//             let decoded_adu = Adu::decompress(&mut bitreader, &mut decoder);
-//
-//             decoder
-//                 .arithmetic_coder
-//                 .as_mut()
-//                 .unwrap()
-//                 .model
-//                 .set_context(decoder.contexts.as_mut().unwrap().eof_context);
-//             let eof = decoder
-//                 .arithmetic_coder
-//                 .as_mut()
-//                 .unwrap()
-//                 .decode(&mut bitreader)
-//                 .unwrap();
-//             assert!(eof.is_none());
-//             assert_eq!(adu.head_event_t, decoded_adu.head_event_t);
-//
-//             compare_channels(&adu.cubes_r, &decoded_adu.cubes_r);
-//             compare_channels(&adu.cubes_g, &decoded_adu.cubes_g);
-//             compare_channels(&adu.cubes_b, &decoded_adu.cubes_b);
-//         }
-//     }
-//
-//     #[test]
-//     fn test_real_data_tshift_inter_refactor_adu_cast_direct_compressor() {
-//         let mut bufreader =
-//             BufReader::new(File::open("/home/andrew/Downloads/bunny_test.adder").unwrap());
-//         let mut bitreader = BitReader::endian(bufreader, BigEndian);
-//         let compression = RawInput::new();
-//         let mut reader = Decoder::new_raw(compression, &mut bitreader).unwrap();
-//
-//         let bufwriter = Vec::new();
-//         let compression = CompressedOutput::new(reader.meta().clone(), bufwriter);
-//
-//         let dtm = compression.meta.delta_t_max;
-//         let ref_interval = compression.meta.ref_interval;
-//         let mut encoder: Encoder<Vec<u8>> = Encoder::new_compressed(compression);
-//
-//         let mut start_event_t = 0;
-//         let mut compress = false;
-//         let mut ev_t = 0;
-//         let mut first_adu = None;
-//         let mut second_adu = None;
-//
-//         loop {
-//             match reader.digest_event(&mut bitreader) {
-//                 Ok(ev) => {
-//                     if let Some(adu) = encoder.ingest_event_debug(ev).unwrap() {
-//                         if first_adu.is_none() {
-//                             first_adu = Some(adu);
-//                         } else if second_adu.is_none() {
-//                             second_adu = Some(adu);
-//                             break;
-//                         }
-//                     }
-//                 }
-//                 Err(_) => {
-//                     panic!("temp")
-//                 }
-//             }
-//         }
-//
-//         let mut written_data = encoder.close_writer().unwrap().unwrap();
-//         // let mut writer = encoder.close_writer().unwrap().unwrap();
-//         // writer.flush().unwrap();
-//         // let written_data = writer.into_inner().unwrap();
-//         let output_len = written_data.len();
-//
-//         eprintln!("Output length: {}", output_len);
-//         eprintln!(
-//             "Input length: {}",
-//             File::open("/home/andrew/Downloads/bunny_test.adder")
-//                 .unwrap()
-//                 .metadata()
-//                 .unwrap()
-//                 .len()
-//         );
-//
-//         // Decode the compressed file
-//         let mut bufreader = BufReader::new(Cursor::new(written_data));
-//         let mut bitreader = BitReader::endian(bufreader, BigEndian);
-//         let compression = CompressedInput::new(dtm, ref_interval);
-//         let mut decoder = Decoder::new_compressed(compression, &mut bitreader).unwrap();
-//
-//         // todo: temporary
-//         // loop {
-//         decoder.digest_event_debug(&mut bitreader, &first_adu.unwrap());
-//         decoder.digest_event_debug(&mut bitreader, &second_adu.unwrap());
-//         // count += 1;
-//         // }
-//     }
-// }
+#[cfg(test)]
+mod tests {
+    use crate::codec::compressed::adu::cube::AduCube;
+    use crate::codec::compressed::adu::frame::{compare_channels, Adu, AduChannelType};
+    use crate::codec::compressed::adu::interblock::AduInterBlock;
+    use crate::codec::compressed::adu::intrablock::AduIntraBlock;
+    use crate::codec::compressed::adu::AduCompression;
+    use crate::codec::compressed::blocks::block::Frame;
+    use crate::codec::compressed::blocks::{BLOCK_SIZE, BLOCK_SIZE_AREA};
+    use crate::codec::compressed::stream::CompressedInput;
+    use crate::codec::decoder::Decoder;
+    use crate::codec::encoder::Encoder;
+    use crate::codec::raw::stream::{RawInput, RawOutput};
+    use crate::codec::CompressedOutput;
+    use crate::codec::{CodecError, ReadCompression, WriteCompression};
+    use crate::Mode::{Continuous, FramePerfect};
+    use crate::{Coord, DeltaT, Event, EventCoordless, Mode};
+    use bitstream_io::{BigEndian, BitReader};
+    use rand::prelude::StdRng;
+    use rand::{Rng, SeedableRng};
+    use std::fs::File;
+    use std::io::{BufReader, BufWriter, Cursor, Write};
+
+    fn setup_frame(
+        events: Vec<Event>,
+        width: usize,
+        height: usize,
+        time_modulation_mode: Mode,
+        delta_t_max: DeltaT,
+    ) -> Frame {
+        let mut frame = Frame::new(width, height, true, time_modulation_mode);
+
+        for event in events {
+            frame.add_event(event, delta_t_max).unwrap();
+        }
+        frame
+    }
+
+    fn setup_frame_dt_to_abs_t(
+        events: Vec<Event>,
+        width: usize,
+        height: usize,
+        time_modulation_mode: Mode,
+    ) -> Frame {
+        let mut frame = Frame::new(width, height, true, time_modulation_mode);
+
+        for event in events {
+            frame.add_event_dt_to_abs_t(event).unwrap();
+        }
+        frame
+    }
+
+    fn get_random_events(
+        seed: Option<u64>,
+        num: usize,
+        width: u16,
+        height: u16,
+        channels: u8,
+        dtm: DeltaT,
+    ) -> Vec<Event> {
+        let mut rng = match seed {
+            None => StdRng::from_rng(rand::thread_rng()).unwrap(),
+            Some(num) => StdRng::seed_from_u64(num),
+        };
+        let mut events = Vec::with_capacity(num);
+        for _ in 0..num {
+            let event = Event {
+                coord: Coord {
+                    x: rng.gen::<u16>() % width,
+                    y: rng.gen::<u16>() % height,
+                    c: Some(rng.gen::<u8>() % channels),
+                },
+                d: rng.gen::<u8>(),
+                delta_t: rng.gen::<u32>() % dtm,
+            };
+            events.push(event);
+        }
+        events
+    }
+
+    #[test]
+    fn test_setup_frame() {
+        let events = get_random_events(None, 10000, 640, 480, 3, 25500);
+        let frame = setup_frame(events, 640, 480, Continuous, 25500);
+    }
+
+    /// Test that cubes are growing correctlly, according to the incoming events.
+    #[test]
+    fn test_cube_growth() {
+        let events = get_random_events(None, 100000, 640, 480, 3, 25500);
+        let frame = setup_frame(events.clone(), 640, 480, Continuous, 25500);
+
+        let mut cube_counts_r = vec![0; frame.cubes.len()];
+        let mut cube_counts_g = vec![0; frame.cubes.len()];
+        let mut cube_counts_b = vec![0; frame.cubes.len()];
+
+        for event in events {
+            let cube_idx = frame.event_coord_to_block_idx(&event).cube_idx;
+            let cube_counts = match event.coord.c.unwrap_or(0) {
+                0 => &mut cube_counts_r,
+                1 => &mut cube_counts_g,
+                2 => &mut cube_counts_b,
+                _ => panic!("Invalid color"),
+            };
+            cube_counts[cube_idx] += 1;
+        }
+
+        for (cube_idx, cube) in frame.cubes.iter().enumerate() {
+            // total fill count for r blocks
+            let mut fill_count_r = 0;
+            for block in &cube.blocks_r {
+                assert!(block.fill_count <= BLOCK_SIZE_AREA as u16);
+                fill_count_r += block.fill_count;
+            }
+            assert_eq!(fill_count_r, cube_counts_r[cube_idx]);
+
+            // total fill count for g blocks
+            let mut fill_count_g = 0;
+            for block in &cube.blocks_g {
+                assert!(block.fill_count <= BLOCK_SIZE_AREA as u16);
+                fill_count_g += block.fill_count;
+            }
+            assert_eq!(fill_count_g, cube_counts_g[cube_idx]);
+
+            // total fill count for b blocks
+            let mut fill_count_b = 0;
+            for block in &cube.blocks_b {
+                assert!(block.fill_count <= BLOCK_SIZE_AREA as u16);
+                fill_count_b += block.fill_count;
+            }
+            assert_eq!(fill_count_b, cube_counts_b[cube_idx]);
+        }
+    }
+
+    // #[test]
+    // fn test_intra_compression_lossless_1() {
+    //     let dtm = 25500;
+    //     let events = get_random_events(
+    //         Some(743822),
+    //         10,
+    //         BLOCK_SIZE as u16,
+    //         BLOCK_SIZE as u16,
+    //         1,
+    //         dtm,
+    //     );
+    //     let mut frame = setup_frame(events.clone(), BLOCK_SIZE, BLOCK_SIZE, Continuous, dtm);
+    //     for mut cube in &mut frame.cubes {
+    //         for block in &mut cube.blocks_r {
+    //             assert!(block.fill_count <= BLOCK_SIZE_AREA as u16);
+    //             let (d_residuals, start_dt, dt_residuals, qp_dt) =
+    //                 block.get_intra_residual_transforms(None, dtm);
+    //             // dbg!(d_residuals);
+    //             // dbg!(dt_residuals);
+    //             let events = block.get_intra_residual_inverse(
+    //                 None,
+    //                 dtm,
+    //                 d_residuals,
+    //                 start_dt,
+    //                 dt_residuals,
+    //                 qp_dt,
+    //             );
+    //
+    //             let epsilon = 100;
+    //             for (idx, recon_event) in events.iter().enumerate() {
+    //                 let orig_event = block.events[idx];
+    //                 if recon_event.is_some() && orig_event.is_some() {
+    //                     assert_eq!(recon_event.unwrap().d, orig_event.unwrap().d);
+    //                     assert!(
+    //                         recon_event.unwrap().delta_t + epsilon > orig_event.unwrap().delta_t
+    //                             && recon_event.unwrap().delta_t - epsilon
+    //                                 < orig_event.unwrap().delta_t
+    //                     );
+    //                 } else {
+    //                     assert!(recon_event.is_none() && orig_event.is_none());
+    //                 }
+    //                 // assert_eq!(*recon_event, orig_event);
+    //             }
+    //         }
+    //     }
+    // }
+    //
+    // // Note: it's not perfectly lossless, because of the large dtm value.
+    // #[test]
+    // fn test_intra_compression_lossless_2() {
+    //     let dtm = 25500;
+    //     let events = get_random_events(
+    //         Some(743822),
+    //         10000,
+    //         BLOCK_SIZE as u16,
+    //         BLOCK_SIZE as u16,
+    //         1,
+    //         dtm,
+    //     );
+    //     let mut frame = setup_frame(events.clone(), BLOCK_SIZE, BLOCK_SIZE, Continuous, dtm);
+    //     for mut cube in &mut frame.cubes {
+    //         for block in &mut cube.blocks_r {
+    //             assert!(block.fill_count <= BLOCK_SIZE_AREA as u16);
+    //             let (d_residuals, start_dt, dt_residuals, qp_dt) =
+    //                 block.get_intra_residual_transforms(None, dtm);
+    //             // dbg!(d_residuals);
+    //             // dbg!(dt_residuals);
+    //             let events = block.get_intra_residual_inverse(
+    //                 None,
+    //                 dtm,
+    //                 d_residuals,
+    //                 start_dt,
+    //                 dt_residuals,
+    //                 qp_dt,
+    //             );
+    //
+    //             let epsilon = 2000;
+    //             for (idx, recon_event) in events.iter().enumerate() {
+    //                 let orig_event = block.events[idx];
+    //                 if recon_event.is_some() && orig_event.is_some() {
+    //                     assert_eq!(recon_event.unwrap().d, orig_event.unwrap().d);
+    //                     assert!(
+    //                         recon_event.unwrap().delta_t + epsilon > orig_event.unwrap().delta_t
+    //                             && recon_event.unwrap().delta_t.saturating_sub(epsilon)
+    //                                 < orig_event.unwrap().delta_t
+    //                     );
+    //                 } else {
+    //                     assert!(recon_event.is_none() && orig_event.is_none());
+    //                 }
+    //                 // assert_eq!(*recon_event, orig_event);
+    //             }
+    //         }
+    //     }
+    // }
+    //
+    // // Note: it's not perfectly lossless, because of the large dtm value.
+    // #[test]
+    // fn test_intra_compression_lossless_3() {
+    //     let dtm = 255000;
+    //     let events = get_random_events(
+    //         Some(743822),
+    //         10000,
+    //         BLOCK_SIZE as u16,
+    //         BLOCK_SIZE as u16,
+    //         1,
+    //         dtm,
+    //     );
+    //     let mut frame = setup_frame(events.clone(), BLOCK_SIZE, BLOCK_SIZE, Continuous, dtm);
+    //     for mut cube in &mut frame.cubes {
+    //         for block in &mut cube.blocks_r {
+    //             assert!(block.fill_count <= BLOCK_SIZE_AREA as u16);
+    //             let (d_residuals, start_dt, dt_residuals, qp_dt) =
+    //                 block.get_intra_residual_transforms(None, dtm);
+    //             // dbg!(d_residuals);
+    //             // dbg!(dt_residuals);
+    //             let events = block.get_intra_residual_inverse(
+    //                 None,
+    //                 dtm,
+    //                 d_residuals,
+    //                 start_dt,
+    //                 dt_residuals,
+    //                 qp_dt,
+    //             );
+    //
+    //             // As our delta_t_max value increases, we can get more loss. Increase epsilon to allow for more slop.
+    //             let epsilon = 5000;
+    //             for (idx, recon_event) in events.iter().enumerate() {
+    //                 let orig_event = block.events[idx];
+    //                 if recon_event.is_some() && orig_event.is_some() {
+    //                     assert_eq!(recon_event.unwrap().d, orig_event.unwrap().d);
+    //                     let recon_dt = recon_event.unwrap().delta_t;
+    //                     let orig_dt = orig_event.unwrap().delta_t;
+    //                     assert!(
+    //                         recon_dt + epsilon > orig_dt
+    //                             && recon_dt.saturating_sub(epsilon) < orig_dt
+    //                     );
+    //                 } else {
+    //                     assert!(recon_event.is_none() && orig_event.is_none());
+    //                 }
+    //                 // assert_eq!(*recon_event, orig_event);
+    //             }
+    //         }
+    //     }
+    // }
+    //
+    // #[test]
+    // fn test_intra_compression_lossy_1() {
+    //     let dtm = 255000;
+    //     let events = get_random_events(
+    //         Some(743822),
+    //         10000,
+    //         BLOCK_SIZE as u16,
+    //         BLOCK_SIZE as u16,
+    //         1,
+    //         dtm,
+    //     );
+    //     let mut frame = setup_frame(events.clone(), BLOCK_SIZE, BLOCK_SIZE, Continuous, dtm);
+    //     for mut cube in &mut frame.cubes {
+    //         for block in &mut cube.blocks_r {
+    //             assert!(block.fill_count <= BLOCK_SIZE_AREA as u16);
+    //             let (d_residuals, start_dt, dt_residuals, qp_dt) =
+    //                 block.get_intra_residual_transforms(Some(30), dtm);
+    //             // dbg!(d_residuals);
+    //             // dbg!(dt_residuals);
+    //             let events = block.get_intra_residual_inverse(
+    //                 Some(30),
+    //                 dtm,
+    //                 d_residuals,
+    //                 start_dt,
+    //                 dt_residuals,
+    //                 qp_dt,
+    //             );
+    //
+    //             // As our delta_t_max value increases, we can get more loss. Increase epsilon to allow for more slop.
+    //             let epsilon = 5000;
+    //             for (idx, recon_event) in events.iter().enumerate() {
+    //                 let orig_event = block.events[idx];
+    //                 if recon_event.is_some() && orig_event.is_some() {
+    //                     assert_eq!(recon_event.unwrap().d, orig_event.unwrap().d);
+    //                     let recon_dt = recon_event.unwrap().delta_t;
+    //                     let orig_dt = orig_event.unwrap().delta_t;
+    //                     assert!(
+    //                         recon_dt + epsilon > orig_dt
+    //                             && recon_dt.saturating_sub(epsilon) < orig_dt
+    //                     );
+    //                 } else {
+    //                     assert!(recon_event.is_none() && orig_event.is_none());
+    //                 }
+    //                 // assert_eq!(*recon_event, orig_event);
+    //             }
+    //         }
+    //     }
+    // }
+    //
+    // #[test]
+    // fn test_intra_compression_lossy_1_big_frame() {
+    //     let dtm = 255000;
+    //     let events = get_random_events(Some(743822), 10000, 640, 480, 1, dtm);
+    //     let mut frame = setup_frame(events.clone(), 640, 480, Continuous, dtm);
+    //     for mut cube in &mut frame.cubes {
+    //         for block in &mut cube.blocks_r {
+    //             assert!(block.fill_count <= BLOCK_SIZE_AREA as u16);
+    //             let (d_residuals, start_dt, dt_residuals, qp_dt) =
+    //                 block.get_intra_residual_transforms(Some(30), dtm);
+    //             // dbg!(d_residuals);
+    //             // dbg!(dt_residuals);
+    //             let events = block.get_intra_residual_inverse(
+    //                 Some(30),
+    //                 dtm,
+    //                 d_residuals,
+    //                 start_dt,
+    //                 dt_residuals,
+    //                 qp_dt,
+    //             );
+    //
+    //             // As our delta_t_max value increases, we can get more loss. Increase epsilon to allow for more slop.
+    //             let epsilon = 50000;
+    //             for (idx, recon_event) in events.iter().enumerate() {
+    //                 let orig_event = block.events[idx];
+    //                 if recon_event.is_some() && orig_event.is_some() {
+    //                     assert_eq!(recon_event.unwrap().d, orig_event.unwrap().d);
+    //                     let recon_dt = recon_event.unwrap().delta_t;
+    //                     let orig_dt = orig_event.unwrap().delta_t;
+    //                     assert!(
+    //                         recon_dt + epsilon > orig_dt
+    //                             && recon_dt.saturating_sub(epsilon) < orig_dt
+    //                     );
+    //                 } else {
+    //                     assert!(recon_event.is_none() && orig_event.is_none());
+    //                 }
+    //                 // assert_eq!(*recon_event, orig_event);
+    //             }
+    //         }
+    //     }
+    // }
+    //
+    // #[test]
+    // fn test_real_data() {
+    //     let mut bufreader =
+    //         BufReader::new(File::open("/home/andrew/Downloads/test_abs.adder").unwrap());
+    //     let mut bitreader = BitReader::endian(bufreader, BigEndian);
+    //     let compression = RawInput::new();
+    //     let mut reader = Decoder::new_raw(compression, &mut bitreader).unwrap();
+    //     let mut events = Vec::new();
+    //     loop {
+    //         match reader.digest_event(&mut bitreader) {
+    //             Ok(ev) => {
+    //                 events.push(ev);
+    //             }
+    //             Err(_) => {
+    //                 break;
+    //             }
+    //         }
+    //     }
+    //
+    //     let bufwriter =
+    //         BufWriter::new(File::create("/home/andrew/Downloads/test_abs_recon.adder").unwrap());
+    //     let compression = RawOutput::new(reader.meta().clone(), bufwriter);
+    //     let mut encoder: Encoder<BufWriter<File>> = Encoder::new_raw(compression);
+    //
+    //     let mut frame = setup_frame(
+    //         events.clone(),
+    //         reader.meta().plane.w_usize(),
+    //         reader.meta().plane.h_usize(),
+    //         FramePerfect,
+    //         reader.meta().delta_t_max,
+    //     );
+    //     let qp = 6;
+    //     for mut cube in &mut frame.cubes {
+    //         for block in &mut cube.blocks_r {
+    //             assert!(block.fill_count <= BLOCK_SIZE_AREA as u16);
+    //             let (d_residuals, start_dt, dt_residuals, qp_dt) =
+    //                 block.get_intra_residual_transforms(None, reader.meta().delta_t_max);
+    //             // dbg!(d_residuals);
+    //             // dbg!(dt_residuals);
+    //             let events = block.get_intra_residual_inverse(
+    //                 None,
+    //                 reader.meta().delta_t_max,
+    //                 d_residuals,
+    //                 start_dt,
+    //                 dt_residuals,
+    //                 qp_dt,
+    //             );
+    //             for (idx, event) in events.iter().enumerate() {
+    //                 if event.is_some() {
+    //                     let event_coord = Event {
+    //                         coord: Coord {
+    //                             x: (cube.cube_idx_x * BLOCK_SIZE as usize
+    //                                 + (idx % BLOCK_SIZE as usize))
+    //                                 as u16,
+    //                             y: (cube.cube_idx_y * BLOCK_SIZE as usize
+    //                                 + (idx / BLOCK_SIZE as usize))
+    //                                 as u16,
+    //                             c: None,
+    //                         },
+    //                         d: event.unwrap().d,
+    //                         delta_t: event.unwrap().delta_t,
+    //                     };
+    //                     encoder.ingest_event(event_coord).unwrap();
+    //                 }
+    //             }
+    //
+    //             // As our delta_t_max value increases, we can get more loss. Increase epsilon to allow for more slop.
+    //             let epsilon = 50000;
+    //         }
+    //     }
+    //     let mut writer = encoder.close_writer().unwrap().unwrap();
+    //     writer.flush().unwrap();
+    //
+    //     writer.into_inner().unwrap();
+    // }
+    //
+    // #[test]
+    // fn test_real_data_tshift() {
+    //     // let mut bufreader =
+    //     //     BufReader::new(File::open("/home/andrew/Downloads/test_abs2.adder").unwrap());
+    //     // let mut bitreader = BitReader::endian(bufreader, BigEndian);
+    //     // let compression = <RawInput as ReadCompression<BufReader<File>>>::new();
+    //     // let mut reader = Decoder::new(Box::new(compression), &mut bitreader).unwrap();
+    //     // let mut events = Vec::new();
+    //     // loop {
+    //     //     match reader.digest_event(&mut bitreader) {
+    //     //         Ok(ev) => {
+    //     //             events.push(ev);
+    //     //         }
+    //     //         Err(_) => {
+    //     //             break;
+    //     //         }
+    //     //     }
+    //     // }
+    //     //
+    //     // let bufwriter =
+    //     //     BufWriter::new(File::create("/home/andrew/Downloads/test_abs_recon2.adder").unwrap());
+    //     // let compression = <RawOutput<_> as WriteCompression<BufWriter<File>>>::new(
+    //     //     reader.meta().clone(),
+    //     //     bufwriter,
+    //     // );
+    //     // let mut encoder: Encoder<BufWriter<File>> = Encoder::new(Box::new(compression));
+    //     //
+    //     // let mut frame = setup_frame(
+    //     //     events.clone(),
+    //     //     reader.meta().plane.w_usize(),
+    //     //     reader.meta().plane.h_usize(),
+    //     //     FramePerfect,
+    //     // );
+    //     // for mut cube in &mut frame.cubes {
+    //     //     for block in &mut cube.blocks_r {
+    //     //         assert!(block.fill_count <= BLOCK_SIZE_AREA as u16);
+    //     //         let (d_residuals, start_dt, dt_residuals, sparam) =
+    //     //             block.get_intra_residual_tshifts(0, reader.meta().delta_t_max);
+    //     //
+    //     //         let events = block.get_intra_residual_tshifts_inverse(
+    //     //             sparam,
+    //     //             reader.meta().delta_t_max,
+    //     //             d_residuals,
+    //     //             start_dt,
+    //     //             dt_residuals,
+    //     //         );
+    //     //
+    //     //         for (idx, event) in events.iter().enumerate() {
+    //     //             if event.is_some() {
+    //     //                 let event_coord = Event {
+    //     //                     coord: Coord {
+    //     //                         x: (cube.cube_idx_x * BLOCK_SIZE as usize
+    //     //                             + (idx % BLOCK_SIZE as usize))
+    //     //                             as u16,
+    //     //                         y: (cube.cube_idx_y * BLOCK_SIZE as usize
+    //     //                             + (idx / BLOCK_SIZE as usize))
+    //     //                             as u16,
+    //     //                         c: None,
+    //     //                     },
+    //     //                     d: event.unwrap().d,
+    //     //                     delta_t: event.unwrap().delta_t,
+    //     //                 };
+    //     //                 encoder.ingest_event(&event_coord).unwrap();
+    //     //             }
+    //     //         }
+    //     //
+    //     //         // As our delta_t_max value increases, we can get more loss. Increase epsilon to allow for more slop.
+    //     //         let epsilon = 5000;
+    //     //     }
+    //     // }
+    //     // let mut writer = encoder.close_writer().unwrap().unwrap();
+    //     // writer.flush().unwrap();
+    //     //
+    //     // writer.into_inner().unwrap();
+    // }
+    //
+    // #[test]
+    // fn test_inter_compression_lossless_tshift() {
+    //     // let dtm = 2550;
+    //     // let events = get_random_events(
+    //     //     Some(743822),
+    //     //     1000,
+    //     //     BLOCK_SIZE as u16,
+    //     //     BLOCK_SIZE as u16,
+    //     //     1,
+    //     //     dtm,
+    //     // );
+    //     // let mut frame = setup_frame_dt_to_abs_t(events.clone(), BLOCK_SIZE, BLOCK_SIZE, Continuous);
+    //     // for mut cube in &mut frame.cubes {
+    //     //     let mut block = &mut cube.blocks_r[0];
+    //     //
+    //     //     let mut event_memory: [EventCoordless; BLOCK_SIZE_AREA] =
+    //     //         [Default::default(); BLOCK_SIZE_AREA];
+    //     //     let mut t_memory: [DeltaT; BLOCK_SIZE_AREA] = [0; BLOCK_SIZE_AREA];
+    //     //     let mut t_recon = t_memory.clone();
+    //     //
+    //     //     let mut event_memory_inverse: [EventCoordless; BLOCK_SIZE_AREA] =
+    //     //         [Default::default(); BLOCK_SIZE_AREA];
+    //     //     let mut t_memory_inverse: [DeltaT; BLOCK_SIZE_AREA] = [0; BLOCK_SIZE_AREA];
+    //     //     let mut t_recon_inverse = t_memory_inverse.clone();
+    //     //     for (idx, event) in block.events.iter().enumerate() {
+    //     //         // Should only be None on the block margins beyond the frame plane
+    //     //         if let Some(ev) = event {
+    //     //             event_memory[idx] = *ev;
+    //     //             t_memory[idx] = ev.delta_t;
+    //     //             t_recon[idx] = ev.delta_t;
+    //     //         }
+    //     //     }
+    //     //     t_memory_inverse = t_memory.clone();
+    //     //     event_memory_inverse = event_memory.clone();
+    //     //     t_recon_inverse = t_recon.clone();
+    //     //
+    //     //     assert!(block.fill_count <= BLOCK_SIZE_AREA as u16);
+    //     //     let (d_residuals, start_dt, dt_residuals, sparam) =
+    //     //         block.get_intra_residual_tshifts(0, dtm);
+    //     //
+    //     //     let events = block.get_intra_residual_tshifts_inverse(
+    //     //         sparam,
+    //     //         dtm,
+    //     //         d_residuals,
+    //     //         start_dt,
+    //     //         dt_residuals,
+    //     //     );
+    //     //
+    //     //     let epsilon = 100;
+    //     //     for (idx, recon_event) in events.iter().enumerate() {
+    //     //         let orig_event = block.events[idx];
+    //     //         if recon_event.is_some() && orig_event.is_some() {
+    //     //             assert_eq!(recon_event.unwrap().d, orig_event.unwrap().d);
+    //     //             assert!(
+    //     //                 recon_event.unwrap().delta_t + epsilon > orig_event.unwrap().delta_t
+    //     //                     && recon_event.unwrap().delta_t.saturating_sub(epsilon)
+    //     //                         < orig_event.unwrap().delta_t
+    //     //             );
+    //     //         } else {
+    //     //             assert!(recon_event.is_none() && orig_event.is_none());
+    //     //         }
+    //     //         // assert_eq!(*recon_event, orig_event);
+    //     //     }
+    //     //
+    //     //     for (block_idx, block) in cube.blocks_r.iter_mut().skip(1).enumerate() {
+    //     //         let (d_residuals, start_dt, t_residuals, sparam) = block
+    //     //             .get_inter_residual_tshifts(
+    //     //                 &mut event_memory,
+    //     //                 &mut t_memory,
+    //     //                 &mut t_recon,
+    //     //                 0,
+    //     //                 dtm,
+    //     //                 255,
+    //     //             );
+    //     //
+    //     //         assert!(sparam == 0);
+    //     //         // t_memory_inverse = t_memory.clone();
+    //     //         // event_memory_inverse = event_memory.clone();
+    //     //         // t_recon_inverse = t_recon.clone();
+    //     //         eprint!("{}", sparam);
+    //     //
+    //     //         let events = block.get_inter_residual_tshifts_inverse(
+    //     //             &mut event_memory_inverse,
+    //     //             &mut t_recon_inverse,
+    //     //             sparam,
+    //     //             d_residuals,
+    //     //             t_residuals,
+    //     //             dtm,
+    //     //             255,
+    //     //             Continuous,
+    //     //         );
+    //     //         for (idx, recon_event) in events.iter().enumerate() {
+    //     //             let orig_event = block.events[idx];
+    //     //             if recon_event.is_some() && orig_event.is_some() {
+    //     //                 assert_eq!(recon_event.unwrap().d, orig_event.unwrap().d);
+    //     //                 // assert!(
+    //     //                 //     recon_event.unwrap().delta_t + epsilon > orig_event.unwrap().delta_t
+    //     //                 //         && recon_event.unwrap().delta_t.saturating_sub(epsilon)
+    //     //                 //             < orig_event.unwrap().delta_t
+    //     //                 // );
+    //     //             } else {
+    //     //                 assert!(recon_event.is_none() && orig_event.is_none());
+    //     //             }
+    //     //             // assert_eq!(*recon_event, orig_event);
+    //     //         }
+    //     //     }
+    //     // }
+    // }
+    //
+    // #[test]
+    // fn test_real_data_tshift_inter() {
+    //     // let mut bufreader =
+    //     //     BufReader::new(File::open("/home/andrew/Downloads/test_out_abs.adder").unwrap());
+    //     // let mut bitreader = BitReader::endian(bufreader, BigEndian);
+    //     // let compression = <RawInput as ReadCompression<BufReader<File>>>::new();
+    //     // let mut reader = Decoder::new(Box::new(compression), &mut bitreader).unwrap();
+    //     // let mut events = Vec::new();
+    //     // loop {
+    //     //     match reader.digest_event(&mut bitreader) {
+    //     //         Ok(ev) => {
+    //     //             events.push(ev);
+    //     //         }
+    //     //         Err(_) => {
+    //     //             break;
+    //     //         }
+    //     //     }
+    //     // }
+    //     //
+    //     // let bufwriter =
+    //     //     BufWriter::new(File::create("/home/andrew/Downloads/test_abs_recon2.adder").unwrap());
+    //     // let compression = <RawOutput<_> as WriteCompression<BufWriter<File>>>::new(
+    //     //     reader.meta().clone(),
+    //     //     bufwriter,
+    //     // );
+    //     //
+    //     // let mut bufrawriter = BufWriter::new(
+    //     //     File::create("/home/andrew/Downloads/test_abs_compressed_raw.adder").unwrap(),
+    //     // );
+    //     // let mut encoder: Encoder<BufWriter<File>> = Encoder::new(Box::new(compression));
+    //     //
+    //     // let mut frame = setup_frame(
+    //     //     events.clone(),
+    //     //     reader.meta().plane.w_usize(),
+    //     //     reader.meta().plane.h_usize(),
+    //     //     FramePerfect,
+    //     // );
+    //     // let dt_ref = reader.meta().ref_interval;
+    //     // let base_sparam = 4;
+    //     //
+    //     // for mut cube in &mut frame.cubes {
+    //     //     let mut block = &mut cube.blocks_r[0];
+    //     //
+    //     //     let mut event_memory: [EventCoordless; BLOCK_SIZE_AREA] =
+    //     //         [Default::default(); BLOCK_SIZE_AREA];
+    //     //     let mut t_memory: [DeltaT; BLOCK_SIZE_AREA] = [0; BLOCK_SIZE_AREA];
+    //     //     let mut t_recon = t_memory.clone();
+    //     //
+    //     //     let mut event_memory_inverse: [EventCoordless; BLOCK_SIZE_AREA] =
+    //     //         [Default::default(); BLOCK_SIZE_AREA];
+    //     //     let mut t_memory_inverse: [DeltaT; BLOCK_SIZE_AREA] = [0; BLOCK_SIZE_AREA];
+    //     //     let mut t_recon_inverse = t_memory_inverse.clone();
+    //     //     for (idx, event) in block.events.iter().enumerate() {
+    //     //         // Should only be None on the block margins beyond the frame plane
+    //     //         if let Some(ev) = event {
+    //     //             event_memory[idx] = *ev;
+    //     //             t_memory[idx] = ev.delta_t;
+    //     //             if t_memory[idx] % dt_ref != 0 {
+    //     //                 // TODO: only do this adjustment for framed sources
+    //     //                 t_memory[idx] = ((t_memory[idx] / dt_ref) + 1) * dt_ref;
+    //     //             }
+    //     //             t_recon[idx] = t_memory[idx];
+    //     //         }
+    //     //     }
+    //     //     t_memory_inverse = t_memory.clone();
+    //     //     event_memory_inverse = event_memory.clone();
+    //     //     t_recon_inverse = t_recon.clone();
+    //     //
+    //     //     assert!(block.fill_count <= BLOCK_SIZE_AREA as u16);
+    //     //     let (d_residuals, start_dt, dt_residuals, sparam) =
+    //     //         block.get_intra_residual_tshifts(base_sparam, reader.meta().delta_t_max);
+    //     //     for (d_resid, dt_resid) in d_residuals.iter().zip(dt_residuals.iter()) {
+    //     //         bufrawriter.write(&d_resid.to_be_bytes()).unwrap();
+    //     //         bufrawriter.write(&dt_resid.to_be_bytes()).unwrap();
+    //     //     }
+    //     //
+    //     //     let events = block.get_intra_residual_tshifts_inverse(
+    //     //         sparam,
+    //     //         reader.meta().delta_t_max,
+    //     //         d_residuals,
+    //     //         start_dt,
+    //     //         dt_residuals,
+    //     //     );
+    //     //
+    //     //     for (idx, event) in events.iter().enumerate() {
+    //     //         if event.is_some() {
+    //     //             let event_coord = Event {
+    //     //                 coord: Coord {
+    //     //                     x: (cube.cube_idx_x * BLOCK_SIZE as usize + (idx % BLOCK_SIZE as usize))
+    //     //                         as u16,
+    //     //                     y: (cube.cube_idx_y * BLOCK_SIZE as usize + (idx / BLOCK_SIZE as usize))
+    //     //                         as u16,
+    //     //                     c: None,
+    //     //                 },
+    //     //                 d: event.unwrap().d,
+    //     //                 delta_t: event.unwrap().delta_t,
+    //     //             };
+    //     //             encoder.ingest_event(&event_coord).unwrap();
+    //     //         }
+    //     //     }
+    //     //
+    //     //     for block in cube.blocks_r.iter_mut().skip(1) {
+    //     //         let (d_residuals, start_dt, t_residuals, sparam) = block
+    //     //             .get_inter_residual_tshifts(
+    //     //                 &mut event_memory,
+    //     //                 &mut t_memory,
+    //     //                 &mut t_recon,
+    //     //                 base_sparam,
+    //     //                 reader.meta().delta_t_max,
+    //     //                 dt_ref,
+    //     //             );
+    //     //         for (d_resid, dt_resid) in d_residuals.iter().zip(dt_residuals.iter()) {
+    //     //             bufrawriter.write(&d_resid.to_be_bytes()).unwrap();
+    //     //             bufrawriter.write(&dt_resid.to_be_bytes()).unwrap();
+    //     //         }
+    //     //
+    //     //         // t_memory_inverse = t_memory.clone();
+    //     //         // event_memory_inverse = event_memory.clone();
+    //     //         // t_recon_inverse = t_recon.clone();
+    //     //         eprint!("{}", sparam);
+    //     //
+    //     //         let events = block.get_inter_residual_tshifts_inverse(
+    //     //             &mut event_memory_inverse,
+    //     //             &mut t_recon_inverse,
+    //     //             sparam,
+    //     //             d_residuals,
+    //     //             t_residuals,
+    //     //             reader.meta().delta_t_max,
+    //     //             dt_ref,
+    //     //             FramePerfect,
+    //     //         );
+    //     //         for (idx, event) in events.iter().enumerate() {
+    //     //             if event.is_some() {
+    //     //                 let event_coord = Event {
+    //     //                     coord: Coord {
+    //     //                         x: (cube.cube_idx_x * BLOCK_SIZE as usize
+    //     //                             + (idx % BLOCK_SIZE as usize))
+    //     //                             as u16,
+    //     //                         y: (cube.cube_idx_y * BLOCK_SIZE as usize
+    //     //                             + (idx / BLOCK_SIZE as usize))
+    //     //                             as u16,
+    //     //                         c: None,
+    //     //                     },
+    //     //                     d: event.unwrap().d,
+    //     //                     delta_t: event.unwrap().delta_t,
+    //     //                 };
+    //     //                 encoder.ingest_event(&event_coord).unwrap();
+    //     //             }
+    //     //         }
+    //     //     }
+    //     // }
+    //     // let mut writer = encoder.close_writer().unwrap().unwrap();
+    //     // writer.flush().unwrap();
+    //     //
+    //     // writer.into_inner().unwrap();
+    //     //
+    //     // bufrawriter.flush().unwrap();
+    // }
+    //
+    // #[test]
+    // fn test_inter_compression_lossless_tshift_refactor() {
+    //     let dtm = 2550;
+    //     let dt_ref = 255;
+    //     let events = get_random_events(
+    //         Some(743822),
+    //         1000,
+    //         BLOCK_SIZE as u16,
+    //         BLOCK_SIZE as u16,
+    //         1,
+    //         dtm,
+    //     );
+    //     let mut frame = setup_frame_dt_to_abs_t(events.clone(), BLOCK_SIZE, BLOCK_SIZE, Continuous);
+    //     for mut cube in &mut frame.cubes {
+    //         let mut block = &mut cube.blocks_r[0];
+    //         let mut inter_model = &mut cube.inter_model_r;
+    //
+    //         let mut event_memory_inverse: [EventCoordless; BLOCK_SIZE_AREA] =
+    //             [Default::default(); BLOCK_SIZE_AREA];
+    //
+    //         assert!(block.fill_count <= BLOCK_SIZE_AREA as u16);
+    //         let (start_t, start_d, d_residuals, dt_residuals, sparam) =
+    //             inter_model.forward_intra_prediction(0, dt_ref, dtm, &block.events);
+    //
+    //         let d_resids = d_residuals.clone();
+    //         let dt_resids = dt_residuals.clone();
+    //         let mut t_memory_inverse = inter_model.t_memory.clone();
+    //         let mut event_memory_inverse = inter_model.event_memory.clone();
+    //         let mut t_recon_inverse = inter_model.t_recon.clone();
+    //
+    //         let events = block.get_intra_residual_tshifts_inverse(
+    //             sparam, dtm, start_t, start_d, d_resids, dt_resids,
+    //         );
+    //
+    //         let epsilon = 100;
+    //         for (idx, recon_event) in events.iter().enumerate() {
+    //             let orig_event = block.events[idx];
+    //             if recon_event.is_some() && orig_event.is_some() {
+    //                 assert_eq!(recon_event.unwrap().d, orig_event.unwrap().d);
+    //                 assert!(
+    //                     recon_event.unwrap().delta_t + epsilon > orig_event.unwrap().delta_t
+    //                         && recon_event.unwrap().delta_t.saturating_sub(epsilon)
+    //                             < orig_event.unwrap().delta_t
+    //                 );
+    //             } else {
+    //                 assert!(recon_event.is_none() && orig_event.is_none());
+    //             }
+    //             // assert_eq!(*recon_event, orig_event);
+    //         }
+    //
+    //         let mut tmp_event_memory;
+    //         let mut tmp_t_recon;
+    //
+    //         for (block_idx, block) in cube.blocks_r.iter_mut().skip(1).enumerate() {
+    //             let (d_residuals, t_residuals, sparam) =
+    //                 inter_model.forward_inter_prediction(0, dtm, dt_ref, &block.events);
+    //             let d_resid_clone = d_residuals.clone();
+    //             let t_resid_clone = t_residuals.clone();
+    //
+    //             tmp_event_memory = inter_model.event_memory.clone();
+    //             tmp_t_recon = inter_model.t_recon.clone();
+    //
+    //             assert!(sparam == 0);
+    //             // t_memory_inverse = t_memory.clone();
+    //             // event_memory_inverse = event_memory.clone();
+    //             // t_recon_inverse = t_recon.clone();
+    //             eprint!("{}", sparam);
+    //
+    //             inter_model.override_memory(event_memory_inverse, t_recon_inverse);
+    //
+    //             let events = inter_model.inverse_inter_prediction(sparam, dtm, dt_ref);
+    //
+    //             event_memory_inverse = inter_model.event_memory.clone();
+    //             t_recon_inverse = inter_model.t_recon.clone();
+    //             inter_model.override_memory(tmp_event_memory, tmp_t_recon);
+    //
+    //             for (idx, recon_event) in events.iter().enumerate() {
+    //                 let orig_event = block.events[idx];
+    //                 if recon_event.is_some() && orig_event.is_some() {
+    //                     assert_eq!(recon_event.unwrap().d, orig_event.unwrap().d);
+    //                     // assert!(
+    //                     //     recon_event.unwrap().delta_t + epsilon > orig_event.unwrap().delta_t
+    //                     //         && recon_event.unwrap().delta_t.saturating_sub(epsilon)
+    //                     //             < orig_event.unwrap().delta_t
+    //                     // );
+    //                 } else {
+    //                     assert!(recon_event.is_none() && orig_event.is_none());
+    //                 }
+    //                 // assert_eq!(*recon_event, orig_event);
+    //             }
+    //         }
+    //     }
+    // }
+    //
+    // #[test]
+    // fn test_real_data_tshift_inter_refactor() {
+    //     let mut bufreader =
+    //         BufReader::new(File::open("/home/andrew/Downloads/test_abs2.adder").unwrap());
+    //     let mut bitreader = BitReader::endian(bufreader, BigEndian);
+    //     let compression = RawInput::new();
+    //     let mut reader = Decoder::new_raw(compression, &mut bitreader).unwrap();
+    //     let mut events = Vec::new();
+    //     loop {
+    //         match reader.digest_event(&mut bitreader) {
+    //             Ok(ev) => {
+    //                 events.push(ev);
+    //             }
+    //             Err(_) => {
+    //                 break;
+    //             }
+    //         }
+    //     }
+    //
+    //     let bufwriter =
+    //         BufWriter::new(File::create("/home/andrew/Downloads/test_abs_recon2.adder").unwrap());
+    //     let compression = RawOutput::new(reader.meta().clone(), bufwriter);
+    //
+    //     let mut bufrawriter = BufWriter::new(
+    //         File::create("/home/andrew/Downloads/test_abs_compressed_raw.adder").unwrap(),
+    //     );
+    //     let mut encoder: Encoder<BufWriter<File>> = Encoder::new_raw(compression);
+    //
+    //     let mut frame = setup_frame(
+    //         events.clone(),
+    //         reader.meta().plane.w_usize(),
+    //         reader.meta().plane.h_usize(),
+    //         FramePerfect,
+    //         reader.meta().delta_t_max,
+    //     );
+    //     let dt_ref = reader.meta().ref_interval;
+    //     let dtm = reader.meta().delta_t_max;
+    //     let base_sparam = 4;
+    //
+    //     for mut cube in &mut frame.cubes {
+    //         let mut block = &mut cube.blocks_r[0];
+    //         let mut inter_model = &mut cube.inter_model_r;
+    //
+    //         let mut event_memory_inverse: [EventCoordless; BLOCK_SIZE_AREA] =
+    //             [Default::default(); BLOCK_SIZE_AREA];
+    //
+    //         let (start_t, start_d, d_residuals, dt_residuals, sparam) =
+    //             inter_model.forward_intra_prediction(0, dt_ref, dtm, &block.events);
+    //
+    //         // let adu_intra_block = AduIntraBlock {
+    //         //     head_event_t: dt_residuals[0] as AbsoluteT,
+    //         //     head_event_d: 0,
+    //         //     shift_loss_param: 0,
+    //         //     d_residuals: [],
+    //         //     dt_residuals: [],
+    //         //     event_count: 0,
+    //         // }
+    //
+    //         let d_resids = d_residuals.clone();
+    //         let dt_resids = dt_residuals.clone();
+    //         let mut t_memory_inverse = inter_model.t_memory.clone();
+    //         let mut event_memory_inverse = inter_model.event_memory.clone();
+    //         let mut t_recon_inverse = inter_model.t_recon.clone();
+    //
+    //         let events = block.get_intra_residual_tshifts_inverse(
+    //             sparam, dtm, start_t, start_d, d_resids, dt_resids,
+    //         );
+    //
+    //         let epsilon = 0;
+    //         for (idx, recon_event) in events.iter().enumerate() {
+    //             let orig_event = block.events[idx];
+    //             if recon_event.is_some() && orig_event.is_some() {
+    //                 assert_eq!(recon_event.unwrap().d, orig_event.unwrap().d);
+    //                 assert!(
+    //                     recon_event.unwrap().delta_t + epsilon >= orig_event.unwrap().delta_t
+    //                         && recon_event.unwrap().delta_t.saturating_sub(epsilon)
+    //                             <= orig_event.unwrap().delta_t
+    //                 );
+    //             } else {
+    //                 assert!(recon_event.is_none() && orig_event.is_none());
+    //             }
+    //             // assert_eq!(*recon_event, orig_event);
+    //         }
+    //
+    //         for (idx, event) in events.iter().enumerate() {
+    //             if event.is_some() {
+    //                 let event_coord = Event {
+    //                     coord: Coord {
+    //                         x: (cube.cube_idx_x * BLOCK_SIZE as usize + (idx % BLOCK_SIZE as usize))
+    //                             as u16,
+    //                         y: (cube.cube_idx_y * BLOCK_SIZE as usize + (idx / BLOCK_SIZE as usize))
+    //                             as u16,
+    //                         c: None,
+    //                     },
+    //                     d: event.unwrap().d,
+    //                     delta_t: event.unwrap().delta_t,
+    //                 };
+    //                 encoder.ingest_event(event_coord).unwrap();
+    //             }
+    //         }
+    //
+    //         let mut tmp_event_memory;
+    //         let mut tmp_t_recon;
+    //         for block in cube.blocks_r.iter_mut().skip(1) {
+    //             let (d_residuals, t_residuals, sparam) =
+    //                 inter_model.forward_inter_prediction(base_sparam, dtm, dt_ref, &block.events);
+    //             let d_resid_clone = d_residuals.clone();
+    //             let t_resid_clone = t_residuals.clone();
+    //
+    //             tmp_event_memory = inter_model.event_memory.clone();
+    //             tmp_t_recon = inter_model.t_recon.clone();
+    //
+    //             // for (d_resid, dt_resid) in d_residuals.iter().zip(dt_residuals.iter()) {
+    //             //     bufrawriter.write(&d_resid.to_be_bytes()).unwrap();
+    //             //     bufrawriter.write(&dt_resid.to_be_bytes()).unwrap();
+    //             // }
+    //
+    //             // t_memory_inverse = t_memory.clone();
+    //             // event_memory_inverse = event_memory.clone();
+    //             // t_recon_inverse = t_recon.clone();
+    //             eprint!("{}", sparam);
+    //
+    //             inter_model.override_memory(event_memory_inverse, t_recon_inverse);
+    //
+    //             let events =
+    //                 inter_model.inverse_inter_prediction(sparam, reader.meta().delta_t_max, dt_ref);
+    //
+    //             event_memory_inverse = inter_model.event_memory.clone();
+    //             t_recon_inverse = inter_model.t_recon.clone();
+    //             inter_model.override_memory(tmp_event_memory, tmp_t_recon);
+    //
+    //             for (idx, event) in events.iter().enumerate() {
+    //                 if event.is_some() {
+    //                     let event_coord = Event {
+    //                         coord: Coord {
+    //                             x: (cube.cube_idx_x * BLOCK_SIZE as usize
+    //                                 + (idx % BLOCK_SIZE as usize))
+    //                                 as u16,
+    //                             y: (cube.cube_idx_y * BLOCK_SIZE as usize
+    //                                 + (idx / BLOCK_SIZE as usize))
+    //                                 as u16,
+    //                             c: None,
+    //                         },
+    //                         d: event.unwrap().d,
+    //                         delta_t: event.unwrap().delta_t,
+    //                     };
+    //                     encoder.ingest_event(event_coord).unwrap();
+    //                 }
+    //             }
+    //         }
+    //     }
+    //     let mut writer = encoder.close_writer().unwrap().unwrap();
+    //     writer.flush().unwrap();
+    //
+    //     writer.into_inner().unwrap();
+    //
+    //     bufrawriter.flush().unwrap();
+    // }
+    //
+    // #[test]
+    // fn test_real_data_tshift_inter_refactor_adu_cast() {
+    //     let mut bufreader =
+    //         BufReader::new(File::open("/home/andrew/Downloads/test_abs2.adder").unwrap());
+    //     let mut bitreader = BitReader::endian(bufreader, BigEndian);
+    //     let compression = RawInput::new();
+    //     let mut reader = Decoder::new_raw(compression, &mut bitreader).unwrap();
+    //     let mut events = Vec::new();
+    //     loop {
+    //         match reader.digest_event(&mut bitreader) {
+    //             Ok(ev) => {
+    //                 events.push(ev);
+    //             }
+    //             Err(_) => {
+    //                 break;
+    //             }
+    //         }
+    //     }
+    //
+    //     let bufwriter =
+    //         BufWriter::new(File::create("/home/andrew/Downloads/test_abs_recon2.adder").unwrap());
+    //     let compression = RawOutput::new(reader.meta().clone(), bufwriter);
+    //
+    //     let mut encoder: Encoder<BufWriter<File>> = Encoder::new_raw(compression);
+    //
+    //     let mut frame = setup_frame(
+    //         events.clone(),
+    //         reader.meta().plane.w_usize(),
+    //         reader.meta().plane.h_usize(),
+    //         FramePerfect,
+    //         reader.meta().delta_t_max,
+    //     );
+    //     let dt_ref = reader.meta().ref_interval;
+    //     let dtm = reader.meta().delta_t_max;
+    //     let base_sparam = 4;
+    //
+    //     let mut adu = Adu::new();
+    //
+    //     for (cube_idx, cube) in frame.cubes.iter_mut().enumerate() {
+    //         let mut block = &mut cube.blocks_r[0];
+    //         let mut inter_model = &mut cube.inter_model_r;
+    //
+    //         let mut event_memory_inverse: [EventCoordless; BLOCK_SIZE_AREA] =
+    //             [Default::default(); BLOCK_SIZE_AREA];
+    //
+    //         let (start_t, start_d, d_residuals, dt_residuals, sparam) =
+    //             inter_model.forward_intra_prediction(0, dt_ref, dtm, &block.events);
+    //
+    //         if cube_idx == 0 {
+    //             adu.head_event_t = start_t;
+    //         }
+    //
+    //         let intra_block = AduIntraBlock {
+    //             head_event_t: start_t,
+    //             head_event_d: start_d,
+    //             shift_loss_param: sparam,
+    //             d_residuals: d_residuals.clone(),
+    //             dt_residuals: dt_residuals.clone(),
+    //         };
+    //         let mut adu_cube = AduCube::from_intra_block(
+    //             intra_block,
+    //             cube.cube_idx_y as u16,
+    //             cube.cube_idx_x as u16,
+    //         );
+    //
+    //         let d_resids = d_residuals.clone();
+    //         let dt_resids = dt_residuals.clone();
+    //         let mut t_memory_inverse = inter_model.t_memory.clone();
+    //         let mut event_memory_inverse = inter_model.event_memory.clone();
+    //         let mut t_recon_inverse = inter_model.t_recon.clone();
+    //
+    //         let events = block.get_intra_residual_tshifts_inverse(
+    //             sparam, dtm, start_t, start_d, d_resids, dt_resids,
+    //         );
+    //
+    //         let epsilon = 0;
+    //         for (idx, recon_event) in events.iter().enumerate() {
+    //             let orig_event = block.events[idx];
+    //             if recon_event.is_some() && orig_event.is_some() {
+    //                 assert_eq!(recon_event.unwrap().d, orig_event.unwrap().d);
+    //                 assert!(
+    //                     recon_event.unwrap().delta_t + epsilon >= orig_event.unwrap().delta_t
+    //                         && recon_event.unwrap().delta_t.saturating_sub(epsilon)
+    //                             <= orig_event.unwrap().delta_t
+    //                 );
+    //             } else {
+    //                 assert!(recon_event.is_none() && orig_event.is_none());
+    //             }
+    //             // assert_eq!(*recon_event, orig_event);
+    //         }
+    //
+    //         for (idx, event) in events.iter().enumerate() {
+    //             if event.is_some() {
+    //                 let event_coord = Event {
+    //                     coord: Coord {
+    //                         x: (cube.cube_idx_x * BLOCK_SIZE as usize + (idx % BLOCK_SIZE as usize))
+    //                             as u16,
+    //                         y: (cube.cube_idx_y * BLOCK_SIZE as usize + (idx / BLOCK_SIZE as usize))
+    //                             as u16,
+    //                         c: None,
+    //                     },
+    //                     d: event.unwrap().d,
+    //                     delta_t: event.unwrap().delta_t,
+    //                 };
+    //                 encoder.ingest_event(event_coord).unwrap();
+    //             }
+    //         }
+    //
+    //         let mut tmp_event_memory;
+    //         let mut tmp_t_recon;
+    //         for block in cube.blocks_r.iter_mut().skip(1) {
+    //             let (d_residuals, t_residuals, sparam) =
+    //                 inter_model.forward_inter_prediction(base_sparam, dtm, dt_ref, &block.events);
+    //
+    //             adu_cube.add_inter_block(AduInterBlock {
+    //                 shift_loss_param: sparam,
+    //                 d_residuals: d_residuals.clone(),
+    //                 t_residuals: t_residuals.clone(),
+    //             });
+    //
+    //             let d_resid_clone = d_residuals.clone();
+    //             let t_resid_clone = t_residuals.clone();
+    //
+    //             tmp_event_memory = inter_model.event_memory.clone();
+    //             tmp_t_recon = inter_model.t_recon.clone();
+    //
+    //             // for (d_resid, dt_resid) in d_residuals.iter().zip(dt_residuals.iter()) {
+    //             //     bufrawriter.write(&d_resid.to_be_bytes()).unwrap();
+    //             //     bufrawriter.write(&dt_resid.to_be_bytes()).unwrap();
+    //             // }
+    //
+    //             // t_memory_inverse = t_memory.clone();
+    //             // event_memory_inverse = event_memory.clone();
+    //             // t_recon_inverse = t_recon.clone();
+    //             eprint!("{}", sparam);
+    //
+    //             inter_model.override_memory(event_memory_inverse, t_recon_inverse);
+    //
+    //             let events =
+    //                 inter_model.inverse_inter_prediction(sparam, reader.meta().delta_t_max, dt_ref);
+    //
+    //             event_memory_inverse = inter_model.event_memory.clone();
+    //             t_recon_inverse = inter_model.t_recon.clone();
+    //             inter_model.override_memory(tmp_event_memory, tmp_t_recon);
+    //
+    //             for (idx, event) in events.iter().enumerate() {
+    //                 if event.is_some() {
+    //                     let event_coord = Event {
+    //                         coord: Coord {
+    //                             x: (cube.cube_idx_x * BLOCK_SIZE as usize
+    //                                 + (idx % BLOCK_SIZE as usize))
+    //                                 as u16,
+    //                             y: (cube.cube_idx_y * BLOCK_SIZE as usize
+    //                                 + (idx / BLOCK_SIZE as usize))
+    //                                 as u16,
+    //                             c: None,
+    //                         },
+    //                         d: event.unwrap().d,
+    //                         delta_t: event.unwrap().delta_t,
+    //                     };
+    //                     encoder.ingest_event(event_coord).unwrap();
+    //                 }
+    //             }
+    //         }
+    //
+    //         adu.add_cube(adu_cube, AduChannelType::R);
+    //     }
+    //     println!("Done writing reconstructed video");
+    //     let meta = encoder.meta().clone();
+    //     let mut writer = encoder.close_writer().unwrap().unwrap();
+    //     writer.flush().unwrap();
+    //
+    //     writer.into_inner().unwrap();
+    //
+    //     // Below is code for arithmetic-coding of the adu we generated
+    //     {
+    //         let mut encoder = CompressedOutput::new(meta, Vec::new());
+    //
+    //         assert!(adu
+    //             .compress(
+    //                 encoder.arithmetic_coder.as_mut().unwrap(),
+    //                 encoder.contexts.as_mut().unwrap(),
+    //                 encoder.stream.as_mut().unwrap(),
+    //                 encoder.meta.delta_t_max
+    //             )
+    //             .is_ok());
+    //
+    //         let written_data = encoder.into_writer().unwrap();
+    //
+    //         let output_len = written_data.len();
+    //         eprintln!("Output length: {}", output_len);
+    //         eprintln!(
+    //             "Input length: {}",
+    //             File::open("/home/andrew/Downloads/test_abs_recon2.adder")
+    //                 .unwrap()
+    //                 .metadata()
+    //                 .unwrap()
+    //                 .len()
+    //         );
+    //
+    //         let mut bufreader = BufReader::new(written_data.as_slice());
+    //         let mut bitreader =
+    //             bitstream_io::BitReader::endian(&mut bufreader, bitstream_io::BigEndian);
+    //
+    //         let mut decoder = CompressedInput::new(meta.delta_t_max, meta.ref_interval);
+    //
+    //         let decoded_adu = Adu::decompress(&mut bitreader, &mut decoder);
+    //
+    //         decoder
+    //             .arithmetic_coder
+    //             .as_mut()
+    //             .unwrap()
+    //             .model
+    //             .set_context(decoder.contexts.as_mut().unwrap().eof_context);
+    //         let eof = decoder
+    //             .arithmetic_coder
+    //             .as_mut()
+    //             .unwrap()
+    //             .decode(&mut bitreader)
+    //             .unwrap();
+    //         assert!(eof.is_none());
+    //         assert_eq!(adu.head_event_t, decoded_adu.head_event_t);
+    //
+    //         compare_channels(&adu.cubes_r, &decoded_adu.cubes_r);
+    //         compare_channels(&adu.cubes_g, &decoded_adu.cubes_g);
+    //         compare_channels(&adu.cubes_b, &decoded_adu.cubes_b);
+    //     }
+    // }
+
+    #[test]
+    fn test_real_data_tshift_inter_refactor_adu_cast_direct_compressor() {
+        let mut bufreader =
+            BufReader::new(File::open("/home/andrew/Downloads/bunny_test.adder").unwrap());
+        let mut bitreader = BitReader::endian(bufreader, BigEndian);
+        let compression = RawInput::new();
+        let mut reader = Decoder::new_raw(compression, &mut bitreader).unwrap();
+
+        let bufwriter = Vec::new();
+        let compression = CompressedOutput::new(reader.meta().clone(), bufwriter);
+
+        let dtm = compression.meta.delta_t_max;
+        let ref_interval = compression.meta.ref_interval;
+        let mut encoder: Encoder<Vec<u8>> = Encoder::new_compressed(compression);
+
+        let mut start_event_t = 0;
+        let mut compress = false;
+        let mut ev_t = 0;
+        let mut first_adu = None;
+        let mut second_adu = None;
+
+        loop {
+            match reader.digest_event(&mut bitreader) {
+                Ok(ev) => {
+                    if let Some(adu) = encoder.ingest_event_debug(ev).unwrap() {
+                        if first_adu.is_none() {
+                            first_adu = Some(adu);
+                        } else if second_adu.is_none() {
+                            second_adu = Some(adu);
+                            break;
+                        }
+                    }
+                }
+                Err(_) => {
+                    panic!("temp")
+                }
+            }
+        }
+
+        let mut written_data = encoder.close_writer().unwrap().unwrap();
+        // let mut writer = encoder.close_writer().unwrap().unwrap();
+        // writer.flush().unwrap();
+        // let written_data = writer.into_inner().unwrap();
+        let output_len = written_data.len();
+
+        eprintln!("Output length: {}", output_len);
+        eprintln!(
+            "Input length: {}",
+            File::open("/home/andrew/Downloads/bunny_test.adder")
+                .unwrap()
+                .metadata()
+                .unwrap()
+                .len()
+        );
+
+        // Decode the compressed file
+        let mut bufreader = BufReader::new(Cursor::new(written_data));
+        let mut bitreader = BitReader::endian(bufreader, BigEndian);
+        let compression = CompressedInput::new(dtm, ref_interval);
+        let mut decoder = Decoder::new_compressed(compression, &mut bitreader).unwrap();
+
+        // todo: temporary
+        // loop {
+        decoder.digest_event(&mut bitreader);
+        decoder.digest_event(&mut bitreader);
+        // count += 1;
+        // }
+    }
+}

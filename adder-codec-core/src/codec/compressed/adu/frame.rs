@@ -8,12 +8,13 @@ use crate::codec::compressed::adu::cube::AduCube;
 use crate::codec::compressed::adu::{AduComponentCompression, AduCompression};
 use crate::codec::compressed::blocks::{DResidual, BLOCK_SIZE_AREA};
 use crate::codec::compressed::stream::{CompressedInput, CompressedOutput};
-use crate::codec::CodecError;
+use crate::codec::{CodecError, CodecMetadata};
 use crate::codec_old::compressed::compression::Contexts;
 use crate::codec_old::compressed::fenwick::context_switching::FenwickModel;
 use crate::{AbsoluteT, DeltaT, D};
 use arithmetic_coding::{Decoder, Encoder};
 use bitstream_io::{BigEndian, BitRead, BitReader, BitWrite, BitWriter};
+use std::cmp::min;
 use std::io::{BufWriter, Cursor, Error, Read, Write};
 use std::mem;
 
@@ -82,14 +83,6 @@ impl AduComponentCompression for AduChannel {
         // dbg!(cubes.last().unwrap().inter_blocks.last().unwrap());
 
         Self { num_cubes, cubes }
-    }
-
-    fn decompress_debug<R: Read>(
-        stream: &mut BitReader<R, BigEndian>,
-        input: &mut CompressedInput<R>,
-        reference_adu: &Adu,
-    ) -> Self {
-        todo!()
     }
 }
 
@@ -173,7 +166,28 @@ impl AduCompression for Adu {
         contexts: &mut Contexts,
         stream: &mut BitWriter<W, BigEndian>,
         dtm: DeltaT,
+        ref_interval: DeltaT,
     ) -> Result<(), CodecError> {
+        let mut source_model =
+            FenwickModel::with_symbols(min(dtm as usize * 2, u16::MAX as usize), 1 << 30);
+
+        *contexts = Contexts::new(
+            &mut source_model,
+            CodecMetadata {
+                codec_version: 0,
+                header_size: 0,
+                time_mode: Default::default(),
+                plane: Default::default(),
+                tps: 0,
+                ref_interval,
+                delta_t_max: dtm,
+                event_size: 0,
+                source_camera: Default::default(),
+            },
+        );
+
+        *encoder = Encoder::new(source_model);
+
         // Get the context references
         // let mut u8_context = contexts.u8_general_context;
         //
@@ -222,7 +236,28 @@ impl AduCompression for Adu {
         contexts: &mut Contexts,
         stream: &mut BitReader<R, BigEndian>,
         dtm: DeltaT,
+        ref_interval: DeltaT,
     ) -> Self {
+        let mut source_model =
+            FenwickModel::with_symbols(min(dtm as usize * 2, u16::MAX as usize), 1 << 30);
+
+        *contexts = Contexts::new(
+            &mut source_model,
+            CodecMetadata {
+                codec_version: 0,
+                header_size: 0,
+                time_mode: Default::default(),
+                plane: Default::default(),
+                tps: 0,
+                ref_interval,
+                delta_t_max: dtm,
+                event_size: 0,
+                source_camera: Default::default(),
+            },
+        );
+
+        *decoder = Decoder::new(source_model);
+
         let (num_bytes, head_event_t) = Self::decompress_header(stream);
         // Take a slice of the next num_bytes bytes from the stream
         let mut adu_bytes = stream.read_to_vec(num_bytes as usize).unwrap();
@@ -245,86 +280,6 @@ impl AduCompression for Adu {
             cubes_b,
         }
     }
-
-    fn decompress_debug<R: Read>(
-        stream: &mut BitReader<R, BigEndian>,
-        input: &mut CompressedInput<R>,
-        reference_adu: &Adu,
-    ) -> Self {
-        todo!();
-        // Get the context references
-        // let mut decoder = input.arithmetic_coder.as_mut().unwrap();
-        // let mut u8_context = input.contexts.as_mut().unwrap().u8_general_context;
-        // let mut eof_context = input.contexts.as_mut().unwrap().eof_context;
-        //
-        // decoder.model.set_context(u8_context);
-        //
-        // // Read the head event timestamp
-        // let mut bytes = [0; mem::size_of::<AbsoluteT>()];
-        // for byte in bytes.iter_mut() {
-        //     *byte = decoder.decode(stream).unwrap().unwrap() as u8;
-        // }
-        // let head_event_t = AbsoluteT::from_be_bytes(bytes);
-        //
-        // assert_eq!(head_event_t, reference_adu.head_event_t);
-        //
-        // // Read the cubes
-        // let cubes_r = AduChannel::decompress(stream, input);
-        //
-        // for (cube, reference_cube) in cubes_r.cubes.iter().zip(reference_adu.cubes_r.cubes.iter()) {
-        //     assert_eq!(cube.idx_y, reference_cube.idx_y);
-        //     assert_eq!(cube.idx_x, reference_cube.idx_x);
-        //     assert_eq!(cube.intra_block, reference_cube.intra_block);
-        //     assert_eq!(cube.num_inter_blocks, reference_cube.num_inter_blocks);
-        //     for ((idx, inter_block), reference_inter_block) in cube
-        //         .inter_blocks
-        //         .iter()
-        //         .enumerate()
-        //         .zip(reference_cube.inter_blocks.iter())
-        //     {
-        //         assert_eq!(
-        //             inter_block.shift_loss_param,
-        //             reference_inter_block.shift_loss_param
-        //         );
-        //
-        //         for px_idx in 0..BLOCK_SIZE_AREA {
-        //             let d = inter_block.d_residuals[px_idx];
-        //             let d_ref = reference_inter_block.d_residuals[px_idx];
-        //             assert_eq!(d, d_ref);
-        //
-        //             let t = inter_block.t_residuals[px_idx];
-        //             let t_ref = reference_inter_block.t_residuals[px_idx];
-        //             assert_eq!(t, t_ref);
-        //         }
-        //     }
-        // }
-        // // let cubes_g = AduChannel::decompress(stream, input);
-        // // let cubes_b = AduChannel::decompress(stream, input);
-        //
-        // let cubes_g = AduChannel {
-        //     num_cubes: 0,
-        //     cubes: vec![],
-        // };
-        // let cubes_b = AduChannel {
-        //     num_cubes: 0,
-        //     cubes: vec![],
-        // };
-        //
-        // let mut decoder = input.arithmetic_coder.as_mut().unwrap();
-        // decoder.model.set_context(eof_context);
-        // assert!(decoder.decode(stream).unwrap().is_none());
-        //
-        // stream.read_bit().unwrap();
-        // stream.byte_align();
-        //
-        // Self {
-        //     num_bytes: 0,
-        //     head_event_t,
-        //     cubes_r,
-        //     cubes_g,
-        //     cubes_b,
-        // }
-    }
 }
 
 #[cfg(test)]
@@ -339,7 +294,7 @@ mod tests {
     use crate::codec::{CodecMetadata, WriteCompression};
     use crate::codec_old::compressed::fenwick::context_switching::FenwickModel;
     use arithmetic_coding::Encoder;
-    use bitstream_io::{BigEndian, BitRead, BitReader, BitWrite};
+    use bitstream_io::{BigEndian, BitRead, BitReader, BitWrite, BitWriter};
     use rand::prelude::StdRng;
     use rand::{Rng, SeedableRng};
     use std::cmp::min;
@@ -449,7 +404,8 @@ mod tests {
                 encoder.arithmetic_coder.as_mut().unwrap(),
                 encoder.contexts.as_mut().unwrap(),
                 encoder.stream.as_mut().unwrap(),
-                encoder.meta.delta_t_max
+                encoder.meta.delta_t_max,
+                encoder.meta.ref_interval
             )
             .is_ok());
 
@@ -539,7 +495,7 @@ mod tests {
         let mut decoder = compressed_input.arithmetic_coder.as_mut().unwrap();
         let mut contexts = compressed_input.contexts.as_mut().unwrap();
 
-        let decoded_adu = Adu::decompress(&mut decoder, &mut contexts, &mut bitreader, 100);
+        let decoded_adu = Adu::decompress(&mut decoder, &mut contexts, &mut bitreader, 100, 100);
 
         assert_eq!(adu.head_event_t, decoded_adu.head_event_t);
 
@@ -667,6 +623,83 @@ mod tests {
             // assert!(decoder.decode(&mut bitreader).unwrap().is_none());
             assert_eq!(decoder.decode(&mut bitreader).unwrap(), Some(255));
         }
+    }
+
+    #[test]
+    fn test_chained_adus() {
+        let mut encoder = setup_encoder();
+
+        let adu1 = setup_adu(&mut encoder, Some(7));
+
+        assert!(adu1
+            .compress(
+                encoder.arithmetic_coder.as_mut().unwrap(),
+                encoder.contexts.as_mut().unwrap(),
+                encoder.stream.as_mut().unwrap(),
+                encoder.meta.delta_t_max,
+                encoder.meta.ref_interval
+            )
+            .is_ok());
+
+        let adu2 = setup_adu(&mut encoder, Some(8));
+
+        assert!(adu2
+            .compress(
+                encoder.arithmetic_coder.as_mut().unwrap(),
+                encoder.contexts.as_mut().unwrap(),
+                encoder.stream.as_mut().unwrap(),
+                encoder.meta.delta_t_max,
+                encoder.meta.ref_interval
+            )
+            .is_ok());
+
+        let adu3 = setup_adu(&mut encoder, Some(18));
+
+        assert!(adu3
+            .compress(
+                encoder.arithmetic_coder.as_mut().unwrap(),
+                encoder.contexts.as_mut().unwrap(),
+                encoder.stream.as_mut().unwrap(),
+                encoder.meta.delta_t_max,
+                encoder.meta.ref_interval
+            )
+            .is_ok());
+
+        // The `stream` field of the encoder is now has our two ADUs in it.
+        let written_data = encoder.into_writer().unwrap();
+
+        // Now we can decode them.
+        let mut bufreader = BufReader::new(written_data.as_slice());
+        let mut bitreader =
+            bitstream_io::BitReader::endian(&mut bufreader, bitstream_io::BigEndian);
+
+        let mut compressed_input: CompressedInput<Cursor<Vec<u8>>> = CompressedInput::new(100, 100);
+        let mut decoder = compressed_input.arithmetic_coder.as_mut().unwrap();
+        let mut contexts = compressed_input.contexts.as_mut().unwrap();
+
+        let decoded_adu = Adu::decompress(&mut decoder, &mut contexts, &mut bitreader, 100, 100);
+
+        assert_eq!(adu1.head_event_t, decoded_adu.head_event_t);
+
+        compare_channels(&adu1.cubes_r, &decoded_adu.cubes_r);
+        compare_channels(&adu1.cubes_g, &decoded_adu.cubes_g);
+        compare_channels(&adu1.cubes_b, &decoded_adu.cubes_b);
+
+        let decoded_adu = Adu::decompress(&mut decoder, &mut contexts, &mut bitreader, 100, 100);
+
+        assert_eq!(adu2.head_event_t, decoded_adu.head_event_t);
+
+        compare_channels(&adu2.cubes_r, &decoded_adu.cubes_r);
+        compare_channels(&adu2.cubes_g, &decoded_adu.cubes_g);
+        compare_channels(&adu2.cubes_b, &decoded_adu.cubes_b);
+
+        let decoded_adu = Adu::decompress(&mut decoder, &mut contexts, &mut bitreader, 100, 100);
+
+        assert_eq!(adu3.head_event_t, decoded_adu.head_event_t);
+
+        compare_channels(&adu3.cubes_r, &decoded_adu.cubes_r);
+        compare_channels(&adu3.cubes_g, &decoded_adu.cubes_g);
+        compare_channels(&adu3.cubes_b, &decoded_adu.cubes_b);
     }
 }
 
