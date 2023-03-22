@@ -91,21 +91,14 @@ impl PredictionModel {
                 // If this is the first event encountered, then encode it directly
                 if !init {
                     init = true;
-                    // self.d_residuals[idx] = prev.d as DResidual;
-                    // self.dt_pred_residuals[idx] = prev.t() as DeltaTResidual;
-
-                    // self.event_memory[idx] = *prev;
-                    // self.event_memory[idx].delta_t -= self.t_memory[idx];
                     self.t_memory[idx] = prev.t();
-                    if self.time_modulation_mode == FramePerfect && self.t_memory[idx] % dt_ref != 0
-                    {
-                        self.t_memory[idx] = ((self.t_memory[idx] / dt_ref) + 1) * dt_ref;
-                    }
+                    frame_perfect_alignment(
+                        self.time_modulation_mode,
+                        &mut self.t_memory[idx],
+                        dt_ref,
+                    );
 
                     self.t_recon[idx] = self.t_memory[idx];
-
-                    // // convert absolute t to delta_t
-                    // self.event_memory[idx].delta_t -= prev.delta_t;
 
                     start = *prev;
                 }
@@ -120,23 +113,13 @@ impl PredictionModel {
                         self.d_residuals[next_idx + idx + 1] = d_resid;
                         self.dt_pred_residuals[next_idx + idx + 1] = t_resid;
 
-                        // self.event_memory[next_idx + idx + 1] = *next;
-                        // self.event_memory[next_idx + idx + 1].delta_t -=
-                        //     self.t_memory[next_idx + idx + 1];
-
                         self.t_memory[next_idx + idx + 1] = next.t();
-                        if self.time_modulation_mode == FramePerfect
-                            && self.t_memory[next_idx + idx + 1] % dt_ref != 0
-                        {
-                            self.t_memory[next_idx + idx + 1] =
-                                ((self.t_memory[next_idx + idx + 1] / dt_ref) + 1) * dt_ref;
-                        }
+                        frame_perfect_alignment(
+                            self.time_modulation_mode,
+                            &mut self.t_memory[next_idx + idx + 1],
+                            dt_ref,
+                        );
                         self.t_recon[next_idx + idx + 1] = self.t_memory[next_idx + idx + 1];
-
-                        // convert absolute t to delta_t
-                        // if self.event_memory[next_idx + idx + 1].delta_t > dtm {
-                        //     self.event_memory[next_idx + idx + 1].delta_t -= start.delta_t;
-                        // }
 
                         if t_resid.abs() > max_t_resid {
                             max_t_resid = t_resid.abs();
@@ -146,8 +129,6 @@ impl PredictionModel {
                                     max_t_resid, next.delta_t, start.delta_t
                                 );
                             }
-                            // assert!(max_t_resid <= dtm as i64);
-                            // assert!(max_t_resid < 100000000);
                         }
                         break;
                     }
@@ -178,6 +159,47 @@ impl PredictionModel {
             &self.dt_pred_residuals_i16,
             sparam,
         )
+    }
+
+    pub(crate) fn inverse_intra_prediction(
+        &mut self,
+        mut sparam: u8,
+        dt_ref: DeltaT,
+        dtm: DeltaT,
+        start_t: AbsoluteT,
+        start_d: D,
+        d_residuals: [DResidual; BLOCK_SIZE_AREA],
+        mut t_residuals: [i16; BLOCK_SIZE_AREA],
+    ) -> BlockEvents {
+        let mut events: [Option<EventCoordless>; BLOCK_SIZE_AREA] = [None; BLOCK_SIZE_AREA];
+        let mut init = false;
+        let mut start = EventCoordless {
+            d: start_d,
+            delta_t: start_t,
+        };
+        events[0] = Some(start);
+        self.t_memory[0] = start_t;
+        if self.time_modulation_mode == FramePerfect && self.t_memory[0] % dt_ref != 0 {
+            self.t_memory[0] = ((self.t_memory[0] / dt_ref) + 1) * dt_ref;
+        }
+
+        for ((idx, d_resid), t_resid) in d_residuals.iter().enumerate().zip(t_residuals.iter()) {
+            if *d_resid != D_ENCODE_NO_EVENT {
+                let next = EventCoordless {
+                    d: (*d_resid + start.d as DResidual) as D,
+                    delta_t: (((start.delta_t as DeltaTResidual) << sparam)
+                        + ((*t_resid as DeltaTResidual) << sparam))
+                        as DeltaT,
+                };
+                self.t_memory[idx] = next.t();
+                frame_perfect_alignment(self.time_modulation_mode, &mut self.t_memory[idx], dt_ref);
+                self.t_recon[idx] = self.t_memory[idx];
+
+                events[idx] = Some(next);
+            }
+        }
+
+        events
     }
 
     /// Get a block of inter-prediction residuals. `t_memory` should hold the previous absolute t
@@ -211,10 +233,7 @@ impl PredictionModel {
                 assert!(delta_t <= dtm);
 
                 self.t_memory[idx] = next.t();
-                if self.time_modulation_mode == FramePerfect && self.t_memory[idx] % dt_ref != 0 {
-                    self.t_memory[idx] = ((self.t_memory[idx] / dt_ref) + 1) * dt_ref;
-                    debug_assert_eq!(self.t_memory[idx] % dt_ref, 0);
-                }
+                frame_perfect_alignment(self.time_modulation_mode, &mut self.t_memory[idx], dt_ref);
 
                 let dt_pred = predict_delta_t(event_mem, d_resid, dtm);
 
@@ -298,9 +317,7 @@ impl PredictionModel {
                 event_mem.delta_t = recon_t - self.t_recon[idx];
                 event_mem.d = d;
                 self.t_recon[idx] = recon_t;
-                if self.time_modulation_mode == FramePerfect && self.t_recon[idx] % dt_ref != 0 {
-                    self.t_recon[idx] = ((self.t_recon[idx] / dt_ref) + 1) * dt_ref;
-                }
+                frame_perfect_alignment(self.time_modulation_mode, &mut self.t_recon[idx], dt_ref);
 
                 let event = EventCoordless {
                     d,
@@ -380,6 +397,13 @@ fn predict_delta_t(event_memory: &mut EventCoordless, d_resid: DResidual, dtm: D
     dt_pred
 }
 
+#[inline]
+fn frame_perfect_alignment(time_modulation_mode: Mode, t_value: &mut AbsoluteT, dt_ref: DeltaT) {
+    if time_modulation_mode == FramePerfect && *t_value % dt_ref != 0 {
+        *t_value = ((*t_value / dt_ref) + 1) * dt_ref;
+    }
+}
+
 fn update_values_from_prediction(
     event_memory: &mut EventCoordless,
     t_recon: &mut AbsoluteT,
@@ -393,4 +417,97 @@ fn update_values_from_prediction(
     assert!(event_memory.delta_t <= dtm);
     // self.event_memory[idx].d = d; TODO?
     *t_recon = recon_t;
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::codec::compressed::blocks::block::BlockEvents;
+    use crate::codec::compressed::blocks::BLOCK_SIZE_AREA;
+    use crate::Mode::FramePerfect;
+    use crate::{Coord, DeltaT, Event};
+    use rand::prelude::StdRng;
+    use rand::{Rng, SeedableRng};
+
+    #[test]
+    fn test_intra_prediction_lossless() {
+        let mut events = get_random_events(Some(7), BLOCK_SIZE_AREA, 16, 16, 1, 1000);
+        let mut events_coordless = events
+            .iter()
+            .map(|event| super::EventCoordless {
+                d: event.d,
+                delta_t: event.delta_t,
+            })
+            .collect::<Vec<_>>();
+        let block_events: BlockEvents = events_coordless
+            .iter()
+            .map(|event| Some(*event))
+            .collect::<Vec<_>>()
+            .try_into()
+            .unwrap();
+
+        // Do the forward intra prediction
+
+        let mut forward_prediction_model = super::PredictionModel::new(FramePerfect);
+        let (start_t, start_d, d_resids, t_resids_i16, sparam) =
+            forward_prediction_model.forward_intra_prediction(0, 255, 1000, &block_events);
+        let ref_start_t = events[0].delta_t;
+        assert_eq!(start_t, ref_start_t);
+        assert_eq!(start_d, events[0].d);
+
+        // Do the inverse intra prediction
+        let mut inverse_prediction_model = super::PredictionModel::new(FramePerfect);
+        let reconstructed_events = inverse_prediction_model.inverse_intra_prediction(
+            sparam,
+            255,
+            1000,
+            start_t,
+            start_d,
+            *d_resids,
+            *t_resids_i16,
+        );
+
+        // Check that the reconstructed events are the same as the original events
+        for (recon_event, event) in reconstructed_events.iter().zip(block_events.iter()) {
+            assert!(recon_event.is_some());
+            assert!(event.is_some());
+            assert_eq!(recon_event.unwrap().d, event.unwrap().d);
+            let recon_t = recon_event.unwrap().delta_t;
+            let ref_t = event.unwrap().delta_t;
+            assert_eq!(recon_t, ref_t);
+        }
+
+        // Check that the models have the same state
+        assert_eq!(
+            forward_prediction_model.t_memory,
+            inverse_prediction_model.t_memory
+        );
+    }
+
+    fn get_random_events(
+        seed: Option<u64>,
+        num: usize,
+        width: u16,
+        height: u16,
+        channels: u8,
+        dtm: DeltaT,
+    ) -> Vec<Event> {
+        let mut rng = match seed {
+            None => StdRng::from_rng(rand::thread_rng()).unwrap(),
+            Some(num) => StdRng::seed_from_u64(num),
+        };
+        let mut events = Vec::with_capacity(num);
+        for _ in 0..num {
+            let event = Event {
+                coord: Coord {
+                    x: rng.gen::<u16>() % width,
+                    y: rng.gen::<u16>() % height,
+                    c: Some(rng.gen::<u8>() % channels),
+                },
+                d: rng.gen::<u8>(),
+                delta_t: rng.gen::<u32>() % dtm,
+            };
+            events.push(event);
+        }
+        events
+    }
 }
