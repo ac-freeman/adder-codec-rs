@@ -1,15 +1,15 @@
 use crate::codec::compressed::adu::frame::Adu;
 use crate::codec::compressed::adu::interblock::AduInterBlock;
 use crate::codec::compressed::adu::intrablock::AduIntraBlock;
-use crate::codec::compressed::adu::AduCompression;
+use crate::codec::compressed::adu::{AduComponentCompression, AduCompression};
 use crate::codec::compressed::stream::{CompressedInput, CompressedOutput};
 use crate::codec::{CodecError, ReadCompression, WriteCompression};
 use crate::codec_old::compressed::compression::Contexts;
 use crate::codec_old::compressed::fenwick::context_switching::FenwickModel;
 use crate::DeltaT;
-use arithmetic_coding::Encoder;
+use arithmetic_coding::{Decoder, Encoder};
 use bitstream_io::{BigEndian, BitReader, BitWriter};
-use std::io::{Error, Read, Write};
+use std::io::{Cursor, Error, Read, Write};
 
 #[derive(Debug, Clone)]
 pub struct AduCube {
@@ -43,12 +43,12 @@ impl AduCube {
     }
 }
 
-impl AduCompression for AduCube {
-    fn compress<W: Write>(
+impl AduComponentCompression for AduCube {
+    fn compress(
         &self,
-        encoder: &mut Encoder<FenwickModel, BitWriter<W, BigEndian>>,
+        encoder: &mut Encoder<FenwickModel, BitWriter<Vec<u8>, BigEndian>>,
         contexts: &mut Contexts,
-        stream: &mut BitWriter<W, BigEndian>,
+        stream: &mut BitWriter<Vec<u8>, BigEndian>,
         dtm: DeltaT,
     ) -> Result<(), CodecError> {
         // Get the context references
@@ -81,17 +81,13 @@ impl AduCompression for AduCube {
         Ok(())
     }
 
-    fn decompress<R: Read>(
-        stream: &mut BitReader<R, BigEndian>,
-        input: &mut CompressedInput<R>,
+    fn decompress(
+        decoder: &mut Decoder<FenwickModel, BitReader<Cursor<Vec<u8>>, BigEndian>>,
+        contexts: &mut Contexts,
+        stream: &mut BitReader<Cursor<Vec<u8>>, BigEndian>,
+        dtm: DeltaT,
     ) -> Self {
-        // Get the context references
-        let mut decoder = input.arithmetic_coder.as_mut().unwrap();
-        let mut d_context = input.contexts.as_mut().unwrap().d_context;
-        let mut dt_context = input.contexts.as_mut().unwrap().dt_context;
-        let mut u8_context = input.contexts.as_mut().unwrap().u8_general_context;
-
-        decoder.model.set_context(u8_context);
+        decoder.model.set_context(contexts.u8_general_context);
 
         // Read the cube coordinates
         let mut bytes = [0; 2];
@@ -105,7 +101,7 @@ impl AduCompression for AduCube {
         let idx_x = u16::from_be_bytes(bytes);
 
         // Read the intra block
-        let intra_block = AduIntraBlock::decompress(stream, input);
+        let intra_block = AduIntraBlock::decompress(decoder, contexts, stream, dtm);
 
         // Initialize empty cube
         let mut cube = Self {
@@ -116,11 +112,9 @@ impl AduCompression for AduCube {
             inter_blocks: Vec::new(),
         };
 
-        let mut decoder = input.arithmetic_coder.as_mut().unwrap();
-
         // Read the number of inter blocks
         let mut bytes = [0; 2];
-        decoder.model.set_context(u8_context);
+        decoder.model.set_context(contexts.u8_general_context);
         for byte in bytes.iter_mut() {
             *byte = decoder.decode(stream).unwrap().unwrap() as u8;
         }
@@ -129,7 +123,7 @@ impl AduCompression for AduCube {
         // Read the inter blocks
         for _ in 0..cube.num_inter_blocks {
             cube.inter_blocks
-                .push(AduInterBlock::decompress(stream, input));
+                .push(AduInterBlock::decompress(decoder, contexts, stream, dtm));
         }
 
         cube
@@ -149,13 +143,14 @@ mod tests {
     use crate::codec::compressed::adu::cube::AduCube;
     use crate::codec::compressed::adu::interblock::AduInterBlock;
     use crate::codec::compressed::adu::intrablock::gen_random_intra_block;
+    use crate::codec::compressed::adu::AduComponentCompression;
     use crate::codec::compressed::adu::AduCompression;
     use crate::codec::compressed::stream::{CompressedInput, CompressedOutput};
     use crate::codec::{CodecMetadata, WriteCompression};
     use rand::prelude::StdRng;
     use rand::{Rng, SeedableRng};
     use std::error::Error;
-    use std::io::BufReader;
+    use std::io::{BufReader, Cursor};
 
     fn setup_encoder() -> crate::codec::compressed::stream::CompressedOutput<Vec<u8>> {
         let meta = CodecMetadata {
@@ -230,21 +225,22 @@ mod tests {
         let (cube, written_data) = compress_cube().unwrap();
         let tmp_len = written_data.len();
 
-        let mut bufreader = BufReader::new(written_data.as_slice());
-        let mut bitreader =
-            bitstream_io::BitReader::endian(&mut bufreader, bitstream_io::BigEndian);
+        let mut bufreader = Cursor::new(written_data);
+        let mut bitreader = bitstream_io::BitReader::endian(bufreader, bitstream_io::BigEndian);
 
-        let mut decoder = CompressedInput::new(100, 100);
+        let mut compressed_input: CompressedInput<Cursor<Vec<u8>>> = CompressedInput::new(100, 100);
+        let mut decoder = compressed_input.arithmetic_coder.as_mut().unwrap();
+        let mut contexts = compressed_input.contexts.as_mut().unwrap();
 
-        let decoded_cube = AduCube::decompress(&mut bitreader, &mut decoder);
+        let decoded_cube = AduCube::decompress(&mut decoder, &mut contexts, &mut bitreader, 100);
 
-        decoder
+        compressed_input
             .arithmetic_coder
             .as_mut()
             .unwrap()
             .model
-            .set_context(decoder.contexts.as_mut().unwrap().eof_context);
-        let eof = decoder
+            .set_context(compressed_input.contexts.as_mut().unwrap().eof_context);
+        let eof = compressed_input
             .arithmetic_coder
             .as_mut()
             .unwrap()

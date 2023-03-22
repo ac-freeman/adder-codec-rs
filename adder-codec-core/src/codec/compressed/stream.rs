@@ -3,7 +3,7 @@ use arithmetic_coding::{Decoder, Encoder};
 use bitstream_io::{BigEndian, BitRead, BitReader, BitWrite, BitWriter};
 use std::cmp::min;
 use std::collections::VecDeque;
-use std::io::{Read, Write};
+use std::io::{Cursor, Read, Write};
 
 use crate::codec::compressed::adu::cube::AduCube;
 use crate::codec::compressed::adu::frame::{Adu, AduChannelType};
@@ -26,8 +26,11 @@ pub struct CompressedOutput<W: Write> {
     pub(crate) meta: CodecMetadata,
     pub(crate) frame: Frame,
     pub(crate) adu: Adu,
+
+    /// The arithmetic coder used to encode the ADU. We write the ADU to a buffer, then write the
+    /// buffer to the stream.
     pub(crate) arithmetic_coder:
-        Option<arithmetic_coding::Encoder<FenwickModel, BitWriter<W, BigEndian>>>,
+        Option<arithmetic_coding::Encoder<FenwickModel, BitWriter<Vec<u8>, BigEndian>>>,
     pub(crate) contexts: Option<Contexts>,
     pub(crate) stream: Option<BitWriter<W, BigEndian>>,
 }
@@ -36,7 +39,7 @@ pub struct CompressedOutput<W: Write> {
 pub struct CompressedInput<R: Read> {
     pub(crate) meta: CodecMetadata,
     pub(crate) arithmetic_coder:
-        Option<arithmetic_coding::Decoder<FenwickModel, BitReader<R, BigEndian>>>,
+        Option<arithmetic_coding::Decoder<FenwickModel, BitReader<Cursor<Vec<u8>>, BigEndian>>>,
     pub(crate) contexts: Option<Contexts>,
 
     // Stores the decoded events so they can be read one by one. They're put into reverse order
@@ -327,11 +330,22 @@ impl<R: Read> ReadCompression<R> for CompressedInput<R> {
             // *self.arithmetic_coder.as_mut().unwrap() = Decoder::new(source_model);
 
             // Then read and decode the next ADU
-            let decoded_adu = Adu::decompress(reader, self);
-            for cube in decoded_adu.cubes_r.cubes {
-                // intra residual tshifts inverse
 
-                // for each inter block, inter residual tshifts inverse
+            match (
+                self.arithmetic_coder.as_mut(),
+                self.contexts.as_mut(),
+                reader,
+                self.meta.delta_t_max,
+            ) {
+                (Some(arithmetic_coder), Some(contexts), reader, dtm) => {
+                    let decoded_adu = Adu::decompress(arithmetic_coder, contexts, reader, dtm);
+                    for cube in decoded_adu.cubes_r.cubes {
+                        // intra residual tshifts inverse
+
+                        // for each inter block, inter residual tshifts inverse
+                    }
+                }
+                _ => panic!("Invalid state"),
             }
         }
 
