@@ -189,16 +189,6 @@ impl<R: Read + Seek> Decoder<R> {
         self.input.digest_event(reader)
     }
 
-    /// Read and decode the next event from the input stream
-    #[inline]
-    pub fn digest_event_debug(
-        &mut self,
-        reader: &mut BitReader<R, BigEndian>,
-        adu: &Adu,
-    ) -> Result<Event, CodecError> {
-        self.input.digest_event_debug(reader, adu)
-    }
-
     /// Sets the input stream position to the given absolute byte position
     pub fn set_input_stream_position(
         &mut self,

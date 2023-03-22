@@ -174,14 +174,6 @@ impl<R: Read + Seek> ReadCompression<R> for RawInput<R> {
         Ok(event)
     }
 
-    fn digest_event_debug(
-        &mut self,
-        reader: &mut BitReader<R, BigEndian>,
-        adu: &Adu,
-    ) -> Result<Event, CodecError> {
-        todo!()
-    }
-
     fn set_input_stream_position(
         &mut self,
         reader: &mut BitReader<R, BigEndian>,
