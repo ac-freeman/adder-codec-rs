@@ -323,19 +323,6 @@ impl<R: Read> ReadCompression<R> for CompressedInput<R> {
     #[allow(unused_variables)]
     fn digest_event(&mut self, reader: &mut BitReader<R, BigEndian>) -> Result<Event, CodecError> {
         if self.decoded_event_queue.is_empty() {
-            // Reset the probability tables
-            // self.frame.reset();
-
-            // TODO: Temporary! Write a function to just reset the probability tables
-            // let mut source_model = FenwickModel::with_symbols(
-            //     min(self.meta.delta_t_max as usize * 2, u16::MAX as usize),
-            //     1 << 30,
-            // );
-            // *self.contexts.as_mut().unwrap() = Contexts::new(&mut source_model, self.meta.clone());
-            // *self.arithmetic_coder.as_mut().unwrap() = Decoder::new(source_model);
-
-            // Then read and decode the next ADU
-
             match (
                 self.arithmetic_coder.as_mut(),
                 self.contexts.as_mut(),
@@ -359,6 +346,35 @@ impl<R: Read> ReadCompression<R> for CompressedInput<R> {
         // Then return the next event from the queue
         match self.decoded_event_queue.pop() {
             Some(event) => Ok(event),
+            None => Err(CodecError::Eof),
+        }
+    }
+
+    #[allow(unused_variables)]
+    fn digest_event_debug(
+        &mut self,
+        reader: &mut BitReader<R, BigEndian>,
+    ) -> Result<(Option<Adu>, Event), CodecError> {
+        if self.decoded_event_queue.is_empty() {
+            match (
+                self.arithmetic_coder.as_mut(),
+                self.contexts.as_mut(),
+                reader,
+                self.meta.delta_t_max,
+                self.meta.ref_interval,
+            ) {
+                (Some(arithmetic_coder), Some(contexts), reader, dtm, ref_interval) => {
+                    let decoded_adu =
+                        Adu::decompress(arithmetic_coder, contexts, reader, dtm, ref_interval);
+                    return Ok((Some(decoded_adu), Event::default()));
+                }
+                _ => panic!("Invalid state"),
+            }
+        }
+
+        // Then return the next event from the queue
+        match self.decoded_event_queue.pop() {
+            Some(event) => Ok((None, event)),
             None => Err(CodecError::Eof),
         }
     }

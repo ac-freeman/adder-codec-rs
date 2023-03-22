@@ -2002,7 +2002,8 @@ mod tests {
     //                 encoder.arithmetic_coder.as_mut().unwrap(),
     //                 encoder.contexts.as_mut().unwrap(),
     //                 encoder.stream.as_mut().unwrap(),
-    //                 encoder.meta.delta_t_max
+    //                 encoder.meta.delta_t_max,
+    //                 encoder.meta.ref_interval
     //             )
     //             .is_ok());
     //
@@ -2025,7 +2026,8 @@ mod tests {
     //
     //         let mut decoder = CompressedInput::new(meta.delta_t_max, meta.ref_interval);
     //
-    //         let decoded_adu = Adu::decompress(&mut bitreader, &mut decoder);
+    //         let decoded_adu =
+    //             Adu::decompress(&mut decoder, &mut contexts, &mut bitreader, dtm, dt_ref);
     //
     //         decoder
     //             .arithmetic_coder
@@ -2066,24 +2068,17 @@ mod tests {
         let mut start_event_t = 0;
         let mut compress = false;
         let mut ev_t = 0;
-        let mut first_adu = None;
-        let mut second_adu = None;
+
+        let mut adus = Vec::new();
 
         loop {
             match reader.digest_event(&mut bitreader) {
                 Ok(ev) => {
                     if let Some(adu) = encoder.ingest_event_debug(ev).unwrap() {
-                        if first_adu.is_none() {
-                            first_adu = Some(adu);
-                        } else if second_adu.is_none() {
-                            second_adu = Some(adu);
-                            break;
-                        }
+                        adus.push(adu);
                     }
                 }
-                Err(_) => {
-                    panic!("temp")
-                }
+                Err(_) => break,
             }
         }
 
@@ -2110,10 +2105,20 @@ mod tests {
         let mut decoder = Decoder::new_compressed(compression, &mut bitreader).unwrap();
 
         // todo: temporary
-        // loop {
-        decoder.digest_event(&mut bitreader);
-        decoder.digest_event(&mut bitreader);
-        // count += 1;
-        // }
+        let mut count = 0;
+        loop {
+            if let Ok((Some(decoded_adu), _)) = decoder.digest_event_debug(&mut bitreader) {
+                let ref_adu = &adus[count];
+                assert_eq!(ref_adu.head_event_t, decoded_adu.head_event_t);
+                compare_channels(&ref_adu.cubes_r, &decoded_adu.cubes_r);
+                compare_channels(&ref_adu.cubes_g, &decoded_adu.cubes_g);
+                compare_channels(&ref_adu.cubes_b, &decoded_adu.cubes_b);
+            }
+            // decoder.digest_event(&mut bitreader);
+            count += 1;
+            if count == adus.len() {
+                break;
+            }
+        }
     }
 }
