@@ -333,7 +333,7 @@ mod tests {
     use crate::codec::compressed::adu::frame::{compare_channels, Adu, AduChannel};
     use crate::codec::compressed::adu::interblock::AduInterBlock;
     use crate::codec::compressed::adu::intrablock::gen_random_intra_block;
-    use crate::codec::compressed::adu::{AduComponentCompression, AduCompression};
+    use crate::codec::compressed::adu::{add_eof, AduComponentCompression, AduCompression};
     use crate::codec::compressed::stream::{CompressedInput, CompressedOutput};
     use crate::codec::decoder::Decoder;
     use crate::codec::{CodecMetadata, WriteCompression};
@@ -413,27 +413,7 @@ mod tests {
             )
             .is_ok());
 
-        // Add an eof
-        encoder
-            .arithmetic_coder
-            .as_mut()
-            .unwrap()
-            .model
-            .set_context(encoder.contexts.as_mut().unwrap().eof_context);
-        encoder
-            .arithmetic_coder
-            .as_mut()
-            .unwrap()
-            .encode(None, encoder.stream.as_mut().unwrap())
-            .unwrap();
-        encoder
-            .arithmetic_coder
-            .as_mut()
-            .unwrap()
-            .flush(encoder.stream.as_mut().unwrap())
-            .unwrap();
-        encoder.stream.as_mut().unwrap().byte_align().unwrap();
-        encoder.stream.as_mut().unwrap().flush().unwrap();
+        add_eof(&mut encoder);
 
         let written_data = encoder.into_writer().unwrap();
 

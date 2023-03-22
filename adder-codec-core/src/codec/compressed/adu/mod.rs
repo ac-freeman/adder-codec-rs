@@ -5,7 +5,7 @@ use crate::codec_old::compressed::compression::Contexts;
 use crate::codec_old::compressed::fenwick::context_switching::FenwickModel;
 use crate::DeltaT;
 use arithmetic_coding::{Decoder, Encoder};
-use bitstream_io::{BigEndian, BitReader, BitWriter};
+use bitstream_io::{BigEndian, BitReader, BitWrite, BitWriter};
 use std::io::{Cursor, Read, Write};
 
 pub mod cube;
@@ -55,4 +55,17 @@ pub trait AduComponentCompression {
         input: &mut CompressedInput<R>,
         reference_adu: &Adu,
     ) -> Self;
+}
+
+/// Only use for running tests, where the output.stream is what we're writing our arithmetic codes
+/// to (directly).
+fn add_eof(output: &mut CompressedOutput<Vec<u8>>) {
+    let mut encoder = output.arithmetic_coder.as_mut().unwrap();
+    let mut stream = output.stream.as_mut().unwrap();
+    let eof_context = output.contexts.as_mut().unwrap().eof_context;
+    encoder.model.set_context(eof_context);
+    encoder.encode(None, stream).unwrap();
+    encoder.flush(stream).unwrap();
+    stream.byte_align().unwrap();
+    stream.flush().unwrap();
 }
