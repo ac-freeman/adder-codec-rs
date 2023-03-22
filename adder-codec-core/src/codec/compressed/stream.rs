@@ -10,7 +10,7 @@ use crate::codec::compressed::adu::frame::{Adu, AduChannelType};
 use crate::codec::compressed::adu::interblock::AduInterBlock;
 use crate::codec::compressed::adu::intrablock::AduIntraBlock;
 use crate::codec::compressed::adu::AduCompression;
-use crate::codec::compressed::blocks::block::Frame;
+use crate::codec::compressed::blocks::block::{Block, Cube, Frame};
 use crate::codec::compressed::blocks::{BLOCK_SIZE, BLOCK_SIZE_AREA};
 use crate::codec::header::{Magic, MAGIC_COMPRESSED};
 use crate::codec_old::compressed::compression::{
@@ -19,6 +19,7 @@ use crate::codec_old::compressed::compression::{
 use crate::codec_old::compressed::fenwick::context_switching::FenwickModel;
 use crate::codec_old::compressed::fenwick::Weights;
 use crate::Mode::{Continuous, FramePerfect};
+use crate::TimeMode::AbsoluteT;
 use crate::{Coord, DeltaT, Event, EventCoordless, SourceCamera};
 
 /// Write compressed ADΔER data to a stream.
@@ -293,6 +294,42 @@ impl<R: Read> CompressedInput<R> {
             _phantom: std::marker::PhantomData,
         }
     }
+
+    fn adu_to_frame(&mut self, adu: &Adu) {
+        for adu_cube in &adu.cubes_r.cubes {
+            let mut residual_cube = Cube::new(
+                adu_cube.idx_y as usize,
+                adu_cube.idx_x as usize,
+                0,
+                FramePerfect,
+            ); // TODO: Get the mode from the adu
+
+            let first_events = residual_cube.blocks_r[0].get_intra_residual_tshifts_inverse(
+                adu_cube.intra_block.shift_loss_param,
+                adu_cube.intra_block.head_event_t,
+                adu_cube.intra_block.head_event_d,
+                adu_cube.intra_block.d_residuals,
+                adu_cube.intra_block.dt_residuals,
+            );
+
+            residual_cube.blocks_r[0].events = first_events;
+
+            for (i, inter_block) in adu_cube.inter_blocks.iter().enumerate() {
+                residual_cube.blocks_r.push(Block::new());
+
+                todo!();
+                // residual_cube.inter_model_r.inverse_inter_prediction(inter_block.shift_loss_param, self.meta.delta_t_max, self.meta.ref_interval)
+                // let events = residual_cube.blocks_r[i + 1].get_inter_residual_tshifts_inverse(
+                //     block.shift_loss_param,
+                //     block.head_event_t,
+                //     block.head_event_d,
+                //     block.d_residuals,
+                //     block.dt_residuals,
+                // );
+                // residual_cube.blocks_r[i + 1].events = events;
+            }
+        }
+    }
 }
 
 impl<R: Read> ReadCompression<R> for CompressedInput<R> {
@@ -333,6 +370,8 @@ impl<R: Read> ReadCompression<R> for CompressedInput<R> {
                 (Some(arithmetic_coder), Some(contexts), reader, dtm, ref_interval) => {
                     let decoded_adu =
                         Adu::decompress(arithmetic_coder, contexts, reader, dtm, ref_interval);
+                    self.adu_to_frame(&decoded_adu);
+
                     for cube in decoded_adu.cubes_r.cubes {
                         // intra residual tshifts inverse
 
