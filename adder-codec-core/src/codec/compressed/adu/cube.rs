@@ -143,8 +143,8 @@ mod tests {
     use crate::codec::compressed::adu::cube::AduCube;
     use crate::codec::compressed::adu::interblock::AduInterBlock;
     use crate::codec::compressed::adu::intrablock::gen_random_intra_block;
-    use crate::codec::compressed::adu::AduComponentCompression;
     use crate::codec::compressed::adu::AduCompression;
+    use crate::codec::compressed::adu::{add_eof, AduComponentCompression};
     use crate::codec::compressed::stream::{CompressedInput, CompressedOutput};
     use crate::codec::{CodecMetadata, WriteCompression};
     use rand::prelude::StdRng;
@@ -205,6 +205,8 @@ mod tests {
             )
             .is_ok());
 
+        add_eof(&mut encoder);
+
         let written_data = encoder.into_writer().unwrap();
 
         Ok((cube, written_data))
@@ -234,19 +236,9 @@ mod tests {
 
         let decoded_cube = AduCube::decompress(&mut decoder, &mut contexts, &mut bitreader, 100);
 
-        compressed_input
-            .arithmetic_coder
-            .as_mut()
-            .unwrap()
-            .model
-            .set_context(compressed_input.contexts.as_mut().unwrap().eof_context);
-        let eof = compressed_input
-            .arithmetic_coder
-            .as_mut()
-            .unwrap()
-            .decode(&mut bitreader)
-            .unwrap();
-        // assert!(eof.is_none());
+        decoder.model.set_context(contexts.eof_context);
+        let eof = decoder.decode(&mut bitreader).unwrap();
+        assert!(eof.is_none());
         assert_eq!(cube.idx_y, decoded_cube.idx_y);
         assert_eq!(cube.idx_x, decoded_cube.idx_x);
         assert_eq!(
