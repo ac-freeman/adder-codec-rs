@@ -524,6 +524,55 @@ mod tests {
             let ref_t = event.unwrap().delta_t;
             assert_eq!(recon_t, ref_t);
         }
+
+        let prev_events = inter_block_events.clone();
+        // Get events for inter block
+        let mut inter_block_events = block_events.clone();
+        inter_block_events.reverse();
+        for (idx, inter_event) in inter_block_events.iter_mut().enumerate() {
+            // Ensure that the events have a bigger timestamp than the previous ones
+            if let Some(event) = inter_event {
+                event.delta_t += forward_prediction_model.t_memory[idx];
+            }
+        }
+
+        // Do the forward inter prediction
+        let (d_resids, dt_resids_i16, sparam) =
+            forward_prediction_model.forward_inter_prediction(0, dtm, 255, &inter_block_events);
+        // Check that the residuals are correct
+        for ((idx, new_event), ref_event) in inter_block_events
+            .iter()
+            .enumerate()
+            .zip(prev_events.iter())
+        {
+            assert_eq!(
+                d_resids[idx],
+                new_event.unwrap().d as i16 - ref_event.unwrap().d as i16
+            );
+        }
+
+        // Do the inverse inter prediction
+        let reconstructed_events = inverse_prediction_model.inverse_inter_prediction(
+            sparam,
+            dtm,
+            255,
+            *d_resids,
+            *dt_resids_i16,
+        );
+
+        // Check that the reconstructed events are the same as the original events
+        for ((idx, recon_event), event) in reconstructed_events
+            .iter()
+            .enumerate()
+            .zip(inter_block_events.iter())
+        {
+            assert!(recon_event.is_some());
+            assert!(event.is_some());
+            assert_eq!(recon_event.unwrap().d, event.unwrap().d);
+            let recon_t = recon_event.unwrap().delta_t;
+            let ref_t = event.unwrap().delta_t;
+            assert_eq!(recon_t, ref_t);
+        }
     }
 
     fn get_random_events(
