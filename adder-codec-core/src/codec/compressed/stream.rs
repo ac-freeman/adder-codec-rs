@@ -101,8 +101,8 @@ impl<W: Write> CompressedOutput<W> {
             let (start_t, start_d, d_residuals, dt_residuals, sparam) = inter_model
                 .forward_intra_prediction(
                     0,
-                    self.meta.ref_interval,
                     self.meta.delta_t_max,
+                    self.meta.ref_interval,
                     &block.events,
                 );
 
