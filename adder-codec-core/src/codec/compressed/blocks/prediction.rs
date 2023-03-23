@@ -184,6 +184,7 @@ impl PredictionModel {
         if self.time_modulation_mode == FramePerfect && self.t_memory[0] % dt_ref != 0 {
             self.t_memory[0] = ((self.t_memory[0] / dt_ref) + 1) * dt_ref;
         }
+        self.t_recon[0] = self.t_memory[0];
 
         dbg!(self.event_memory);
 
@@ -297,28 +298,7 @@ impl PredictionModel {
                 let d = (event_mem.d as DResidual + *d_resid) as D;
                 // let mut event = EventCoordless { d, delta_t: 0 }
                 let t_resid = ((t_resid_i16 as DeltaTResidual) << sparam);
-                let mut dt_pred = match *d_resid > 0 {
-                    true => {
-                        if *d_resid < 8 {
-                            event_mem.delta_t << *d_resid
-                        } else {
-                            event_mem.delta_t
-                        }
-                    }
-                    false => {
-                        if *d_resid > -8 {
-                            event_mem.delta_t >> -*d_resid
-                        } else {
-                            event_mem.delta_t
-                        }
-                    }
-                };
-                if dt_pred > dtm {
-                    dt_pred = event_mem.delta_t;
-                }
-                // if dt_pred > dtm as DeltaTResidual {
-                //     dt_pred = event_mem.delta_t as DeltaTResidual;
-                // }
+                let mut dt_pred = predict_delta_t(event_mem, *d_resid, dtm);
 
                 let recon_t = (self.t_recon[idx] as DeltaTResidual
                     + dt_pred as DeltaTResidual
@@ -326,6 +306,7 @@ impl PredictionModel {
                 event_mem.delta_t = recon_t - self.t_recon[idx];
                 event_mem.d = d;
                 self.t_recon[idx] = recon_t;
+
                 frame_perfect_alignment(self.time_modulation_mode, &mut self.t_recon[idx], dt_ref);
 
                 let event = EventCoordless {
