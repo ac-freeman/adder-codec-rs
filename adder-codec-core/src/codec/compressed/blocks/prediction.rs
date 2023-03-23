@@ -69,8 +69,8 @@ impl PredictionModel {
     pub(crate) fn forward_intra_prediction(
         &mut self,
         mut sparam: u8,
-        dt_ref: DeltaT,
         dtm: DeltaT,
+        dt_ref: DeltaT,
         events: &BlockEvents,
     ) -> (
         AbsoluteT,
@@ -87,6 +87,7 @@ impl PredictionModel {
         let mut max_t_resid = 0;
 
         for (idx, event_opt) in events.iter().enumerate() {
+            self.event_memory[idx] = event_opt.unwrap();
             if let Some(prev) = event_opt {
                 // If this is the first event encountered, then encode it directly
                 if !init {
@@ -164,8 +165,8 @@ impl PredictionModel {
     pub(crate) fn inverse_intra_prediction(
         &mut self,
         mut sparam: u8,
-        dt_ref: DeltaT,
         dtm: DeltaT,
+        dt_ref: DeltaT,
         start_t: AbsoluteT,
         start_d: D,
         d_residuals: [DResidual; BLOCK_SIZE_AREA],
@@ -177,11 +178,14 @@ impl PredictionModel {
             d: start_d,
             delta_t: start_t,
         };
+        self.event_memory[0] = start;
         events[0] = Some(start);
         self.t_memory[0] = start_t;
         if self.time_modulation_mode == FramePerfect && self.t_memory[0] % dt_ref != 0 {
             self.t_memory[0] = ((self.t_memory[0] / dt_ref) + 1) * dt_ref;
         }
+
+        dbg!(self.event_memory);
 
         for ((idx, d_resid), t_resid) in d_residuals.iter().enumerate().zip(t_residuals.iter()) {
             if *d_resid != D_ENCODE_NO_EVENT {
@@ -195,9 +199,12 @@ impl PredictionModel {
                 frame_perfect_alignment(self.time_modulation_mode, &mut self.t_memory[idx], dt_ref);
                 self.t_recon[idx] = self.t_memory[idx];
 
+                self.event_memory[idx] = next;
                 events[idx] = Some(next);
             }
         }
+
+        dbg!(self.event_memory);
 
         events
     }
@@ -275,15 +282,17 @@ impl PredictionModel {
         sparam: u8,
         dtm: DeltaT,
         dt_ref: DeltaT,
+        d_residuals: [DResidual; BLOCK_SIZE_AREA],
+        mut dt_pred_residuals_i16: [i16; BLOCK_SIZE_AREA],
     ) -> [Option<EventCoordless>; BLOCK_SIZE_AREA] {
         let mut events = [None; BLOCK_SIZE_AREA];
-        for (idx, ((d_resid, t_resid_i16), event_mem)) in self
-            .d_residuals
+        for (idx, ((d_resid, t_resid_i16), event_mem)) in d_residuals
             .iter()
-            .zip(self.dt_pred_residuals_i16)
+            .zip(dt_pred_residuals_i16)
             .zip(self.event_memory.iter_mut())
             .enumerate()
         {
+            debug_assert!(event_mem.delta_t > 0); // Sanity check
             if *d_resid != D_ENCODE_NO_EVENT as i16 {
                 let d = (event_mem.d as DResidual + *d_resid) as D;
                 // let mut event = EventCoordless { d, delta_t: 0 }
@@ -429,8 +438,9 @@ mod tests {
     use rand::{Rng, SeedableRng};
 
     #[test]
-    fn test_intra_prediction_lossless() {
-        let mut events = get_random_events(Some(7), BLOCK_SIZE_AREA, 16, 16, 1, 1000);
+    fn test_prediction_lossless() {
+        let dtm = 255;
+        let mut events = get_random_events(Some(7), BLOCK_SIZE_AREA, 16, 16, 1, dtm);
         let mut events_coordless = events
             .iter()
             .map(|event| super::EventCoordless {
@@ -449,7 +459,7 @@ mod tests {
 
         let mut forward_prediction_model = super::PredictionModel::new(FramePerfect);
         let (start_t, start_d, d_resids, t_resids_i16, sparam) =
-            forward_prediction_model.forward_intra_prediction(0, 255, 1000, &block_events);
+            forward_prediction_model.forward_intra_prediction(0, dtm, 255, &block_events);
         let ref_start_t = events[0].delta_t;
         assert_eq!(start_t, ref_start_t);
         assert_eq!(start_d, events[0].d);
@@ -458,8 +468,8 @@ mod tests {
         let mut inverse_prediction_model = super::PredictionModel::new(FramePerfect);
         let reconstructed_events = inverse_prediction_model.inverse_intra_prediction(
             sparam,
+            dtm,
             255,
-            1000,
             start_t,
             start_d,
             *d_resids,
@@ -481,6 +491,58 @@ mod tests {
             forward_prediction_model.t_memory,
             inverse_prediction_model.t_memory
         );
+        assert_eq!(
+            forward_prediction_model.event_memory,
+            inverse_prediction_model.event_memory
+        );
+
+        // Get events for inter block
+        let mut inter_block_events = block_events.clone();
+        inter_block_events.reverse();
+        for (idx, inter_event) in inter_block_events.iter_mut().enumerate() {
+            // Ensure that the events have a bigger timestamp than the previous ones
+            if let Some(event) = inter_event {
+                event.delta_t += forward_prediction_model.t_memory[idx];
+            }
+        }
+
+        // Do the forward inter prediction
+        let (d_resids, dt_resids_i16, sparam) =
+            forward_prediction_model.forward_inter_prediction(0, dtm, 255, &inter_block_events);
+        // Check that the residuals are correct
+        for ((idx, new_event), ref_event) in inter_block_events
+            .iter()
+            .enumerate()
+            .zip(block_events.iter())
+        {
+            assert_eq!(
+                d_resids[idx],
+                new_event.unwrap().d as i16 - ref_event.unwrap().d as i16
+            );
+        }
+
+        // Do the inverse inter prediction
+        let reconstructed_events = inverse_prediction_model.inverse_inter_prediction(
+            sparam,
+            dtm,
+            255,
+            *d_resids,
+            *dt_resids_i16,
+        );
+
+        // Check that the reconstructed events are the same as the original events
+        for ((idx, recon_event), event) in reconstructed_events
+            .iter()
+            .enumerate()
+            .zip(inter_block_events.iter())
+        {
+            assert!(recon_event.is_some());
+            assert!(event.is_some());
+            assert_eq!(recon_event.unwrap().d, event.unwrap().d);
+            let recon_t = recon_event.unwrap().delta_t;
+            let ref_t = event.unwrap().delta_t;
+            assert_eq!(recon_t, ref_t);
+        }
     }
 
     fn get_random_events(
@@ -504,7 +566,7 @@ mod tests {
                     c: Some(rng.gen::<u8>() % channels),
                 },
                 d: rng.gen::<u8>(),
-                delta_t: rng.gen::<u32>() % dtm,
+                delta_t: rng.gen_range(1..dtm),
             };
             events.push(event);
         }
