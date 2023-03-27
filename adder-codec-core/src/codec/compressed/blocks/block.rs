@@ -64,37 +64,37 @@ impl Block {
         Ok(())
     }
 
-    pub fn get_intra_residual_tshifts_inverse(
-        &mut self,
-        sparam: u8,
-        // dtm: DeltaT,
-        start_t: AbsoluteT,
-        start_d: D,
-        d_residuals: [DResidual; BLOCK_SIZE_AREA],
-        mut t_residuals: [i16; BLOCK_SIZE_AREA],
-    ) -> [Option<EventCoordless>; BLOCK_SIZE_AREA] {
-        let mut events: [Option<EventCoordless>; BLOCK_SIZE_AREA] = [None; BLOCK_SIZE_AREA];
-        let mut init = false;
-        let mut start = EventCoordless {
-            d: start_d,
-            delta_t: start_t,
-        };
-        events[0] = Some(start);
-
-        for ((idx, d_resid), t_resid) in d_residuals.iter().enumerate().zip(t_residuals.iter()) {
-            if *d_resid != D_ENCODE_NO_EVENT {
-                let next = EventCoordless {
-                    d: (*d_resid + start.d as DResidual) as D,
-                    delta_t: (((start.delta_t as DeltaTResidual) << sparam)
-                        + ((*t_resid as DeltaTResidual) << sparam))
-                        as DeltaT,
-                };
-                events[idx] = Some(next);
-            }
-        }
-
-        events
-    }
+    // pub fn get_intra_residual_tshifts_inverse(
+    //     &mut self,
+    //     sparam: u8,
+    //     // dtm: DeltaT,
+    //     start_t: AbsoluteT,
+    //     start_d: D,
+    //     d_residuals: [DResidual; BLOCK_SIZE_AREA],
+    //     mut t_residuals: [i16; BLOCK_SIZE_AREA],
+    // ) -> [Option<EventCoordless>; BLOCK_SIZE_AREA] {
+    //     let mut events: [Option<EventCoordless>; BLOCK_SIZE_AREA] = [None; BLOCK_SIZE_AREA];
+    //     let mut init = false;
+    //     let mut start = EventCoordless {
+    //         d: start_d,
+    //         delta_t: start_t,
+    //     };
+    //     events[0] = Some(start);
+    //
+    //     for ((idx, d_resid), t_resid) in d_residuals.iter().enumerate().zip(t_residuals.iter()) {
+    //         if *d_resid != D_ENCODE_NO_EVENT {
+    //             let next = EventCoordless {
+    //                 d: (*d_resid + start.d as DResidual) as D,
+    //                 delta_t: (((start.delta_t as DeltaTResidual) << sparam)
+    //                     + ((*t_resid as DeltaTResidual) << sparam))
+    //                     as DeltaT,
+    //             };
+    //             events[idx] = Some(next);
+    //         }
+    //     }
+    //
+    //     events
+    // }
 
     fn compress_inter(&mut self) {
         todo!()
@@ -464,6 +464,10 @@ impl Frame {
             cube_idx: cube_idx_y * self.cube_width + cube_idx_x,
             block_idx: block_idx_y * BLOCK_SIZE + block_idx_x,
         }
+    }
+
+    fn serialize_to_events(self) -> Result<Vec<Event>, BlockError> {
+        todo!("Serialize to events")
     }
 }
 
@@ -1805,6 +1809,7 @@ mod tests {
                 compare_channels(&ref_adu.cubes_g, &decoded_adu.cubes_g);
                 compare_channels(&ref_adu.cubes_b, &decoded_adu.cubes_b);
             }
+            eprintln!("adu {} is identical", count);
             // decoder.digest_event(&mut bitreader);
             count += 1;
             if count == adus.len() {
