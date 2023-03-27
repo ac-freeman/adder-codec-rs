@@ -45,7 +45,7 @@ pub struct CompressedInput<R: Read> {
 
     // Stores the decoded events so they can be read one by one. They're put into reverse order
     // (todo) when the ADU is decoded, so that they can be popped off the end of the vector.
-    decoded_event_queue: Vec<Event>,
+    decoded_event_queue: VecDeque<Event>,
     _phantom: std::marker::PhantomData<R>,
 }
 
@@ -290,7 +290,7 @@ impl<R: Read> CompressedInput<R> {
             },
             arithmetic_coder: Some(arithmetic_coder),
             contexts: Some(contexts),
-            decoded_event_queue: Vec::new(),
+            decoded_event_queue: VecDeque::new(),
             // stream: BitReader::endian(reader, BigEndian),
             _phantom: std::marker::PhantomData,
         }
@@ -333,10 +333,12 @@ impl<R: Read> CompressedInput<R> {
                     adu_cube.inter_blocks[i].d_residuals,
                     adu_cube.inter_blocks[i].t_residuals,
                 );
-                residual_cube.blocks_r[i].events = events;
+                residual_cube.blocks_r[i + 1].events = events;
             }
             frame.cubes.push(residual_cube);
         }
+        let events = frame.serialize_to_events().unwrap();
+        self.decoded_event_queue.extend(events);
     }
 }
 
@@ -385,7 +387,7 @@ impl<R: Read> ReadCompression<R> for CompressedInput<R> {
         }
 
         // Then return the next event from the queue
-        match self.decoded_event_queue.pop() {
+        match self.decoded_event_queue.pop_front() {
             Some(event) => Ok(event),
             None => Err(CodecError::Eof),
         }
@@ -407,6 +409,7 @@ impl<R: Read> ReadCompression<R> for CompressedInput<R> {
                 (Some(arithmetic_coder), Some(contexts), reader, dtm, ref_interval) => {
                     let decoded_adu =
                         Adu::decompress(arithmetic_coder, contexts, reader, dtm, ref_interval);
+                    self.adu_to_frame(&decoded_adu);
                     return Ok((Some(decoded_adu), Event::default()));
                 }
                 _ => panic!("Invalid state"),
@@ -414,7 +417,7 @@ impl<R: Read> ReadCompression<R> for CompressedInput<R> {
         }
 
         // Then return the next event from the queue
-        match self.decoded_event_queue.pop() {
+        match self.decoded_event_queue.pop_front() {
             Some(event) => Ok((None, event)),
             None => Err(CodecError::Eof),
         }
