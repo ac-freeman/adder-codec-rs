@@ -466,8 +466,31 @@ impl Frame {
         }
     }
 
-    fn serialize_to_events(self) -> Result<Vec<Event>, BlockError> {
-        todo!("Serialize to events")
+    pub(crate) fn serialize_to_events(self) -> Result<Vec<Event>, BlockError> {
+        let mut events = Vec::new();
+        for cube in self.cubes {
+            for block in cube.blocks_r {
+                for (idx, event) in block.events.iter().enumerate() {
+                    if event.is_some() {
+                        let event_coorded = Event {
+                            coord: Coord {
+                                x: (cube.cube_idx_x * BLOCK_SIZE as usize
+                                    + (idx % BLOCK_SIZE as usize))
+                                    as u16,
+                                y: (cube.cube_idx_y * BLOCK_SIZE as usize
+                                    + (idx / BLOCK_SIZE as usize))
+                                    as u16,
+                                c: None,
+                            },
+                            d: event.unwrap().d,
+                            delta_t: event.unwrap().delta_t,
+                        };
+                        events.push(event_coorded);
+                    }
+                }
+            }
+        }
+        Ok(events)
     }
 }
 
