@@ -98,6 +98,7 @@ impl<W: Write> CompressedOutput<W> {
             let mut block = &mut cube.blocks_r[0];
             let mut inter_model = &mut cube.inter_model_r;
 
+            let tmp = &self.adu;
             let (start_t, start_d, d_residuals, dt_residuals, sparam) = inter_model
                 .forward_intra_prediction(
                     0,
