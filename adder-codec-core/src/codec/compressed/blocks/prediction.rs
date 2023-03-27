@@ -87,10 +87,11 @@ impl PredictionModel {
         let mut max_t_resid = 0;
 
         for (idx, event_opt) in events.iter().enumerate() {
-            self.event_memory[idx] = event_opt.unwrap();
             if let Some(prev) = event_opt {
                 // If this is the first event encountered, then encode it directly
                 if !init {
+                    self.event_memory[idx].d = prev.d;
+                    self.event_memory[idx].delta_t = prev.t() - self.t_memory[idx];
                     init = true;
                     self.t_memory[idx] = prev.t();
                     frame_perfect_alignment(
@@ -107,20 +108,25 @@ impl PredictionModel {
                 // Get the prediction residual for the next event and store it
                 for (next_idx, next_event_opt) in events.iter().skip(idx + 1).enumerate() {
                     if let Some(next) = next_event_opt {
+                        let abs_next_idx = next_idx + idx + 1;
+                        self.event_memory[abs_next_idx].d = next.d;
+                        self.event_memory[abs_next_idx].delta_t =
+                            next.t() - self.t_memory[abs_next_idx];
+
                         let d_resid = next.d as DResidual - start.d as DResidual;
                         let t_resid =
                             next.delta_t as DeltaTResidual - start.delta_t as DeltaTResidual;
 
-                        self.d_residuals[next_idx + idx + 1] = d_resid;
-                        self.dt_pred_residuals[next_idx + idx + 1] = t_resid;
+                        self.d_residuals[abs_next_idx] = d_resid;
+                        self.dt_pred_residuals[abs_next_idx] = t_resid;
 
-                        self.t_memory[next_idx + idx + 1] = next.t();
+                        self.t_memory[abs_next_idx] = next.t();
                         frame_perfect_alignment(
                             self.time_modulation_mode,
-                            &mut self.t_memory[next_idx + idx + 1],
+                            &mut self.t_memory[abs_next_idx],
                             dt_ref,
                         );
-                        self.t_recon[next_idx + idx + 1] = self.t_memory[next_idx + idx + 1];
+                        self.t_recon[next_idx + idx + 1] = self.t_memory[abs_next_idx];
 
                         if t_resid.abs() > max_t_resid {
                             max_t_resid = t_resid.abs();
@@ -134,6 +140,10 @@ impl PredictionModel {
                         break;
                     }
                 }
+            } else {
+                // In the case that this cube is on the spatial edge, of the plane, and doesn't have
+                // data in every pixel
+                break;
             }
         }
 
@@ -230,14 +240,14 @@ impl PredictionModel {
             if let Some(next) = event_opt {
                 // Get the d-residual
                 let d_resid = d_residual(event_mem.d, next.d);
-                event_mem.d = next.d; // ??? TODO
+                // event_mem.d = next.d; // ??? TODO
                 self.d_residuals[idx] = d_resid;
 
                 let tmp = self.t_memory[idx];
 
                 // The true delta_t
                 let delta_t = next.t() - self.t_memory[idx];
-
+                assert!(delta_t > 0);
                 assert!(delta_t <= dtm);
 
                 self.t_memory[idx] = next.t();
@@ -273,7 +283,14 @@ impl PredictionModel {
             // assert!(t_resid_i16.abs() <= dtm as i16);
         }
 
-        self.reconstruct_t_values(sparam, dtm, dt_ref);
+        self.reconstruct_t_values(None, sparam, dtm, dt_ref);
+
+        // TODO: temporary
+        for (idx, t_recon) in self.t_recon.iter().enumerate() {
+            if self.d_residuals[idx] != D_ENCODE_NO_EVENT {
+                assert_eq!(self.t_memory[idx], *t_recon);
+            }
+        }
 
         (&self.d_residuals, &self.dt_pred_residuals_i16, sparam)
     }
@@ -287,61 +304,57 @@ impl PredictionModel {
         mut dt_pred_residuals_i16: [i16; BLOCK_SIZE_AREA],
     ) -> [Option<EventCoordless>; BLOCK_SIZE_AREA] {
         let mut events = [None; BLOCK_SIZE_AREA];
-        for (idx, ((d_resid, t_resid_i16), event_mem)) in d_residuals
-            .iter()
-            .zip(dt_pred_residuals_i16)
-            .zip(self.event_memory.iter_mut())
-            .enumerate()
-        {
-            debug_assert!(event_mem.delta_t > 0); // Sanity check
-            if *d_resid != D_ENCODE_NO_EVENT as i16 {
-                let d = (event_mem.d as DResidual + *d_resid) as D;
-                // let mut event = EventCoordless { d, delta_t: 0 }
-                let t_resid = ((t_resid_i16 as DeltaTResidual) << sparam);
-                let mut dt_pred = predict_delta_t(event_mem, *d_resid, dtm);
 
-                let recon_t = (self.t_recon[idx] as DeltaTResidual
-                    + dt_pred as DeltaTResidual
-                    + t_resid) as DeltaT;
-                event_mem.delta_t = recon_t - self.t_recon[idx];
-                event_mem.d = d;
-                self.t_recon[idx] = recon_t;
-
-                frame_perfect_alignment(self.time_modulation_mode, &mut self.t_recon[idx], dt_ref);
-
-                let event = EventCoordless {
-                    d,
-                    delta_t: recon_t,
-                };
-                events[idx] = Some(event);
-            }
-        }
+        self.d_residuals = d_residuals;
+        self.dt_pred_residuals_i16 = dt_pred_residuals_i16;
+        self.reconstruct_t_values(Some(&mut events), sparam, dtm, dt_ref);
 
         events
     }
 
-    fn reconstruct_t_values(&mut self, sparam: u8, dtm: DeltaT, dt_ref: DeltaT) {
+    /// Reconstruct the t values from the t prediction residuals. Called by `forward_inter_prediction`
+    ///
+    fn reconstruct_t_values(
+        &mut self,
+        mut events: Option<&mut [Option<EventCoordless>; 256]>,
+        sparam: u8,
+        dtm: DeltaT,
+        dt_ref: DeltaT,
+    ) {
         for ((event_mem, t_resid_i16), (idx, d_resid)) in self
             .event_memory
             .iter_mut()
             .zip(self.dt_pred_residuals_i16.iter())
             .zip(self.d_residuals.iter().enumerate())
         {
-            if *d_resid != D_ENCODE_NO_EVENT {
-                let dt_pred_residual = ((*t_resid_i16 as DeltaTResidual) << sparam);
-
-                let dt_pred = predict_delta_t(event_mem, *d_resid, dtm);
+            debug_assert!(event_mem.delta_t > 0); // Sanity check
+            if *d_resid != D_ENCODE_NO_EVENT as i16 {
+                // let mut event = EventCoordless { d, delta_t: 0 }
+                let t_resid = ((*t_resid_i16 as DeltaTResidual) << sparam);
+                let mut dt_pred = predict_delta_t(event_mem, *d_resid, dtm);
 
                 update_values_from_prediction(
                     event_mem,
                     &mut self.t_recon[idx],
                     dt_pred,
-                    dt_pred_residual,
+                    t_resid,
+                    *d_resid,
                     dtm,
                 );
 
-                if self.time_modulation_mode == FramePerfect && self.t_recon[idx] % dt_ref != 0 {
-                    self.t_recon[idx] = ((self.t_recon[idx] / dt_ref) + 1) * dt_ref;
+                self.t_memory[idx] = self.t_recon[idx];
+
+                match events {
+                    None => {}
+                    Some(events_mut) => {
+                        // TODO: Write this cleaner
+                        let event = EventCoordless {
+                            d: event_mem.d,
+                            delta_t: self.t_recon[idx],
+                        };
+                        events_mut[idx] = Some(event);
+                        events = Some(events_mut);
+                    }
                 }
             }
         }
@@ -399,11 +412,14 @@ fn update_values_from_prediction(
     t_recon: &mut AbsoluteT,
     dt_pred: DeltaT,
     dt_pred_residual: DeltaTResidual,
+    d_residual: DResidual,
     dtm: DeltaT,
 ) {
+    let d = (event_memory.d as DResidual + d_residual) as D;
     let recon_t =
         (*t_recon as DeltaTResidual + dt_pred as DeltaTResidual + dt_pred_residual) as AbsoluteT;
     event_memory.delta_t = recon_t - *t_recon;
+    event_memory.d = d;
     assert!(event_memory.delta_t <= dtm);
     // self.event_memory[idx].d = d; TODO?
     *t_recon = recon_t;
@@ -472,6 +488,13 @@ mod tests {
             forward_prediction_model.t_memory,
             inverse_prediction_model.t_memory
         );
+        for (idx, event) in forward_prediction_model.event_memory.iter().enumerate() {
+            assert_eq!(event.d, inverse_prediction_model.event_memory[idx].d);
+            assert_eq!(
+                event.delta_t,
+                inverse_prediction_model.event_memory[idx].delta_t
+            );
+        }
         assert_eq!(
             forward_prediction_model.event_memory,
             inverse_prediction_model.event_memory
@@ -509,6 +532,31 @@ mod tests {
             255,
             *d_resids,
             *dt_resids_i16,
+        );
+
+        // Check that the models have the same state
+        for ((idx, forward_t), inverse_t) in forward_prediction_model
+            .t_memory
+            .iter()
+            .enumerate()
+            .zip(inverse_prediction_model.t_memory.iter())
+        {
+            assert_eq!(forward_t, inverse_t);
+        }
+        assert_eq!(
+            forward_prediction_model.t_memory,
+            inverse_prediction_model.t_memory
+        );
+        for (idx, event) in forward_prediction_model.event_memory.iter().enumerate() {
+            assert_eq!(event.d, inverse_prediction_model.event_memory[idx].d);
+            assert_eq!(
+                event.delta_t,
+                inverse_prediction_model.event_memory[idx].delta_t
+            );
+        }
+        assert_eq!(
+            forward_prediction_model.event_memory,
+            inverse_prediction_model.event_memory
         );
 
         // Check that the reconstructed events are the same as the original events
