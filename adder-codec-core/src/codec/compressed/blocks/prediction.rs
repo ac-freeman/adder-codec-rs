@@ -91,7 +91,8 @@ impl PredictionModel {
                 // If this is the first event encountered, then encode it directly
                 if !init {
                     self.event_memory[idx].d = prev.d;
-                    self.event_memory[idx].delta_t = prev.t() - self.t_memory[idx];
+                    self.event_memory[idx].delta_t = 0;
+                    debug_assert!(self.event_memory[idx].delta_t <= dtm);
                     init = true;
                     self.t_memory[idx] = prev.t();
                     frame_perfect_alignment(
@@ -110,8 +111,10 @@ impl PredictionModel {
                     if let Some(next) = next_event_opt {
                         let abs_next_idx = next_idx + idx + 1;
                         self.event_memory[abs_next_idx].d = next.d;
-                        self.event_memory[abs_next_idx].delta_t =
-                            next.t() - self.t_memory[abs_next_idx];
+                        // self.event_memory[abs_next_idx].delta_t =
+                        //     next.t() - self.t_memory[abs_next_idx];
+                        self.event_memory[abs_next_idx].delta_t = 0;
+                        debug_assert!(self.event_memory[idx].delta_t <= dtm);
 
                         let d_resid = next.d as DResidual - start.d as DResidual;
                         let t_resid =
@@ -163,6 +166,8 @@ impl PredictionModel {
             *t_resid_i16 = (*t_resid >> sparam) as i16;
         }
 
+        self.event_memory[0].delta_t = 0; // TODO: This will cause bad prediction residuals for the first inter block
+
         (
             start.delta_t,
             start.d,
@@ -189,14 +194,13 @@ impl PredictionModel {
             delta_t: start_t,
         };
         self.event_memory[0] = start;
+
         events[0] = Some(start);
         self.t_memory[0] = start_t;
         if self.time_modulation_mode == FramePerfect && self.t_memory[0] % dt_ref != 0 {
             self.t_memory[0] = ((self.t_memory[0] / dt_ref) + 1) * dt_ref;
         }
         self.t_recon[0] = self.t_memory[0];
-
-        dbg!(self.event_memory);
 
         for ((idx, d_resid), t_resid) in d_residuals.iter().enumerate().zip(t_residuals.iter()) {
             if *d_resid != D_ENCODE_NO_EVENT {
@@ -211,11 +215,12 @@ impl PredictionModel {
                 self.t_recon[idx] = self.t_memory[idx];
 
                 self.event_memory[idx] = next;
+                debug_assert!(self.event_memory[idx].delta_t <= dtm);
                 events[idx] = Some(next);
             }
         }
-
-        dbg!(self.event_memory);
+        self.event_memory[0].delta_t = 0; // TODO: This will cause bad prediction residuals for the first inter block
+        debug_assert!(self.event_memory[0].delta_t <= dtm);
 
         events
     }
@@ -327,8 +332,8 @@ impl PredictionModel {
             .zip(self.dt_pred_residuals_i16.iter())
             .zip(self.d_residuals.iter().enumerate())
         {
-            debug_assert!(event_mem.delta_t > 0); // Sanity check
             if *d_resid != D_ENCODE_NO_EVENT as i16 {
+                // debug_assert!(event_mem.delta_t >= 0); // Sanity check
                 // let mut event = EventCoordless { d, delta_t: 0 }
                 let t_resid = ((*t_resid_i16 as DeltaTResidual) << sparam);
                 let mut dt_pred = predict_delta_t(event_mem, *d_resid, dtm);
