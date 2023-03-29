@@ -27,11 +27,11 @@ overflow-checks = false
 opt-level = 3
 
 [profile.dev]
-opt-level = 0
+opt-level = 2
 
 
 [profile.test]
-opt-level = 0
+opt-level = 3
 
 [profile.test.package."*"]
 opt-level = 3

@@ -222,7 +222,7 @@ pub struct FrameSequence<T> {
     /// The state of the frame sequence
     pub state: FrameSequenceState,
     pub(crate) frames: Vec<VecDeque<Frame<Option<T>>>>,
-    pub(crate) frame_idx_offsets: Vec<i64>,
+    pub frame_idx_offsets: Vec<i64>,
     pub(crate) pixel_ts_tracker: Vec<Array3<BigT>>,
     pub(crate) last_filled_tracker: Vec<Array3<i64>>,
     pub(crate) last_frame_intensity_tracker: Vec<Array3<T>>,
@@ -552,7 +552,7 @@ impl<T: Clone + Default + FrameValue<Output = T> + Serialize> FrameSequence<T> {
     /// Get whether or not the next frame is "filled" (i.e., all pixels have been written to)
     #[must_use]
     pub fn is_frame_0_filled(&self) -> bool {
-        for chunk in &self.chunk_filled_tracker {
+        for chunk in self.chunk_filled_tracker.iter() {
             if !chunk {
                 return false;
             }
@@ -603,7 +603,8 @@ impl<T: Clone + Default + FrameValue<Output = T> + Serialize> FrameSequence<T> {
                     ]));
                     self.frame_idx_offsets[chunk_num] += 1;
                 }
-                self.chunk_filled_tracker[chunk_num] = false;
+                self.chunk_filled_tracker[chunk_num] =
+                    self.frames[chunk_num][0].filled_count == self.frames[chunk_num][0].array.len();
                 Some(a.array)
             }
             None => None,

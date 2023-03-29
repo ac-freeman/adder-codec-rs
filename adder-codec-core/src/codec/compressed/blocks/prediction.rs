@@ -141,10 +141,10 @@ impl PredictionModel {
                         if t_resid.abs() > max_t_resid {
                             max_t_resid = t_resid.abs();
                             if max_t_resid > dtm as i64 {
-                                eprintln!(
-                                    "max_t_resid: {}, next_dt: {}, start_dt: {}, ",
-                                    max_t_resid, next.delta_t, start.delta_t
-                                );
+                                // eprintln!(
+                                //     "max_t_resid: {}, next_dt: {}, start_dt: {}, ",
+                                //     max_t_resid, next.delta_t, start.delta_t
+                                // );
                             }
                         }
                         break;
@@ -271,8 +271,8 @@ impl PredictionModel {
                 // The true delta_t
                 let delta_t = next.t() - self.t_memory[idx];
                 assert!(delta_t > 0);
-                assert!(delta_t <= dtm);
-
+                // assert!(delta_t <= dtm); /* TODO: this can be greater than dtm if the original
+                // delta t was really big, and we have lossy coding. Need to cover with a unit test */
                 self.t_memory[idx] = next.t();
                 frame_perfect_alignment(self.time_modulation_mode, &mut self.t_memory[idx], dt_ref);
 
@@ -284,7 +284,7 @@ impl PredictionModel {
                 self.dt_pred_residuals[idx] = dt_pred_residual;
                 if dt_pred_residual.abs() > max_t_resid {
                     max_t_resid = dt_pred_residual.abs();
-                    assert!(max_t_resid <= dtm as DeltaTResidual);
+                    // assert!(max_t_resid <= dtm as DeltaTResidual);
                     assert!(max_t_resid < 100000000);
                 }
             }
