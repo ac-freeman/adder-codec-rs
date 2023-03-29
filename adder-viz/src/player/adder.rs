@@ -394,11 +394,9 @@ impl AdderPlayer {
                 TextureFormat::Bgra8UnormSrgb,
             ))
         } else {
-            eprintln!("NOT FULL");
             None
         };
 
-        // TODO: TEMP
         if image_bevy.is_some() {
             return Ok((0, image_bevy));
         }
@@ -408,7 +406,6 @@ impl AdderPlayer {
                 Ok(mut event) => {
                     event_count += 1;
                     if frame_sequence.ingest_event(&mut event) {
-                        eprintln!("Frame offset: {}", frame_sequence.frame_idx_offsets[0]);
                         return Ok((event_count, image_bevy));
                     }
                 }
