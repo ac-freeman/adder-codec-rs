@@ -53,7 +53,7 @@ impl PredictionModel {
     }
 
     fn reset_memory(&mut self) {
-        self.t_memory = [0; BLOCK_SIZE_AREA];
+        // self.t_memory = [0; BLOCK_SIZE_AREA];
         self.event_memory = [Default::default(); BLOCK_SIZE_AREA];
         self.t_recon = [0; BLOCK_SIZE_AREA];
     }
@@ -111,9 +111,15 @@ impl PredictionModel {
                     if let Some(next) = next_event_opt {
                         let abs_next_idx = next_idx + idx + 1;
                         self.event_memory[abs_next_idx].d = next.d;
-                        // self.event_memory[abs_next_idx].delta_t =
-                        //     next.t() - self.t_memory[abs_next_idx];
-                        self.event_memory[abs_next_idx].delta_t = 0;
+                        self.event_memory[abs_next_idx].delta_t =
+                            next.t() - self.t_memory[abs_next_idx];
+                        // self.event_memory[abs_next_idx].delta_t = 0;
+                        if self.event_memory[abs_next_idx].delta_t > dtm {
+                            let tmp = self.event_memory[abs_next_idx].delta_t;
+                            let tmp2 = self.t_memory[abs_next_idx];
+                            eprintln!("CHECK TODO");
+                            self.event_memory[abs_next_idx].delta_t = dtm;
+                        }
                         debug_assert!(self.event_memory[idx].delta_t <= dtm);
 
                         let d_resid = next.d as DResidual - start.d as DResidual;
@@ -197,9 +203,9 @@ impl PredictionModel {
 
         events[0] = Some(start);
         self.t_memory[0] = start_t;
-        if self.time_modulation_mode == FramePerfect && self.t_memory[0] % dt_ref != 0 {
-            self.t_memory[0] = ((self.t_memory[0] / dt_ref) + 1) * dt_ref;
-        }
+        assert!(start_t != 0);
+
+        frame_perfect_alignment(self.time_modulation_mode, &mut self.t_memory[0], dt_ref);
         self.t_recon[0] = self.t_memory[0];
 
         for ((idx, d_resid), t_resid) in d_residuals.iter().enumerate().zip(t_residuals.iter()) {

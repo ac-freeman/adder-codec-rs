@@ -234,6 +234,21 @@ impl Cube {
         }
     }
 
+    pub fn reset(&mut self) {
+        self.blocks_r.clear();
+        self.blocks_r.push(Block::new());
+        self.blocks_g.clear();
+        self.blocks_g.push(Block::new());
+        self.blocks_b.clear();
+        self.blocks_b.push(Block::new());
+        self.block_idx_map_r = [0; BLOCK_SIZE_AREA];
+        self.block_idx_map_g = [0; BLOCK_SIZE_AREA];
+        self.block_idx_map_b = [0; BLOCK_SIZE_AREA];
+
+        // Notably, DON'T do anything to the prediction models. We need to keep the same t_memory.
+        // Other than that, they are reset when the intra prediction is performed.
+    }
+
     fn set_event(&mut self, event: Event, block_idx: usize) -> Result<(), BlockError> {
         // let (idx, c) = self.event_coord_to_block_idx(&event);
 
@@ -340,13 +355,16 @@ impl Frame {
     }
 
     pub(crate) fn reset(&mut self) {
-        self.cubes.clear();
+        // self.cubes.clear();
         self.start_event_t = 0;
         // self.index_hashmap.clear();
         for y in 0..self.cube_height {
             for x in 0..self.cube_width {
-                let cube = Cube::new(y, x, 0, self.time_modulation_mode);
-                self.cubes.push(cube);
+                let old_cube = &mut self.cubes[y * self.cube_width + x];
+                old_cube.reset();
+
+                // let cube = Cube::new(y, x, 0, self.time_modulation_mode);
+                // self.cubes.push(cube);
             }
         }
     }
