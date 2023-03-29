@@ -1840,22 +1840,41 @@ mod tests {
         let compression = CompressedInput::new(dtm, ref_interval);
         let mut decoder = Decoder::new_compressed(compression, &mut bitreader).unwrap();
 
+        let mut recon_meta = reader.meta().clone();
+        let bufwriter =
+            BufWriter::new(File::create("/home/andrew/Downloads/bunny_test_recon.adder").unwrap());
+        let mut compressed_recon_raw_encoder =
+            Encoder::new_raw(RawOutput::new(reader.meta().clone(), bufwriter));
+
         // todo: temporary
         let mut count = 0;
         loop {
-            if let Ok((Some(decoded_adu), _)) = decoder.digest_event_debug(&mut bitreader) {
-                let ref_adu = &adus[count];
-                assert_eq!(ref_adu.head_event_t, decoded_adu.head_event_t);
-                compare_channels(&ref_adu.cubes_r, &decoded_adu.cubes_r);
-                compare_channels(&ref_adu.cubes_g, &decoded_adu.cubes_g);
-                compare_channels(&ref_adu.cubes_b, &decoded_adu.cubes_b);
-            }
-            eprintln!("adu {} is identical", count);
-            // decoder.digest_event(&mut bitreader);
-            count += 1;
-            if count == adus.len() {
-                break;
+            match decoder.digest_event_debug(&mut bitreader) {
+                Ok((Some(decoded_adu), decoded_event)) => {
+                    let ref_adu = &adus[count];
+                    assert_eq!(ref_adu.head_event_t, decoded_adu.head_event_t);
+                    compare_channels(&ref_adu.cubes_r, &decoded_adu.cubes_r);
+                    compare_channels(&ref_adu.cubes_g, &decoded_adu.cubes_g);
+                    compare_channels(&ref_adu.cubes_b, &decoded_adu.cubes_b);
+                    compressed_recon_raw_encoder
+                        .ingest_event(decoded_event)
+                        .unwrap();
+                    eprintln!("adu {} is identical", count);
+                    // decoder.digest_event(&mut bitreader);
+                    count += 1;
+                    if count == adus.len() {
+                        break;
+                    }
+                }
+                Ok((None, decoded_event)) => {
+                    compressed_recon_raw_encoder
+                        .ingest_event(decoded_event)
+                        .unwrap();
+                }
+                _ => {}
             }
         }
+        let mut bufwriter = compressed_recon_raw_encoder.close_writer().unwrap();
+        bufwriter.unwrap().flush().unwrap();
     }
 }
