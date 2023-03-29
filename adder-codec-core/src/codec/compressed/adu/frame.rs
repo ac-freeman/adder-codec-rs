@@ -126,6 +126,15 @@ impl Adu {
         }
     }
 
+    // Resets the necessary parameters for a new ADU, but keeps the existing log of timestamp
+    // memory and the existing cubes.
+    // pub(crate) fn reset_new(&mut self) {
+    //     self.cubes_r.num_cubes = 0;
+    //     self.cubes_g.num_cubes = 0;
+    //     self.cubes_b.num_cubes = 0;
+    //
+    // }
+
     pub fn add_cube(&mut self, cube: AduCube, channel: AduChannelType) {
         match channel {
             AduChannelType::R => {
