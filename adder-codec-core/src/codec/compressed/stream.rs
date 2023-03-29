@@ -124,7 +124,7 @@ impl<W: Write> CompressedOutput<W> {
                 cube.cube_idx_x as u16,
             );
 
-            let base_sparam = 7; // TODO: Dynamic control of this parameter
+            let base_sparam = 0; // TODO: Dynamic control of this parameter
 
             for block in cube.blocks_r.iter_mut().skip(1) {
                 let (d_residuals, t_residuals, sparam) = inter_model.forward_inter_prediction(
@@ -338,7 +338,9 @@ impl<R: Read> CompressedInput<R> {
             frame.cubes.push(residual_cube);
         }
         let events = frame.serialize_to_events().unwrap();
-        self.decoded_event_queue.extend(events);
+
+        self.decoded_event_queue.append(&mut VecDeque::from(events));
+        eprintln!(" {} events in queue", self.decoded_event_queue.len());
     }
 }
 

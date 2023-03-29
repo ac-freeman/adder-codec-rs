@@ -4,6 +4,7 @@ use crate::codec::compressed::blocks::{
 };
 use crate::Mode::FramePerfect;
 use crate::{AbsoluteT, DeltaT, EventCoordless, Mode, D};
+use std::cmp::max;
 
 pub static D_RESIDUALS_EMPTY: [DResidual; BLOCK_SIZE_AREA] = [D_ENCODE_NO_EVENT; BLOCK_SIZE_AREA];
 
@@ -117,7 +118,7 @@ impl PredictionModel {
                         if self.event_memory[abs_next_idx].delta_t > dtm {
                             let tmp = self.event_memory[abs_next_idx].delta_t;
                             let tmp2 = self.t_memory[abs_next_idx];
-                            eprintln!("CHECK TODO");
+                            // eprintln!("CHECK TODO");
                             self.event_memory[abs_next_idx].delta_t = dtm;
                         }
                         debug_assert!(self.event_memory[idx].delta_t <= dtm);
@@ -216,11 +217,19 @@ impl PredictionModel {
                         + ((*t_resid as DeltaTResidual) << sparam))
                         as DeltaT,
                 };
+
+                self.event_memory[idx] = next;
+                self.event_memory[idx].delta_t = next.t() - self.t_memory[idx];
+                if self.event_memory[idx].delta_t > dtm {
+                    let tmp = self.event_memory[idx].delta_t;
+                    let tmp2 = self.t_memory[idx];
+                    // eprintln!("CHECK TODO");
+                    self.event_memory[idx].delta_t = dtm;
+                }
                 self.t_memory[idx] = next.t();
                 frame_perfect_alignment(self.time_modulation_mode, &mut self.t_memory[idx], dt_ref);
                 self.t_recon[idx] = self.t_memory[idx];
 
-                self.event_memory[idx] = next;
                 debug_assert!(self.event_memory[idx].delta_t <= dtm);
                 events[idx] = Some(next);
             }
@@ -283,6 +292,8 @@ impl PredictionModel {
         if num_places + (sparam as u32) < 49 && max_t_resid > 0 {
             sparam = (49 - num_places) as u8;
         }
+
+        let redo = false;
 
         // Quantize the T residuals
         for (t_resid, t_resid_i16) in self
@@ -427,10 +438,18 @@ fn update_values_from_prediction(
     dtm: DeltaT,
 ) {
     let d = (event_memory.d as DResidual + d_residual) as D;
-    let recon_t =
-        (*t_recon as DeltaTResidual + dt_pred as DeltaTResidual + dt_pred_residual) as AbsoluteT;
+    let mut recon_t = max(
+        *t_recon as DeltaTResidual + dt_pred as DeltaTResidual + dt_pred_residual,
+        0,
+    ) as AbsoluteT;
+    if recon_t < *t_recon {
+        recon_t = *t_recon + 1;
+    }
     event_memory.delta_t = recon_t - *t_recon;
     event_memory.d = d;
+    if event_memory.delta_t > dtm {
+        event_memory.delta_t = dtm;
+    }
     assert!(event_memory.delta_t <= dtm);
     // self.event_memory[idx].d = d; TODO?
     *t_recon = recon_t;
