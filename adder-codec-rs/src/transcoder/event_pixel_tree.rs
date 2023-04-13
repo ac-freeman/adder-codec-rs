@@ -51,7 +51,7 @@ pub struct PixelNode {
 pub struct PixelArena {
     pub coord: Coord,
     time_mode: TimeMode,
-    last_fired_t: f64,
+    pub last_fired_t: f64,
     pub(crate) running_t: f64,
     length: usize,
     pub base_val: u8,

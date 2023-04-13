@@ -1,5 +1,4 @@
-
-use opencv::core::{Mat, Size, CV_8U, CV_8UC3};
+use opencv::core::{Mat, Scalar, Size, CV_32F, CV_32FC3, CV_8U, CV_8UC3};
 use std::io::{sink, Write};
 use std::mem::swap;
 
@@ -26,7 +25,7 @@ use ndarray::{Array3, Axis, ShapeError};
 use rayon::iter::IntoParallelIterator;
 use rayon::iter::ParallelIterator;
 use rayon::iter::{IndexedParallelIterator, IntoParallelRefMutIterator};
-use rayon::{ThreadPool};
+use rayon::ThreadPool;
 
 use thiserror::Error;
 use tokio::task::JoinError;
@@ -109,6 +108,10 @@ pub enum FramedViewMode {
 
     /// Visualize the temporal component ([`DeltaT`]) of each pixel's most recent event
     DeltaT,
+
+    /// Surface of Active Events. Visualize the time elapsed since each pixel last fired an event
+    /// (most recent events will have greater values)
+    SAE,
 }
 
 /// Running state of the video transcode
@@ -506,14 +509,38 @@ impl<W: Write + 'static> Video<W> {
                 return Err(SourceError::OpencvError(e));
             }
         };
+        let mut sae_mat = Mat::default();
+        match self.state.plane.c() {
+            1 => unsafe {
+                sae_mat.create_rows_cols(
+                    self.state.plane.h() as i32,
+                    self.state.plane.w() as i32,
+                    CV_32F,
+                )?;
+            },
+            _ => unsafe {
+                sae_mat.create_rows_cols(
+                    self.state.plane.h() as i32,
+                    self.state.plane.w() as i32,
+                    CV_32FC3,
+                )?;
+            },
+        }
+        sae_mat = sae_mat.clone();
 
         // TODO: When there's full support for various bit-depth sources, modify this accordingly
         let practical_d_max =
             fast_math::log2_raw(255.0 * (self.state.delta_t_max / self.state.ref_time) as f32);
-        db.par_iter_mut().enumerate().for_each(|(idx, val)| {
+        db.iter_mut().enumerate().for_each(|(idx, val)| {
             let y = idx / self.state.plane.area_wc();
             let x = (idx % self.state.plane.area_wc()) / self.state.plane.c_usize();
             let c = idx % self.state.plane.c_usize();
+
+            let sae_time_since = self.event_pixel_trees[[y, x, c]].running_t
+                - self.event_pixel_trees[[y, x, c]].last_fired_t;
+            if y == 0 && x == 0 && c == 0 {
+                dbg!(sae_time_since);
+            }
             *val = match self.event_pixel_trees[[y, x, c]].arena[0].best_event {
                 Some(event) => u8::get_frame_value(
                     &event.into(),
@@ -522,10 +549,47 @@ impl<W: Write + 'static> Video<W> {
                     practical_d_max,
                     self.state.delta_t_max,
                     self.instantaneous_view_mode,
+                    sae_time_since,
                 ),
                 None => *val,
             };
+
+            if self.instantaneous_view_mode == FramedViewMode::SAE {
+                // let tmp = sae_mat.at_2d::<f32>(y as i32, x as i32).unwrap();
+                unsafe {
+                    *sae_mat.at_2d_mut::<f32>(y as i32, x as i32).unwrap() = sae_time_since as f32;
+                }
+            }
         });
+
+        let mut sae_mat_norm = Mat::default();
+        opencv::core::normalize(
+            &sae_mat,
+            &mut sae_mat_norm,
+            0.0,
+            255.0,
+            opencv::core::NORM_MINMAX,
+            opencv::core::CV_8U,
+            &Mat::default(),
+        )?;
+        // subtract each element from 255
+        opencv::core::subtract(
+            &Scalar::new(255.0, 255.0, 255.0, 0.0),
+            &sae_mat_norm.clone(),
+            &mut sae_mat_norm,
+            &Mat::default(),
+            opencv::core::CV_8U,
+        )?;
+        // opencv::core::normalize(
+        //     &sae_mat_norm.clone(),
+        //     &mut sae_mat_norm,
+        //     0.0,
+        //     255.0,
+        //     opencv::core::NORM_L1,
+        //     opencv::core::CV_8U,
+        //     &Mat::default(),
+        // )?;
+        self.instantaneous_frame = sae_mat_norm;
 
         if self.state.show_live {
             show_display("instance", &self.instantaneous_frame, 1, self)?;

@@ -526,6 +526,7 @@ impl<W: Write + 'static> Integration<W> {
                     practical_d_max,
                     video.state.delta_t_max,
                     video.instantaneous_view_mode,
+                    0.0, //TODO
                 ),
                 None => *val,
             };
