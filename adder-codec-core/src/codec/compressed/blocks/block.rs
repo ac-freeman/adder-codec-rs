@@ -1790,7 +1790,9 @@ mod tests {
     fn test_real_data_tshift_inter_refactor_adu_cast_direct_compressor() {
         let mut bufreader =
             // BufReader::new(File::open("/home/andrew/Downloads/bunny_test.adder").unwrap());
-            BufReader::new(File::open("/home/andrew/Downloads/virat_gray_fullres.adder").unwrap());
+            // BufReader::new(File::open("/home/andrew/Downloads/virat_gray_fullres.adder").unwrap());
+        // BufReader::new(File::open("/home/andrew/Downloads/davis_raw.adder").unwrap());
+        BufReader::new(File::open("/home/andrew/Downloads/excerpt.adder").unwrap());
         let mut bitreader = BitReader::endian(bufreader, BigEndian);
         let compression = RawInput::new();
         let mut reader = Decoder::new_raw(compression, &mut bitreader).unwrap();
@@ -1852,7 +1854,9 @@ mod tests {
         let mut recon_meta = reader.meta().clone();
         let bufwriter =
             // BufWriter::new(File::create("/home/andrew/Downloads/bunny_test_recon.adder").unwrap());
-            BufWriter::new(File::create("/home/andrew/Downloads/virat_gray_fullres_recon.adder").unwrap());
+            // BufWriter::new(File::create("/home/andrew/Downloads/virat_gray_fullres_recon.adder").unwrap());
+            // BufWriter::new(File::create("/home/andrew/Downloads/davis_recon.adder").unwrap());
+            BufWriter::new(File::create("/home/andrew/Downloads/excerpt_recon.adder").unwrap());
         let mut compressed_recon_raw_encoder =
             Encoder::new_raw(RawOutput::new(reader.meta().clone(), bufwriter));
 

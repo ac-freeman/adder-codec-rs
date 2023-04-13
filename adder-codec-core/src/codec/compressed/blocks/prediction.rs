@@ -269,7 +269,10 @@ impl PredictionModel {
                 let tmp = self.t_memory[idx];
 
                 // The true delta_t
-                let delta_t = next.t() - self.t_memory[idx];
+                let mut delta_t = next.t() - self.t_memory[idx];
+                if delta_t == 0 {
+                    delta_t = 1;
+                }
                 assert!(delta_t > 0);
                 // assert!(delta_t <= dtm); /* TODO: this can be greater than dtm if the original
                 // delta t was really big, and we have lossy coding. Need to cover with a unit test */
