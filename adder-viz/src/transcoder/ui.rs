@@ -438,7 +438,7 @@ fn side_panel_grid_contents(
         ui,
         &mut ui_state.delta_t_max_mult,
         &mut ui_state.delta_t_max_mult_slider,
-        2..=1000,
+        1..=1000,
         vec![],
         10,
     );
