@@ -500,6 +500,11 @@ fn side_panel_grid_contents(
             FramedViewMode::DeltaT,
             "Δt",
         );
+        ui.radio_value(
+            &mut ui_state.view_mode_radio_state,
+            FramedViewMode::SAE,
+            "SAE",
+        );
     });
     ui.end_row();
 

@@ -256,6 +256,7 @@ impl PlayerState {
                 ("Intensity", FramedViewMode::Intensity),
                 ("D", FramedViewMode::D),
                 ("Δt", FramedViewMode::DeltaT),
+                ("SAE", FramedViewMode::SAE),
             ],
             ui,
             &mut self.ui_state.view_mode,
