@@ -1,4 +1,4 @@
-use opencv::core::{Mat, Scalar, Size, CV_32F, CV_32FC3, CV_8U, CV_8UC3};
+use opencv::core::{KeyPoint, Mat, Scalar, Size, Vector, CV_32F, CV_32FC3, CV_8U, CV_8UC3};
 use std::io::{sink, Write};
 use std::mem::swap;
 
@@ -27,6 +27,12 @@ use rayon::iter::ParallelIterator;
 use rayon::iter::{IndexedParallelIterator, IntoParallelRefMutIterator};
 use rayon::ThreadPool;
 
+use opencv::{
+    features2d::FastFeatureDetector,
+    highgui::{imshow, wait_key},
+    imgcodecs::imread,
+    prelude::*,
+};
 use thiserror::Error;
 use tokio::task::JoinError;
 
@@ -655,6 +661,18 @@ impl<W: Write + 'static> Video<W> {
                 opencv::core::CV_8U,
             )?;
         }
+
+        let mut keypoints = Vector::<KeyPoint>::new();
+        opencv::features2d::FAST(&self.instantaneous_frame, &mut keypoints, 50, true)?;
+        let mut keypoint_mat = Mat::default();
+        opencv::features2d::draw_keypoints(
+            &self.instantaneous_frame,
+            &keypoints,
+            &mut keypoint_mat,
+            Scalar::new(0.0, 0.0, 255.0, 0.0),
+            opencv::features2d::DrawMatchesFlags::DEFAULT,
+        )?;
+        show_display_force("keypoints", &keypoint_mat, 1)?;
 
         // let mut corners = Mat::default();
         //
