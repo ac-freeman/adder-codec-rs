@@ -83,6 +83,11 @@ impl FrameValue for u8 {
                 ((f32::from(event.d) / practical_d_max) * f32::from(u8::MAX)) as u8
             }
             FramedViewMode::DeltaT => {
+                if event.coord.x == 0 && event.coord.y == 0 {
+                    dbg!(event.delta_t);
+                    dbg!(delta_t_max);
+                    dbg!(((event.delta_t as f32 / delta_t_max as f32) * f32::from(u8::MAX)) as u8);
+                }
                 ((event.delta_t as f32 / delta_t_max as f32) * f32::from(u8::MAX)) as u8
             }
             FramedViewMode::SAE => {
