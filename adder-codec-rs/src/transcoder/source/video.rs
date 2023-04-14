@@ -98,9 +98,10 @@ impl From<adder_codec_core::codec::CodecError> for SourceError {
 }
 
 /// The display mode
-#[derive(PartialEq, Eq, Clone, Copy, Debug)]
+#[derive(PartialEq, Eq, Clone, Copy, Debug, Default)]
 pub enum FramedViewMode {
     /// Visualize the intensity (2^[`D`] / [`DeltaT`]) of each pixel's most recent event
+    #[default]
     Intensity,
 
     /// Visualize the [`D`] component of each pixel's most recent event
@@ -646,7 +647,36 @@ impl<W: Write + 'static> Video<W> {
                 opencv::core::CV_8U,
                 &Mat::default(),
             )?;
+            opencv::core::subtract(
+                &Scalar::new(255.0, 255.0, 255.0, 0.0),
+                &self.instantaneous_frame.clone(),
+                &mut self.instantaneous_frame,
+                &Mat::default(),
+                opencv::core::CV_8U,
+            )?;
         }
+
+        // let mut corners = Mat::default();
+        //
+        // opencv::imgproc::corner_harris(
+        //     &self.instantaneous_frame.clone(),
+        //     &mut corners,
+        //     5,
+        //     3,
+        //     0.04,
+        //     opencv::core::BORDER_DEFAULT,
+        // )?;
+        // opencv::core::normalize(
+        //     &corners.clone(),
+        //     &mut corners,
+        //     0.0,
+        //     255.0,
+        //     opencv::core::NORM_MINMAX,
+        //     opencv::core::CV_8U,
+        //     &Mat::default(),
+        // )?;
+        //
+        // show_display_force("corners", &corners, 1)?;
 
         if self.state.show_live {
             show_display("instance", &self.instantaneous_frame, 1, self)?;
