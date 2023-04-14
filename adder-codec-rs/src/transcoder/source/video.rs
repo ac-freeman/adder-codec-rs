@@ -565,7 +565,7 @@ impl<W: Write + 'static> Video<W> {
         // TODO: When there's full support for various bit-depth sources, modify this accordingly
         let practical_d_max =
             fast_math::log2_raw(255.0 * (self.state.delta_t_max / self.state.ref_time) as f32);
-        db.ter_mut().enumerate().for_each(|(idx, val)| {
+        db.iter_mut().enumerate().for_each(|(idx, val)| {
             let y = idx / self.state.plane.area_wc();
             let x = (idx % self.state.plane.area_wc()) / self.state.plane.c_usize();
             let c = idx % self.state.plane.c_usize();
