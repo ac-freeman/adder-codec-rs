@@ -594,17 +594,17 @@ impl<W: Write + 'static> Video<W> {
             }
         });
 
-        let mut sae_mat_norm = Mat::default();
-        opencv::core::normalize(
-            &sae_mat,
-            &mut sae_mat_norm,
-            0.0,
-            255.0,
-            opencv::core::NORM_MINMAX,
-            opencv::core::CV_8U,
-            &Mat::default(),
-        )?;
         if self.instantaneous_view_mode == FramedViewMode::SAE {
+            let mut sae_mat_norm = Mat::default();
+            opencv::core::normalize(
+                &sae_mat,
+                &mut sae_mat_norm,
+                0.0,
+                255.0,
+                opencv::core::NORM_MINMAX,
+                opencv::core::CV_8U,
+                &Mat::default(),
+            )?;
             self.instantaneous_frame = sae_mat_norm;
         }
 
