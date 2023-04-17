@@ -32,15 +32,21 @@ If you write a paper which references this software, we ask that you reference t
 
 [An Asynchronous Intensity Representation for Framed and Event Video Sources](https://arxiv.org/abs/2301.08783)
 ```
-@misc{https://doi.org/10.48550/arxiv.2301.08783,
-  doi = {10.48550/ARXIV.2301.08783},
-  url = {https://arxiv.org/abs/2301.08783},
+@inproceedings{10.1145/3587819.3590969,
+  
   author = {Freeman, Andrew C. and Singh, Montek and Mayer-Patel, Ketan},
-  keywords = {Computer Vision and Pattern Recognition (cs.CV), Multimedia (cs.MM), FOS: Computer and information sciences, FOS: Computer and information sciences},
-  title = {An Asynchronous Intensity Representation for Framed and Event Video Sources},
-  publisher = {arXiv},
-  year = {2023},
-  copyright = {arXiv.org perpetual, non-exclusive license}
+title = {An Asynchronous Intensity Representation for Framed and Event Video Sources},
+year = {2023},
+isbn = {979-8-4007-0148-1/23/06},
+publisher = {Association for Computing Machinery},
+address = {New York, NY, USA},
+url = {https://doi.org/10.1145/3587819.3590969},
+doi = {10.1145/3587819.3590969},
+booktitle = {Proceedings of the 14th ACM Multimedia Systems Conference},
+pages = {1–12},
+numpages = {12},
+location = {Vancouver, BC, Canada},
+series = {MMSys '23}
 }
 ```
 
