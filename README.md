@@ -31,6 +31,8 @@ Read the [wiki](https://github.com/ac-freeman/adder-codec-rs/wiki/) for backgrou
 If you write a paper which references this software, we ask that you reference the following papers on which it is based. Citations are given in the BibTeX format.
 
 [An Asynchronous Intensity Representation for Framed and Event Video Sources](https://arxiv.org/abs/2301.08783)
+
+**Note:** The code associated with this paper was released in [version 0.2.0](https://github.com/ac-freeman/adder-codec-rs/releases/tag/v0.2.0)
 ```
 @inproceedings{10.1145/3587819.3590969,
 author = {Freeman, Andrew C. and Singh, Montek and Mayer-Patel, Ketan},
