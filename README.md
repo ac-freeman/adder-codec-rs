@@ -33,8 +33,7 @@ If you write a paper which references this software, we ask that you reference t
 [An Asynchronous Intensity Representation for Framed and Event Video Sources](https://arxiv.org/abs/2301.08783)
 ```
 @inproceedings{10.1145/3587819.3590969,
-  
-  author = {Freeman, Andrew C. and Singh, Montek and Mayer-Patel, Ketan},
+author = {Freeman, Andrew C. and Singh, Montek and Mayer-Patel, Ketan},
 title = {An Asynchronous Intensity Representation for Framed and Event Video Sources},
 year = {2023},
 isbn = {979-8-4007-0148-1/23/06},
