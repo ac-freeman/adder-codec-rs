@@ -332,8 +332,8 @@ mod tests {
         let tmp = Cursor::new(&*output);
         let bufreader = BufReader::new(tmp);
         let compression = RawInput::new();
-
         let mut bitreader = BitReader::endian(bufreader, BigEndian);
+
         let reader = Decoder::new_raw(compression, &mut bitreader).unwrap();
         assert_eq!(reader.input.meta().header_size, 29);
     }
