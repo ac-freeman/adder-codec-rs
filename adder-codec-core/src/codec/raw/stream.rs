@@ -5,8 +5,10 @@ use crate::{Coord, DeltaT, Event, EventSingle, EOF_PX_ADDRESS};
 use bincode::config::{FixintEncoding, WithOtherEndian, WithOtherIntEncoding};
 use bincode::{DefaultOptions, Options};
 use bitstream_io::{BigEndian, BitRead, BitReader};
+use hashbrown::hash_map::DefaultHashBuilder;
 use priority_queue::PriorityQueue;
 use std::cmp::Reverse;
+use std::collections::BinaryHeap;
 use std::io::{Read, Seek, SeekFrom, Write};
 
 /// Write uncompressed (raw) ADΔER data to a stream.
@@ -16,7 +18,7 @@ pub struct RawOutput<W> {
         WithOtherIntEncoding<DefaultOptions, FixintEncoding>,
         bincode::config::BigEndian,
     >,
-    queue: PriorityQueue<Event, Reverse<DeltaT>>,
+    queue: BinaryHeap<Event>,
     pub(crate) stream: Option<W>,
 }
 
@@ -43,7 +45,7 @@ impl<W: Write> RawOutput<W> {
         Self {
             meta,
             bincode,
-            queue: PriorityQueue::new(),
+            queue: BinaryHeap::new(),
             stream: Some(writer),
         }
     }
@@ -83,14 +85,14 @@ impl<W: Write> WriteCompression<W> for RawOutput<W> {
             let output_event: EventSingle;
             if self.meta.plane.channels == 1 {
                 // let event_to_write = self.queue.pop()
-                output_event = (&first_item.0).into();
+                output_event = (&first_item).into();
                 self.bincode
                     .serialize_into(self.stream(), &output_event)
                     .unwrap();
                 // bincode::serialize_into(&mut *stream, &output_event, my_options).unwrap();
             } else {
                 self.bincode
-                    .serialize_into(self.stream(), &first_item.0)
+                    .serialize_into(self.stream(), &first_item)
                     .unwrap();
             }
         }
@@ -125,19 +127,19 @@ impl<W: Write> WriteCompression<W> for RawOutput<W> {
 
         // First, push the event to the queue
         let dt = event.delta_t;
-        self.queue.push(event, Reverse(dt));
+        self.queue.push(event);
 
         if let Some(first_item_addr) = self.queue.peek() {
-            if first_item_addr.0.delta_t < dt.saturating_sub(self.meta.delta_t_max * 2) {
+            if first_item_addr.delta_t < dt.saturating_sub(self.meta.delta_t_max) {
                 if let Some(first_item) = self.queue.pop() {
                     let output_event: EventSingle;
                     if self.meta.plane.channels == 1 {
                         // let event_to_write = self.queue.pop()
-                        output_event = (&first_item.0).into();
+                        output_event = (&first_item).into();
                         self.bincode.serialize_into(self.stream(), &output_event)?;
                         // bincode::serialize_into(&mut *stream, &output_event, my_options).unwrap();
                     } else {
-                        self.bincode.serialize_into(self.stream(), &first_item.0)?;
+                        self.bincode.serialize_into(self.stream(), &first_item)?;
                     }
                 }
             }

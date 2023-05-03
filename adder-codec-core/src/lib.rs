@@ -10,7 +10,7 @@ mod codec_old;
 
 pub use bitstream_io;
 use bitstream_io::{BigEndian, BitReader};
-use std::cmp::{max, min};
+use std::cmp::{max, min, Ordering};
 use std::fs::File;
 use std::io::BufReader;
 use std::ops::Add;
@@ -475,6 +475,20 @@ impl From<EventSingle> for Event {
             d: event.d,
             delta_t: event.delta_t,
         }
+    }
+}
+
+impl Ord for Event {
+    fn cmp(&self, other: &Self) -> Ordering {
+        let b = other.delta_t;
+        let a = self.delta_t;
+        b.cmp(&a)
+    }
+}
+
+impl PartialOrd for Event {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
     }
 }
 
