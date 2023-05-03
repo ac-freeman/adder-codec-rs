@@ -338,7 +338,7 @@ fn test_encode_event() {
         d: 5,
         delta_t: 1000,
     };
-    stream.ingest_event(&event).unwrap();
+    stream.ingest_event(event).unwrap();
     cleanup_raw_writer(n, stream)
 }
 
@@ -401,7 +401,7 @@ fn read_event() {
         d: 5,
         delta_t: 1000,
     };
-    stream.ingest_event(&event).unwrap();
+    stream.ingest_event(event).unwrap();
     stream.flush_writer().unwrap();
     let (mut reader, mut bitreader) = setup_raw_reader(n);
     let res = reader.digest_event(&mut bitreader);
