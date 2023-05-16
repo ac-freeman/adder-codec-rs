@@ -10,14 +10,14 @@ Encoder/transcoder/decoder for ADΔER (Address, Decimation, Δt Event Representa
 
 Source 8-bit image frame with shadows boosted ([source video](https://www.pexels.com/video/river-between-trees-2126081/))      |  Frame reconstructed from ADΔER events, generated from 48 input frames, with shadows boosted. Note the greater dynamic range and temporal denoising in the shadows.
 :-------------------------:|:-------------------------:
-![](https://github.com/ac-freeman/adder-codec-rs/blob/main/adder-codec-rs/source_frame_0.jpg)  |  ![](https://github.com/ac-freeman/adder-codec-rs/blob/main/adder-codec-rs/out_16bit_2_c10.jpg)
+![](adder-codec-rs/source_frame_0.jpg)  |  ![](adder-codec-rs/out_16bit_2_c10.jpg)
 
 ## Included crates
-- **adder-codec-rs**: ADΔER transcoders [[source](https://github.com/ac-freeman/adder-codec-rs/tree/main/adder-codec-rs)] [![Crates.io](https://img.shields.io/crates/v/adder-codec-rs)](https://crates.io/crates/adder-codec-rs)
-- **adder-codec-core**: core library [[source](https://github.com/ac-freeman/adder-codec-rs/tree/main/adder-codec-core)] [![Crates.io](https://img.shields.io/crates/v/adder-codec-core)](https://crates.io/crates/adder-codec-core)
-- **adder-info**: tool for reading metadata of a .adder file [[source](https://github.com/ac-freeman/adder-codec-rs/tree/main/adder-info)] [![Crates.io](https://img.shields.io/crates/v/adder-info)](https://crates.io/crates/adder-info)
-- **adder-to-dvs**: tool for quickly converting a .adder file to a reasonable DVS representation in a text format [[source](https://github.com/ac-freeman/adder-codec-rs/tree/main/adder-to-dvs)] [![Crates.io](https://img.shields.io/crates/v/adder-to-dvs)](https://crates.io/crates/adder-to-dvs)
-- **adder-viz**: GUI application for transcoding framed and event (DVS/DAVIS) video to ADΔER, playing back .adder files, and visualizing the _many_ available ADΔER parameters [[source](https://github.com/ac-freeman/adder-codec-rs/tree/main/adder-viz)] [![Crates.io](https://img.shields.io/crates/v/adder-viz)](https://crates.io/crates/adder-viz)
+- **adder-codec-rs**: ADΔER transcoders [[source](adder-codec-rs)] [![Crates.io](https://img.shields.io/crates/v/adder-codec-rs)](https://crates.io/crates/adder-codec-rs)
+- **adder-codec-core**: core library [[source](adder-codec-core)] [![Crates.io](https://img.shields.io/crates/v/adder-codec-core)](https://crates.io/crates/adder-codec-core)
+- **adder-info**: tool for reading metadata of a .adder file [[source](adder-info)] [![Crates.io](https://img.shields.io/crates/v/adder-info)](https://crates.io/crates/adder-info)
+- **adder-to-dvs**: tool for quickly converting a .adder file to a reasonable DVS representation in a text format [[source](adder-to-dvs)] [![Crates.io](https://img.shields.io/crates/v/adder-to-dvs)](https://crates.io/crates/adder-to-dvs)
+- **adder-viz**: GUI application for transcoding framed and event (DVS/DAVIS) video to ADΔER, playing back .adder files, and visualizing the _many_ available ADΔER parameters [[source](adder-viz)] [![Crates.io](https://img.shields.io/crates/v/adder-viz)](https://crates.io/crates/adder-viz)
 
 ## Other crates
 - **davis-edi-rs**: a super high-speed system for performing frame deblurring and framed reconstruction from DAVIS/DVS streams, forming the backbone for the event camera driver code in the ADΔER library [[source](https://github.com/ac-freeman/davis-EDI-rs)] [![Crates.io](https://img.shields.io/crates/v/davis-edi-rs)](https://crates.io/crates/davis-edi-rs)
@@ -33,7 +33,7 @@ If you write a paper which references this software, we ask that you reference t
 [An Asynchronous Intensity Representation for Framed and Event Video Sources](https://arxiv.org/abs/2301.08783)
 
 **Note:** The code associated with this paper was released in [version 0.2.0](https://github.com/ac-freeman/adder-codec-rs/releases/tag/v0.2.0)
-```
+```bibtex
 @inproceedings{10.1145/3587819.3590969,
 author = {Freeman, Andrew C. and Singh, Montek and Mayer-Patel, Ketan},
 title = {An Asynchronous Intensity Representation for Framed and Event Video Sources},
@@ -52,7 +52,7 @@ series = {MMSys '23}
 ```
 
 [Motion segmentation and tracking for integrating event cameras](https://dl.acm.org/doi/abs/10.1145/3458305.3463373)
-```
+```bibtex
 @inproceedings{10.1145/3458305.3463373,
 author = {Freeman, Andrew C. and Burgess, Chris and Mayer-Patel, Ketan},
 title = {Motion Segmentation and Tracking for Integrating Event Cameras},
@@ -73,7 +73,7 @@ series = {MMSys '21}
 ```
 
 [Integrating Event Camera Sensor Emulator](https://dl.acm.org/doi/10.1145/3394171.3414394)
-```
+```bibtex
 @inproceedings{10.1145/3394171.3414394,
 author = {Freeman, Andrew C. and Mayer-Patel, Ketan},
 title = {Integrating Event Camera Sensor Emulator},
