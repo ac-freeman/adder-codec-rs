@@ -33,7 +33,7 @@ If you write a paper which references this software, we ask that you reference t
 [An Asynchronous Intensity Representation for Framed and Event Video Sources](https://arxiv.org/abs/2301.08783)
 
 **Note:** The code associated with this paper was released in [version 0.2.0](https://github.com/ac-freeman/adder-codec-rs/releases/tag/v0.2.0)
-```
+```bibtex
 @inproceedings{10.1145/3587819.3590969,
 author = {Freeman, Andrew C. and Singh, Montek and Mayer-Patel, Ketan},
 title = {An Asynchronous Intensity Representation for Framed and Event Video Sources},
@@ -52,7 +52,7 @@ series = {MMSys '23}
 ```
 
 [Motion segmentation and tracking for integrating event cameras](https://dl.acm.org/doi/abs/10.1145/3458305.3463373)
-```
+```bibtex
 @inproceedings{10.1145/3458305.3463373,
 author = {Freeman, Andrew C. and Burgess, Chris and Mayer-Patel, Ketan},
 title = {Motion Segmentation and Tracking for Integrating Event Cameras},
@@ -73,7 +73,7 @@ series = {MMSys '21}
 ```
 
 [Integrating Event Camera Sensor Emulator](https://dl.acm.org/doi/10.1145/3394171.3414394)
-```
+```bibtex
 @inproceedings{10.1145/3394171.3414394,
 author = {Freeman, Andrew C. and Mayer-Patel, Ketan},
 title = {Integrating Event Camera Sensor Emulator},
