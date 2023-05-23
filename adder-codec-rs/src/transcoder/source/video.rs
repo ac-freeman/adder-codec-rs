@@ -4,8 +4,10 @@ use std::mem::swap;
 
 use adder_codec_core::codec::empty::stream::EmptyOutput;
 use adder_codec_core::codec::encoder::Encoder;
-use adder_codec_core::codec::raw::stream::RawOutput;
-use adder_codec_core::codec::{CodecError, CodecMetadata, LATEST_CODEC_VERSION};
+use adder_codec_core::codec::raw::stream::{RawOutput, RawOutputInterleaved};
+use adder_codec_core::codec::{
+    encoder, CodecError, CodecMetadata, EncoderType, LATEST_CODEC_VERSION,
+};
 use adder_codec_core::{
     Coord, DeltaT, Event, Mode, PlaneError, PlaneSize, SourceCamera, SourceType, TimeMode,
 };
@@ -19,6 +21,7 @@ use opencv::prelude::*;
 
 use crate::framer::scale_intensity::{event_to_intensity, FrameValue};
 use crate::transcoder::event_pixel_tree::{Intensity32, PixelArena};
+use adder_codec_core::codec::compressed::stream::CompressedOutput;
 use adder_codec_core::Mode::{Continuous, FramePerfect};
 use davis_edi_rs::util::reconstructor::ReconstructionError;
 use ndarray::{Array3, Axis, ShapeError};
@@ -191,6 +194,7 @@ pub trait VideoBuilder<W> {
         self,
         source_camera: SourceCamera,
         time_mode: TimeMode,
+        encoder_type: EncoderType,
         write: W,
     ) -> Result<Box<Self>, SourceError>;
 
@@ -217,6 +221,7 @@ pub struct Video<W: Write> {
     /// Channel for sending events to the encoder
     pub event_sender: Sender<Vec<Event>>,
     pub(crate) encoder: Encoder<W>,
+    pub encoder_type: EncoderType,
     // TODO: Hold multiple encoder options and an enum, so that boxing isn't required.
     // Also hold a state for whether or not to write out events at all, so that a null writer isn't required.
 }
@@ -308,6 +313,7 @@ impl<W: Write + 'static> Video<W> {
                     instantaneous_view_mode,
                     event_sender,
                     encoder,
+                    encoder_type: EncoderType::Empty,
                 })
             }
             Some(w) => {
@@ -323,6 +329,7 @@ impl<W: Write + 'static> Video<W> {
                     instantaneous_view_mode,
                     event_sender,
                     encoder,
+                    encoder_type: EncoderType::Empty,
                 })
             }
         }
@@ -415,25 +422,83 @@ impl<W: Write + 'static> Video<W> {
         mut self,
         source_camera: Option<SourceCamera>,
         time_mode: Option<TimeMode>,
+        encoder_type: EncoderType,
         write: W,
     ) -> Result<Self, SourceError> {
         // TODO: Allow for compressed representation (not just raw)
-        let compression = RawOutput::new(
-            CodecMetadata {
-                codec_version: LATEST_CODEC_VERSION,
-                header_size: 0,
-                time_mode: time_mode.unwrap_or_default(),
-                plane: self.state.plane,
-                tps: self.state.tps,
-                ref_interval: self.state.ref_time,
-                delta_t_max: self.state.delta_t_max,
-                event_size: 0,
-                source_camera: source_camera.unwrap_or_default(),
-            },
-            write,
-        );
-        let encoder: Encoder<_> = Encoder::new_raw(compression);
+        let encoder: Encoder<_> = match encoder_type {
+            EncoderType::Compressed => {
+                let compression = CompressedOutput::new(
+                    CodecMetadata {
+                        codec_version: LATEST_CODEC_VERSION,
+                        header_size: 0,
+                        time_mode: time_mode.unwrap_or_default(),
+                        plane: self.state.plane,
+                        tps: self.state.tps,
+                        ref_interval: self.state.ref_time,
+                        delta_t_max: self.state.delta_t_max,
+                        event_size: 0,
+                        source_camera: source_camera.unwrap_or_default(),
+                    },
+                    write,
+                );
+                Encoder::new_compressed(compression)
+            }
+            EncoderType::Raw => {
+                let compression = RawOutput::new(
+                    CodecMetadata {
+                        codec_version: LATEST_CODEC_VERSION,
+                        header_size: 0,
+                        time_mode: time_mode.unwrap_or_default(),
+                        plane: self.state.plane,
+                        tps: self.state.tps,
+                        ref_interval: self.state.ref_time,
+                        delta_t_max: self.state.delta_t_max,
+                        event_size: 0,
+                        source_camera: source_camera.unwrap_or_default(),
+                    },
+                    write,
+                );
+                Encoder::new_raw(compression)
+            }
+            EncoderType::RawInterleaved => {
+                let compression = RawOutputInterleaved::new(
+                    CodecMetadata {
+                        codec_version: LATEST_CODEC_VERSION,
+                        header_size: 0,
+                        time_mode: time_mode.unwrap_or_default(),
+                        plane: self.state.plane,
+                        tps: self.state.tps,
+                        ref_interval: self.state.ref_time,
+                        delta_t_max: self.state.delta_t_max,
+                        event_size: 0,
+                        source_camera: source_camera.unwrap_or_default(),
+                    },
+                    write,
+                );
+                Encoder::new_raw_interleaved(compression)
+            }
+            EncoderType::Empty => {
+                let compression = EmptyOutput::new(
+                    CodecMetadata {
+                        codec_version: LATEST_CODEC_VERSION,
+                        header_size: 0,
+                        time_mode: time_mode.unwrap_or_default(),
+                        plane: self.state.plane,
+                        tps: self.state.tps,
+                        ref_interval: self.state.ref_time,
+                        delta_t_max: self.state.delta_t_max,
+                        event_size: 0,
+                        source_camera: source_camera.unwrap_or_default(),
+                    },
+                    sink(),
+                );
+                Encoder::new_empty(compression)
+            }
+        };
+
         self.encoder = encoder;
+        self.encoder_type = encoder_type;
 
         dbg!(time_mode);
         self.event_pixel_trees.par_map_inplace(|px| {

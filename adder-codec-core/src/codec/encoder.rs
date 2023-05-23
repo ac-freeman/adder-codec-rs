@@ -12,7 +12,7 @@ use crate::codec::header::{
     EventStreamHeader, EventStreamHeaderExtensionV0, EventStreamHeaderExtensionV1,
     EventStreamHeaderExtensionV2,
 };
-use crate::codec::raw::stream::RawOutput;
+use crate::codec::raw::stream::{RawOutput, RawOutputInterleaved};
 use crate::SourceType::U8;
 use bincode::config::{FixintEncoding, WithOtherEndian, WithOtherIntEncoding};
 use bincode::{DefaultOptions, Options};
@@ -65,6 +65,21 @@ impl<W: Write + 'static> Encoder<W> {
     {
         let mut encoder = Self {
             output: WriteCompressionEnum::RawOutput(compression),
+            bincode: DefaultOptions::new()
+                .with_fixint_encoding()
+                .with_big_endian(),
+        };
+        encoder.encode_header().unwrap();
+        encoder
+    }
+
+    /// Create a new [`Encoder`] with the given raw compression scheme
+    pub fn new_raw_interleaved(compression: RawOutputInterleaved<W>) -> Self
+    where
+        Self: Sized,
+    {
+        let mut encoder = Self {
+            output: WriteCompressionEnum::RawOutputInterleaved(compression),
             bincode: DefaultOptions::new()
                 .with_fixint_encoding()
                 .with_big_endian(),

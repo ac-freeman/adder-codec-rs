@@ -2,7 +2,6 @@ extern crate core;
 
 use adder_codec_core::codec::decoder::Decoder;
 use adder_codec_core::codec::raw::stream::RawInput;
-use adder_codec_core::codec::ReadCompression;
 use adder_codec_rs::framer::driver::Framer;
 use adder_codec_rs::framer::driver::FramerMode::INSTANTANEOUS;
 use adder_codec_rs::framer::driver::{FrameSequence, FramerBuilder};

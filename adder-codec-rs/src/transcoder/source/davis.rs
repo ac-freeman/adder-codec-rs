@@ -24,7 +24,7 @@ use std::io::Write;
 use std::mem::swap;
 use std::thread;
 
-use adder_codec_core::codec::CodecError;
+use adder_codec_core::codec::{CodecError, EncoderType};
 use adder_codec_core::{Event, PlaneSize, SourceCamera, SourceType, TimeMode};
 
 use crate::framer::scale_intensity::FrameValue;
@@ -884,11 +884,12 @@ impl<W: Write + 'static> VideoBuilder<W> for Davis<W> {
         mut self,
         source_camera: SourceCamera,
         time_mode: TimeMode,
+        encoder_type: EncoderType,
         write: W,
     ) -> Result<Box<Self>, SourceError> {
-        self.video = self
-            .video
-            .write_out(Some(source_camera), Some(time_mode), write)?;
+        self.video =
+            self.video
+                .write_out(Some(source_camera), Some(time_mode), encoder_type, write)?;
         Ok(Box::new(self))
     }
 
