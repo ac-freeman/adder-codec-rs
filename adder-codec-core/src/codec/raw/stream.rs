@@ -18,6 +18,16 @@ pub struct RawOutput<W> {
         WithOtherIntEncoding<DefaultOptions, FixintEncoding>,
         bincode::config::BigEndian,
     >,
+    pub(crate) stream: Option<W>,
+}
+
+/// Write uncompressed (raw) ADΔER data to a stream.
+pub struct RawOutputInterleaved<W> {
+    pub(crate) meta: CodecMetadata,
+    pub(crate) bincode: WithOtherEndian<
+        WithOtherIntEncoding<DefaultOptions, FixintEncoding>,
+        bincode::config::BigEndian,
+    >,
     queue: BinaryHeap<Event>,
     pub(crate) stream: Option<W>,
 }
@@ -45,7 +55,6 @@ impl<W: Write> RawOutput<W> {
         Self {
             meta,
             bincode,
-            queue: BinaryHeap::new(),
             stream: Some(writer),
         }
     }
@@ -56,6 +65,103 @@ impl<W: Write> RawOutput<W> {
 }
 
 impl<W: Write> WriteCompression<W> for RawOutput<W> {
+    fn magic(&self) -> Magic {
+        MAGIC_RAW
+    }
+
+    fn meta(&self) -> &CodecMetadata {
+        &self.meta
+    }
+
+    fn meta_mut(&mut self) -> &mut CodecMetadata {
+        &mut self.meta
+    }
+
+    fn write_bytes(&mut self, bytes: &[u8]) -> Result<(), std::io::Error> {
+        // Silently ignore the returned usize because we don't care about the number of bytes
+        self.stream().write(bytes).map(|_| ())
+    }
+
+    // Will always be byte-aligned. Do nothing.
+    fn byte_align(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+
+    // If `self.writer` is a `BufWriter`, you'll need to flush it yourself after this.
+    fn into_writer(&mut self) -> Option<W> {
+        dbg!("IN INTO_WRITER!");
+
+        let eof = Event {
+            coord: Coord {
+                x: EOF_PX_ADDRESS,
+                y: EOF_PX_ADDRESS,
+                c: Some(0),
+            },
+            d: 0,
+            delta_t: 0,
+        };
+        self.bincode.serialize_into(self.stream(), &eof).unwrap();
+        self.flush_writer().unwrap();
+        std::mem::replace(&mut self.stream, None)
+    }
+
+    fn flush_writer(&mut self) -> std::io::Result<()> {
+        self.stream().flush()
+    }
+
+    /// Ingest an event into the codec_old.
+    ///
+    /// This will always write the event immediately to the underlying writer.
+    fn ingest_event(&mut self, event: Event) -> Result<(), CodecError> {
+        // NOTE: for speed, the following checks only run in debug builds. It's entirely
+        // possibly to encode nonsensical events if you want to.
+        debug_assert!(event.coord.x < self.meta.plane.width || event.coord.x == EOF_PX_ADDRESS);
+        debug_assert!(event.coord.y < self.meta.plane.height || event.coord.y == EOF_PX_ADDRESS);
+
+        // TODO: Switch functionality based on what the deltat mode is!
+
+        let output_event: EventSingle;
+        if self.meta.plane.channels == 1 {
+            // let event_to_write = self.queue.pop()
+            output_event = (&event).into();
+            self.bincode.serialize_into(self.stream(), &output_event)?;
+            // bincode::serialize_into(&mut *stream, &output_event, my_options).unwrap();
+        } else {
+            self.bincode.serialize_into(self.stream(), &event)?;
+        }
+
+        Ok(())
+    }
+
+    fn ingest_event_debug(&mut self, event: Event) -> Result<Option<Adu>, CodecError> {
+        todo!()
+    }
+}
+
+impl<W: Write> RawOutputInterleaved<W> {
+    /// Create a new raw output stream.
+    pub fn new(mut meta: CodecMetadata, writer: W) -> Self {
+        let bincode = DefaultOptions::new()
+            .with_fixint_encoding()
+            .with_big_endian();
+        meta.event_size = match meta.plane.c() {
+            1 => bincode.serialized_size(&EventSingle::default()).unwrap() as u8,
+            _ => bincode.serialized_size(&Event::default()).unwrap() as u8,
+        };
+        Self {
+            meta,
+            bincode,
+            queue: BinaryHeap::new(),
+            stream: Some(writer),
+        }
+    }
+
+    fn stream(&mut self) -> &mut W {
+        self.stream.as_mut().unwrap()
+    }
+}
+
+impl<W: Write> WriteCompression<W> for RawOutputInterleaved<W> {
     fn magic(&self) -> Magic {
         MAGIC_RAW
     }

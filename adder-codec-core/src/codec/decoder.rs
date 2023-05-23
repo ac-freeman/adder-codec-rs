@@ -237,7 +237,7 @@ mod tests {
     use super::*;
     use crate::codec::compressed::stream::{CompressedInput, CompressedOutput};
     use crate::codec::encoder::Encoder;
-    use crate::codec::raw::stream::{RawInput, RawOutput};
+    use crate::codec::raw::stream::{RawInput, RawOutput, RawOutputInterleaved};
 
     use crate::Coord;
     use std::io::{BufReader, BufWriter, Cursor, Write};
@@ -273,6 +273,35 @@ mod tests {
             bufwriter,
         );
         let mut encoder: Encoder<BufWriter<Vec<u8>>> = Encoder::new_raw(compression);
+
+        let event = stock_event();
+        encoder.ingest_event(event).unwrap();
+        let mut writer = encoder.close_writer().unwrap().unwrap();
+
+        writer.flush().unwrap();
+
+        writer.into_inner().unwrap()
+    }
+
+    fn setup_encoded_raw_interleaved(codec_version: u8) -> Vec<u8> {
+        let output = Vec::new();
+
+        let bufwriter = BufWriter::new(output);
+        let compression = RawOutputInterleaved::new(
+            CodecMetadata {
+                codec_version,
+                header_size: 0,
+                time_mode: Default::default(),
+                plane: Default::default(),
+                tps: 0,
+                ref_interval: 255,
+                delta_t_max: 255,
+                event_size: 0,
+                source_camera: Default::default(),
+            },
+            bufwriter,
+        );
+        let mut encoder: Encoder<BufWriter<Vec<u8>>> = Encoder::new_raw_interleaved(compression);
 
         let event = stock_event();
         encoder.ingest_event(event).unwrap();

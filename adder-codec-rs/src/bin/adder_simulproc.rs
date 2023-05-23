@@ -9,6 +9,7 @@ use rayon::current_num_threads;
 use std::error::Error;
 use std::fs::File;
 
+use adder_codec_core::codec::EncoderType;
 use adder_codec_core::SourceCamera::FramedU8;
 use adder_codec_core::TimeMode;
 use adder_codec_rs::transcoder::source::framed::Framed;
@@ -74,7 +75,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     if !args.output_events_filename.is_empty() {
         let path = Path::new(&args.output_events_filename);
         let file = File::create(path)?;
-        source = *source.write_out(FramedU8, time_mode, BufWriter::new(file))?;
+        source = *source.write_out(FramedU8, time_mode, EncoderType::Raw, BufWriter::new(file))?;
     }
 
     let source_fps = source.source_fps;

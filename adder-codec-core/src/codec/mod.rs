@@ -8,10 +8,21 @@ use std::io;
 use std::io::{Read, Seek, Sink, Write};
 
 #[enum_dispatch(WriteCompression<W>)]
-enum WriteCompressionEnum<W: Write> {
+pub enum WriteCompressionEnum<W: Write> {
     CompressedOutput(CompressedOutput<W>),
     RawOutput(RawOutput<W>),
+    RawOutputInterleaved(RawOutputInterleaved<W>),
     EmptyOutput(EmptyOutput<Sink>),
+}
+
+#[derive(Default, Clone, Copy, PartialEq)]
+pub enum EncoderType {
+    Compressed,
+    Raw,
+    RawInterleaved,
+
+    #[default]
+    Empty,
 }
 
 #[enum_dispatch(ReadCompression<R>)]
@@ -163,7 +174,7 @@ use crate::codec::compressed::stream::{CompressedInput, CompressedOutput};
 // use crate::codec::empty::stream::EmptyOutput;
 use crate::codec::compressed::adu::frame::Adu;
 use crate::codec::empty::stream::EmptyOutput;
-use crate::codec::raw::stream::{RawInput, RawOutput};
+use crate::codec::raw::stream::{RawInput, RawOutput, RawOutputInterleaved};
 use crate::codec_old::compressed::fenwick::ValueError;
 use thiserror::Error;
 
