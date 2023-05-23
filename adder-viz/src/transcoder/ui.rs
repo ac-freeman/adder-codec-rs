@@ -153,8 +153,7 @@ impl TranscoderState {
         ui.horizontal(|ui| {
             if ui.button("Open file").clicked() {
                 if let Some(path) = rfd::FileDialog::new()
-                    .add_filter("framed video", &["mp4"])
-                    .add_filter("DVS/DAVIS video", &["aedat4"])
+                    .add_filter("video", &["mp4", "aedat4"])
                     .pick_file()
                 {
                     self.ui_info_state.input_path_0 = Some(path.clone());
