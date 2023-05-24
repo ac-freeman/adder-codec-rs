@@ -614,18 +614,6 @@ impl<W: Write + 'static> Video<W> {
             },
         }
         sae_mat = sae_mat.clone();
-        //
-        // for events in &big_buffer {
-        //     for event in events {
-        //         let y = event.coord.y;
-        //         let x = event.coord.x;
-        //
-        //         *self
-        //             .abs_intensity_mat
-        //             .at_2d_mut::<f32>(y as i32, x as i32)
-        //             .unwrap() = event_to_intensity(&event) as f32;
-        //     }
-        // }
 
         // TODO: When there's full support for various bit-depth sources, modify this accordingly
         let practical_d_max =
@@ -672,46 +660,6 @@ impl<W: Write + 'static> Video<W> {
             )?;
             self.instantaneous_frame = sae_mat_norm;
         }
-
-        // // subtract each element from 255
-        // opencv::core::subtract(
-        //     &Scalar::new(255.0, 255.0, 255.0, 0.0),
-        //     &sae_mat_norm.clone(),
-        //     &mut sae_mat_norm,
-        //     &Mat::default(),
-        //     opencv::core::CV_8U,
-        // )?;
-
-        // show_display_force("abs", &self.abs_intensity_mat, 0)?;
-
-        // let mut abs_intensity_mat_norm = Mat::default();
-        // opencv::core::normalize(
-        //     &self.abs_intensity_mat,
-        //     &mut abs_intensity_mat_norm,
-        //     0.0,
-        //     255.0,
-        //     opencv::core::NORM_MINMAX,
-        //     opencv::core::CV_8U,
-        //     &Mat::default(),
-        // )?;
-        // opencv::core::subtract(
-        //     &Scalar::new(255.0, 255.0, 255.0, 0.0),
-        //     &abs_intensity_mat_norm.clone(),
-        //     &mut abs_intensity_mat_norm,
-        //     &Mat::default(),
-        //     opencv::core::CV_8U,
-        // )?;
-        // opencv::core::normalize(
-        //     &sae_mat_norm.clone(),
-        //     &mut sae_mat_norm,
-        //     0.0,
-        //     255.0,
-        //     opencv::core::NORM_L1,
-        //     opencv::core::CV_8U,
-        //     &Mat::default(),
-        // )?;
-        // self.instantaneous_frame = sae_mat_norm;
-        // self.instantaneous_frame = abs_intensity_mat_norm;
 
         if self.instantaneous_view_mode == FramedViewMode::DeltaT {
             opencv::core::normalize(
@@ -831,6 +779,7 @@ impl<W: Write + 'static> Video<W> {
 /// * `state`: the state of the video source
 ///
 /// returns: ()
+#[inline(always)]
 pub fn integrate_for_px(
     px: &mut PixelArena,
     base_val: &mut u8,
