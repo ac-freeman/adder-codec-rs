@@ -200,6 +200,7 @@ impl<W: Write + 'static> Encoder<W> {
     }
 
     /// Ingest an event
+    #[inline(always)]
     pub fn ingest_event(&mut self, event: Event) -> Result<(), CodecError> {
         self.output.ingest_event(event)
     }
