@@ -26,7 +26,7 @@ use adder_codec_core::codec::compressed::stream::CompressedOutput;
 use adder_codec_core::Mode::{Continuous, FramePerfect};
 use davis_edi_rs::util::reconstructor::ReconstructionError;
 use itertools::Itertools;
-use ndarray::{Array3, Axis, ShapeError};
+use ndarray::{Array, Array2, Array3, Axis, ShapeError};
 use rayon::iter::IntoParallelIterator;
 use rayon::iter::ParallelIterator;
 use rayon::iter::{IndexedParallelIterator, IntoParallelRefMutIterator};
@@ -215,6 +215,8 @@ pub struct Video<W: Write> {
     /// The current instantaneous frame
     pub instantaneous_frame: Mat,
 
+    pub running_intensities: Array2<i32>,
+
     abs_intensity_mat: Mat,
 
     /// The current view mode of the instantaneous frame
@@ -288,6 +290,8 @@ impl<W: Write + 'static> Video<W> {
         }
         let mut abs_intensity_mat = sae_mat.clone();
 
+        let running_intensities = Array::zeros((plane.h_usize(), plane.w_usize()));
+
         state.plane = plane;
         let instantaneous_view_mode = FramedViewMode::Intensity;
         let (event_sender, _) = channel();
@@ -310,6 +314,7 @@ impl<W: Write + 'static> Video<W> {
                     state,
                     event_pixel_trees,
                     instantaneous_frame,
+                    running_intensities,
                     abs_intensity_mat,
                     instantaneous_view_mode,
                     event_sender,
@@ -326,6 +331,7 @@ impl<W: Write + 'static> Video<W> {
                     state,
                     event_pixel_trees,
                     instantaneous_frame,
+                    running_intensities,
                     abs_intensity_mat,
                     instantaneous_view_mode,
                     event_sender,
@@ -617,34 +623,38 @@ impl<W: Write + 'static> Video<W> {
         // TODO: When there's full support for various bit-depth sources, modify this accordingly
         let practical_d_max =
             fast_math::log2_raw(255.0 * (self.state.delta_t_max / self.state.ref_time) as f32);
-        db.iter_mut().enumerate().for_each(|(idx, val)| {
-            let y = idx / self.state.plane.area_wc();
-            let x = (idx % self.state.plane.area_wc()) / self.state.plane.c_usize();
-            let c = idx % self.state.plane.c_usize();
+        db.iter_mut()
+            .zip(self.running_intensities.iter_mut())
+            .enumerate()
+            .for_each(|(idx, (val, running))| {
+                let y = idx / self.state.plane.area_wc();
+                let x = (idx % self.state.plane.area_wc()) / self.state.plane.c_usize();
+                let c = idx % self.state.plane.c_usize();
 
-            // let sae_time_since = self.event_pixel_trees[[y, x, c]].running_t
-            //     - self.event_pixel_trees[[y, x, c]].last_fired_t;
-            let sae_time = self.event_pixel_trees[[y, x, c]].last_fired_t;
-            *val = match self.event_pixel_trees[[y, x, c]].arena[0].best_event {
-                Some(event) => u8::get_frame_value(
-                    &event.into(),
-                    SourceType::U8,
-                    self.state.ref_time as DeltaT,
-                    practical_d_max,
-                    self.state.delta_t_max,
-                    self.instantaneous_view_mode,
-                    sae_time,
-                ),
-                None => *val,
-            };
+                // let sae_time_since = self.event_pixel_trees[[y, x, c]].running_t
+                //     - self.event_pixel_trees[[y, x, c]].last_fired_t;
+                let sae_time = self.event_pixel_trees[[y, x, c]].last_fired_t;
+                *val = match self.event_pixel_trees[[y, x, c]].arena[0].best_event {
+                    Some(event) => u8::get_frame_value(
+                        &event.into(),
+                        SourceType::U8,
+                        self.state.ref_time as DeltaT,
+                        practical_d_max,
+                        self.state.delta_t_max,
+                        self.instantaneous_view_mode,
+                        sae_time,
+                    ),
+                    None => *val,
+                };
+                *running = *val as i32;
 
-            if self.instantaneous_view_mode == FramedViewMode::SAE {
-                // let tmp = sae_mat.at_2d::<f32>(y as i32, x as i32).unwrap();
-                unsafe {
-                    *sae_mat.at_2d_mut::<f32>(y as i32, x as i32).unwrap() = sae_time as f32;
+                if self.instantaneous_view_mode == FramedViewMode::SAE {
+                    // let tmp = sae_mat.at_2d::<f32>(y as i32, x as i32).unwrap();
+                    unsafe {
+                        *sae_mat.at_2d_mut::<f32>(y as i32, x as i32).unwrap() = sae_time as f32;
+                    }
                 }
-            }
-        });
+            });
 
         if self.instantaneous_view_mode == FramedViewMode::SAE {
             let mut sae_mat_norm = Mat::default();
@@ -772,9 +782,23 @@ impl<W: Write + 'static> Video<W> {
         self.state.c_thresh_neg = c;
     }
 
-    pub(crate) fn feature_test(&self, e: &Event) -> Result<bool, Box<dyn Error>> {
-        // let candidate = sae_pol[[e.coord.y_usize(), e.coord.x_usize()]];
+    pub(crate) fn feature_test(&mut self, e: &Event) -> Result<(), Box<dyn Error>> {
+        if self.is_feature(e)? {
+            let color: u8 = 255;
+            let radius = 2;
+            for i in -radius..=radius {
+                *self
+                    .instantaneous_frame
+                    .at_2d_mut(e.coord.y as i32 + i, e.coord.x as i32)? = color;
+                *self
+                    .instantaneous_frame
+                    .at_2d_mut(e.coord.y as i32, e.coord.x as i32 + i)? = color;
+            }
+        }
+        Ok(())
+    }
 
+    fn is_feature(&self, e: &Event) -> Result<bool, Box<dyn Error>> {
         if e.coord
             .is_border(self.state.plane.w_usize(), self.state.plane.h_usize(), 3)
         {
@@ -866,7 +890,6 @@ impl<W: Write + 'static> Video<W> {
             }
 
             if !did_break {
-                eprint!("Y");
                 return Ok(true);
             }
         }

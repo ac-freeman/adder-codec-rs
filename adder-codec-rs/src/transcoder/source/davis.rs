@@ -405,9 +405,6 @@ impl<W: Write + 'static> Integration<W> {
                                     [[event.y() as usize % chunk_rows, event.x() as usize, 0]]
                                     >= tmpp
                             );
-                            if buffer_grew {
-                                // video.feature_test();
-                            }
                         }
                     }
 
@@ -416,6 +413,37 @@ impl<W: Write + 'static> Integration<W> {
             )
             .collect();
 
+        let db = match video.instantaneous_frame.data_bytes_mut() {
+            Ok(db) => db,
+            Err(e) => return Err(CodecError::MalformedEncoder), // TODO: Wrong type of error
+        };
+
+        // TODO: split off into separate function
+        // TODO: When there's full support for various bit-depth sources, modify this accordingly
+        let practical_d_max =
+            fast_math::log2_raw(255.0 * (video.state.delta_t_max / video.state.ref_time) as f32);
+        db.iter_mut()
+            .zip(video.running_intensities.iter_mut())
+            .enumerate()
+            .for_each(|(idx, (val, running))| {
+                let y = idx / video.state.plane.area_wc();
+                let x = (idx % video.state.plane.area_wc()) / video.state.plane.c_usize();
+                let c = idx % video.state.plane.c_usize();
+                *val = match video.event_pixel_trees[[y, x, c]].arena[0].best_event {
+                    Some(event) => u8::get_frame_value(
+                        &event.into(),
+                        SourceType::U8,
+                        video.state.ref_time as DeltaT,
+                        practical_d_max,
+                        video.state.delta_t_max,
+                        video.instantaneous_view_mode,
+                        0.0, //TODO
+                    ),
+                    None => *val,
+                };
+                *running = *val as i32;
+            });
+
         for events in &big_buffer {
             for (e1, e2) in events.iter().tuple_windows() {
                 video.encoder.ingest_event(*e1)?;
@@ -423,6 +451,10 @@ impl<W: Write + 'static> Integration<W> {
                     video.feature_test(e1);
                 }
             }
+        }
+
+        if video.state.show_live {
+            show_display("instance", &video.instantaneous_frame, 1, video).unwrap();
         }
         Ok(())
     }
@@ -513,23 +545,27 @@ impl<W: Write + 'static> Integration<W> {
         // TODO: When there's full support for various bit-depth sources, modify this accordingly
         let practical_d_max =
             fast_math::log2_raw(255.0 * (video.state.delta_t_max / video.state.ref_time) as f32);
-        db.par_iter_mut().enumerate().for_each(|(idx, val)| {
-            let y = idx / video.state.plane.area_wc();
-            let x = (idx % video.state.plane.area_wc()) / video.state.plane.c_usize();
-            let c = idx % video.state.plane.c_usize();
-            *val = match video.event_pixel_trees[[y, x, c]].arena[0].best_event {
-                Some(event) => u8::get_frame_value(
-                    &event.into(),
-                    SourceType::U8,
-                    video.state.ref_time as DeltaT,
-                    practical_d_max,
-                    video.state.delta_t_max,
-                    video.instantaneous_view_mode,
-                    0.0, //TODO
-                ),
-                None => *val,
-            };
-        });
+        db.iter_mut()
+            .zip(video.running_intensities.iter_mut())
+            .enumerate()
+            .for_each(|(idx, (val, running))| {
+                let y = idx / video.state.plane.area_wc();
+                let x = (idx % video.state.plane.area_wc()) / video.state.plane.c_usize();
+                let c = idx % video.state.plane.c_usize();
+                *val = match video.event_pixel_trees[[y, x, c]].arena[0].best_event {
+                    Some(event) => u8::get_frame_value(
+                        &event.into(),
+                        SourceType::U8,
+                        video.state.ref_time as DeltaT,
+                        practical_d_max,
+                        video.state.delta_t_max,
+                        video.instantaneous_view_mode,
+                        0.0, //TODO
+                    ),
+                    None => *val,
+                };
+                *running = *val as i32;
+            });
 
         for events in &big_buffer {
             for (e1, e2) in events.iter().tuple_windows() {
