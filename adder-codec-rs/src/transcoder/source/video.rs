@@ -1,4 +1,5 @@
 use opencv::core::{KeyPoint, Mat, Scalar, Size, Vector, CV_32F, CV_32FC3, CV_8U, CV_8UC3};
+use std::error::Error;
 use std::io::{sink, Write};
 use std::mem::swap;
 
@@ -24,6 +25,7 @@ use crate::transcoder::event_pixel_tree::{Intensity32, PixelArena};
 use adder_codec_core::codec::compressed::stream::CompressedOutput;
 use adder_codec_core::Mode::{Continuous, FramePerfect};
 use davis_edi_rs::util::reconstructor::ReconstructionError;
+use itertools::Itertools;
 use ndarray::{Array3, Axis, ShapeError};
 use rayon::iter::IntoParallelIterator;
 use rayon::iter::ParallelIterator;
@@ -225,7 +227,6 @@ pub struct Video<W: Write> {
     // TODO: Hold multiple encoder options and an enum, so that boxing isn't required.
     // Also hold a state for whether or not to write out events at all, so that a null writer isn't required.
 }
-
 unsafe impl<W: Write> Send for Video<W> {}
 
 impl<W: Write + 'static> Video<W> {
@@ -588,8 +589,6 @@ impl<W: Write + 'static> Video<W> {
             })
             .collect();
 
-        self.encoder.ingest_events_events(&big_buffer)?;
-
         let db = match self.instantaneous_frame.data_bytes_mut() {
             Ok(v) => v,
             Err(e) => {
@@ -692,6 +691,15 @@ impl<W: Write + 'static> Video<W> {
         )?;
         show_display_force("keypoints", &keypoint_mat, 1)?;
 
+        for events in &big_buffer {
+            for (e1, e2) in events.iter().tuple_windows() {
+                self.encoder.ingest_event(*e1)?;
+                if e2.delta_t != e1.delta_t {
+                    self.feature_test(e1);
+                }
+            }
+        }
+
         // let mut corners = Mat::default();
         //
         // opencv::imgproc::corner_harris(
@@ -763,7 +771,119 @@ impl<W: Write + 'static> Video<W> {
     pub fn update_adder_thresh_neg(&mut self, c: u8) {
         self.state.c_thresh_neg = c;
     }
+
+    pub(crate) fn feature_test(&self, e: &Event) -> Result<bool, Box<dyn Error>> {
+        // let candidate = sae_pol[[e.coord.y_usize(), e.coord.x_usize()]];
+
+        if e.coord
+            .is_border(self.state.plane.w_usize(), self.state.plane.h_usize(), 3)
+        {
+            return Ok(false);
+        }
+
+        let img = &self.instantaneous_frame;
+        let candidate: i32 = (*img.at_2d::<u8>(e.coord.y as i32, e.coord.x as i32)?) as i32;
+
+        let mut count = 0;
+        if (*img.at_2d::<u8>(
+            (e.coord.y as i32 + circle3_[4][1]),
+            (e.coord.x as i32 + circle3_[4][0]),
+        )? as i32
+            - candidate)
+            .abs()
+            > INTENSITY_THRESHOLD
+        {
+            count += 1;
+        }
+        if (*img.at_2d::<u8>(
+            (e.coord.y as i32 + circle3_[12][1]),
+            (e.coord.x as i32 + circle3_[12][0]),
+        )? as i32
+            - candidate)
+            .abs()
+            > INTENSITY_THRESHOLD
+        {
+            count += 1;
+        }
+        if (*img.at_2d::<u8>(
+            (e.coord.y as i32 + circle3_[1][1]),
+            (e.coord.x as i32 + circle3_[1][0]),
+        )? as i32
+            - candidate)
+            .abs()
+            > INTENSITY_THRESHOLD
+        {
+            count += 1;
+        }
+
+        if (*img.at_2d::<u8>(
+            (e.coord.y as i32 + circle3_[7][1]),
+            (e.coord.x as i32 + circle3_[7][0]),
+        )? as i32
+            - candidate)
+            .abs()
+            > INTENSITY_THRESHOLD
+        {
+            count += 1;
+        }
+
+        if count <= 2 {
+            return Ok(false);
+        }
+
+        let streak_size = 12;
+
+        for i in 0..16 {
+            // Are we looking at a bright or dark streak?
+            let brighter = *img.at_2d::<u8>(
+                (e.coord.y as i32 + circle3_[i][1]),
+                (e.coord.x as i32 + circle3_[i][0]),
+            )? as i32
+                > candidate;
+
+            let mut did_break = false;
+
+            for j in 0..streak_size {
+                if brighter {
+                    if *img.at_2d::<u8>(
+                        (e.coord.y as i32 + circle3_[(i + j) % 16][1]),
+                        (e.coord.x as i32 + circle3_[(i + j) % 16][0]),
+                    )? as i32
+                        <= candidate + INTENSITY_THRESHOLD
+                    {
+                        did_break = true;
+                    }
+                } else {
+                    if *img.at_2d::<u8>(
+                        (e.coord.y as i32 + circle3_[(i + j) % 16][1]),
+                        (e.coord.x as i32 + circle3_[(i + j) % 16][0]),
+                    )? as i32
+                        >= candidate - INTENSITY_THRESHOLD
+                    {
+                        did_break = true;
+                    }
+                }
+            }
+
+            if !did_break {
+                eprint!("Y");
+                return Ok(true);
+            }
+        }
+
+        return Ok(false);
+    }
 }
+
+const INTENSITY_THRESHOLD: i32 = 30;
+
+#[rustfmt::skip]
+const circle3_: [[i32; 2]; 16] = [
+    [0, 3], [1, 3], [2, 2], [3, 1],
+    [3, 0], [3, -1], [2, -2], [1, -3],
+    [0, -3], [-1, -3], [-2, -2], [-3, -1],
+    [-3, 0], [-3, 1], [-2, 2], [-1, 3]
+];
 
 /// Integrate an intensity value for a pixel, over a given time span
 ///
@@ -788,9 +908,11 @@ pub fn integrate_for_px(
     time_spanned: f32,
     buffer: &mut Vec<Event>,
     state: &VideoState,
-) {
+) -> bool {
+    let mut grew_buffer = false;
     if px.need_to_pop_top {
         buffer.push(px.pop_top_event(intensity, state.pixel_tree_mode, state.ref_time));
+        grew_buffer = true;
     }
 
     *base_val = px.base_val;
@@ -799,6 +921,7 @@ pub fn integrate_for_px(
         || *frame_val > base_val.saturating_add(state.c_thresh_pos)
     {
         px.pop_best_events(buffer, state.pixel_tree_mode, state.ref_time);
+        grew_buffer = true;
         px.base_val = *frame_val;
 
         // If continuous mode and the D value needs to be different now
@@ -820,7 +943,10 @@ pub fn integrate_for_px(
 
     if px.need_to_pop_top {
         buffer.push(px.pop_top_event(intensity, state.pixel_tree_mode, state.ref_time));
+        grew_buffer = true;
     }
+
+    return grew_buffer;
 }
 
 /// If `video.show_display`, shows the given [`Mat`] in an `OpenCV` window

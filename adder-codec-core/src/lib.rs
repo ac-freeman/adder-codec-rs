@@ -422,6 +422,15 @@ impl Coord {
     pub fn is_eof(&self) -> bool {
         self.x == EOF_PX_ADDRESS && self.y == EOF_PX_ADDRESS
     }
+
+    /// Is this coordinate at the border of the image?
+    pub fn is_border(&self, width: usize, height: usize, max_scale: usize) -> bool {
+        let cs = max_scale * 4;
+        self.x_usize() < cs
+            || self.x_usize() >= width - cs
+            || self.y_usize() < cs
+            || self.y_usize() >= height - cs
+    }
 }
 
 /// A 2D coordinate representation

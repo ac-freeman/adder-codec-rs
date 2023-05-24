@@ -15,6 +15,7 @@ use opencv::prelude::*;
 use bumpalo::Bump;
 use ndarray::{Array3, Axis};
 
+use itertools::Itertools;
 use rayon::iter::IntoParallelIterator;
 use rayon::{current_num_threads, ThreadPool};
 use std::cmp::max;
@@ -326,7 +327,10 @@ impl<W: Write + 'static> Integration<W> {
                                 / video.state.ref_time as f32
                                 * delta_t_ticks)
                                 .max(0.0);
+
+                            let mut buffer_grew = false;
                             if px.need_to_pop_top {
+                                buffer_grew = true;
                                 buffer.push(px.pop_top_event(
                                     first_integration,
                                     Continuous,
@@ -349,6 +353,7 @@ impl<W: Write + 'static> Integration<W> {
                             );
 
                             if px.need_to_pop_top {
+                                buffer_grew = true;
                                 buffer.push(px.pop_top_event(
                                     first_integration,
                                     Continuous,
@@ -399,6 +404,9 @@ impl<W: Write + 'static> Integration<W> {
                                     [[event.y() as usize % chunk_rows, event.x() as usize, 0]]
                                     >= tmpp
                             );
+                            if buffer_grew {
+                                // video.feature_test();
+                            }
                         }
                     }
 
@@ -407,7 +415,14 @@ impl<W: Write + 'static> Integration<W> {
             )
             .collect();
 
-        video.encoder.ingest_events_events(&big_buffer)?;
+        for events in &big_buffer {
+            for (e1, e2) in events.iter().tuple_windows() {
+                video.encoder.ingest_event(*e1)?;
+                if e2.delta_t != e1.delta_t {
+                    video.feature_test(e1);
+                }
+            }
+        }
         Ok(())
     }
 
@@ -488,8 +503,6 @@ impl<W: Write + 'static> Integration<W> {
             })
             .collect();
 
-        video.encoder.ingest_events_events(&big_buffer)?;
-
         let db = match video.instantaneous_frame.data_bytes_mut() {
             Ok(db) => db,
             Err(e) => return Err(SourceError::OpencvError(e)),
@@ -516,6 +529,16 @@ impl<W: Write + 'static> Integration<W> {
                 None => *val,
             };
         });
+
+        for events in &big_buffer {
+            for (e1, e2) in events.iter().tuple_windows() {
+                video.encoder.ingest_event(*e1)?;
+                if e2.delta_t != e1.delta_t {
+                    video.feature_test(e1);
+                }
+            }
+        }
+
         if video.state.show_live {
             show_display("instance", &video.instantaneous_frame, 1, video)?;
         }
