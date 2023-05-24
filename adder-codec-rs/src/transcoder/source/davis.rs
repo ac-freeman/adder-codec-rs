@@ -484,21 +484,6 @@ impl<W: Write + 'static> Integration<W> {
                         &mut buffer,
                         &video.state,
                     );
-                    if px.need_to_pop_top {
-                        buffer.push(px.pop_top_event(
-                            integration as f32,
-                            video.state.pixel_tree_mode,
-                            video.state.ref_time,
-                        ));
-                    }
-
-                    // TODO: temporary debugging
-                    // self.dvs_last_timestamps[[px.coord.y as usize, px.coord.x as usize, 0]] +=
-                    //     delta_t_micro;
-                    // let a = px.running_t as i64;
-                    // let b = self.dvs_last_timestamps[[px.coord.y as usize, px.coord.x as usize, 0]]
-                    //     - self.temp_first_frame_start_timestamp;
-                    // debug_assert!({ a == b });
                 }
                 buffer
             })
