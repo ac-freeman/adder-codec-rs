@@ -63,16 +63,16 @@ default-features = false
 features = ['videoio', 'imgproc', 'highgui']
 optional = true
 
-[dev-dependencies]
+[target.'cfg(any(target_os = "linux"))'.dev-dependencies]
 criterion = "0.3.6"
 criterion-perf-events = "0.2.0"
 perfcnt = "0.8.0"
 
-[[bench]]
+[[target.'cfg(any(target_os = "linux"))'.bench]]
 name = "framed_to_adder_hd"
 harness = false
 
-[[bench]]
+[[target.'cfg(any(target_os = "linux"))'.bench]]
 name = "block"
 harness = false
 
