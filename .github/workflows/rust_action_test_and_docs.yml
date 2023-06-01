@@ -67,5 +67,5 @@ jobs:
             default: true
 
         - name: Run a documentation generation test
-          run: cargo doc -vv -p adder-codec-rs --features=docs-only
+          run: cargo doc -vv 
 
