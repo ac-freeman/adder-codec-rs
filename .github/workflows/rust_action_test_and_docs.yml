@@ -55,4 +55,4 @@ jobs:
           files: lcov.info
           fail_ci_if_error: false
       - name: Run a documentation generation test
-          run: cargo doc -vv
+        run: cargo doc -vv
