@@ -54,18 +54,5 @@ jobs:
         with:
           files: lcov.info
           fail_ci_if_error: false
-
-  docs-rs:
-      runs-on: ubuntu-20.04
-      steps:
-        - uses: actions/checkout@v2
-
-        - name: Install Rust
-          uses: actions-rs/toolchain@v1
-          with:
-            toolchain: stable
-            default: true
-
-        - name: Run a documentation generation test
-          run: cargo doc -vv 
-
+      - name: Run a documentation generation test
+        run: cargo doc -vv

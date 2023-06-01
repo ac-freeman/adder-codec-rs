@@ -303,9 +303,9 @@ impl AdderPlayer {
                         * 255.0;
 
                     let db = display_mat.data_bytes_mut()?;
-                    db[(y as usize * meta.plane.area_wc()
+                    db[y as usize * meta.plane.area_wc()
                         + x as usize * meta.plane.c_usize()
-                        + c as usize)] = frame_intensity as u8;
+                        + c as usize] = frame_intensity as u8;
                 }
                 Err(_e) => {
                     match stream

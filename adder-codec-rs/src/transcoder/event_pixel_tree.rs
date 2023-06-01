@@ -89,7 +89,7 @@ impl PixelArena {
 
     /// If the integration is 0, we need to forcefully fire an event where d=254
     fn get_zero_event(&mut self, idx: usize, next_intensity: Option<Intensity32>) -> Event64 {
-        let mut node = &mut self.arena[idx];
+        let node = &mut self.arena[idx];
         let ret_event = Event64 {
             coord: self.coord,
             d: D_ZERO_INTEGRATION, // 254_u8
@@ -149,7 +149,7 @@ impl PixelArena {
         ref_time: DeltaT,
     ) -> Event64 {
         self.need_to_pop_top = false;
-        let mut root = &mut self.arena[0];
+        let root = &mut self.arena[0];
         match root.best_event {
             None => {
                 if root.state.integration == 0.0 && root.state.delta_t > 0.0 {

@@ -1,6 +1,6 @@
 [package]
 name = "adder-codec-rs"
-version = "0.3.1"
+version = "0.3.2"
 edition = "2021"
 authors = ["Andrew C. Freeman"]
 description = """Encoder/transcoder/decoder for ADΔER (Address, Decimation, Δt Event Representation) streams.
@@ -22,7 +22,8 @@ default-run = "adder_simulproc"
 default = ["transcoder"]
 transcoder = ["opencv", "dep:fast-math"]
 raw-codec = []
-docs-only = ["opencv/docs-only", "dep:fast-math"]
+#docs-only = ["opencv/docs-only", "dep:fast-math"]
+docs-only = ["dep:fast-math"]
 
 [dependencies]
 adder-codec-core = { path = "../adder-codec-core", version = "0.1.2"}
@@ -31,7 +32,7 @@ bincode = "1.3.3"
 bitvec = "1.0.1"
 bumpalo = "3.11.0"
 clap = { version = "4.0.17", features = ["derive"] }
-davis-edi-rs = "0.2.1"
+davis-edi-rs = "0.2.2"
 duplicate = "0.4.1"
 fast-math = { version = "0.1", optional = true }
 fenwick = "2.0.1"
@@ -56,22 +57,22 @@ toml = "0.5.8"
 bitstream-io = "1.6.0"
 
 [dependencies.opencv]
-version = '0.66.0'
+version = "0.76.4"
 package = 'opencv'
 default-features = false
 features = ['videoio', 'imgproc', 'highgui']
 optional = true
 
-[dev-dependencies]
+[target.'cfg(any(target_os = "linux"))'.dev-dependencies]
 criterion = "0.3.6"
 criterion-perf-events = "0.2.0"
 perfcnt = "0.8.0"
 
-[[bench]]
+[[target.'cfg(any(target_os = "linux"))'.bench]]
 name = "framed_to_adder_hd"
 harness = false
 
-[[bench]]
+[[target.'cfg(any(target_os = "linux"))'.bench]]
 name = "block"
 harness = false
 
