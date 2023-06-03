@@ -5,10 +5,13 @@ on:
     branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
-    
+
+env:
+  CARGO_TERM_COLOR: always
+
 jobs:
-  check_and_test_project:
-    name: Rust project
+  check_and_test_ubuntu:
+    name: Check and test on Ubuntu
     runs-on: ubuntu-20.04
     steps:
       - uses: actions/checkout@v2
@@ -56,3 +59,39 @@ jobs:
           fail_ci_if_error: false
       - name: Run a documentation generation test
         run: cargo doc -vv
+  check_windows:
+    name: Check and test on Windows
+    runs-on: windows-2022
+    env:
+      LLVM_VERSION: 15.0.7
+      OPENCV_VERSION: 4.6.0
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+          override: true
+
+      - name: Install LLVM/clang
+        run: choco install -y llvm --version "$LLVM_VERSION"
+        shell: bash
+
+      - name: Install OpenCV
+        run: choco install -y opencv --version "$OPENCV_VERSION"
+        shell: bash
+
+      - name: Build binary
+        run: |
+          export PATH="/C/Program Files/LLVM/bin:$PATH"
+          export LIBCLANG_PATH="/C/Program Files/LLVM/bin"
+          export PATH="/C/tools/opencv/build/x64/vc15/bin:$PATH"
+          export OPENCV_LINK_PATHS="/C/tools/opencv/build/x64/vc15/lib"
+          export OPENCV_LINK_LIBS="opencv_world${OPENCV_VERSION//./}"
+          export OPENCV_INCLUDE_PATHS="/C/tools/opencv/build/include"
+          cargo build -p adder-info
+        shell: bash
+
+      - name: Test project
+        run: cargo test -vv
