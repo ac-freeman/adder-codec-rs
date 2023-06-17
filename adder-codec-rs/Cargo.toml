@@ -22,8 +22,6 @@ default-run = "adder_simulproc"
 default = ["transcoder"]
 transcoder = ["opencv", "dep:fast-math"]
 raw-codec = []
-#docs-only = ["opencv/docs-only", "dep:fast-math"]
-docs-only = ["dep:fast-math"]
 
 [dependencies]
 adder-codec-core = { path = "../adder-codec-core", version = "0.1.2"}
@@ -79,4 +77,4 @@ harness = false
 [package.metadata.docs.rs]
 no-default-features = true
 default-target = "x86_64-unknown-linux-gnu"
-features = ["docs-only"]
+features = ["transcoder"]
