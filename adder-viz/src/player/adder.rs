@@ -551,7 +551,7 @@ impl AdderPlayer {
             }
 
             let mut keypoints = Vector::<KeyPoint>::new();
-            opencv::features2d::FAST(display_mat, &mut keypoints, 50, true)?;
+            opencv::features2d::fast(display_mat, &mut keypoints, 50, true)?;
             let mut keypoint_mat = Mat::default();
             opencv::features2d::draw_keypoints(
                 display_mat,
