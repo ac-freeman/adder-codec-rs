@@ -554,6 +554,9 @@ fn side_panel_grid_contents(
                     "Compressed",
                 );
             });
+            ui.horizontal(|ui| {
+                ui.radio_value(&mut ui_state.encoder_type, EncoderType::RawBandwidthLimited, "Raw, bandwidth limited (WIP)");
+            });
         });
     });
     ui.end_row();

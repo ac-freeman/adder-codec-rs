@@ -5,7 +5,7 @@ use std::mem::swap;
 
 use adder_codec_core::codec::empty::stream::EmptyOutput;
 use adder_codec_core::codec::encoder::Encoder;
-use adder_codec_core::codec::raw::stream::{RawOutput, RawOutputInterleaved};
+use adder_codec_core::codec::raw::stream::{RawOutput, RawOutputInterleaved, RawOutputBandwidthLimited};
 use adder_codec_core::codec::{
     encoder, CodecError, CodecMetadata, EncoderType, LATEST_CODEC_VERSION,
 };
@@ -484,6 +484,24 @@ impl<W: Write + 'static> Video<W> {
                     write,
                 );
                 Encoder::new_raw_interleaved(compression)
+            }
+            EncoderType::RawBandwidthLimited => {
+                // TODO: wip
+                let compression = RawOutputBandwidthLimited::new(
+                    CodecMetadata {
+                        codec_version: LATEST_CODEC_VERSION,
+                        header_size: 0,
+                        time_mode: time_mode.unwrap_or_default(),
+                        plane: self.state.plane,
+                        tps: self.state.tps,
+                        ref_interval: self.state.ref_time,
+                        delta_t_max: self.state.delta_t_max,
+                        event_size: 0,
+                        source_camera: source_camera.unwrap_or_default(),
+                    },
+                    write,
+                );
+                Encoder::new_raw_bandwidth(compression)
             }
             EncoderType::Empty => {
                 let compression = EmptyOutput::new(

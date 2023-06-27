@@ -12,6 +12,7 @@ pub enum WriteCompressionEnum<W: Write> {
     CompressedOutput(CompressedOutput<W>),
     RawOutput(RawOutput<W>),
     RawOutputInterleaved(RawOutputInterleaved<W>),
+    RawOutputBandwidthLimited(RawOutputBandwidthLimited<W>),
     EmptyOutput(EmptyOutput<Sink>),
 }
 
@@ -20,6 +21,7 @@ pub enum EncoderType {
     Compressed,
     Raw,
     RawInterleaved,
+    RawBandwidthLimited,
 
     #[default]
     Empty,
@@ -174,7 +176,7 @@ use crate::codec::compressed::stream::{CompressedInput, CompressedOutput};
 // use crate::codec::empty::stream::EmptyOutput;
 use crate::codec::compressed::adu::frame::Adu;
 use crate::codec::empty::stream::EmptyOutput;
-use crate::codec::raw::stream::{RawInput, RawOutput, RawOutputInterleaved};
+use crate::codec::raw::stream::{RawInput, RawOutput, RawOutputInterleaved, RawOutputBandwidthLimited};
 use crate::codec_old::compressed::fenwick::ValueError;
 use thiserror::Error;
 
