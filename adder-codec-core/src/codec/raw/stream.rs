@@ -39,6 +39,9 @@ pub struct RawOutputBandwidthLimited<W> {
         WithOtherIntEncoding<DefaultOptions, FixintEncoding>,
         bincode::config::BigEndian,
     >,
+    target_bitrate: f64,
+    current_bitrate: f64,
+    last_event: i64,
     pub(crate) stream: Option<W>,
 }
 
@@ -283,6 +286,9 @@ impl<W: Write> RawOutputBandwidthLimited<W> {
         Self {
             meta,
             bincode,
+            target_bitrate: 20.0,
+            current_bitrate: 0.0,
+            last_event: 0,
             stream: Some(writer),
         }
     }
@@ -292,7 +298,6 @@ impl<W: Write> RawOutputBandwidthLimited<W> {
     }
 }
 
-// TODO: wip
 impl<W: Write> WriteCompression<W> for RawOutputBandwidthLimited<W> {
     fn magic(&self) -> Magic {
         MAGIC_RAW
@@ -342,6 +347,7 @@ impl<W: Write> WriteCompression<W> for RawOutputBandwidthLimited<W> {
     ///
     /// This will always write the event immediately to the underlying writer.
     fn ingest_event(&mut self, event: Event) -> Result<(), CodecError> {
+        // TODO: Eric
         // NOTE: for speed, the following checks only run in debug builds. It's entirely
         // possibly to encode nonsensical events if you want to.
         debug_assert!(event.coord.x < self.meta.plane.width || event.coord.x == EOF_PX_ADDRESS);
