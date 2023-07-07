@@ -126,6 +126,7 @@ impl PlayerState {
         }
         if let Some(rx) = &self.player_rx {
             let (event_count, stream_state, image_opt) = rx.try_recv()?;
+            // we dont get to here
             self.ui_info_state.events_total += event_count;
             self.ui_info_state.stream_state = stream_state;
 

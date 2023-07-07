@@ -10,6 +10,7 @@ use priority_queue::PriorityQueue;
 use std::cmp::Reverse;
 use std::collections::BinaryHeap;
 use std::io::{Read, Seek, SeekFrom, Write};
+use std::time::Instant;
 
 /// Write uncompressed (raw) ADΔER data to a stream.
 pub struct RawOutput<W> {
@@ -41,7 +42,7 @@ pub struct RawOutputBandwidthLimited<W> {
     >,
     target_bitrate: f64,
     current_bitrate: f64,
-    last_event: i64,
+    last_event: Instant,
     pub(crate) stream: Option<W>,
 }
 
@@ -286,9 +287,9 @@ impl<W: Write> RawOutputBandwidthLimited<W> {
         Self {
             meta,
             bincode,
-            target_bitrate: 20.0,
+            target_bitrate: 65.0,
             current_bitrate: 0.0,
-            last_event: 0,
+            last_event: Instant::now(),
             stream: Some(writer),
         }
     }
@@ -344,8 +345,6 @@ impl<W: Write> WriteCompression<W> for RawOutputBandwidthLimited<W> {
     }
 
     /// Ingest an event into the codec_old.
-    ///
-    /// This will always write the event immediately to the underlying writer.
     fn ingest_event(&mut self, event: Event) -> Result<(), CodecError> {
         // TODO: Eric
         // NOTE: for speed, the following checks only run in debug builds. It's entirely
@@ -354,6 +353,25 @@ impl<W: Write> WriteCompression<W> for RawOutputBandwidthLimited<W> {
         debug_assert!(event.coord.y < self.meta.plane.height || event.coord.y == EOF_PX_ADDRESS);
 
         // TODO: Switch functionality based on what the deltat mode is!
+        // ^ I don't know what that means -Eric
+
+        const A: f64 = 0.9;
+
+        let now = Instant::now();
+        let t_diff = now.duration_since(self.last_event).as_millis() as f64;
+        //println!("t_diff: {}", t_diff);
+        let new_bitrate = A * self.current_bitrate + (1.0 - A) / t_diff;
+
+        if new_bitrate > self.target_bitrate {
+            //println!("Skipping event!");
+            return Ok(()); // skip this event
+        }
+
+        //println!("Not skipping event!");
+        //println!("{}", new_bitrate);
+
+        self.last_event = now; // update time
+        self.current_bitrate = new_bitrate;
 
         let output_event: EventSingle;
         if self.meta.plane.channels == 1 {
