@@ -51,6 +51,23 @@ series = {MMSys '23}
 }
 ```
 
+[The ADΔER Framework: Tools for Event Video Representations](https://dl.acm.org/doi/pdf/10.1145/3587819.3593028)
+```bibtex
+@inproceedings{Freeman23-0,
+  title = {The ADΔER Framework: Tools for Event Video Representations},
+  author = {Andrew C. Freeman},
+  year = {2023},
+  doi = {10.1145/3587819.3593028},
+  url = {https://doi.org/10.1145/3587819.3593028},
+  researchr = {https://researchr.org/publication/Freeman23-0},
+  cites = {0},
+  citedby = {0},
+  pages = {343-347},
+  booktitle = {Proceedings of the 14th Conference on ACM Multimedia Systems, MMSys 2023, Vancouver, BC, Canada, June 7-10, 2023},
+  publisher = {ACM},
+}
+```
+
 [Motion segmentation and tracking for integrating event cameras](https://dl.acm.org/doi/abs/10.1145/3458305.3463373)
 ```bibtex
 @inproceedings{10.1145/3458305.3463373,
