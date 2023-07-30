@@ -346,13 +346,17 @@ impl<W: Write + 'static> Video<W> {
 
     /// Set the positive contrast threshold
     pub fn c_thresh_pos(mut self, c_thresh_pos: u8) -> Self {
-        self.state.c_thresh_pos = c_thresh_pos;
+        for px in self.event_pixel_trees.iter_mut() {
+            px.c_thresh = c_thresh_pos;
+        }
         self
     }
 
     /// Set the negative contrast threshold
     pub fn c_thresh_neg(mut self, c_thresh_neg: u8) -> Self {
-        self.state.c_thresh_neg = c_thresh_neg;
+        for px in self.event_pixel_trees.iter_mut() {
+            px.c_thresh = c_thresh_neg;
+        }
         self
     }
 
@@ -776,16 +780,23 @@ impl<W: Write + 'static> Video<W> {
 
     /// Set a new value for `c_thresh_pos`
     pub fn update_adder_thresh_pos(&mut self, c: u8) {
-        self.state.c_thresh_pos = c;
+        for px in self.event_pixel_trees.iter_mut() {
+            px.c_thresh = c;
+        }
+        // self.state.c_thresh_pos = c;
     }
 
     /// Set a new value for `c_thresh_neg`
     pub fn update_adder_thresh_neg(&mut self, c: u8) {
-        self.state.c_thresh_neg = c;
+        for px in self.event_pixel_trees.iter_mut() {
+            px.c_thresh = c;
+        }
+        // self.state.c_thresh_neg = c;
     }
 
     pub(crate) fn feature_test(&mut self, e: &Event) -> Result<(), Box<dyn Error>> {
         if self.is_feature(e)? {
+            // Display the feature on the viz frame
             let color: u8 = 255;
             let radius = 2;
             for i in -radius..=radius {
@@ -795,6 +806,20 @@ impl<W: Write + 'static> Video<W> {
                 *self
                     .instantaneous_frame
                     .at_2d_mut(e.coord.y as i32, e.coord.x as i32 + i)? = color;
+            }
+
+            // Reset the threshold for that pixel and its neighbors
+
+            let radius = 5;
+            for r in -radius..=radius {
+                for c in -radius..=radius {
+                    self.event_pixel_trees[[
+                        (e.coord.y() as i32 + r) as usize,
+                        (e.coord.x() as i32 + c) as usize,
+                        e.coord.c_usize(),
+                    ]]
+                    .c_thresh = 10;
+                }
             }
         }
         Ok(())
@@ -942,8 +967,8 @@ pub fn integrate_for_px(
 
     *base_val = px.base_val;
 
-    if *frame_val < base_val.saturating_sub(state.c_thresh_neg)
-        || *frame_val > base_val.saturating_add(state.c_thresh_pos)
+    if *frame_val < base_val.saturating_sub(px.c_thresh)
+        || *frame_val > base_val.saturating_add(px.c_thresh)
     {
         px.pop_best_events(buffer, state.pixel_tree_mode, state.ref_time);
         grew_buffer = true;

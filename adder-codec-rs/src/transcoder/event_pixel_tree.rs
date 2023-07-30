@@ -57,6 +57,7 @@ pub struct PixelArena {
     pub base_val: u8,
     pub need_to_pop_top: bool,
     pub arena: SmallVec<[PixelNode; 6]>,
+    pub(crate) c_thresh: u8,
 }
 
 impl PixelArena {
@@ -73,6 +74,7 @@ impl PixelArena {
             base_val: 0,
             need_to_pop_top: false,
             arena,
+            c_thresh: 10,
         }
     }
 
@@ -319,6 +321,11 @@ impl PixelArena {
             // By design, the integration will not exceed 2^[`D_MAX`], so we can
             // safely cast it to integer [`D`] type.
             unsafe { self.arena[0].state.delta_t.to_int_unchecked::<DeltaT>() } >= dtm;
+
+        if self.c_thresh < 40 {
+            // Increment the threshold
+            self.c_thresh += 1;
+        }
     }
 
     /// Integrate an intensity for a given node. Returns `Some()` if the node fires an event, so
