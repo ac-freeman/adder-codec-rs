@@ -212,9 +212,11 @@ pub struct Video<W: Write> {
     pub state: VideoState,
     pub(crate) event_pixel_trees: Array3<PixelArena>,
 
-    /// The current instantaneous frame
+    // pub instan: Mat,
+    /// The current instantaneous display frame
     pub instantaneous_frame: Mat,
 
+    /// The current instantaneous frame, for determining features
     pub running_intensities: Array2<i32>,
 
     abs_intensity_mat: Mat,
@@ -805,34 +807,34 @@ impl<W: Write + 'static> Video<W> {
             return Ok(false);
         }
 
-        let img = &self.instantaneous_frame;
-        let candidate: i32 = (*img.at_2d::<u8>(e.coord.y as i32, e.coord.x as i32)?) as i32;
+        let img = &self.running_intensities;
+        let candidate: i32 = (img[(e.coord.y_usize(), e.coord.x_usize())]) as i32;
 
         let mut count = 0;
-        if (*img.at_2d::<u8>(
-            (e.coord.y as i32 + circle3_[4][1]),
-            (e.coord.x as i32 + circle3_[4][0]),
-        )? as i32
+        if (img[(
+            (e.coord.y as i32 + circle3_[4][1]) as usize,
+            (e.coord.x as i32 + circle3_[4][0]) as usize,
+        )] as i32
             - candidate)
             .abs()
             > INTENSITY_THRESHOLD
         {
             count += 1;
         }
-        if (*img.at_2d::<u8>(
-            (e.coord.y as i32 + circle3_[12][1]),
-            (e.coord.x as i32 + circle3_[12][0]),
-        )? as i32
+        if (img[(
+            (e.coord.y as i32 + circle3_[12][1]) as usize,
+            (e.coord.x as i32 + circle3_[12][0]) as usize,
+        )] as i32
             - candidate)
             .abs()
             > INTENSITY_THRESHOLD
         {
             count += 1;
         }
-        if (*img.at_2d::<u8>(
-            (e.coord.y as i32 + circle3_[1][1]),
-            (e.coord.x as i32 + circle3_[1][0]),
-        )? as i32
+        if (img[(
+            (e.coord.y as i32 + circle3_[1][1]) as usize,
+            (e.coord.x as i32 + circle3_[1][0]) as usize,
+        )] as i32
             - candidate)
             .abs()
             > INTENSITY_THRESHOLD
@@ -840,10 +842,10 @@ impl<W: Write + 'static> Video<W> {
             count += 1;
         }
 
-        if (*img.at_2d::<u8>(
-            (e.coord.y as i32 + circle3_[7][1]),
-            (e.coord.x as i32 + circle3_[7][0]),
-        )? as i32
+        if (img[(
+            (e.coord.y as i32 + circle3_[7][1]) as usize,
+            (e.coord.x as i32 + circle3_[7][0]) as usize,
+        )] as i32
             - candidate)
             .abs()
             > INTENSITY_THRESHOLD
@@ -859,29 +861,29 @@ impl<W: Write + 'static> Video<W> {
 
         for i in 0..16 {
             // Are we looking at a bright or dark streak?
-            let brighter = *img.at_2d::<u8>(
-                (e.coord.y as i32 + circle3_[i][1]),
-                (e.coord.x as i32 + circle3_[i][0]),
-            )? as i32
+            let brighter = img[(
+                (e.coord.y as i32 + circle3_[i][1]) as usize,
+                (e.coord.x as i32 + circle3_[i][0]) as usize,
+            )] as i32
                 > candidate;
 
             let mut did_break = false;
 
             for j in 0..streak_size {
                 if brighter {
-                    if *img.at_2d::<u8>(
-                        (e.coord.y as i32 + circle3_[(i + j) % 16][1]),
-                        (e.coord.x as i32 + circle3_[(i + j) % 16][0]),
-                    )? as i32
+                    if img[(
+                        (e.coord.y as i32 + circle3_[(i + j) % 16][1]) as usize,
+                        (e.coord.x as i32 + circle3_[(i + j) % 16][0]) as usize,
+                    )] as i32
                         <= candidate + INTENSITY_THRESHOLD
                     {
                         did_break = true;
                     }
                 } else {
-                    if *img.at_2d::<u8>(
-                        (e.coord.y as i32 + circle3_[(i + j) % 16][1]),
-                        (e.coord.x as i32 + circle3_[(i + j) % 16][0]),
-                    )? as i32
+                    if img[(
+                        (e.coord.y as i32 + circle3_[(i + j) % 16][1]) as usize,
+                        (e.coord.x as i32 + circle3_[(i + j) % 16][0]) as usize,
+                    )] as i32
                         >= candidate - INTENSITY_THRESHOLD
                     {
                         did_break = true;
