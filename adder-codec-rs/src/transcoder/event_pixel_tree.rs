@@ -266,6 +266,7 @@ impl PixelArena {
         mode: Mode,
         dtm: DeltaT,
         ref_time: DeltaT,
+        c_thresh: u8,
     ) {
         let tail = &mut self.arena[self.length - 1];
         if tail.state.delta_t == 0.0 && tail.state.integration == 0.0 {
@@ -322,7 +323,7 @@ impl PixelArena {
             // safely cast it to integer [`D`] type.
             unsafe { self.arena[0].state.delta_t.to_int_unchecked::<DeltaT>() } >= dtm;
 
-        if self.c_thresh < 40 {
+        if self.c_thresh < c_thresh {
             // Increment the threshold
             self.c_thresh += 1;
         }

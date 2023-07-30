@@ -327,7 +327,7 @@ impl TranscoderState {
 
         let video = source.get_video_mut();
         video.update_adder_thresh_pos(self.ui_state.adder_tresh as u8);
-        video.update_adder_thresh_neg(self.ui_state.adder_tresh as u8);
+        // video.update_adder_thresh_neg(self.ui_state.adder_tresh as u8);
         video.update_delta_t_max(self.ui_state.delta_t_max_mult * video.get_ref_time());
         video.instantaneous_view_mode = self.ui_state.view_mode_radio_state;
     }

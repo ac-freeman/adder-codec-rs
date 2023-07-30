@@ -345,6 +345,7 @@ impl<W: Write + 'static> Integration<W> {
                                 Continuous,
                                 video.state.delta_t_max,
                                 video.state.ref_time,
+                                video.state.c_thresh_pos,
                             );
                             let running_t_after = px.running_t;
                             debug_assert_eq!(

@@ -75,7 +75,7 @@ impl AdderTranscoder {
                         .frame_start(current_frame)?
                         .chunk_rows(64)
                         .c_thresh_pos(ui_state.adder_tresh as u8)
-                        .c_thresh_neg(ui_state.adder_tresh as u8)
+                        // .c_thresh_neg(ui_state.adder_tresh as u8)
                         .auto_time_parameters(
                             ui_state.delta_t_ref as u32,
                             ui_state.delta_t_max_mult * ui_state.delta_t_ref as u32,

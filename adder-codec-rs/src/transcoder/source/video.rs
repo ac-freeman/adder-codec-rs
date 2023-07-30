@@ -349,15 +349,17 @@ impl<W: Write + 'static> Video<W> {
         for px in self.event_pixel_trees.iter_mut() {
             px.c_thresh = c_thresh_pos;
         }
+        self.state.c_thresh_pos = c_thresh_pos;
         self
     }
 
     /// Set the negative contrast threshold
     pub fn c_thresh_neg(mut self, c_thresh_neg: u8) -> Self {
-        for px in self.event_pixel_trees.iter_mut() {
-            px.c_thresh = c_thresh_neg;
-        }
-        self
+        unimplemented!();
+        // for px in self.event_pixel_trees.iter_mut() {
+        //     px.c_thresh = c_thresh_neg;
+        // }
+        // self
     }
 
     /// Set the number of rows to process at a time (in each thread)
@@ -783,14 +785,15 @@ impl<W: Write + 'static> Video<W> {
         for px in self.event_pixel_trees.iter_mut() {
             px.c_thresh = c;
         }
-        // self.state.c_thresh_pos = c;
+        self.state.c_thresh_pos = c;
     }
 
     /// Set a new value for `c_thresh_neg`
     pub fn update_adder_thresh_neg(&mut self, c: u8) {
-        for px in self.event_pixel_trees.iter_mut() {
-            px.c_thresh = c;
-        }
+        unimplemented!();
+        // for px in self.event_pixel_trees.iter_mut() {
+        //     px.c_thresh = c;
+        // }
         // self.state.c_thresh_neg = c;
     }
 
@@ -810,15 +813,15 @@ impl<W: Write + 'static> Video<W> {
 
             // Reset the threshold for that pixel and its neighbors
 
-            let radius = 5;
-            for r in -radius..=radius {
-                for c in -radius..=radius {
-                    self.event_pixel_trees[[
-                        (e.coord.y() as i32 + r) as usize,
-                        (e.coord.x() as i32 + c) as usize,
-                        e.coord.c_usize(),
-                    ]]
-                    .c_thresh = 10;
+            let radius = 30;
+            for r in (e.coord.y() as i32 - radius).max(0)
+                ..(e.coord.y() as i32 + radius).min(self.state.plane.h() as i32)
+            {
+                for c in (e.coord.x() as i32 - radius).max(0)
+                    ..(e.coord.x() as i32 + radius).min(self.state.plane.w() as i32)
+                {
+                    self.event_pixel_trees[[r as usize, c as usize, e.coord.c_usize()]].c_thresh =
+                        1;
                 }
             }
         }
@@ -989,6 +992,7 @@ pub fn integrate_for_px(
         state.pixel_tree_mode,
         state.delta_t_max,
         state.ref_time,
+        state.c_thresh_pos,
     );
 
     if px.need_to_pop_top {
