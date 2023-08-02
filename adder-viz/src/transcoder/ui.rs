@@ -40,6 +40,8 @@ pub struct ParamsUiState {
     pub(crate) optimize_c: bool,
     pub(crate) optimize_c_frequency: u32,
     pub(crate) optimize_c_frequency_slider: u32,
+    pub(crate) bitrate: f64,
+    bitrate_slider: f64,
     pub(crate) time_mode: TimeMode,
     pub(crate) encoder_type: EncoderType,
 }
@@ -66,6 +68,8 @@ impl Default for ParamsUiState {
             optimize_c: true,
             optimize_c_frequency: 10,
             optimize_c_frequency_slider: 10,
+            bitrate: 1_000_000.0,
+            bitrate_slider: 1_000_000.0,
             time_mode: TimeMode::default(),
             encoder_type: EncoderType::default(),
         }
@@ -617,6 +621,22 @@ fn side_panel_grid_contents(
         1..=250,
         vec![10, 25, 50, 100],
         1,
+    );
+    ui.end_row();
+
+    ui.label("Bandwidth limiting:");
+
+    slider_pm(
+        ui_state.encoder_type == EncoderType::RawBandwidthLimited,
+        true,
+        ui,
+        &mut ui_state.bitrate,
+        &mut ui_state.bitrate_slider,
+        100_000.0..=5_000_000.0, // TODO: range
+        vec![
+            100_000.0, 250_000.0, 500_000.0, 1_000_000.0, 5_000_000.0,
+        ],
+        50_000.0,
     );
     ui.end_row();
 }
