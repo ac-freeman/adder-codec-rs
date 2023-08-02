@@ -287,7 +287,7 @@ impl<W: Write> RawOutputBandwidthLimited<W> {
         Self {
             meta,
             bincode,
-            target_bitrate: 65.0,
+            target_bitrate: 100_000.0,
             current_bitrate: 0.0,
             last_event: Instant::now(),
             stream: Some(writer),
@@ -355,20 +355,21 @@ impl<W: Write> WriteCompression<W> for RawOutputBandwidthLimited<W> {
         // TODO: Switch functionality based on what the deltat mode is!
         // ^ I don't know what that means -Eric
 
-        const A: f64 = 0.9;
+        const A: f64 = 0.995;
 
         let now = Instant::now();
-        let t_diff = now.duration_since(self.last_event).as_millis() as f64;
-        //println!("t_diff: {}", t_diff);
+        // it could be faster to use as_nanos here
+        let t_diff = now.duration_since(self.last_event).as_secs_f64();
+
         let new_bitrate = A * self.current_bitrate + (1.0 - A) / t_diff;
 
         if new_bitrate > self.target_bitrate {
-            //println!("Skipping event!");
+            //dbg!("Skipping event!");
             return Ok(()); // skip this event
         }
 
-        //println!("Not skipping event!");
-        //println!("{}", new_bitrate);
+        //dbg!("Not skipping event!");
+        //dbg!("{}", new_bitrate);
 
         self.last_event = now; // update time
         self.current_bitrate = new_bitrate;
