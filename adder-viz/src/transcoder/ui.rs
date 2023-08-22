@@ -274,6 +274,7 @@ impl TranscoderState {
                                 != self.ui_state.davis_output_fps
                             || source.time_mode != self.ui_state.time_mode
                             || source.get_video_ref().encoder_type != self.ui_state.encoder_type
+                            || source.get_video_ref().target_bitrate != self.ui_state.bitrate
                         {
                             if self.ui_state.davis_mode_radio_state == RawDvs {
                                 // self.ui_state.davis_output_fps = 1000000.0;

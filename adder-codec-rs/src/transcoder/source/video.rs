@@ -226,6 +226,9 @@ pub struct Video<W: Write> {
     pub event_sender: Sender<Vec<Event>>,
     pub(crate) encoder: Encoder<W>,
     pub encoder_type: EncoderType,
+    /// Target bitrate if bandwidth limiting is used
+    /// This is messy right now (see TO-DO below)
+    pub target_bitrate: f64,
     // TODO: Hold multiple encoder options and an enum, so that boxing isn't required.
     // Also hold a state for whether or not to write out events at all, so that a null writer isn't required.
 }
@@ -320,6 +323,7 @@ impl<W: Write + 'static> Video<W> {
                     event_sender,
                     encoder,
                     encoder_type: EncoderType::Empty,
+                    target_bitrate: 1_000_000.0,
                 })
             }
             Some(w) => {
@@ -337,6 +341,7 @@ impl<W: Write + 'static> Video<W> {
                     event_sender,
                     encoder,
                     encoder_type: EncoderType::Empty,
+                    target_bitrate: 1_000_000.0,
                 })
             }
         }

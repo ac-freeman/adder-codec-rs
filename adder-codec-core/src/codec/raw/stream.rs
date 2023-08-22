@@ -276,7 +276,7 @@ impl<W: Write> WriteCompression<W> for RawOutputInterleaved<W> {
 // TODO: wip
 impl<W: Write> RawOutputBandwidthLimited<W> {
     /// Create a new raw bandwidth limited output stream.
-    pub fn new(mut meta: CodecMetadata, writer: W) -> Self {
+    pub fn new(mut meta: CodecMetadata, writer: W, target_bitrate: f64) -> Self {
         let bincode = DefaultOptions::new()
             .with_fixint_encoding()
             .with_big_endian();
@@ -287,7 +287,7 @@ impl<W: Write> RawOutputBandwidthLimited<W> {
         Self {
             meta,
             bincode,
-            target_bitrate: 100_000.0,
+            target_bitrate,
             current_bitrate: 0.0,
             last_event: Instant::now(),
             stream: Some(writer),
