@@ -505,6 +505,7 @@ impl<W: Write + 'static> Video<W> {
                         source_camera: source_camera.unwrap_or_default(),
                     },
                     write,
+                    self.target_bitrate,
                 );
                 Encoder::new_raw_bandwidth(compression)
             }

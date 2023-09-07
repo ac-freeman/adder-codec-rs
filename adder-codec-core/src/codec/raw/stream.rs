@@ -365,6 +365,8 @@ impl<W: Write> WriteCompression<W> for RawOutputBandwidthLimited<W> {
 
         if new_bitrate > self.target_bitrate {
             //dbg!("Skipping event!");
+            // todo adjust self.current_bitrate
+            // adjust diff 2^d briefly?
             return Ok(()); // skip this event
         }
 
