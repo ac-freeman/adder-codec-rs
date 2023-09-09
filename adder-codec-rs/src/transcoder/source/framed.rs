@@ -227,11 +227,12 @@ impl<W: Write + 'static> VideoBuilder<W> for Framed<W> {
         source_camera: SourceCamera,
         time_mode: TimeMode,
         encoder_type: EncoderType,
+        target_bitrate: f64,
         write: W,
     ) -> Result<Box<Self>, SourceError> {
         self.video =
             self.video
-                .write_out(Some(source_camera), Some(time_mode), encoder_type, write)?;
+                .write_out(Some(source_camera), Some(time_mode), encoder_type, target_bitrate, write)?;
         Ok(Box::new(self))
     }
 

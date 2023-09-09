@@ -303,6 +303,7 @@ impl TranscoderState {
                         || source.get_ref_time() != self.ui_state.delta_t_ref as u32
                         || source.time_mode != self.ui_state.time_mode
                         || source.get_video_ref().encoder_type != self.ui_state.encoder_type
+                        || source.get_video_ref().target_bitrate != self.ui_state.bitrate
                         || match source.get_video_ref().state.plane.c() {
                             1 => {
                                 // True if the transcoder is gray, but the user wants color

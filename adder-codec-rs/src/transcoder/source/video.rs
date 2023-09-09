@@ -196,7 +196,8 @@ pub trait VideoBuilder<W> {
         self,
         source_camera: SourceCamera,
         time_mode: TimeMode,
-        encoder_type: EncoderType,
+        encoder_type: EncoderType, // TODO: replace EncoderType with not just the type, but the options
+        target_bitrate: f64,
         write: W,
     ) -> Result<Box<Self>, SourceError>;
 
@@ -323,7 +324,7 @@ impl<W: Write + 'static> Video<W> {
                     event_sender,
                     encoder,
                     encoder_type: EncoderType::Empty,
-                    target_bitrate: 1_000_000.0,
+                    target_bitrate: 1_000_000.0, // not right
                 })
             }
             Some(w) => {
@@ -435,6 +436,7 @@ impl<W: Write + 'static> Video<W> {
         source_camera: Option<SourceCamera>,
         time_mode: Option<TimeMode>,
         encoder_type: EncoderType,
+        target_bitrate: f64,
         write: W,
     ) -> Result<Self, SourceError> {
         // TODO: Allow for compressed representation (not just raw)
@@ -505,7 +507,7 @@ impl<W: Write + 'static> Video<W> {
                         source_camera: source_camera.unwrap_or_default(),
                     },
                     write,
-                    self.target_bitrate,
+                    target_bitrate,
                 );
                 Encoder::new_raw_bandwidth(compression)
             }
@@ -530,6 +532,7 @@ impl<W: Write + 'static> Video<W> {
 
         self.encoder = encoder;
         self.encoder_type = encoder_type;
+        self.target_bitrate = target_bitrate;
 
         dbg!(time_mode);
         self.event_pixel_trees.par_map_inplace(|px| {
