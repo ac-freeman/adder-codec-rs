@@ -16,12 +16,13 @@ pub enum WriteCompressionEnum<W: Write> {
     EmptyOutput(EmptyOutput<Sink>),
 }
 
+/// The encoder type, along with any associated options
 #[derive(Default, Clone, Copy, PartialEq)]
-pub enum EncoderType {
+pub enum EncoderOptions {
     Compressed,
     Raw,
     RawInterleaved,
-    RawBandwidthLimited,
+    RawBandwidthLimited {target_bitrate: f64},
 
     #[default]
     Empty,

@@ -12,7 +12,7 @@ use opencv::imgproc;
 use rayon::current_num_threads;
 use std::error::Error;
 
-use adder_codec_core::codec::EncoderType;
+use adder_codec_core::codec::EncoderOptions;
 use adder_codec_core::TimeMode;
 use adder_codec_rs::transcoder::source::davis::TranscoderMode::RawDvs;
 use std::default::Default;
@@ -43,7 +43,7 @@ pub struct ParamsUiState {
     pub(crate) bitrate: f64,
     bitrate_slider: f64,
     pub(crate) time_mode: TimeMode,
-    pub(crate) encoder_type: EncoderType,
+    pub(crate) encoder_options: EncoderOptions,
 }
 
 impl Default for ParamsUiState {
@@ -71,7 +71,7 @@ impl Default for ParamsUiState {
             bitrate: 1_000_000.0,
             bitrate_slider: 1_000_000.0,
             time_mode: TimeMode::default(),
-            encoder_type: EncoderType::default(),
+            encoder_options: EncoderOptions::default(),
         }
     }
 }
@@ -273,9 +273,11 @@ impl TranscoderState {
                             || source.get_reconstructor().as_ref().unwrap().output_fps
                                 != self.ui_state.davis_output_fps
                             || source.time_mode != self.ui_state.time_mode
-                            || source.get_video_ref().encoder_type != self.ui_state.encoder_type
-                            || source.get_video_ref().target_bitrate != self.ui_state.bitrate // TODO:
+                            || source.get_video_ref().encoder_options != self.ui_state.encoder_options
+                            // TODO: better way to do this
+                            || match source.get_video_ref().encoder_options { EncoderOptions::RawBandwidthLimited {target_bitrate} => target_bitrate != self.ui_state.bitrate, _ => false }
                         {
+                            dbg!("Replacing the transcoder!");
                             if self.ui_state.davis_mode_radio_state == RawDvs {
                                 // self.ui_state.davis_output_fps = 1000000.0;
                                 // self.ui_state.davis_output_fps_slider = 1000000.0;
@@ -302,8 +304,7 @@ impl TranscoderState {
                     if source.scale != self.ui_state.scale
                         || source.get_ref_time() != self.ui_state.delta_t_ref as u32
                         || source.time_mode != self.ui_state.time_mode
-                        || source.get_video_ref().encoder_type != self.ui_state.encoder_type
-                        || source.get_video_ref().target_bitrate != self.ui_state.bitrate
+                        || source.get_video_ref().encoder_options != self.ui_state.encoder_options
                         || match source.get_video_ref().state.plane.c() {
                             1 => {
                                 // True if the transcoder is gray, but the user wants color
@@ -542,26 +543,26 @@ fn side_panel_grid_contents(
         ui.vertical(|ui| {
             ui.horizontal(|ui| {
                 ui.radio_value(
-                    &mut ui_state.encoder_type,
-                    EncoderType::Empty,
+                    &mut ui_state.encoder_options,
+                    EncoderOptions::Empty,
                     "Empty (don't write)",
                 );
-                ui.radio_value(&mut ui_state.encoder_type, EncoderType::Raw, "Raw");
+                ui.radio_value(&mut ui_state.encoder_options, EncoderOptions::Raw, "Raw");
             });
             ui.horizontal(|ui| {
                 ui.radio_value(
-                    &mut ui_state.encoder_type,
-                    EncoderType::RawInterleaved,
+                    &mut ui_state.encoder_options,
+                    EncoderOptions::RawInterleaved,
                     "Raw, temporally interleaved",
                 );
                 ui.radio_value(
-                    &mut ui_state.encoder_type,
-                    EncoderType::Compressed,
+                    &mut ui_state.encoder_options,
+                    EncoderOptions::Compressed,
                     "Compressed",
                 );
             });
             ui.horizontal(|ui| {
-                ui.radio_value(&mut ui_state.encoder_type, EncoderType::RawBandwidthLimited, "Raw, bandwidth limited (WIP)");
+                ui.radio_value(&mut ui_state.encoder_options, EncoderOptions::RawBandwidthLimited {target_bitrate: *&mut ui_state.bitrate }, "Raw, bandwidth limited (WIP)");
             });
         });
     });
@@ -629,7 +630,9 @@ fn side_panel_grid_contents(
     ui.label("Bandwidth limiting:");
 
     slider_pm(
-        ui_state.encoder_type == EncoderType::RawBandwidthLimited,
+        // TODO: probably a cleaner way to express this than using match
+        //ui_state.encoder_options == EncoderOptions::RawBandwidthLimited,
+        match ui_state.encoder_options {EncoderOptions::RawBandwidthLimited {..} => true, _ => false},
         true,
         ui,
         &mut ui_state.bitrate,

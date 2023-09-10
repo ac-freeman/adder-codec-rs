@@ -7,7 +7,7 @@ use adder_codec_core::codec::empty::stream::EmptyOutput;
 use adder_codec_core::codec::encoder::Encoder;
 use adder_codec_core::codec::raw::stream::{RawOutput, RawOutputInterleaved, RawOutputBandwidthLimited};
 use adder_codec_core::codec::{
-    encoder, CodecError, CodecMetadata, EncoderType, LATEST_CODEC_VERSION,
+    encoder, CodecError, CodecMetadata, EncoderOptions, LATEST_CODEC_VERSION,
 };
 use adder_codec_core::{
     Coord, DeltaT, Event, Mode, PlaneError, PlaneSize, SourceCamera, SourceType, TimeMode,
@@ -196,8 +196,7 @@ pub trait VideoBuilder<W> {
         self,
         source_camera: SourceCamera,
         time_mode: TimeMode,
-        encoder_type: EncoderType, // TODO: replace EncoderType with not just the type, but the options
-        target_bitrate: f64,
+        encoder_options: EncoderOptions,
         write: W,
     ) -> Result<Box<Self>, SourceError>;
 
@@ -226,12 +225,10 @@ pub struct Video<W: Write> {
     /// Channel for sending events to the encoder
     pub event_sender: Sender<Vec<Event>>,
     pub(crate) encoder: Encoder<W>,
-    pub encoder_type: EncoderType,
-    /// Target bitrate if bandwidth limiting is used
-    /// This is messy right now (see TO-DO below)
-    pub target_bitrate: f64,
+    pub encoder_options: EncoderOptions,
     // TODO: Hold multiple encoder options and an enum, so that boxing isn't required.
     // Also hold a state for whether or not to write out events at all, so that a null writer isn't required.
+    // Eric: this is somewhat addressed above
 }
 unsafe impl<W: Write> Send for Video<W> {}
 
@@ -323,8 +320,7 @@ impl<W: Write + 'static> Video<W> {
                     instantaneous_view_mode,
                     event_sender,
                     encoder,
-                    encoder_type: EncoderType::Empty,
-                    target_bitrate: 1_000_000.0, // not right
+                    encoder_options: EncoderOptions::Empty,
                 })
             }
             Some(w) => {
@@ -341,8 +337,7 @@ impl<W: Write + 'static> Video<W> {
                     instantaneous_view_mode,
                     event_sender,
                     encoder,
-                    encoder_type: EncoderType::Empty,
-                    target_bitrate: 1_000_000.0,
+                    encoder_options: EncoderOptions::Empty,
                 })
             }
         }
@@ -435,13 +430,12 @@ impl<W: Write + 'static> Video<W> {
         mut self,
         source_camera: Option<SourceCamera>,
         time_mode: Option<TimeMode>,
-        encoder_type: EncoderType,
-        target_bitrate: f64,
+        encoder_options: EncoderOptions,
         write: W,
     ) -> Result<Self, SourceError> {
         // TODO: Allow for compressed representation (not just raw)
-        let encoder: Encoder<_> = match encoder_type {
-            EncoderType::Compressed => {
+        let encoder: Encoder<_> = match encoder_options {
+            EncoderOptions::Compressed => {
                 let compression = CompressedOutput::new(
                     CodecMetadata {
                         codec_version: LATEST_CODEC_VERSION,
@@ -458,7 +452,7 @@ impl<W: Write + 'static> Video<W> {
                 );
                 Encoder::new_compressed(compression)
             }
-            EncoderType::Raw => {
+            EncoderOptions::Raw => {
                 let compression = RawOutput::new(
                     CodecMetadata {
                         codec_version: LATEST_CODEC_VERSION,
@@ -475,7 +469,7 @@ impl<W: Write + 'static> Video<W> {
                 );
                 Encoder::new_raw(compression)
             }
-            EncoderType::RawInterleaved => {
+            EncoderOptions::RawInterleaved => {
                 let compression = RawOutputInterleaved::new(
                     CodecMetadata {
                         codec_version: LATEST_CODEC_VERSION,
@@ -492,8 +486,8 @@ impl<W: Write + 'static> Video<W> {
                 );
                 Encoder::new_raw_interleaved(compression)
             }
-            EncoderType::RawBandwidthLimited => {
-                // TODO: wip
+            EncoderOptions::RawBandwidthLimited {target_bitrate} => {
+                // TODO: wip (Eric)
                 let compression = RawOutputBandwidthLimited::new(
                     CodecMetadata {
                         codec_version: LATEST_CODEC_VERSION,
@@ -511,7 +505,7 @@ impl<W: Write + 'static> Video<W> {
                 );
                 Encoder::new_raw_bandwidth(compression)
             }
-            EncoderType::Empty => {
+            EncoderOptions::Empty => {
                 let compression = EmptyOutput::new(
                     CodecMetadata {
                         codec_version: LATEST_CODEC_VERSION,
@@ -531,8 +525,7 @@ impl<W: Write + 'static> Video<W> {
         };
 
         self.encoder = encoder;
-        self.encoder_type = encoder_type;
-        self.target_bitrate = target_bitrate;
+        self.encoder_options = encoder_options;
 
         dbg!(time_mode);
         self.event_pixel_trees.par_map_inplace(|px| {

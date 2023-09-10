@@ -91,11 +91,10 @@ impl AdderTranscoder {
                             Some(output_path) => {
                                 let out_path = output_path.to_str().unwrap();
                                 let writer = BufWriter::new(File::create(out_path)?);
-                                framed = *framed.write_out( // TODO: (Eric) augment
+                                framed = *framed.write_out(
                                     FramedU8,
                                     ui_state.time_mode,
-                                    ui_state.encoder_type,
-                                    ui_state.bitrate,
+                                    ui_state.encoder_options,
                                     writer,
                                 )?;
                                 //     .output_events_filename(match output_path.to_str() {
@@ -219,8 +218,7 @@ impl AdderTranscoder {
                             davis_source = *davis_source.write_out(
                                 DavisU8,
                                 ui_state.time_mode,
-                                ui_state.encoder_type,
-                                ui_state.bitrate,
+                                ui_state.encoder_options,
                                 writer,
                             )?;
                         }
