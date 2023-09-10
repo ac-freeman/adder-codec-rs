@@ -146,6 +146,7 @@ mod tests {
     use std::process::Command;
     use std::thread::sleep;
     use std::time::Duration;
+    use adder_codec_core::codec::EncoderOptions;
 
     #[test]
     fn dark() -> Result<(), Box<dyn Error>> {
@@ -188,7 +189,7 @@ mod tests {
         if !args.output_events_filename.is_empty() {
             let file = File::create(args.output_events_filename)?;
             let writer = BufWriter::new(file);
-            source = *source.write_out(FramedU8, TimeMode::DeltaT, writer)?;
+            source = *source.write_out(FramedU8, TimeMode::DeltaT, EncoderOptions::Raw, writer)?;
         }
         let ref_time = source.get_ref_time();
 
