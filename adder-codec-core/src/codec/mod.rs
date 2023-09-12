@@ -22,7 +22,7 @@ pub enum EncoderOptions {
     Compressed,
     Raw,
     RawInterleaved,
-    RawBandwidthLimited {target_bitrate: f64},
+    RawBandwidthLimited {target_bitrate: f64, alpha: f64},
 
     #[default]
     Empty,

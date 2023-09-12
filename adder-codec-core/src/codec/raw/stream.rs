@@ -41,6 +41,9 @@ pub struct RawOutputBandwidthLimited<W> {
         bincode::config::BigEndian,
     >,
     target_bitrate: f64,
+    /// This is basically the decay rate.
+    /// Should be between 0 and 1.
+    alpha: f64,
     current_bitrate: f64,
     last_event: Instant,
     pub(crate) stream: Option<W>,
@@ -200,7 +203,6 @@ impl<W: Write> WriteCompression<W> for RawOutputInterleaved<W> {
 
     // If `self.writer` is a `BufWriter`, you'll need to flush it yourself after this.
     fn into_writer(&mut self) -> Option<W> {
-        dbg!("IN INTO_WRITER!");
         while let Some(first_item) = self.queue.pop() {
             let output_event: EventSingle;
             if self.meta.plane.channels == 1 {
@@ -276,7 +278,7 @@ impl<W: Write> WriteCompression<W> for RawOutputInterleaved<W> {
 // TODO: wip
 impl<W: Write> RawOutputBandwidthLimited<W> {
     /// Create a new raw bandwidth limited output stream.
-    pub fn new(mut meta: CodecMetadata, writer: W, target_bitrate: f64) -> Self {
+    pub fn new(mut meta: CodecMetadata, writer: W, target_bitrate: f64, alpha: f64) -> Self {
         let bincode = DefaultOptions::new()
             .with_fixint_encoding()
             .with_big_endian();
@@ -288,6 +290,7 @@ impl<W: Write> RawOutputBandwidthLimited<W> {
             meta,
             bincode,
             target_bitrate,
+            alpha,
             current_bitrate: 0.0,
             last_event: Instant::now(),
             stream: Some(writer),
@@ -324,8 +327,6 @@ impl<W: Write> WriteCompression<W> for RawOutputBandwidthLimited<W> {
 
     // If `self.writer` is a `BufWriter`, you'll need to flush it yourself after this.
     fn into_writer(&mut self) -> Option<W> {
-        dbg!("IN INTO_WRITER!");
-
         let eof = Event {
             coord: Coord {
                 x: EOF_PX_ADDRESS,
@@ -354,19 +355,16 @@ impl<W: Write> WriteCompression<W> for RawOutputBandwidthLimited<W> {
 
         // TODO: Switch functionality based on what the deltat mode is!
         // ^ I don't know what that means -Eric
-
-        const A: f64 = 0.995;
-
         let now = Instant::now();
         // it could be faster to use as_nanos here
         let t_diff = now.duration_since(self.last_event).as_secs_f64();
 
-        let new_bitrate = A * self.current_bitrate + (1.0 - A) / t_diff;
+        let new_bitrate = self.alpha * self.current_bitrate + (1.0 - self.alpha) / t_diff;
 
         if new_bitrate > self.target_bitrate {
             //dbg!("Skipping event!");
-            // todo adjust self.current_bitrate
-            // adjust diff 2^d briefly?
+            // TODO: Montek said something about adjusting diff 2^d briefly?
+            self.current_bitrate = self.alpha * self.current_bitrate;
             return Ok(()); // skip this event
         }
 
