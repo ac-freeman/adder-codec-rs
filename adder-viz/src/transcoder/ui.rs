@@ -344,7 +344,7 @@ impl TranscoderState {
             .num_threads(self.ui_state.thread_count)
             .build()?;
 
-        let mut ui_info_state = &mut self.ui_info_state;
+        let ui_info_state = &mut self.ui_info_state;
         ui_info_state.events_per_sec = 0.;
 
         let source: &mut dyn Source<BufWriter<File>> = {

@@ -5,10 +5,13 @@ on:
     branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
-    
+
+env:
+  CARGO_TERM_COLOR: always
+
 jobs:
-  check_and_test_project:
-    name: Rust project
+  check_and_test_ubuntu:
+    name: Check and test on Ubuntu
     runs-on: ubuntu-20.04
     steps:
       - uses: actions/checkout@v2
@@ -23,7 +26,7 @@ jobs:
           override: true
 
       - name: Install OpenCV
-        run: sudo apt-get install -y libopencv-dev libopencv-calib3d-dev libopencv-contrib-dev libopencv-features2d-dev libopencv-highgui-dev libopencv-imgcodecs-dev libopencv-objdetect-dev libopencv-shape-dev libopencv-stitching-dev libopencv-superres-dev libopencv-video-dev libopencv-videoio-dev libopencv-videostab-dev libopencv4.2-java libopencv-calib3d4.2 libopencv-contrib4.2 libopencv-features2d4.2 libopencv-highgui4.2 libopencv-imgcodecs4.2 libopencv-videoio4.2 libgdal26 libodbc1
+        run: sudo apt-get install -y --fix-missing libopencv-dev libopencv-calib3d-dev libopencv-contrib-dev libopencv-features2d-dev libopencv-highgui-dev libopencv-imgcodecs-dev libopencv-objdetect-dev libopencv-shape-dev libopencv-stitching-dev libopencv-superres-dev libopencv-video-dev libopencv-videoio-dev libopencv-videostab-dev libopencv4.2-java libopencv-calib3d4.2 libopencv-contrib4.2 libopencv-features2d4.2 libopencv-highgui4.2 libopencv-imgcodecs4.2 libopencv-videoio4.2 libgdal26 libodbc1
 
       - name: Clang
         run: sudo apt-get install -y clang && sudo ln -s libclang.so.1 /usr/lib/llvm-10/lib/libclang.so
@@ -54,18 +57,49 @@ jobs:
         with:
           files: lcov.info
           fail_ci_if_error: false
+      - name: Run a documentation generation test
+        run: cargo doc -vv -p adder-codec_old-rs --features=docs-only
+  check_windows:
+    name: Check and test on Windows
+    runs-on: windows-2022
+    env:
+      LLVM_VERSION: 15.0.7
+      OPENCV_VERSION: 4.6.0
+    steps:
+      - uses: actions/checkout@v2
 
-  docs-rs:
-      runs-on: ubuntu-20.04
-      steps:
-        - uses: actions/checkout@v2
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+          override: true
 
-        - name: Install Rust
-          uses: actions-rs/toolchain@v1
-          with:
-            toolchain: stable
-            default: true
+      - name: Install LLVM/clang
+        run: choco install -y llvm --version "$LLVM_VERSION"
+        shell: bash
 
-        - name: Run a documentation generation test
-          run: cargo doc -vv -p adder-codec_old-rs --features=docs-only
+      - name: Install OpenCV
+        run: choco install -y opencv --version "$OPENCV_VERSION"
+        shell: bash
 
+      - name: Build binary
+        run: |
+          export PATH="/C/Program Files/LLVM/bin:$PATH"
+          export LIBCLANG_PATH="/C/Program Files/LLVM/bin"
+          export PATH="/C/tools/opencv/build/x64/vc15/bin:$PATH"
+          export OPENCV_LINK_PATHS="/C/tools/opencv/build/x64/vc15/lib"
+          export OPENCV_LINK_LIBS="opencv_world${OPENCV_VERSION//./}"
+          export OPENCV_INCLUDE_PATHS="/C/tools/opencv/build/include"
+          cargo build -p adder-info
+        shell: bash
+
+      - name: Test project
+        run: |
+          export PATH="/C/Program Files/LLVM/bin:$PATH"
+          export LIBCLANG_PATH="/C/Program Files/LLVM/bin"
+          export PATH="/C/tools/opencv/build/x64/vc15/bin:$PATH"
+          export OPENCV_LINK_PATHS="/C/tools/opencv/build/x64/vc15/lib"
+          export OPENCV_LINK_LIBS="opencv_world${OPENCV_VERSION//./}"
+          export OPENCV_INCLUDE_PATHS="/C/tools/opencv/build/include"
+          cargo test -vv
+        shell: bash

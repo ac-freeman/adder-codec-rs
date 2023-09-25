@@ -244,7 +244,7 @@ pub(crate) fn replace_adder_transcoder(
     output_path_opt: Option<PathBuf>,
     current_frame: u32,
 ) {
-    let mut ui_info_state = &mut transcoder_state.ui_info_state;
+    let ui_info_state = &mut transcoder_state.ui_info_state;
     ui_info_state.events_per_sec = 0.0;
     ui_info_state.events_ppc_total = 0.0;
     ui_info_state.events_total = 0;

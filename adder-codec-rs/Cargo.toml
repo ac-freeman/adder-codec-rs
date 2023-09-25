@@ -1,6 +1,6 @@
 [package]
 name = "adder-codec-rs"
-version = "0.3.1"
+version = "0.3.2"
 edition = "2021"
 authors = ["Andrew C. Freeman"]
 description = """Encoder/transcoder/decoder for ADΔER (Address, Decimation, Δt Event Representation) streams.
@@ -23,7 +23,8 @@ default = ["transcoder"]
 transcoder = ["opencv", "dep:fast-math", "dep:adder-codec-core"]
 compression = ["opencv", "dep:fast-math", "adder-codec-core/compression"]
 raw-codec = []
-docs-only = ["opencv", "dep:fast-math"]
+docs-only = ["opencv", "dep:fast-math", "dep:adder-codec-core"]
+
 
 [dependencies]
 adder-codec-core = { path = "../adder-codec-core", version = "0.1.2", default-features = false, optional = true}
@@ -63,20 +64,20 @@ default-features = false
 features = ['videoio', 'imgproc', 'highgui']
 optional = true
 
-[dev-dependencies]
+[target.'cfg(any(target_os = "linux"))'.dev-dependencies]
 criterion = "0.3.6"
 criterion-perf-events = "0.2.0"
 perfcnt = "0.8.0"
 
-[[bench]]
+[[target.'cfg(any(target_os = "linux"))'.bench]]
 name = "framed_to_adder_hd"
 harness = false
 
-[[bench]]
+[[target.'cfg(any(target_os = "linux"))'.bench]]
 name = "block"
 harness = false
 
 [package.metadata.docs.rs]
 no-default-features = true
 default-target = "x86_64-unknown-linux-gnu"
-features = ["docs-only"]
+features = ["transcoder"]
