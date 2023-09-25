@@ -217,7 +217,7 @@ pub struct Video<W: Write> {
     pub instantaneous_frame: Mat,
 
     /// The current instantaneous frame, for determining features
-    pub running_intensities: Array2<i32>,
+    pub running_intensities: Array3<i32>,
 
     abs_intensity_mat: Mat,
 
@@ -292,7 +292,7 @@ impl<W: Write + 'static> Video<W> {
         }
         let mut abs_intensity_mat = sae_mat.clone();
 
-        let running_intensities = Array::zeros((plane.h_usize(), plane.w_usize()));
+        let running_intensities = Array::zeros((plane.h_usize(), plane.w_usize(), plane.c_usize()));
 
         state.plane = plane;
         let instantaneous_view_mode = FramedViewMode::Intensity;
@@ -546,6 +546,8 @@ impl<W: Write + 'static> Video<W> {
         time_spanned: f32,
         view_interval: u32,
     ) -> std::result::Result<Vec<Vec<Event>>, SourceError> {
+        let color = self.state.plane.c() != 1;
+
         let frame_arr: &[u8] = match matrix.data_bytes() {
             Ok(v) => v,
             Err(e) => {
@@ -610,22 +612,25 @@ impl<W: Write + 'static> Video<W> {
             }
         };
         let mut sae_mat = Mat::default();
-        match self.state.plane.c() {
-            1 => unsafe {
-                sae_mat.create_rows_cols(
-                    self.state.plane.h() as i32,
-                    self.state.plane.w() as i32,
-                    CV_32F,
-                )?;
-            },
-            _ => unsafe {
+
+        if color {
+            unsafe {
                 sae_mat.create_rows_cols(
                     self.state.plane.h() as i32,
                     self.state.plane.w() as i32,
                     CV_32FC3,
                 )?;
-            },
+            }
+        } else {
+            unsafe {
+                sae_mat.create_rows_cols(
+                    self.state.plane.h() as i32,
+                    self.state.plane.w() as i32,
+                    CV_32F,
+                )?;
+            }
         }
+
         sae_mat = sae_mat.clone();
 
         // TODO: When there's full support for various bit-depth sources, modify this accordingly
@@ -654,7 +659,11 @@ impl<W: Write + 'static> Video<W> {
                     ),
                     None => *val,
                 };
-                *running = *val as i32;
+
+                // Only track the running state if we're in grayscale mode
+                if !color {
+                    *running = *val as i32;
+                }
 
                 if self.instantaneous_view_mode == FramedViewMode::SAE {
                     // let tmp = sae_mat.at_2d::<f32>(y as i32, x as i32).unwrap();
@@ -697,48 +706,29 @@ impl<W: Write + 'static> Video<W> {
             )?;
         }
 
-        let mut keypoints = Vector::<KeyPoint>::new();
-        opencv::features2d::fast(&self.instantaneous_frame, &mut keypoints, 50, true)?;
-        let mut keypoint_mat = Mat::default();
-        opencv::features2d::draw_keypoints(
-            &self.instantaneous_frame,
-            &keypoints,
-            &mut keypoint_mat,
-            Scalar::new(0.0, 0.0, 255.0, 0.0),
-            opencv::features2d::DrawMatchesFlags::DEFAULT,
-        )?;
-        show_display_force("keypoints", &keypoint_mat, 1)?;
+        // TODO: Add a toggle option to only calculate features if user says so
+        if !color {
+            let mut keypoints = Vector::<KeyPoint>::new();
+            opencv::features2d::fast(&self.instantaneous_frame, &mut keypoints, 50, true)?;
+            let mut keypoint_mat = Mat::default();
+            opencv::features2d::draw_keypoints(
+                &self.instantaneous_frame,
+                &keypoints,
+                &mut keypoint_mat,
+                Scalar::new(0.0, 0.0, 255.0, 0.0),
+                opencv::features2d::DrawMatchesFlags::DEFAULT,
+            )?;
+            show_display_force("keypoints", &keypoint_mat, 1)?;
 
-        for events in &big_buffer {
-            for (e1, e2) in events.iter().tuple_windows() {
-                self.encoder.ingest_event(*e1)?;
-                if e2.delta_t != e1.delta_t {
-                    self.feature_test(e1);
+            for events in &big_buffer {
+                for (e1, e2) in events.iter().tuple_windows() {
+                    self.encoder.ingest_event(*e1)?;
+                    if e2.delta_t != e1.delta_t {
+                        self.feature_test(e1);
+                    }
                 }
             }
         }
-
-        // let mut corners = Mat::default();
-        //
-        // opencv::imgproc::corner_harris(
-        //     &self.instantaneous_frame.clone(),
-        //     &mut corners,
-        //     5,
-        //     3,
-        //     0.04,
-        //     opencv::core::BORDER_DEFAULT,
-        // )?;
-        // opencv::core::normalize(
-        //     &corners.clone(),
-        //     &mut corners,
-        //     0.0,
-        //     255.0,
-        //     opencv::core::NORM_MINMAX,
-        //     opencv::core::CV_8U,
-        //     &Mat::default(),
-        // )?;
-        //
-        // show_display_force("corners", &corners, 1)?;
 
         if self.state.show_live {
             show_display("instance", &self.instantaneous_frame, 1, self)?;
@@ -836,12 +826,13 @@ impl<W: Write + 'static> Video<W> {
         }
 
         let img = &self.running_intensities;
-        let candidate: i32 = (img[(e.coord.y_usize(), e.coord.x_usize())]) as i32;
+        let candidate: i32 = (img[(e.coord.y_usize(), e.coord.x_usize(), 0)]) as i32;
 
         let mut count = 0;
         if (img[(
             (e.coord.y as i32 + circle3_[4][1]) as usize,
             (e.coord.x as i32 + circle3_[4][0]) as usize,
+            0,
         )] as i32
             - candidate)
             .abs()
@@ -852,6 +843,7 @@ impl<W: Write + 'static> Video<W> {
         if (img[(
             (e.coord.y as i32 + circle3_[12][1]) as usize,
             (e.coord.x as i32 + circle3_[12][0]) as usize,
+            0,
         )] as i32
             - candidate)
             .abs()
@@ -862,6 +854,7 @@ impl<W: Write + 'static> Video<W> {
         if (img[(
             (e.coord.y as i32 + circle3_[1][1]) as usize,
             (e.coord.x as i32 + circle3_[1][0]) as usize,
+            0,
         )] as i32
             - candidate)
             .abs()
@@ -873,6 +866,7 @@ impl<W: Write + 'static> Video<W> {
         if (img[(
             (e.coord.y as i32 + circle3_[7][1]) as usize,
             (e.coord.x as i32 + circle3_[7][0]) as usize,
+            0,
         )] as i32
             - candidate)
             .abs()
@@ -892,6 +886,7 @@ impl<W: Write + 'static> Video<W> {
             let brighter = img[(
                 (e.coord.y as i32 + circle3_[i][1]) as usize,
                 (e.coord.x as i32 + circle3_[i][0]) as usize,
+                0,
             )] as i32
                 > candidate;
 
@@ -902,6 +897,7 @@ impl<W: Write + 'static> Video<W> {
                     if img[(
                         (e.coord.y as i32 + circle3_[(i + j) % 16][1]) as usize,
                         (e.coord.x as i32 + circle3_[(i + j) % 16][0]) as usize,
+                        0,
                     )] as i32
                         <= candidate + INTENSITY_THRESHOLD
                     {
@@ -911,6 +907,7 @@ impl<W: Write + 'static> Video<W> {
                     if img[(
                         (e.coord.y as i32 + circle3_[(i + j) % 16][1]) as usize,
                         (e.coord.x as i32 + circle3_[(i + j) % 16][0]) as usize,
+                        0,
                     )] as i32
                         >= candidate - INTENSITY_THRESHOLD
                     {
