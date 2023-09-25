@@ -22,7 +22,7 @@ default-run = "adder_simulproc"
 default = ["transcoder"]
 transcoder = ["opencv", "dep:fast-math"]
 raw-codec = []
-docs-only = ["opencv/docs-only", "dep:fast-math"]
+docs-only = ["opencv", "dep:fast-math"]
 
 [dependencies]
 adder-codec-core = { path = "../adder-codec-core", version = "0.1.2"}
@@ -31,7 +31,7 @@ bincode = "1.3.3"
 bitvec = "1.0.1"
 bumpalo = "3.11.0"
 clap = { version = "4.0.17", features = ["derive"] }
-davis-edi-rs = "0.2.1"
+davis-edi-rs = { git = "https://github.com/ac-freeman/davis-EDI-rs.git" }
 duplicate = "0.4.1"
 fast-math = { version = "0.1", optional = true }
 fenwick = "2.0.1"
@@ -56,7 +56,7 @@ toml = "0.5.8"
 bitstream-io = "1.6.0"
 
 [dependencies.opencv]
-version = '0.66.0'
+version = '0.84.5'
 package = 'opencv'
 default-features = false
 features = ['videoio', 'imgproc', 'highgui']
