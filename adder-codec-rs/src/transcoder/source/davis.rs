@@ -941,6 +941,11 @@ impl<W: Write + 'static> VideoBuilder<W> for Davis<W> {
         self.video = self.video.show_display(show_display);
         self
     }
+
+    fn detect_features(mut self, detect_features: bool) -> Self {
+        self.video = self.video.detect_features(detect_features);
+        self
+    }
 }
 
 fn check_dvs_before(dvs_event_t: i64, timestamp_before: i64) -> bool {

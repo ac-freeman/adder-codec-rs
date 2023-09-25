@@ -236,11 +236,9 @@ impl<W: Write + 'static> Encoder<W> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::codec::compressed::stream::CompressedOutput;
     use crate::codec::raw::stream::RawOutput;
     use crate::codec::{CodecMetadata, LATEST_CODEC_VERSION};
 
-    use crate::codec::compressed::adu::frame::Adu;
     use crate::{Coord, PlaneSize};
     use bitstream_io::{BigEndian, BitWriter};
     use std::io::BufWriter;
@@ -348,6 +346,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "compression")]
     fn compressed() {
         let output = Vec::new();
         let bufwriter = BufWriter::new(output);
@@ -378,6 +377,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "compression")]
     fn compressed2() {
         let output = Vec::new();
         let bufwriter = BufWriter::new(output);
@@ -404,6 +404,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "compression")]
     fn compressed3() {
         let output = Vec::new();
         let bufwriter = BufWriter::new(output);

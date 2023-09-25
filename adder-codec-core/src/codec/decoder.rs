@@ -6,6 +6,9 @@ use crate::{Event, PlaneSize, SourceCamera, SourceType};
 use crate::codec::compressed::adu::frame::Adu;
 #[cfg(feature = "compression")]
 use crate::codec::compressed::stream::CompressedInput;
+#[cfg(feature = "compression")]
+use crate::codec::CompressedOutput;
+
 use crate::codec::header::{
     EventStreamHeader, EventStreamHeaderExtensionV1, EventStreamHeaderExtensionV2,
 };
@@ -239,7 +242,7 @@ impl<R: Read + Seek> Decoder<R> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::codec::compressed::stream::{CompressedInput, CompressedOutput};
+
     use crate::codec::encoder::Encoder;
     use crate::codec::raw::stream::{RawInput, RawOutput, RawOutputInterleaved};
 
@@ -316,6 +319,7 @@ mod tests {
         writer.into_inner().unwrap()
     }
 
+    #[cfg(feature = "compression")]
     fn setup_encoded_compressed(codec_version: u8) -> Vec<u8> {
         let output = Vec::new();
 
@@ -384,6 +388,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "compression")]
     fn header_v0_compressed() {
         let output = setup_encoded_compressed(0);
         let tmp = Cursor::new(&*output);
@@ -396,6 +401,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "compression")]
     fn header_v1_compressed() {
         let output = setup_encoded_compressed(1);
         let tmp = Cursor::new(&*output);
@@ -408,6 +414,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "compression")]
     fn header_v2_compressed() {
         let output = setup_encoded_compressed(2);
         let tmp = Cursor::new(&*output);

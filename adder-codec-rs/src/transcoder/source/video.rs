@@ -147,6 +147,7 @@ pub struct VideoState {
     pub(crate) tps: DeltaT,
     pub(crate) show_display: bool,
     pub(crate) show_live: bool,
+    pub(crate) feature_detection: bool,
 }
 
 impl Default for VideoState {
@@ -164,6 +165,7 @@ impl Default for VideoState {
             tps: 7650,
             show_display: false,
             show_live: false,
+            feature_detection: false,
         }
     }
 }
@@ -204,6 +206,8 @@ pub trait VideoBuilder<W> {
 
     /// Set whether or not the show the live display
     fn show_display(self, show_display: bool) -> Self;
+
+    fn detect_features(self, detect_features: bool) -> Self;
 }
 
 // impl VideoBuilder for Video {}
@@ -672,7 +676,7 @@ impl<W: Write + 'static> Video<W> {
                 };
 
                 // Only track the running state if we're in grayscale mode
-                if !color {
+                if self.state.feature_detection && !color {
                     *running = *val as i32;
                 }
 
@@ -718,7 +722,7 @@ impl<W: Write + 'static> Video<W> {
         }
 
         // TODO: Add a toggle option to only calculate features if user says so
-        if !color {
+        if self.state.feature_detection && !color {
             let mut keypoints = Vector::<KeyPoint>::new();
             opencv::features2d::fast(&self.instantaneous_frame, &mut keypoints, 50, true)?;
             let mut keypoint_mat = Mat::default();
@@ -933,6 +937,11 @@ impl<W: Write + 'static> Video<W> {
         }
 
         return Ok(false);
+    }
+
+    pub fn detect_features(mut self, detect_features: bool) -> Self {
+        self.state.feature_detection = detect_features;
+        self
     }
 }
 
