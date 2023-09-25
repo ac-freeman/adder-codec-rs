@@ -2,7 +2,9 @@ use crate::codec::{CodecError, CodecMetadata, ReadCompression, ReadCompressionEn
 use crate::SourceType::*;
 use crate::{Event, PlaneSize, SourceCamera, SourceType};
 
+#[cfg(feature = "compression")]
 use crate::codec::compressed::adu::frame::Adu;
+#[cfg(feature = "compression")]
 use crate::codec::compressed::stream::CompressedInput;
 use crate::codec::header::{
     EventStreamHeader, EventStreamHeaderExtensionV1, EventStreamHeaderExtensionV2,
@@ -28,6 +30,7 @@ pub struct Decoder<R: Read + Seek> {
 #[allow(dead_code)]
 impl<R: Read + Seek> Decoder<R> {
     /// Create a new decoder with the given compression scheme
+    #[cfg(feature = "compression")]
     pub fn new_compressed(
         compression: CompressedInput<R>,
         reader: &mut BitReader<R, BigEndian>,
@@ -190,6 +193,7 @@ impl<R: Read + Seek> Decoder<R> {
     }
 
     /// Read and decode the next event from the input stream
+    #[cfg(feature = "compression")]
     #[inline]
     pub fn digest_event_debug(
         &mut self,

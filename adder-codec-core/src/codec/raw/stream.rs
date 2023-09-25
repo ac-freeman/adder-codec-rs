@@ -1,3 +1,4 @@
+#[cfg(feature = "compression")]
 use crate::codec::compressed::adu::frame::Adu;
 use crate::codec::header::{Magic, MAGIC_RAW};
 use crate::codec::{CodecError, CodecMetadata, ReadCompression, WriteCompression};
@@ -5,9 +6,6 @@ use crate::{Coord, DeltaT, Event, EventSingle, EOF_PX_ADDRESS};
 use bincode::config::{FixintEncoding, WithOtherEndian, WithOtherIntEncoding};
 use bincode::{DefaultOptions, Options};
 use bitstream_io::{BigEndian, BitRead, BitReader};
-use hashbrown::hash_map::DefaultHashBuilder;
-use priority_queue::PriorityQueue;
-use std::cmp::Reverse;
 use std::collections::BinaryHeap;
 use std::io::{Read, Seek, SeekFrom, Write};
 
@@ -133,6 +131,7 @@ impl<W: Write> WriteCompression<W> for RawOutput<W> {
         Ok(())
     }
 
+    #[cfg(feature = "compression")]
     fn ingest_event_debug(&mut self, event: Event) -> Result<Option<Adu>, CodecError> {
         todo!()
     }
@@ -254,6 +253,7 @@ impl<W: Write> WriteCompression<W> for RawOutputInterleaved<W> {
         Ok(())
     }
 
+    #[cfg(feature = "compression")]
     fn ingest_event_debug(&mut self, event: Event) -> Result<Option<Adu>, CodecError> {
         todo!()
     }
@@ -328,6 +328,7 @@ impl<R: Read + Seek> ReadCompression<R> for RawInput<R> {
         Ok(event)
     }
 
+    #[cfg(feature = "compression")]
     fn digest_event_debug(
         &mut self,
         reader: &mut BitReader<R, BigEndian>,

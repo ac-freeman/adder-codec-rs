@@ -22,6 +22,8 @@ use opencv::prelude::*;
 
 use crate::framer::scale_intensity::{event_to_intensity, FrameValue};
 use crate::transcoder::event_pixel_tree::{Intensity32, PixelArena};
+
+#[cfg(feature = "compression")]
 use adder_codec_core::codec::compressed::stream::CompressedOutput;
 use adder_codec_core::Mode::{Continuous, FramePerfect};
 use davis_edi_rs::util::reconstructor::ReconstructionError;
@@ -443,21 +445,31 @@ impl<W: Write + 'static> Video<W> {
         // TODO: Allow for compressed representation (not just raw)
         let encoder: Encoder<_> = match encoder_type {
             EncoderType::Compressed => {
-                let compression = CompressedOutput::new(
-                    CodecMetadata {
-                        codec_version: LATEST_CODEC_VERSION,
-                        header_size: 0,
-                        time_mode: time_mode.unwrap_or_default(),
-                        plane: self.state.plane,
-                        tps: self.state.tps,
-                        ref_interval: self.state.ref_time,
-                        delta_t_max: self.state.delta_t_max,
-                        event_size: 0,
-                        source_camera: source_camera.unwrap_or_default(),
-                    },
-                    write,
-                );
-                Encoder::new_compressed(compression)
+                #[cfg(feature = "compression")]
+                {
+                    let compression = CompressedOutput::new(
+                        CodecMetadata {
+                            codec_version: LATEST_CODEC_VERSION,
+                            header_size: 0,
+                            time_mode: time_mode.unwrap_or_default(),
+                            plane: self.state.plane,
+                            tps: self.state.tps,
+                            ref_interval: self.state.ref_time,
+                            delta_t_max: self.state.delta_t_max,
+                            event_size: 0,
+                            source_camera: source_camera.unwrap_or_default(),
+                        },
+                        write,
+                    );
+                    Encoder::new_compressed(compression)
+                }
+                #[cfg(not(feature = "compression"))]
+                {
+                    return Err(SourceError::BadParams(
+                        "Compressed representation is experimental and is not enabled by default!"
+                            .to_string(),
+                    ));
+                }
             }
             EncoderType::Raw => {
                 let compression = RawOutput::new(
@@ -515,7 +527,6 @@ impl<W: Write + 'static> Video<W> {
         self.encoder = encoder;
         self.encoder_type = encoder_type;
 
-        dbg!(time_mode);
         self.event_pixel_trees.par_map_inplace(|px| {
             px.time_mode(time_mode);
         });

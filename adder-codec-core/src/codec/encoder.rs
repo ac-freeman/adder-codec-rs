@@ -5,8 +5,11 @@ use crate::{Event, EventSingle, SourceCamera, SourceType, EOF_EVENT};
 use std::io;
 use std::io::{Sink, Write};
 
+#[cfg(feature = "compression")]
 use crate::codec::compressed::adu::frame::Adu;
+#[cfg(feature = "compression")]
 use crate::codec::compressed::stream::CompressedOutput;
+
 use crate::codec::empty::stream::EmptyOutput;
 use crate::codec::header::{
     EventStreamHeader, EventStreamHeaderExtensionV0, EventStreamHeaderExtensionV1,
@@ -44,6 +47,7 @@ impl<W: Write + 'static> Encoder<W> {
     }
 
     /// Create a new [`Encoder`] with the given compression scheme
+    #[cfg(feature = "compression")]
     pub fn new_compressed(compression: CompressedOutput<W>) -> Self
     where
         Self: Sized,
@@ -205,6 +209,7 @@ impl<W: Write + 'static> Encoder<W> {
         self.output.ingest_event(event)
     }
     /// Ingest an event
+    #[cfg(feature = "compression")]
     pub fn ingest_event_debug(&mut self, event: Event) -> Result<Option<Adu>, CodecError> {
         self.output.ingest_event_debug(event)
     }

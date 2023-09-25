@@ -1,3 +1,4 @@
+#[cfg(feature = "compression")]
 use crate::codec::compressed::adu::frame::Adu;
 use crate::codec::header::{Magic, MAGIC_RAW};
 use crate::codec::{CodecError, CodecMetadata, WriteCompression};
@@ -53,6 +54,7 @@ impl<W: std::io::Write> WriteCompression<W> for EmptyOutput<Sink> {
         Ok(())
     }
 
+    #[cfg(feature = "compression")]
     fn ingest_event_debug(&mut self, event: Event) -> Result<Option<Adu>, CodecError> {
         todo!()
     }
