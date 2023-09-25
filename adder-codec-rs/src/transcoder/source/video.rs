@@ -147,7 +147,7 @@ pub struct VideoState {
     pub(crate) tps: DeltaT,
     pub(crate) show_display: bool,
     pub(crate) show_live: bool,
-    pub(crate) feature_detection: bool,
+    pub feature_detection: bool,
 }
 
 impl Default for VideoState {
@@ -783,6 +783,12 @@ impl<W: Write + 'static> Video<W> {
     pub fn update_delta_t_max(&mut self, dtm: u32) {
         // Validate new value
         self.state.delta_t_max = self.state.ref_time.max(dtm);
+    }
+
+    /// Set a new bool for `feature_detection`
+    pub fn update_detect_features(&mut self, detect_features: bool) {
+        // Validate new value
+        self.state.feature_detection = detect_features;
     }
 
     /// Set a new value for `c_thresh_pos`

@@ -42,6 +42,7 @@ pub struct ParamsUiState {
     pub(crate) optimize_c_frequency_slider: u32,
     pub(crate) time_mode: TimeMode,
     pub(crate) encoder_type: EncoderType,
+    pub(crate) detect_features: bool,
 }
 
 impl Default for ParamsUiState {
@@ -68,6 +69,7 @@ impl Default for ParamsUiState {
             optimize_c_frequency_slider: 10,
             time_mode: TimeMode::default(),
             encoder_type: EncoderType::default(),
+            detect_features: false,
         }
     }
 }
@@ -330,6 +332,7 @@ impl TranscoderState {
         // video.update_adder_thresh_neg(self.ui_state.adder_tresh as u8);
         video.update_delta_t_max(self.ui_state.delta_t_max_mult * video.get_ref_time());
         video.instantaneous_view_mode = self.ui_state.view_mode_radio_state;
+        video.update_detect_features(self.ui_state.detect_features);
     }
 
     pub fn consume_source(
@@ -614,6 +617,13 @@ fn side_panel_grid_contents(
         1..=250,
         vec![10, 25, 50, 100],
         1,
+    );
+    ui.end_row();
+
+    ui.label("Processing:");
+    ui.add_enabled(
+        true,
+        egui::Checkbox::new(&mut ui_state.detect_features, "Detect features"),
     );
     ui.end_row();
 }

@@ -891,7 +891,7 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Davis<W> {
 impl<W: Write + 'static> VideoBuilder<W> for Davis<W> {
     fn contrast_thresholds(mut self, c_thresh_pos: u8, c_thresh_neg: u8) -> Self {
         self.video = self.video.c_thresh_pos(c_thresh_pos);
-        self.video = self.video.c_thresh_neg(c_thresh_neg);
+        // self.video = self.video.c_thresh_neg(c_thresh_neg);
         self
     }
 
@@ -901,7 +901,7 @@ impl<W: Write + 'static> VideoBuilder<W> for Davis<W> {
     }
 
     fn c_thresh_neg(mut self, c_thresh_neg: u8) -> Self {
-        self.video = self.video.c_thresh_neg(c_thresh_neg);
+        // self.video = self.video.c_thresh_neg(c_thresh_neg);
         self
     }
 
