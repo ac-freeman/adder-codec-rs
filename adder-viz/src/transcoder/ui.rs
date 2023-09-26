@@ -70,9 +70,10 @@ impl Default for ParamsUiState {
             optimize_c: true,
             optimize_c_frequency: 10,
             optimize_c_frequency_slider: 10,
+            // TODO: these are good defaults, but maybe there are better
             target_bitrate: 5_000_000.0,
             target_bitrate_slider: 5_000_000.0,
-            alpha: 0.999, // TODO: maybe adjust
+            alpha: 0.999,
             alpha_slider: 0.999,
             time_mode: TimeMode::default(),
             encoder_options: EncoderOptions::default(),
@@ -281,7 +282,6 @@ impl TranscoderState {
                             // TODO: better way to do this
                             || match source.get_video_ref().encoder_options { EncoderOptions::RawBandwidthLimited {target_bitrate, alpha} => target_bitrate != self.ui_state.target_bitrate || alpha != self.ui_state.alpha, _ => false }
                         {
-                            dbg!("Replacing the transcoder!");
                             if self.ui_state.davis_mode_radio_state == RawDvs {
                                 // self.ui_state.davis_output_fps = 1000000.0;
                                 // self.ui_state.davis_output_fps_slider = 1000000.0;
@@ -634,14 +634,14 @@ fn side_panel_grid_contents(
     ui.label("Bandwidth limiting rate:");
 
     slider_pm(
-        // TODO: might be a cleaner way to express this than using match
+        // TODO: might be a cleaner way to express this without using match
         //ui_state.encoder_options == EncoderOptions::RawBandwidthLimited,
         match ui_state.encoder_options {EncoderOptions::RawBandwidthLimited {..} => true, _ => false},
         true,
         ui,
         &mut ui_state.target_bitrate,
         &mut ui_state.target_bitrate_slider,
-        1_000_000.0..=10_000_000.0, // TODO: range
+        1_000_000.0..=100_000_000.0, // TODO: range
         vec![ // TODO: tune slider values
             1_000_000.0, 2_500_000.0, 5_000_000.0, 7_500_000.0, 10_000_000.0
         ],
@@ -652,16 +652,16 @@ fn side_panel_grid_contents(
     ui.label("Bandwidth limiting alpha:");
 
     slider_pm(
-        // TODO: might be a cleaner way to express this than using match
+        // TODO: might be a cleaner way to express this without using match
         //ui_state.encoder_options == EncoderOptions::RawBandwidthLimited,
         match ui_state.encoder_options {EncoderOptions::RawBandwidthLimited {..} => true, _ => false},
         true,
         ui,
         &mut ui_state.alpha,
         &mut ui_state.alpha_slider,
-        0.0..=1.0,
-        vec![ // TODO: tune slider values
-            0.0, 0.8, 0.9, 0.99, 0.999, 1.0
+        0.8..=1.0,
+        vec![ // TODO: I think these values are okay, but maybe there are better ones
+            0.8, 0.9, 0.999, 0.99999, 1.0
         ],
         0.001,
     );
