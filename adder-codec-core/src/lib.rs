@@ -1,6 +1,6 @@
 #![warn(missing_docs)]
 
-//! # adder-codec_old-core
+//! # adder-codec-core
 //!
 //! The core types and utilities for encoding and decoding ADΔER events
 

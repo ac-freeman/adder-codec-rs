@@ -20,7 +20,7 @@ pub fn absolute_event_to_dt_event(mut event: Event, last_t: DeltaT) -> Event {
     event
 }
 
-/// Transforms an input stream to a new output stream with v2 of the codec_old.
+/// Transforms an input stream to a new output stream with v2 of the codec.
 ///
 /// # Arguments
 ///

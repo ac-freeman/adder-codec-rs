@@ -87,8 +87,6 @@ impl<W: Write> WriteCompression<W> for RawOutput<W> {
 
     // If `self.writer` is a `BufWriter`, you'll need to flush it yourself after this.
     fn into_writer(&mut self) -> Option<W> {
-        dbg!("IN INTO_WRITER!");
-
         let eof = Event {
             coord: Coord {
                 x: EOF_PX_ADDRESS,
@@ -107,7 +105,7 @@ impl<W: Write> WriteCompression<W> for RawOutput<W> {
         self.stream().flush()
     }
 
-    /// Ingest an event into the codec_old.
+    /// Ingest an event into the codec.
     ///
     /// This will always write the event immediately to the underlying writer.
     fn ingest_event(&mut self, event: Event) -> Result<(), CodecError> {
@@ -185,7 +183,6 @@ impl<W: Write> WriteCompression<W> for RawOutputInterleaved<W> {
 
     // If `self.writer` is a `BufWriter`, you'll need to flush it yourself after this.
     fn into_writer(&mut self) -> Option<W> {
-        dbg!("IN INTO_WRITER!");
         while let Some(first_item) = self.queue.pop() {
             let output_event: EventSingle;
             if self.meta.plane.channels == 1 {
@@ -219,7 +216,7 @@ impl<W: Write> WriteCompression<W> for RawOutputInterleaved<W> {
         self.stream().flush()
     }
 
-    /// Ingest an event into the codec_old.
+    /// Ingest an event into the codec.
     ///
     /// This will always write the event immediately to the underlying writer.
     fn ingest_event(&mut self, event: Event) -> Result<(), CodecError> {

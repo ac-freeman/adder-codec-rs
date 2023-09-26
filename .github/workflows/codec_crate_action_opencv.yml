@@ -1,4 +1,4 @@
-name: Build and test adder-codec_old-rs
+name: Build and test adder-codec-rs
 
 on:
   push:
@@ -40,7 +40,7 @@ jobs:
           key: ${{ runner.os }}-${{ matrix.version.opencv }}-build
 
       - name: Install dependencies
-        run: adder-codec_old-rs/ci/install.sh
+        run: adder-codec-rs/ci/install.sh
         shell: bash
 
       - name: Install Rust
@@ -50,49 +50,8 @@ jobs:
           default: true
           
       - name: Test project
-        run: adder-codec_old-rs/ci/script.sh
+        run: adder-codec-rs/ci/script.sh
         shell: bash
-
-#   vcpkg:
-#     strategy:
-#       fail-fast: false
-#       matrix:
-#         os:
-#           - image: ubuntu-20.04
-#             family: linux
-#         rust:
-#           - stable
-#           - beta
-#         version:
-#           - vcpkg: 4
-#     runs-on: ${{ matrix.os.image }}
-#     env:
-#       OS_FAMILY: ${{ matrix.os.family }}
-#       RUST_TOOLCHAIN: ${{ matrix.rust }}
-#       VCPKG_OPENCV_VERSION: ${{ matrix.version.vcpkg }}
-#       VCPKG_TREE_COMMIT: 2022.02.23
-#     steps:
-#       - uses: actions/checkout@v2
-
-#       - name: Cache dependencies
-#         uses: actions/cache@v1
-#         with:
-#           path: ~/build
-#           key: ${{ runner.os }}-${{ matrix.version.vcpkg }}-build
-
-#       - name: Install dependencies
-#         run: adder-codec_old-rs/ci/install.sh
-#         shell: bash
-
-#       - name: Install Rust
-#         uses: actions-rs/toolchain@v1
-#         with:
-#           toolchain: ${{ matrix.rust }}
-#           default: true
-          
-#       - name: Test project
-#         run: adder-codec_old-rs/ci/script.sh
-#         shell: bash
 
   bin:
     strategy:
@@ -126,7 +85,7 @@ jobs:
       - uses: actions/checkout@v2
 
       - name: Install dependencies
-        run: adder-codec_old-rs/ci/install.sh
+        run: adder-codec-rs/ci/install.sh
         shell: bash
 
       - name: Install Rust
@@ -135,7 +94,7 @@ jobs:
           toolchain: ${{ matrix.rust }}
           default: true
       - name: Test project
-        run: adder-codec_old-rs/ci/script.sh
+        run: adder-codec-rs/ci/script.sh
         shell: bash
           
   docs-rs:
@@ -150,5 +109,5 @@ jobs:
             default: true
 
         - name: Run a documentation generation test
-          run: adder-codec_old-rs/ci/docs-rs.sh
+          run: adder-codec-rs/ci/docs-rs.sh
           shell: bash

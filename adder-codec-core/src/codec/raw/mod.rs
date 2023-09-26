@@ -1,2 +1,2 @@
-/// Raw codec_old
+/// Raw codec
 pub mod stream;

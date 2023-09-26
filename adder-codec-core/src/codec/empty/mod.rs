@@ -1,2 +1,2 @@
-/// Empty codec_old
+/// Empty codec
 pub mod stream;

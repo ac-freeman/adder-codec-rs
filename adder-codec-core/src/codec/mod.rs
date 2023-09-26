@@ -33,7 +33,7 @@ enum ReadCompressionEnum<R: Read + Seek> {
     RawInput(RawInput<R>),
 }
 
-/// Compressed codec_old utilities
+/// Compressed codec utilities
 #[cfg(feature = "compression")]
 pub mod compressed;
 
@@ -47,10 +47,10 @@ pub mod empty;
 pub mod encoder;
 mod header;
 
-/// Raw codec_old utilities
+/// Raw codec utilities
 pub mod raw;
 
-/// Current latest version of the codec_old.
+/// Current latest version of the codec.
 ///
 /// This is the version which will be written to the header.
 pub const LATEST_CODEC_VERSION: u8 = 2;
@@ -135,7 +135,7 @@ pub trait ReadCompression<R: Read> {
     // where
     //     Self: Sized;
 
-    /// Returns the magic number for the codec_old
+    /// Returns the magic number for the codec
     fn magic(&self) -> Magic;
 
     /// Returns a reference to the metadata
@@ -203,7 +203,7 @@ pub enum CodecError {
     #[error("Attempted to seek to a bad position in the stream")]
     Seek,
 
-    #[error("Unsupported codec_old version (expected {LATEST_CODEC_VERSION} or lower, found {0})")]
+    #[error("Unsupported codec version (expected {LATEST_CODEC_VERSION} or lower, found {0})")]
     UnsupportedVersion(u8),
 
     #[error("Malformed encoder")]
