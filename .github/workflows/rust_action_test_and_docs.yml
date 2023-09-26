@@ -46,17 +46,17 @@ jobs:
       - name: Test project
         run: cargo test -vv -p adder-codec-core -p adder-codec-rs -p adder-info -p adder-to-dvs -p adder-viz
       
-      - name: Install cargo-llvm-cov
-        uses: taiki-e/install-action@cargo-llvm-cov
-      - uses: Swatinem/rust-cache@v2
-      - name: run llvm-cov test
-        # should test with --all-features if gpu support.
-        run: cargo llvm-cov -p adder-codec-core -p adder-codec-rs -p adder-info -p adder-to-dvs -p adder-viz --lcov --output-path lcov.info
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
-        with:
-          files: lcov.info
-          fail_ci_if_error: false
+      # - name: Install cargo-llvm-cov
+      #   uses: taiki-e/install-action@cargo-llvm-cov
+      # - uses: Swatinem/rust-cache@v2
+      # - name: run llvm-cov test
+      #   # should test with --all-features if gpu support.
+      #   run: cargo llvm-cov -p adder-codec-core -p adder-codec-rs -p adder-info -p adder-to-dvs -p adder-viz --lcov --output-path lcov.info
+      # - name: Upload coverage to Codecov
+      #   uses: codecov/codecov-action@v3
+      #   with:
+      #     files: lcov.info
+      #     fail_ci_if_error: false
       - name: Run a documentation generation test
         run: cargo doc -vv -p adder-codec-rs --features=docs-only
   check_windows:
