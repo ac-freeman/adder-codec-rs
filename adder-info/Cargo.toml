@@ -14,8 +14,8 @@ keywords = ["neuromorphic", "decoding", "event", "asynchronous", "video"]
 categories = ["multimedia::encoding", "multimedia::video", "science"]
 
 [dependencies]
-adder-codec-core = { version = "0.1.2", path = "../adder-codec-core" }
-adder-codec-rs = { version = "0.3.1", path = "../adder-codec-rs", features = [
+adder-codec-core = { version = "0.2.0", path = "../adder-codec-core" }
+adder-codec-rs = { version = "0.3.3", path = "../adder-codec-rs", features = [
     "transcoder",
 ] }
 clap = { version = "4.0.17", features = ["derive"] }

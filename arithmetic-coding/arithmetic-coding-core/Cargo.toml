@@ -1,0 +1,15 @@
+[package]
+name = "arithmetic-coding-core"
+description = "core traits for the 'arithmetic-coding' crate"
+version = "0.3.0"
+edition = "2021"
+license = "MIT"
+keywords = ["compression", "encoding", "arithmetic-coding", "lossless"]
+categories = ["compression", "encoding", "parsing"]
+repository = "https://github.com/danieleades/arithmetic-coding"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+thiserror = "1.0.30"
+
