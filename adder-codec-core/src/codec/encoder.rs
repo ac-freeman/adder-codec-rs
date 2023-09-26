@@ -240,7 +240,7 @@ mod tests {
     use crate::codec::{CodecMetadata, LATEST_CODEC_VERSION};
 
     use crate::{Coord, PlaneSize};
-    use bitstream_io::{BigEndian, BitWriter};
+    
     use std::io::BufWriter;
 
     #[test]

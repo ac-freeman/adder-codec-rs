@@ -201,7 +201,7 @@ where
     R: BitRead,
 {
     /// todo
-    pub fn new(precision: u32) -> Self {
+    #[must_use] pub fn new(precision: u32) -> Self {
         let low = B::ZERO;
         let high = B::ONE << precision;
         let x = B::ZERO;

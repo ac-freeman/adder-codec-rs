@@ -7,7 +7,7 @@ use adder_codec_core::codec::empty::stream::EmptyOutput;
 use adder_codec_core::codec::encoder::Encoder;
 use adder_codec_core::codec::raw::stream::{RawOutput, RawOutputInterleaved};
 use adder_codec_core::codec::{
-    encoder, CodecError, CodecMetadata, EncoderType, LATEST_CODEC_VERSION,
+    CodecError, CodecMetadata, EncoderType, LATEST_CODEC_VERSION,
 };
 use adder_codec_core::{
     Coord, DeltaT, Event, Mode, PlaneError, PlaneSize, SourceCamera, SourceType, TimeMode,
@@ -20,26 +20,21 @@ use opencv::highgui;
 use opencv::imgproc::resize;
 use opencv::prelude::*;
 
-use crate::framer::scale_intensity::{event_to_intensity, FrameValue};
+use crate::framer::scale_intensity::{FrameValue};
 use crate::transcoder::event_pixel_tree::{Intensity32, PixelArena};
 
 #[cfg(feature = "compression")]
 use adder_codec_core::codec::compressed::stream::CompressedOutput;
-use adder_codec_core::Mode::{Continuous, FramePerfect};
+use adder_codec_core::Mode::{Continuous};
 use davis_edi_rs::util::reconstructor::ReconstructionError;
 use itertools::Itertools;
-use ndarray::{Array, Array2, Array3, Axis, ShapeError};
+use ndarray::{Array, Array3, Axis, ShapeError};
 use rayon::iter::IntoParallelIterator;
 use rayon::iter::ParallelIterator;
 use rayon::iter::{IndexedParallelIterator, IntoParallelRefMutIterator};
 use rayon::ThreadPool;
 
-use opencv::{
-    features2d::FastFeatureDetector,
-    highgui::{imshow, wait_key},
-    imgcodecs::imread,
-    prelude::*,
-};
+
 use thiserror::Error;
 use tokio::task::JoinError;
 
@@ -296,7 +291,7 @@ impl<W: Write + 'static> Video<W> {
                 sae_mat.create_rows_cols(plane.h() as i32, plane.w() as i32, CV_32FC3)?;
             },
         }
-        let mut abs_intensity_mat = sae_mat.clone();
+        let abs_intensity_mat = sae_mat.clone();
 
         let running_intensities = Array::zeros((plane.h_usize(), plane.w_usize(), plane.c_usize()));
 
@@ -360,7 +355,7 @@ impl<W: Write + 'static> Video<W> {
     }
 
     /// Set the negative contrast threshold
-    pub fn c_thresh_neg(mut self, c_thresh_neg: u8) -> Self {
+    pub fn c_thresh_neg(self, _c_thresh_neg: u8) -> Self {
         unimplemented!();
         // for px in self.event_pixel_trees.iter_mut() {
         //     px.c_thresh = c_thresh_neg;
@@ -575,11 +570,7 @@ impl<W: Write + 'static> Video<W> {
 
         self.state.in_interval_count += 1;
 
-        if self.state.in_interval_count % view_interval == 0 {
-            self.state.show_live = true;
-        } else {
-            self.state.show_live = false;
-        }
+        self.state.show_live = self.state.in_interval_count % view_interval == 0;
 
         let px_per_chunk: usize = self.state.chunk_rows * self.state.plane.area_wc();
 
@@ -800,7 +791,7 @@ impl<W: Write + 'static> Video<W> {
     }
 
     /// Set a new value for `c_thresh_neg`
-    pub fn update_adder_thresh_neg(&mut self, c: u8) {
+    pub fn update_adder_thresh_neg(&mut self, _c: u8) {
         unimplemented!();
         // for px in self.event_pixel_trees.iter_mut() {
         //     px.c_thresh = c;
@@ -847,14 +838,14 @@ impl<W: Write + 'static> Video<W> {
         }
 
         let img = &self.running_intensities;
-        let candidate: i32 = (img[(e.coord.y_usize(), e.coord.x_usize(), 0)]) as i32;
+        let candidate: i32 = img[(e.coord.y_usize(), e.coord.x_usize(), 0)];
 
         let mut count = 0;
         if (img[(
             (e.coord.y as i32 + circle3_[4][1]) as usize,
             (e.coord.x as i32 + circle3_[4][0]) as usize,
             0,
-        )] as i32
+        )]
             - candidate)
             .abs()
             > INTENSITY_THRESHOLD
@@ -865,7 +856,7 @@ impl<W: Write + 'static> Video<W> {
             (e.coord.y as i32 + circle3_[12][1]) as usize,
             (e.coord.x as i32 + circle3_[12][0]) as usize,
             0,
-        )] as i32
+        )]
             - candidate)
             .abs()
             > INTENSITY_THRESHOLD
@@ -876,7 +867,7 @@ impl<W: Write + 'static> Video<W> {
             (e.coord.y as i32 + circle3_[1][1]) as usize,
             (e.coord.x as i32 + circle3_[1][0]) as usize,
             0,
-        )] as i32
+        )]
             - candidate)
             .abs()
             > INTENSITY_THRESHOLD
@@ -888,7 +879,7 @@ impl<W: Write + 'static> Video<W> {
             (e.coord.y as i32 + circle3_[7][1]) as usize,
             (e.coord.x as i32 + circle3_[7][0]) as usize,
             0,
-        )] as i32
+        )]
             - candidate)
             .abs()
             > INTENSITY_THRESHOLD
@@ -908,7 +899,7 @@ impl<W: Write + 'static> Video<W> {
                 (e.coord.y as i32 + circle3_[i][1]) as usize,
                 (e.coord.x as i32 + circle3_[i][0]) as usize,
                 0,
-            )] as i32
+            )]
                 > candidate;
 
             let mut did_break = false;
@@ -919,21 +910,19 @@ impl<W: Write + 'static> Video<W> {
                         (e.coord.y as i32 + circle3_[(i + j) % 16][1]) as usize,
                         (e.coord.x as i32 + circle3_[(i + j) % 16][0]) as usize,
                         0,
-                    )] as i32
+                    )]
                         <= candidate + INTENSITY_THRESHOLD
                     {
                         did_break = true;
                     }
-                } else {
-                    if img[(
-                        (e.coord.y as i32 + circle3_[(i + j) % 16][1]) as usize,
-                        (e.coord.x as i32 + circle3_[(i + j) % 16][0]) as usize,
-                        0,
-                    )] as i32
-                        >= candidate - INTENSITY_THRESHOLD
-                    {
-                        did_break = true;
-                    }
+                } else if img[(
+                    (e.coord.y as i32 + circle3_[(i + j) % 16][1]) as usize,
+                    (e.coord.x as i32 + circle3_[(i + j) % 16][0]) as usize,
+                    0,
+                )]
+                    >= candidate - INTENSITY_THRESHOLD
+                {
+                    did_break = true;
                 }
             }
 
@@ -942,7 +931,7 @@ impl<W: Write + 'static> Video<W> {
             }
         }
 
-        return Ok(false);
+        Ok(false)
     }
 
     pub fn detect_features(mut self, detect_features: bool) -> Self {
@@ -1023,7 +1012,7 @@ pub fn integrate_for_px(
         grew_buffer = true;
     }
 
-    return grew_buffer;
+    grew_buffer
 }
 
 /// If `video.show_display`, shows the given [`Mat`] in an `OpenCV` window

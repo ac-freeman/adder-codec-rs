@@ -415,7 +415,7 @@ impl<W: Write + 'static> Integration<W> {
 
         let db = match video.instantaneous_frame.data_bytes_mut() {
             Ok(db) => db,
-            Err(e) => return Err(CodecError::MalformedEncoder), // TODO: Wrong type of error
+            Err(_e) => return Err(CodecError::MalformedEncoder), // TODO: Wrong type of error
         };
 
         // TODO: split off into separate function
@@ -843,7 +843,7 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Davis<W> {
                 // };
                 self.integration.dvs_events_last_after = self.integration.dvs_events_after.clone();
                 self.integration.end_of_last_frame_timestamp =
-                    self.integration.end_of_frame_timestamp.clone();
+                    self.integration.end_of_frame_timestamp;
 
                 self.integration.dvs_last_timestamps.par_map_inplace(|ts| {
                     debug_assert!(*ts < end_of_frame_timestamp);
@@ -889,7 +889,7 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Davis<W> {
 }
 
 impl<W: Write + 'static> VideoBuilder<W> for Davis<W> {
-    fn contrast_thresholds(mut self, c_thresh_pos: u8, c_thresh_neg: u8) -> Self {
+    fn contrast_thresholds(mut self, c_thresh_pos: u8, _c_thresh_neg: u8) -> Self {
         self.video = self.video.c_thresh_pos(c_thresh_pos);
         // self.video = self.video.c_thresh_neg(c_thresh_neg);
         self
@@ -900,7 +900,7 @@ impl<W: Write + 'static> VideoBuilder<W> for Davis<W> {
         self
     }
 
-    fn c_thresh_neg(mut self, c_thresh_neg: u8) -> Self {
+    fn c_thresh_neg(self, _c_thresh_neg: u8) -> Self {
         // self.video = self.video.c_thresh_neg(c_thresh_neg);
         self
     }
