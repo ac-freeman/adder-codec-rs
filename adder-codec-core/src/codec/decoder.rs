@@ -2,7 +2,13 @@ use crate::codec::{CodecError, CodecMetadata, ReadCompression, ReadCompressionEn
 use crate::SourceType::*;
 use crate::{Event, PlaneSize, SourceCamera, SourceType};
 
+#[cfg(feature = "compression")]
+use crate::codec::compressed::adu::frame::Adu;
+#[cfg(feature = "compression")]
 use crate::codec::compressed::stream::CompressedInput;
+#[cfg(feature = "compression")]
+use crate::codec::CompressedOutput;
+
 use crate::codec::header::{
     EventStreamHeader, EventStreamHeaderExtensionV1, EventStreamHeaderExtensionV2,
 };
@@ -27,6 +33,7 @@ pub struct Decoder<R: Read + Seek> {
 #[allow(dead_code)]
 impl<R: Read + Seek> Decoder<R> {
     /// Create a new decoder with the given compression scheme
+    #[cfg(feature = "compression")]
     pub fn new_compressed(
         compression: CompressedInput<R>,
         reader: &mut BitReader<R, BigEndian>,
@@ -188,6 +195,16 @@ impl<R: Read + Seek> Decoder<R> {
         self.input.digest_event(reader)
     }
 
+    /// Read and decode the next event from the input stream
+    #[cfg(feature = "compression")]
+    #[inline]
+    pub fn digest_event_debug(
+        &mut self,
+        reader: &mut BitReader<R, BigEndian>,
+    ) -> Result<(Option<Adu>, Event), CodecError> {
+        self.input.digest_event_debug(reader)
+    }
+
     /// Sets the input stream position to the given absolute byte position
     pub fn set_input_stream_position(
         &mut self,
@@ -225,9 +242,9 @@ impl<R: Read + Seek> Decoder<R> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::codec::compressed::stream::{CompressedInput, CompressedOutput};
+
     use crate::codec::encoder::Encoder;
-    use crate::codec::raw::stream::{RawInput, RawOutput};
+    use crate::codec::raw::stream::{RawInput, RawOutput, RawOutputInterleaved};
 
     use crate::Coord;
     use std::io::{BufReader, BufWriter, Cursor, Write};
@@ -265,7 +282,7 @@ mod tests {
         let mut encoder: Encoder<BufWriter<Vec<u8>>> = Encoder::new_raw(compression);
 
         let event = stock_event();
-        encoder.ingest_event(&event).unwrap();
+        encoder.ingest_event(event).unwrap();
         let mut writer = encoder.close_writer().unwrap().unwrap();
 
         writer.flush().unwrap();
@@ -273,6 +290,36 @@ mod tests {
         writer.into_inner().unwrap()
     }
 
+    fn setup_encoded_raw_interleaved(codec_version: u8) -> Vec<u8> {
+        let output = Vec::new();
+
+        let bufwriter = BufWriter::new(output);
+        let compression = RawOutputInterleaved::new(
+            CodecMetadata {
+                codec_version,
+                header_size: 0,
+                time_mode: Default::default(),
+                plane: Default::default(),
+                tps: 0,
+                ref_interval: 255,
+                delta_t_max: 255,
+                event_size: 0,
+                source_camera: Default::default(),
+            },
+            bufwriter,
+        );
+        let mut encoder: Encoder<BufWriter<Vec<u8>>> = Encoder::new_raw_interleaved(compression);
+
+        let event = stock_event();
+        encoder.ingest_event(event).unwrap();
+        let mut writer = encoder.close_writer().unwrap().unwrap();
+
+        writer.flush().unwrap();
+
+        writer.into_inner().unwrap()
+    }
+
+    #[cfg(feature = "compression")]
     fn setup_encoded_compressed(codec_version: u8) -> Vec<u8> {
         let output = Vec::new();
 
@@ -322,8 +369,8 @@ mod tests {
         let tmp = Cursor::new(&*output);
         let bufreader = BufReader::new(tmp);
         let compression = RawInput::new();
-
         let mut bitreader = BitReader::endian(bufreader, BigEndian);
+
         let reader = Decoder::new_raw(compression, &mut bitreader).unwrap();
         assert_eq!(reader.input.meta().header_size, 29);
     }
@@ -341,11 +388,12 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "compression")]
     fn header_v0_compressed() {
         let output = setup_encoded_compressed(0);
         let tmp = Cursor::new(&*output);
         let bufreader = BufReader::new(tmp);
-        let compression = CompressedInput::new();
+        let compression = CompressedInput::new(255, 255);
 
         let mut bitreader = BitReader::endian(bufreader, BigEndian);
         let reader = Decoder::new_compressed(compression, &mut bitreader).unwrap();
@@ -353,11 +401,12 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "compression")]
     fn header_v1_compressed() {
         let output = setup_encoded_compressed(1);
         let tmp = Cursor::new(&*output);
         let bufreader = BufReader::new(tmp);
-        let compression = CompressedInput::new();
+        let compression = CompressedInput::new(255, 255);
 
         let mut bitreader = BitReader::endian(bufreader, BigEndian);
         let reader = Decoder::new_compressed(compression, &mut bitreader).unwrap();
@@ -365,11 +414,12 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "compression")]
     fn header_v2_compressed() {
         let output = setup_encoded_compressed(2);
         let tmp = Cursor::new(&*output);
         let bufreader = BufReader::new(tmp);
-        let compression = CompressedInput::new();
+        let compression = CompressedInput::new(255, 255);
 
         let mut bitreader = BitReader::endian(bufreader, BigEndian);
         let reader = Decoder::new_compressed(compression, &mut bitreader).unwrap();

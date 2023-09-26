@@ -5,13 +5,17 @@ use crate::{Event, EventSingle, SourceCamera, SourceType, EOF_EVENT};
 use std::io;
 use std::io::{Sink, Write};
 
+#[cfg(feature = "compression")]
+use crate::codec::compressed::adu::frame::Adu;
+#[cfg(feature = "compression")]
 use crate::codec::compressed::stream::CompressedOutput;
+
 use crate::codec::empty::stream::EmptyOutput;
 use crate::codec::header::{
     EventStreamHeader, EventStreamHeaderExtensionV0, EventStreamHeaderExtensionV1,
     EventStreamHeaderExtensionV2,
 };
-use crate::codec::raw::stream::RawOutput;
+use crate::codec::raw::stream::{RawOutput, RawOutputInterleaved};
 use crate::SourceType::U8;
 use bincode::config::{FixintEncoding, WithOtherEndian, WithOtherIntEncoding};
 use bincode::{DefaultOptions, Options};
@@ -43,6 +47,7 @@ impl<W: Write + 'static> Encoder<W> {
     }
 
     /// Create a new [`Encoder`] with the given compression scheme
+    #[cfg(feature = "compression")]
     pub fn new_compressed(compression: CompressedOutput<W>) -> Self
     where
         Self: Sized,
@@ -64,6 +69,21 @@ impl<W: Write + 'static> Encoder<W> {
     {
         let mut encoder = Self {
             output: WriteCompressionEnum::RawOutput(compression),
+            bincode: DefaultOptions::new()
+                .with_fixint_encoding()
+                .with_big_endian(),
+        };
+        encoder.encode_header().unwrap();
+        encoder
+    }
+
+    /// Create a new [`Encoder`] with the given raw compression scheme
+    pub fn new_raw_interleaved(compression: RawOutputInterleaved<W>) -> Self
+    where
+        Self: Sized,
+    {
+        let mut encoder = Self {
+            output: WriteCompressionEnum::RawOutputInterleaved(compression),
             bincode: DefaultOptions::new()
                 .with_fixint_encoding()
                 .with_big_endian(),
@@ -115,9 +135,9 @@ impl<W: Write + 'static> Encoder<W> {
 
     /// Close the encoder's writer and return it, consuming the encoder in the process.
     pub fn close_writer(mut self) -> Result<Option<W>, CodecError> {
-        self.output.byte_align()?;
-        self.write_eof()?;
-        self.flush_writer()?;
+        // self.output.byte_align()?;
+        // self.write_eof()?;
+        // self.flush_writer()?;
         Ok(self.output.into_writer())
         // let compressed_output = self.compressed_output.take();
         // let raw_output = self.raw_output.take();
@@ -184,14 +204,22 @@ impl<W: Write + 'static> Encoder<W> {
     }
 
     /// Ingest an event
-    pub fn ingest_event(&mut self, event: &Event) -> Result<(), CodecError> {
+    #[inline(always)]
+    pub fn ingest_event(&mut self, event: Event) -> Result<(), CodecError> {
         self.output.ingest_event(event)
+    }
+    /// Ingest an event
+    #[cfg(feature = "compression")]
+    pub fn ingest_event_debug(&mut self, event: Event) -> Result<Option<Adu>, CodecError> {
+        self.output.ingest_event_debug(event)
     }
 
     /// Ingest an array of events
+    ///
+    /// TODO: Make this move events, not by reference
     pub fn ingest_events(&mut self, events: &[Event]) -> Result<(), CodecError> {
         for event in events {
-            self.ingest_event(event)?;
+            self.ingest_event(*event)?;
         }
         Ok(())
     }
@@ -208,7 +236,6 @@ impl<W: Write + 'static> Encoder<W> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::codec::compressed::stream::CompressedOutput;
     use crate::codec::raw::stream::RawOutput;
     use crate::codec::{CodecMetadata, LATEST_CODEC_VERSION};
 
@@ -311,7 +338,7 @@ mod tests {
             delta_t: 0,
         };
 
-        encoder.ingest_event(&event).unwrap();
+        encoder.ingest_event(event).unwrap();
         let mut writer = encoder.close_writer().unwrap().unwrap();
         writer.flush().unwrap();
         let output = writer.into_inner().unwrap();
@@ -319,6 +346,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "compression")]
     fn compressed() {
         let output = Vec::new();
         let bufwriter = BufWriter::new(output);
@@ -334,6 +362,10 @@ mod tests {
                 event_size: 0,
                 source_camera: Default::default(),
             },
+            frame: Default::default(),
+            adu: Adu::new(),
+            arithmetic_coder: None,
+            contexts: None,
             stream: Some(BitWriter::endian(bufwriter, BigEndian)),
         };
         let _encoder = Encoder {
@@ -345,6 +377,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "compression")]
     fn compressed2() {
         let output = Vec::new();
         let bufwriter = BufWriter::new(output);
@@ -371,6 +404,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "compression")]
     fn compressed3() {
         let output = Vec::new();
         let bufwriter = BufWriter::new(output);

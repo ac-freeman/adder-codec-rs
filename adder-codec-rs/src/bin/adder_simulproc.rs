@@ -9,6 +9,7 @@ use rayon::current_num_threads;
 use std::error::Error;
 use std::fs::File;
 
+use adder_codec_core::codec::EncoderType;
 use adder_codec_core::SourceCamera::FramedU8;
 use adder_codec_core::TimeMode;
 use adder_codec_rs::transcoder::source::framed::Framed;
@@ -74,7 +75,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     if !args.output_events_filename.is_empty() {
         let path = Path::new(&args.output_events_filename);
         let file = File::create(path)?;
-        source = *source.write_out(FramedU8, time_mode, BufWriter::new(file))?;
+        source = *source.write_out(FramedU8, time_mode, EncoderType::Raw, BufWriter::new(file))?;
     }
 
     let source_fps = source.source_fps;
@@ -131,6 +132,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
 #[cfg(test)]
 mod tests {
+    use adder_codec_core::codec::EncoderType;
     use adder_codec_core::DeltaT;
     use adder_codec_core::SourceCamera::FramedU8;
     use adder_codec_core::TimeMode;
@@ -174,7 +176,6 @@ mod tests {
             // .chunk_rows(64)
             .frame_start(args.frame_idx_start)?
             .c_thresh_pos(args.c_thresh_pos)
-            .c_thresh_neg(args.c_thresh_neg)
             .show_display(args.show_display);
 
         let source_fps = source.source_fps;
@@ -187,7 +188,7 @@ mod tests {
         if !args.output_events_filename.is_empty() {
             let file = File::create(args.output_events_filename)?;
             let writer = BufWriter::new(file);
-            source = *source.write_out(FramedU8, TimeMode::DeltaT, writer)?;
+            source = *source.write_out(FramedU8, TimeMode::DeltaT, EncoderType::Raw, writer)?;
         }
         let ref_time = source.get_ref_time();
 
@@ -228,6 +229,7 @@ mod tests {
         // framing generates more frames at the end than the original method used. This assertion
         // should still pass if all the frames before that are identical.
         assert_eq!(output.stdout.len(), 0);
+        // assert!(output.stdout.len() < 100); // TODO: Make this more precise; figure out if the test has gotten better or worse
         fs::remove_file(output_path).unwrap();
 
         let output_path = "./tests/samples/TEST_lake_scaled_hd_crop.adder";

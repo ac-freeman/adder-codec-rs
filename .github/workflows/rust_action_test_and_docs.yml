@@ -58,12 +58,11 @@ jobs:
           files: lcov.info
           fail_ci_if_error: false
       - name: Run a documentation generation test
-        run: cargo doc -vv
+        run: cargo doc -vv -p adder-codec-rs --features=docs-only
   check_windows:
     name: Check and test on Windows
     runs-on: windows-2022
     env:
-      LLVM_VERSION: 15.0.7
       OPENCV_VERSION: 4.6.0
     steps:
       - uses: actions/checkout@v2
@@ -75,7 +74,7 @@ jobs:
           override: true
 
       - name: Install LLVM/clang
-        run: choco install -y llvm --version "$LLVM_VERSION"
+        run: choco install -y llvm
         shell: bash
 
       - name: Install OpenCV

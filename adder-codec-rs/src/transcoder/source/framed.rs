@@ -1,10 +1,11 @@
-use crate::transcoder::event_pixel_tree::Mode::FramePerfect;
 use crate::transcoder::source::video::SourceError;
 use crate::transcoder::source::video::SourceError::BufferEmpty;
 use crate::transcoder::source::video::Video;
 use crate::transcoder::source::video::{Source, VideoBuilder};
+use adder_codec_core::Mode::FramePerfect;
 use adder_codec_core::{DeltaT, Event, PlaneSize, SourceCamera, TimeMode};
 
+use adder_codec_core::codec::EncoderType;
 use opencv::core::{Mat, Size};
 use opencv::videoio::{VideoCapture, CAP_PROP_FPS, CAP_PROP_FRAME_COUNT, CAP_PROP_POS_FRAMES};
 use opencv::{imgproc, prelude::*, videoio, Result};
@@ -185,7 +186,7 @@ impl<W: Write + 'static> Source<W> for Framed<W> {
 impl<W: Write + 'static> VideoBuilder<W> for Framed<W> {
     fn contrast_thresholds(mut self, c_thresh_pos: u8, c_thresh_neg: u8) -> Self {
         self.video = self.video.c_thresh_pos(c_thresh_pos);
-        self.video = self.video.c_thresh_neg(c_thresh_neg);
+        // self.video = self.video.c_thresh_neg(c_thresh_neg);
         self
     }
 
@@ -225,16 +226,22 @@ impl<W: Write + 'static> VideoBuilder<W> for Framed<W> {
         mut self,
         source_camera: SourceCamera,
         time_mode: TimeMode,
+        encoder_type: EncoderType,
         write: W,
     ) -> Result<Box<Self>, SourceError> {
-        self.video = self
-            .video
-            .write_out(Some(source_camera), Some(time_mode), write)?;
+        self.video =
+            self.video
+                .write_out(Some(source_camera), Some(time_mode), encoder_type, write)?;
         Ok(Box::new(self))
     }
 
     fn show_display(mut self, show_display: bool) -> Self {
         self.video = self.video.show_display(show_display);
+        self
+    }
+
+    fn detect_features(mut self, detect_features: bool) -> Self {
+        self.video = self.video.detect_features(detect_features);
         self
     }
 }

@@ -99,12 +99,17 @@ fn update_ui_scale_factor(
     windows: Res<Windows>,
 ) {
     if keyboard_input.just_pressed(KeyCode::Slash) || toggle_scale_factor.is_none() {
-        *toggle_scale_factor = Some(!toggle_scale_factor.unwrap_or(true));
+        *toggle_scale_factor = Some(!toggle_scale_factor.unwrap_or(false));
 
         if let Some(window) = windows.get_primary() {
             let scale_factor = if toggle_scale_factor.unwrap_or(true) {
+                eprintln!("using default scale factor");
                 1.0
             } else {
+                eprintln!(
+                    "Primary window found, using scale factor: {}",
+                    window.scale_factor()
+                );
                 1.0 / window.scale_factor()
             };
             egui_settings.scale_factor = scale_factor;

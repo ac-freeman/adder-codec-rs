@@ -12,6 +12,7 @@ use opencv::imgproc;
 use rayon::current_num_threads;
 use std::error::Error;
 
+use adder_codec_core::codec::EncoderType;
 use adder_codec_core::TimeMode;
 use adder_codec_rs::transcoder::source::davis::TranscoderMode::RawDvs;
 use std::default::Default;
@@ -40,6 +41,8 @@ pub struct ParamsUiState {
     pub(crate) optimize_c_frequency: u32,
     pub(crate) optimize_c_frequency_slider: u32,
     pub(crate) time_mode: TimeMode,
+    pub(crate) encoder_type: EncoderType,
+    pub(crate) detect_features: bool,
 }
 
 impl Default for ParamsUiState {
@@ -65,6 +68,8 @@ impl Default for ParamsUiState {
             optimize_c_frequency: 10,
             optimize_c_frequency_slider: 10,
             time_mode: TimeMode::default(),
+            encoder_type: EncoderType::default(),
+            detect_features: false,
         }
     }
 }
@@ -254,6 +259,7 @@ impl TranscoderState {
 
     pub fn update_adder_params(&mut self) {
         // TODO: do conditionals on the sliders themselves
+
         let source: &mut dyn Source<BufWriter<File>> = {
             match &mut self.transcoder.framed_source {
                 None => match &mut self.transcoder.davis_source {
@@ -265,6 +271,7 @@ impl TranscoderState {
                             || source.get_reconstructor().as_ref().unwrap().output_fps
                                 != self.ui_state.davis_output_fps
                             || source.time_mode != self.ui_state.time_mode
+                            || source.get_video_ref().encoder_type != self.ui_state.encoder_type
                         {
                             if self.ui_state.davis_mode_radio_state == RawDvs {
                                 // self.ui_state.davis_output_fps = 1000000.0;
@@ -292,6 +299,7 @@ impl TranscoderState {
                     if source.scale != self.ui_state.scale
                         || source.get_ref_time() != self.ui_state.delta_t_ref as u32
                         || source.time_mode != self.ui_state.time_mode
+                        || source.get_video_ref().encoder_type != self.ui_state.encoder_type
                         || match source.get_video_ref().state.plane.c() {
                             1 => {
                                 // True if the transcoder is gray, but the user wants color
@@ -321,9 +329,10 @@ impl TranscoderState {
 
         let video = source.get_video_mut();
         video.update_adder_thresh_pos(self.ui_state.adder_tresh as u8);
-        video.update_adder_thresh_neg(self.ui_state.adder_tresh as u8);
+        // video.update_adder_thresh_neg(self.ui_state.adder_tresh as u8);
         video.update_delta_t_max(self.ui_state.delta_t_max_mult * video.get_ref_time());
         video.instantaneous_view_mode = self.ui_state.view_mode_radio_state;
+        video.update_detect_features(self.ui_state.detect_features);
     }
 
     pub fn consume_source(
@@ -438,7 +447,7 @@ fn side_panel_grid_contents(
         ui,
         &mut ui_state.delta_t_max_mult,
         &mut ui_state.delta_t_max_mult_slider,
-        2..=1000,
+        1..=1000,
         vec![],
         10,
     );
@@ -500,6 +509,11 @@ fn side_panel_grid_contents(
             FramedViewMode::DeltaT,
             "Δt",
         );
+        ui.radio_value(
+            &mut ui_state.view_mode_radio_state,
+            FramedViewMode::SAE,
+            "SAE",
+        );
     });
     ui.end_row();
 
@@ -516,6 +530,33 @@ fn side_panel_grid_contents(
                 TimeMode::AbsoluteT,
                 "t (absolute time)",
             );
+        });
+    });
+    ui.end_row();
+
+    ui.label("Compression mode:");
+    ui.add_enabled_ui(true, |ui| {
+        ui.vertical(|ui| {
+            ui.horizontal(|ui| {
+                ui.radio_value(
+                    &mut ui_state.encoder_type,
+                    EncoderType::Empty,
+                    "Empty (don't write)",
+                );
+                ui.radio_value(&mut ui_state.encoder_type, EncoderType::Raw, "Raw");
+            });
+            ui.horizontal(|ui| {
+                ui.radio_value(
+                    &mut ui_state.encoder_type,
+                    EncoderType::RawInterleaved,
+                    "Raw, temporally interleaved",
+                );
+                ui.radio_value(
+                    &mut ui_state.encoder_type,
+                    EncoderType::Compressed,
+                    "Compressed",
+                );
+            });
         });
     });
     ui.end_row();
@@ -576,6 +617,13 @@ fn side_panel_grid_contents(
         1..=250,
         vec![10, 25, 50, 100],
         1,
+    );
+    ui.end_row();
+
+    ui.label("Processing:");
+    ui.add_enabled(
+        true,
+        egui::Checkbox::new(&mut ui_state.detect_features, "Detect features"),
     );
     ui.end_row();
 }

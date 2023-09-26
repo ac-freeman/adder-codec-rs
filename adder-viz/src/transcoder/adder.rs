@@ -75,7 +75,7 @@ impl AdderTranscoder {
                         .frame_start(current_frame)?
                         .chunk_rows(64)
                         .c_thresh_pos(ui_state.adder_tresh as u8)
-                        .c_thresh_neg(ui_state.adder_tresh as u8)
+                        // .c_thresh_neg(ui_state.adder_tresh as u8)
                         .auto_time_parameters(
                             ui_state.delta_t_ref as u32,
                             ui_state.delta_t_max_mult * ui_state.delta_t_ref as u32,
@@ -91,7 +91,12 @@ impl AdderTranscoder {
                             Some(output_path) => {
                                 let out_path = output_path.to_str().unwrap();
                                 let writer = BufWriter::new(File::create(out_path)?);
-                                framed = *framed.write_out(FramedU8, ui_state.time_mode, writer)?;
+                                framed = *framed.write_out(
+                                    FramedU8,
+                                    ui_state.time_mode,
+                                    ui_state.encoder_type,
+                                    writer,
+                                )?;
                                 //     .output_events_filename(match output_path.to_str() {
                                 //     None => {
                                 //         return Err(Box::new(AdderTranscoderError(
@@ -210,8 +215,12 @@ impl AdderTranscoder {
 
                         if let Some(output_string) = output_string {
                             let writer = BufWriter::new(File::create(&output_string)?);
-                            davis_source =
-                                *davis_source.write_out(DavisU8, ui_state.time_mode, writer)?;
+                            davis_source = *davis_source.write_out(
+                                DavisU8,
+                                ui_state.time_mode,
+                                ui_state.encoder_type,
+                                writer,
+                            )?;
                         }
 
                         Ok(AdderTranscoder {

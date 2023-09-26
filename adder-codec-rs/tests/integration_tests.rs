@@ -209,7 +209,7 @@ fn test_encode_header_v0() {
         fs::metadata("./TEST_".to_owned() + n.to_string().as_str() + ".addr")
             .unwrap()
             .len(),
-        34
+        36
     );
     fs::remove_file("./TEST_".to_owned() + n.to_string().as_str() + ".addr").unwrap();
     // Don't check the error
@@ -226,7 +226,7 @@ fn test_encode_header_v1() {
         fs::metadata("./TEST_".to_owned() + n.to_string().as_str() + ".addr")
             .unwrap()
             .len(),
-        38
+        40
     );
     fs::remove_file("./TEST_".to_owned() + n.to_string().as_str() + ".addr").unwrap();
     // Don't check the error
@@ -338,7 +338,7 @@ fn test_encode_event() {
         d: 5,
         delta_t: 1000,
     };
-    stream.ingest_event(&event).unwrap();
+    stream.ingest_event(event).unwrap();
     cleanup_raw_writer(n, stream)
 }
 
@@ -401,7 +401,7 @@ fn read_event() {
         d: 5,
         delta_t: 1000,
     };
-    stream.ingest_event(&event).unwrap();
+    stream.ingest_event(event).unwrap();
     stream.flush_writer().unwrap();
     let (mut reader, mut bitreader) = setup_raw_reader(n);
     let res = reader.digest_event(&mut bitreader);

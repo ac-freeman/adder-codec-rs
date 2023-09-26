@@ -222,7 +222,7 @@ pub struct FrameSequence<T> {
     /// The state of the frame sequence
     pub state: FrameSequenceState,
     pub(crate) frames: Vec<VecDeque<Frame<Option<T>>>>,
-    pub(crate) frame_idx_offsets: Vec<i64>,
+    pub frame_idx_offsets: Vec<i64>,
     pub(crate) pixel_ts_tracker: Vec<Array3<BigT>>,
     pub(crate) last_filled_tracker: Vec<Array3<i64>>,
     pub(crate) last_frame_intensity_tracker: Vec<Array3<T>>,
@@ -552,7 +552,7 @@ impl<T: Clone + Default + FrameValue<Output = T> + Serialize> FrameSequence<T> {
     /// Get whether or not the next frame is "filled" (i.e., all pixels have been written to)
     #[must_use]
     pub fn is_frame_0_filled(&self) -> bool {
-        for chunk in &self.chunk_filled_tracker {
+        for chunk in self.chunk_filled_tracker.iter() {
             if !chunk {
                 return false;
             }
@@ -603,7 +603,8 @@ impl<T: Clone + Default + FrameValue<Output = T> + Serialize> FrameSequence<T> {
                     ]));
                     self.frame_idx_offsets[chunk_num] += 1;
                 }
-                self.chunk_filled_tracker[chunk_num] = false;
+                self.chunk_filled_tracker[chunk_num] =
+                    self.frames[chunk_num][0].filled_count == self.frames[chunk_num][0].array.len();
                 Some(a.array)
             }
             None => None,
@@ -696,11 +697,15 @@ fn ingest_event_for_chunk<
             // event's intensity. Else we reset the intensity here.
             let practical_d_max =
                 fast_math::log2_raw(T::max_f32() * (state.source_dtm / state.ref_interval) as f32);
-            if state.codec_version >= 2 && state.time_mode == TimeMode::AbsoluteT {
+            if state.codec_version >= 2
+                && state.time_mode == TimeMode::AbsoluteT
+                && state.view_mode != FramedViewMode::SAE
+            {
                 // event.delta_t -= ((*last_filled_frame_ref + 1) * state.ref_interval as i64) as u32;
-                event.delta_t -= prev_running_ts as u32;
+                event.delta_t = event.delta_t.saturating_sub(prev_running_ts as u32);
             }
 
+            // TODO: Handle SAE view mode
             *last_frame_intensity_ref = T::get_frame_value(
                 event,
                 state.source,
@@ -708,6 +713,7 @@ fn ingest_event_for_chunk<
                 practical_d_max,
                 state.source_dtm,
                 state.view_mode,
+                0.0, // TODO
             );
         }
         *last_filled_frame_ref = (running_ts_ref.saturating_sub(1)) as i64 / i64::from(state.tpf);

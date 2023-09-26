@@ -1,9 +1,12 @@
+#[cfg(feature = "compression")]
+use crate::codec::compressed::adu::frame::Adu;
 use crate::codec::header::{Magic, MAGIC_RAW};
 use crate::codec::{CodecError, CodecMetadata, ReadCompression, WriteCompression};
-use crate::{Event, EventSingle, EOF_PX_ADDRESS};
+use crate::{Coord, DeltaT, Event, EventSingle, EOF_PX_ADDRESS};
 use bincode::config::{FixintEncoding, WithOtherEndian, WithOtherIntEncoding};
 use bincode::{DefaultOptions, Options};
 use bitstream_io::{BigEndian, BitRead, BitReader};
+use std::collections::BinaryHeap;
 use std::io::{Read, Seek, SeekFrom, Write};
 
 /// Write uncompressed (raw) ADΔER data to a stream.
@@ -13,6 +16,17 @@ pub struct RawOutput<W> {
         WithOtherIntEncoding<DefaultOptions, FixintEncoding>,
         bincode::config::BigEndian,
     >,
+    pub(crate) stream: Option<W>,
+}
+
+/// Write uncompressed (raw) ADΔER data to a stream.
+pub struct RawOutputInterleaved<W> {
+    pub(crate) meta: CodecMetadata,
+    pub(crate) bincode: WithOtherEndian<
+        WithOtherIntEncoding<DefaultOptions, FixintEncoding>,
+        bincode::config::BigEndian,
+    >,
+    queue: BinaryHeap<Event>,
     pub(crate) stream: Option<W>,
 }
 
@@ -73,6 +87,17 @@ impl<W: Write> WriteCompression<W> for RawOutput<W> {
 
     // If `self.writer` is a `BufWriter`, you'll need to flush it yourself after this.
     fn into_writer(&mut self) -> Option<W> {
+        let eof = Event {
+            coord: Coord {
+                x: EOF_PX_ADDRESS,
+                y: EOF_PX_ADDRESS,
+                c: Some(0),
+            },
+            d: 0,
+            delta_t: 0,
+        };
+        self.bincode.serialize_into(self.stream(), &eof).unwrap();
+        self.flush_writer().unwrap();
         std::mem::replace(&mut self.stream, None)
     }
 
@@ -80,27 +105,154 @@ impl<W: Write> WriteCompression<W> for RawOutput<W> {
         self.stream().flush()
     }
 
-    fn compress(&self, _data: &[u8]) -> Vec<u8> {
+    /// Ingest an event into the codec.
+    ///
+    /// This will always write the event immediately to the underlying writer.
+    fn ingest_event(&mut self, event: Event) -> Result<(), CodecError> {
+        // NOTE: for speed, the following checks only run in debug builds. It's entirely
+        // possibly to encode nonsensical events if you want to.
+        debug_assert!(event.coord.x < self.meta.plane.width || event.coord.x == EOF_PX_ADDRESS);
+        debug_assert!(event.coord.y < self.meta.plane.height || event.coord.y == EOF_PX_ADDRESS);
+
+        // TODO: Switch functionality based on what the deltat mode is!
+
+        let output_event: EventSingle;
+        if self.meta.plane.channels == 1 {
+            // let event_to_write = self.queue.pop()
+            output_event = (&event).into();
+            self.bincode.serialize_into(self.stream(), &output_event)?;
+            // bincode::serialize_into(&mut *stream, &output_event, my_options).unwrap();
+        } else {
+            self.bincode.serialize_into(self.stream(), &event)?;
+        }
+
+        Ok(())
+    }
+
+    #[cfg(feature = "compression")]
+    fn ingest_event_debug(&mut self, event: Event) -> Result<Option<Adu>, CodecError> {
         todo!()
+    }
+}
+
+impl<W: Write> RawOutputInterleaved<W> {
+    /// Create a new raw output stream.
+    pub fn new(mut meta: CodecMetadata, writer: W) -> Self {
+        let bincode = DefaultOptions::new()
+            .with_fixint_encoding()
+            .with_big_endian();
+        meta.event_size = match meta.plane.c() {
+            1 => bincode.serialized_size(&EventSingle::default()).unwrap() as u8,
+            _ => bincode.serialized_size(&Event::default()).unwrap() as u8,
+        };
+        Self {
+            meta,
+            bincode,
+            queue: BinaryHeap::new(),
+            stream: Some(writer),
+        }
+    }
+
+    fn stream(&mut self) -> &mut W {
+        self.stream.as_mut().unwrap()
+    }
+}
+
+impl<W: Write> WriteCompression<W> for RawOutputInterleaved<W> {
+    fn magic(&self) -> Magic {
+        MAGIC_RAW
+    }
+
+    fn meta(&self) -> &CodecMetadata {
+        &self.meta
+    }
+
+    fn meta_mut(&mut self) -> &mut CodecMetadata {
+        &mut self.meta
+    }
+
+    fn write_bytes(&mut self, bytes: &[u8]) -> Result<(), std::io::Error> {
+        // Silently ignore the returned usize because we don't care about the number of bytes
+        self.stream().write(bytes).map(|_| ())
+    }
+
+    // Will always be byte-aligned. Do nothing.
+    fn byte_align(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+
+    // If `self.writer` is a `BufWriter`, you'll need to flush it yourself after this.
+    fn into_writer(&mut self) -> Option<W> {
+        while let Some(first_item) = self.queue.pop() {
+            let output_event: EventSingle;
+            if self.meta.plane.channels == 1 {
+                // let event_to_write = self.queue.pop()
+                output_event = (&first_item).into();
+                self.bincode
+                    .serialize_into(self.stream(), &output_event)
+                    .unwrap();
+                // bincode::serialize_into(&mut *stream, &output_event, my_options).unwrap();
+            } else {
+                self.bincode
+                    .serialize_into(self.stream(), &first_item)
+                    .unwrap();
+            }
+        }
+        let eof = Event {
+            coord: Coord {
+                x: EOF_PX_ADDRESS,
+                y: EOF_PX_ADDRESS,
+                c: Some(0),
+            },
+            d: 0,
+            delta_t: 0,
+        };
+        self.bincode.serialize_into(self.stream(), &eof).unwrap();
+        self.flush_writer().unwrap();
+        std::mem::replace(&mut self.stream, None)
+    }
+
+    fn flush_writer(&mut self) -> std::io::Result<()> {
+        self.stream().flush()
     }
 
     /// Ingest an event into the codec.
     ///
     /// This will always write the event immediately to the underlying writer.
-    fn ingest_event(&mut self, event: &Event) -> Result<(), CodecError> {
+    fn ingest_event(&mut self, event: Event) -> Result<(), CodecError> {
         // NOTE: for speed, the following checks only run in debug builds. It's entirely
         // possibly to encode nonsensical events if you want to.
         debug_assert!(event.coord.x < self.meta.plane.width || event.coord.x == EOF_PX_ADDRESS);
         debug_assert!(event.coord.y < self.meta.plane.height || event.coord.y == EOF_PX_ADDRESS);
-        let output_event: EventSingle;
-        if self.meta.plane.channels == 1 {
-            output_event = event.into();
-            self.bincode.serialize_into(self.stream(), &output_event)?;
-            // bincode::serialize_into(&mut *stream, &output_event, my_options).unwrap();
-        } else {
-            self.bincode.serialize_into(self.stream(), event)?;
+
+        // TODO: Switch functionality based on what the deltat mode is!
+
+        // First, push the event to the queue
+        let dt = event.delta_t;
+        self.queue.push(event);
+
+        if let Some(first_item_addr) = self.queue.peek() {
+            if first_item_addr.delta_t < dt.saturating_sub(self.meta.delta_t_max) {
+                if let Some(first_item) = self.queue.pop() {
+                    let output_event: EventSingle;
+                    if self.meta.plane.channels == 1 {
+                        // let event_to_write = self.queue.pop()
+                        output_event = (&first_item).into();
+                        self.bincode.serialize_into(self.stream(), &output_event)?;
+                        // bincode::serialize_into(&mut *stream, &output_event, my_options).unwrap();
+                    } else {
+                        self.bincode.serialize_into(self.stream(), &first_item)?;
+                    }
+                }
+            }
         }
+
         Ok(())
+    }
+
+    #[cfg(feature = "compression")]
+    fn ingest_event_debug(&mut self, event: Event) -> Result<Option<Adu>, CodecError> {
+        todo!()
     }
 }
 
@@ -171,6 +323,14 @@ impl<R: Read + Seek> ReadCompression<R> for RawInput<R> {
             return Err(CodecError::Eof);
         }
         Ok(event)
+    }
+
+    #[cfg(feature = "compression")]
+    fn digest_event_debug(
+        &mut self,
+        reader: &mut BitReader<R, BigEndian>,
+    ) -> Result<(Option<Adu>, Event), CodecError> {
+        todo!()
     }
 
     fn set_input_stream_position(

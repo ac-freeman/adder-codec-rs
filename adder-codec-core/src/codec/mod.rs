@@ -8,19 +8,33 @@ use std::io;
 use std::io::{Read, Seek, Sink, Write};
 
 #[enum_dispatch(WriteCompression<W>)]
-enum WriteCompressionEnum<W: Write> {
+pub enum WriteCompressionEnum<W: Write> {
+    #[cfg(feature = "compression")]
     CompressedOutput(CompressedOutput<W>),
     RawOutput(RawOutput<W>),
+    RawOutputInterleaved(RawOutputInterleaved<W>),
     EmptyOutput(EmptyOutput<Sink>),
+}
+
+#[derive(Default, Clone, Copy, PartialEq)]
+pub enum EncoderType {
+    Compressed,
+    Raw,
+    RawInterleaved,
+
+    #[default]
+    Empty,
 }
 
 #[enum_dispatch(ReadCompression<R>)]
 enum ReadCompressionEnum<R: Read + Seek> {
+    #[cfg(feature = "compression")]
     CompressedInput(CompressedInput<R>),
     RawInput(RawInput<R>),
 }
 
 /// Compressed codec utilities
+#[cfg(feature = "compression")]
 pub mod compressed;
 
 /// ADΔER stream decoder
@@ -103,12 +117,11 @@ pub trait WriteCompression<W: Write> {
     /// Flush the `BitWriter`. Does not flush the internal `BufWriter`.
     fn flush_writer(&mut self) -> io::Result<()>;
 
-    /// Compress the given bytes.
-    fn compress(&self, data: &[u8]) -> Vec<u8>;
-
     /// Take in an event and process it. May or may not write to the output, depending on the state
     /// of the stream (Is it ready to write events? Is it accumulating/reorganizing events? etc.)
-    fn ingest_event(&mut self, event: &Event) -> Result<(), CodecError>;
+    fn ingest_event(&mut self, event: Event) -> Result<(), CodecError>;
+    #[cfg(feature = "compression")]
+    fn ingest_event_debug(&mut self, event: Event) -> Result<Option<Adu>, CodecError>;
 }
 
 /// A trait for reading ADΔER data from a stream.
@@ -142,6 +155,12 @@ pub trait ReadCompression<R: Read> {
     /// Read the next event from the stream. Returns `None` if the stream is exhausted.
     fn digest_event(&mut self, reader: &mut BitReader<R, BigEndian>) -> Result<Event, CodecError>;
 
+    #[cfg(feature = "compression")]
+    fn digest_event_debug(
+        &mut self,
+        reader: &mut BitReader<R, BigEndian>,
+    ) -> Result<(Option<Adu>, Event), CodecError>;
+
     /// Set the input stream position to the given byte offset.
     fn set_input_stream_position(
         &mut self,
@@ -155,11 +174,12 @@ pub trait ReadCompression<R: Read> {
 }
 
 // unsafe impl<R: Read> Send for ReadCompression {}
-
+#[cfg(feature = "compression")]
+use crate::codec::compressed::adu::frame::Adu;
+#[cfg(feature = "compression")]
 use crate::codec::compressed::stream::{CompressedInput, CompressedOutput};
-// use crate::codec::empty::stream::EmptyOutput;
 use crate::codec::empty::stream::EmptyOutput;
-use crate::codec::raw::stream::{RawInput, RawOutput};
+use crate::codec::raw::stream::{RawInput, RawOutput, RawOutputInterleaved};
 use thiserror::Error;
 
 #[allow(missing_docs)]
@@ -197,4 +217,12 @@ pub enum CodecError {
 
     #[error("Plane error")]
     PlaneError(#[from] crate::PlaneError),
+
+    #[cfg(feature = "compression")]
+    #[error("Blocking error")]
+    BlockError(#[from] crate::codec::compressed::blocks::block::BlockError),
+
+    #[cfg(feature = "compression")]
+    #[error("Arithmetic coding error")]
+    ArithmeticCodingError(#[from] arithmetic_coding::Error),
 }

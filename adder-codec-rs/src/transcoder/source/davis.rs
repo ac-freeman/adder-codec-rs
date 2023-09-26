@@ -1,10 +1,10 @@
-use crate::aedat::events_generated::Event as DvsEvent;
-use crate::transcoder::event_pixel_tree::Mode::{Continuous, FramePerfect};
 use crate::transcoder::source::video::SourceError::BufferEmpty;
 use crate::transcoder::source::video::{
     integrate_for_px, show_display, Source, SourceError, Video, VideoBuilder,
 };
 use adder_codec_core::DeltaT;
+use adder_codec_core::Mode::{Continuous, FramePerfect};
+use davis_edi_rs::aedat::events_generated::Event as DvsEvent;
 use davis_edi_rs::util::reconstructor::{IterVal, ReconstructionError, Reconstructor};
 use rayon::iter::ParallelIterator;
 use rayon::iter::{IndexedParallelIterator, IntoParallelRefMutIterator};
@@ -15,6 +15,7 @@ use opencv::prelude::*;
 use bumpalo::Bump;
 use ndarray::{Array3, Axis};
 
+use itertools::Itertools;
 use rayon::iter::IntoParallelIterator;
 use rayon::{current_num_threads, ThreadPool};
 use std::cmp::max;
@@ -23,7 +24,7 @@ use std::io::Write;
 use std::mem::swap;
 use std::thread;
 
-use adder_codec_core::codec::CodecError;
+use adder_codec_core::codec::{CodecError, EncoderType};
 use adder_codec_core::{Event, PlaneSize, SourceCamera, SourceType, TimeMode};
 
 use crate::framer::scale_intensity::FrameValue;
@@ -326,7 +327,10 @@ impl<W: Write + 'static> Integration<W> {
                                 / video.state.ref_time as f32
                                 * delta_t_ticks)
                                 .max(0.0);
+
+                            let mut buffer_grew = false;
                             if px.need_to_pop_top {
+                                buffer_grew = true;
                                 buffer.push(px.pop_top_event(
                                     first_integration,
                                     Continuous,
@@ -341,6 +345,7 @@ impl<W: Write + 'static> Integration<W> {
                                 Continuous,
                                 video.state.delta_t_max,
                                 video.state.ref_time,
+                                video.state.c_thresh_pos,
                             );
                             let running_t_after = px.running_t;
                             debug_assert_eq!(
@@ -349,6 +354,7 @@ impl<W: Write + 'static> Integration<W> {
                             );
 
                             if px.need_to_pop_top {
+                                buffer_grew = true;
                                 buffer.push(px.pop_top_event(
                                     first_integration,
                                     Continuous,
@@ -407,7 +413,49 @@ impl<W: Write + 'static> Integration<W> {
             )
             .collect();
 
-        video.encoder.ingest_events_events(&big_buffer)?;
+        let db = match video.instantaneous_frame.data_bytes_mut() {
+            Ok(db) => db,
+            Err(e) => return Err(CodecError::MalformedEncoder), // TODO: Wrong type of error
+        };
+
+        // TODO: split off into separate function
+        // TODO: When there's full support for various bit-depth sources, modify this accordingly
+        let practical_d_max =
+            fast_math::log2_raw(255.0 * (video.state.delta_t_max / video.state.ref_time) as f32);
+        db.iter_mut()
+            .zip(video.running_intensities.iter_mut())
+            .enumerate()
+            .for_each(|(idx, (val, running))| {
+                let y = idx / video.state.plane.area_wc();
+                let x = (idx % video.state.plane.area_wc()) / video.state.plane.c_usize();
+                let c = idx % video.state.plane.c_usize();
+                *val = match video.event_pixel_trees[[y, x, c]].arena[0].best_event {
+                    Some(event) => u8::get_frame_value(
+                        &event.into(),
+                        SourceType::U8,
+                        video.state.ref_time as DeltaT,
+                        practical_d_max,
+                        video.state.delta_t_max,
+                        video.instantaneous_view_mode,
+                        0.0, //TODO
+                    ),
+                    None => *val,
+                };
+                *running = *val as i32;
+            });
+
+        for events in &big_buffer {
+            for (e1, e2) in events.iter().tuple_windows() {
+                video.encoder.ingest_event(*e1)?;
+                if e2.delta_t != e1.delta_t {
+                    video.feature_test(e1);
+                }
+            }
+        }
+
+        if video.state.show_live {
+            show_display("instance", &video.instantaneous_frame, 1, video).unwrap();
+        }
         Ok(())
     }
 
@@ -483,27 +531,10 @@ impl<W: Write + 'static> Integration<W> {
                         &mut buffer,
                         &video.state,
                     );
-                    if px.need_to_pop_top {
-                        buffer.push(px.pop_top_event(
-                            integration as f32,
-                            video.state.pixel_tree_mode,
-                            video.state.ref_time,
-                        ));
-                    }
-
-                    // TODO: temporary debugging
-                    // self.dvs_last_timestamps[[px.coord.y as usize, px.coord.x as usize, 0]] +=
-                    //     delta_t_micro;
-                    // let a = px.running_t as i64;
-                    // let b = self.dvs_last_timestamps[[px.coord.y as usize, px.coord.x as usize, 0]]
-                    //     - self.temp_first_frame_start_timestamp;
-                    // debug_assert!({ a == b });
                 }
                 buffer
             })
             .collect();
-
-        video.encoder.ingest_events_events(&big_buffer)?;
 
         let db = match video.instantaneous_frame.data_bytes_mut() {
             Ok(db) => db,
@@ -514,22 +545,37 @@ impl<W: Write + 'static> Integration<W> {
         // TODO: When there's full support for various bit-depth sources, modify this accordingly
         let practical_d_max =
             fast_math::log2_raw(255.0 * (video.state.delta_t_max / video.state.ref_time) as f32);
-        db.par_iter_mut().enumerate().for_each(|(idx, val)| {
-            let y = idx / video.state.plane.area_wc();
-            let x = (idx % video.state.plane.area_wc()) / video.state.plane.c_usize();
-            let c = idx % video.state.plane.c_usize();
-            *val = match video.event_pixel_trees[[y, x, c]].arena[0].best_event {
-                Some(event) => u8::get_frame_value(
-                    &event.into(),
-                    SourceType::U8,
-                    video.state.ref_time as DeltaT,
-                    practical_d_max,
-                    video.state.delta_t_max,
-                    video.instantaneous_view_mode,
-                ),
-                None => *val,
-            };
-        });
+        db.iter_mut()
+            .zip(video.running_intensities.iter_mut())
+            .enumerate()
+            .for_each(|(idx, (val, running))| {
+                let y = idx / video.state.plane.area_wc();
+                let x = (idx % video.state.plane.area_wc()) / video.state.plane.c_usize();
+                let c = idx % video.state.plane.c_usize();
+                *val = match video.event_pixel_trees[[y, x, c]].arena[0].best_event {
+                    Some(event) => u8::get_frame_value(
+                        &event.into(),
+                        SourceType::U8,
+                        video.state.ref_time as DeltaT,
+                        practical_d_max,
+                        video.state.delta_t_max,
+                        video.instantaneous_view_mode,
+                        0.0, //TODO
+                    ),
+                    None => *val,
+                };
+                *running = *val as i32;
+            });
+
+        for events in &big_buffer {
+            for (e1, e2) in events.iter().tuple_windows() {
+                video.encoder.ingest_event(*e1)?;
+                if e2.delta_t != e1.delta_t {
+                    video.feature_test(e1);
+                }
+            }
+        }
+
         if video.state.show_live {
             show_display("instance", &video.instantaneous_frame, 1, video)?;
         }
@@ -845,7 +891,7 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Davis<W> {
 impl<W: Write + 'static> VideoBuilder<W> for Davis<W> {
     fn contrast_thresholds(mut self, c_thresh_pos: u8, c_thresh_neg: u8) -> Self {
         self.video = self.video.c_thresh_pos(c_thresh_pos);
-        self.video = self.video.c_thresh_neg(c_thresh_neg);
+        // self.video = self.video.c_thresh_neg(c_thresh_neg);
         self
     }
 
@@ -855,7 +901,7 @@ impl<W: Write + 'static> VideoBuilder<W> for Davis<W> {
     }
 
     fn c_thresh_neg(mut self, c_thresh_neg: u8) -> Self {
-        self.video = self.video.c_thresh_neg(c_thresh_neg);
+        // self.video = self.video.c_thresh_neg(c_thresh_neg);
         self
     }
 
@@ -882,16 +928,22 @@ impl<W: Write + 'static> VideoBuilder<W> for Davis<W> {
         mut self,
         source_camera: SourceCamera,
         time_mode: TimeMode,
+        encoder_type: EncoderType,
         write: W,
     ) -> Result<Box<Self>, SourceError> {
-        self.video = self
-            .video
-            .write_out(Some(source_camera), Some(time_mode), write)?;
+        self.video =
+            self.video
+                .write_out(Some(source_camera), Some(time_mode), encoder_type, write)?;
         Ok(Box::new(self))
     }
 
     fn show_display(mut self, show_display: bool) -> Self {
         self.video = self.video.show_display(show_display);
+        self
+    }
+
+    fn detect_features(mut self, detect_features: bool) -> Self {
+        self.video = self.video.detect_features(detect_features);
         self
     }
 }

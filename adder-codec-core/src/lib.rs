@@ -7,8 +7,11 @@
 /// Expose public API for encoding and decoding
 pub mod codec;
 
+#[cfg(feature = "compression")]
+mod codec_old;
 pub use bitstream_io;
 use bitstream_io::{BigEndian, BitReader};
+use std::cmp::{max, min, Ordering};
 use std::fs::File;
 use std::io::BufReader;
 use std::ops::Add;
@@ -45,10 +48,13 @@ pub enum SourceCamera {
     Asint,
 }
 
+#[cfg(feature = "compression")]
+use crate::codec::compressed::blocks::{DeltaTResidual, EventResidual};
+#[cfg(feature = "compression")]
 use crate::codec::compressed::stream::CompressedInput;
 use crate::codec::decoder::Decoder;
 use crate::codec::raw::stream::RawInput;
-use crate::codec::CodecError;
+use crate::codec::{CodecError, ReadCompression};
 use serde::{Deserialize, Serialize};
 
 /// The type of time used in the ADΔER representation
@@ -163,8 +169,14 @@ pub const D_EMPTY: D = 255;
 pub const D_ZERO_INTEGRATION: D = 254;
 
 /// Special symbol signifying no [`Event`] exists
-pub const D_NO_EVENT: D = 253;
+// pub const D_NO_EVENT: D = 253;
 
+#[derive(Clone, Copy, PartialEq, Default)]
+pub enum Mode {
+    #[default]
+    FramePerfect,
+    Continuous,
+}
 /// Precision for maximum intensity representable with allowed [`D`] values
 pub type UDshift = u128;
 
@@ -309,6 +321,8 @@ pub const D_START: D = 7;
 /// Number of ticks elapsed since a given pixel last fired an [`Event`]
 pub type DeltaT = u32;
 
+pub type AbsoluteT = u32;
+
 /// Large count of ticks (e.g., for tracking the running timestamp of a sequence of [Events](Event)
 pub type BigT = u64;
 
@@ -323,7 +337,7 @@ pub const EOF_PX_ADDRESS: PixelAddress = u16::MAX;
 
 /// Pixel channel address in the ADΔER model
 #[repr(packed)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Coord {
     /// Pixel x-coordinate
     pub x: PixelAddress,
@@ -410,6 +424,15 @@ impl Coord {
     pub fn is_eof(&self) -> bool {
         self.x == EOF_PX_ADDRESS && self.y == EOF_PX_ADDRESS
     }
+
+    /// Is this coordinate at the border of the image?
+    pub fn is_border(&self, width: usize, height: usize, max_scale: usize) -> bool {
+        let cs = max_scale * 4;
+        self.x_usize() < cs
+            || self.x_usize() >= width - cs
+            || self.y_usize() < cs
+            || self.y_usize() >= height - cs
+    }
 }
 
 /// A 2D coordinate representation
@@ -423,7 +446,7 @@ pub struct CoordSingle {
 /// An ADΔER event representation
 #[allow(missing_docs)]
 #[repr(packed)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Default, Hash, Serialize, Deserialize)]
 pub struct Event {
     pub coord: Coord,
     pub d: D,
@@ -463,6 +486,20 @@ impl From<EventSingle> for Event {
             d: event.d,
             delta_t: event.delta_t,
         }
+    }
+}
+
+impl Ord for Event {
+    fn cmp(&self, other: &Self) -> Ordering {
+        let b = other.delta_t;
+        let a = self.delta_t;
+        b.cmp(&a)
+    }
+}
+
+impl PartialOrd for Event {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
     }
 }
 
@@ -506,10 +543,16 @@ pub fn open_file_decoder(
     let stream = match Decoder::new_raw(compression, &mut bitreader) {
         Ok(reader) => reader,
         Err(CodecError::WrongMagic) => {
-            bufreader = BufReader::new(File::open(file_path)?);
-            let compression = CompressedInput::new();
-            bitreader = BitReader::endian(bufreader, BigEndian);
-            Decoder::new_compressed(compression, &mut bitreader)?
+            #[cfg(feature = "compression")]
+            {
+                bufreader = BufReader::new(File::open(file_path)?);
+                let compression = CompressedInput::new(0, 0); // TODO: temporary args. Need to refactor.
+                bitreader = BitReader::endian(bufreader, BigEndian);
+                Decoder::new_compressed(compression, &mut bitreader)?
+            }
+
+            #[cfg(not(feature = "compression"))]
+            return Err(CodecError::WrongMagic);
         }
         Err(e) => {
             return Err(e);
@@ -525,6 +568,13 @@ pub struct EventCoordless {
     pub d: D,
 
     pub delta_t: DeltaT,
+}
+
+impl EventCoordless {
+    #[inline(always)]
+    pub fn t(&self) -> AbsoluteT {
+        self.delta_t as AbsoluteT
+    }
 }
 
 impl From<Event> for EventCoordless {

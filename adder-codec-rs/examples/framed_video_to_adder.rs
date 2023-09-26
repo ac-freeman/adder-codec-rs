@@ -3,6 +3,7 @@ extern crate core;
 use adder_codec_rs::transcoder::source::framed::Framed;
 use adder_codec_rs::transcoder::source::video::{Source, VideoBuilder};
 
+use adder_codec_core::codec::EncoderType;
 use adder_codec_core::SourceCamera::FramedU8;
 use adder_codec_core::TimeMode;
 use rayon::current_num_threads;
@@ -22,7 +23,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         0.5,
     )?
     .frame_start(1420)?
-    .write_out(FramedU8, TimeMode::DeltaT, writer)?
+    .write_out(FramedU8, TimeMode::DeltaT, EncoderType::Raw, writer)?
     .contrast_thresholds(10, 10)
     .show_display(true)
     .auto_time_parameters(255, 255 * 30, None)?;

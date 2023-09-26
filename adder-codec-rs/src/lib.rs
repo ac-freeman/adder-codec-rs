@@ -14,6 +14,6 @@ pub mod transcoder; // Have to enable the 'transcoder' feature. Requires OpenCV 
 /// A module for utilities which may be common between programs
 pub mod utils;
 
-extern crate core;
+pub extern crate adder_codec_core;
 pub extern crate davis_edi_rs;
 pub use davis_edi_rs::aedat;

@@ -5,10 +5,13 @@ use adder_codec_core::*;
 use adder_codec_rs::framer::driver::FramerMode::INSTANTANEOUS;
 use adder_codec_rs::framer::driver::{FrameSequence, Framer, FramerBuilder};
 use adder_codec_rs::framer::scale_intensity::event_to_intensity;
-use adder_codec_rs::transcoder::source::video::FramedViewMode;
+use adder_codec_rs::transcoder::source::video::{show_display_force, FramedViewMode};
 use bevy::prelude::Image;
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
-use opencv::core::{create_continuous, Mat, MatTraitConstManual, MatTraitManual, CV_8UC1, CV_8UC3};
+use opencv::core::{
+    create_continuous, KeyPoint, Mat, MatTraitConstManual, MatTraitManual, Scalar, Vector, CV_8UC1,
+    CV_8UC3,
+};
 use opencv::imgproc;
 use std::error::Error;
 use std::fmt;
@@ -44,6 +47,7 @@ pub struct AdderPlayer {
     reconstruction_method: ReconstructionMethod,
     current_frame: u32,
     stream_state: StreamState,
+    pub(crate) view_mode: FramedViewMode,
 }
 
 unsafe impl Sync for AdderPlayer {}
@@ -134,6 +138,7 @@ impl AdderPlayer {
                         playback_speed,
                         reconstruction_method: ReconstructionMethod::Accurate,
                         current_frame: 0,
+                        view_mode,
                     })
                 }
                 Some(_) => Err(Box::new(AdderPlayerError("Invalid file type".into()))),
@@ -237,7 +242,26 @@ impl AdderPlayer {
 
         let frame_length = meta.ref_interval as f64 * self.playback_speed as f64; //TODO: temp
 
-        let display_mat = &mut self.display_mat;
+        let mut display_mat = &mut self.display_mat;
+
+        if self.view_mode == FramedViewMode::DeltaT {
+            opencv::core::normalize(
+                &display_mat.clone(),
+                &mut display_mat,
+                0.0,
+                255.0,
+                opencv::core::NORM_MINMAX,
+                opencv::core::CV_8U,
+                &Mat::default(),
+            )?;
+            opencv::core::subtract(
+                &Scalar::new(255.0, 255.0, 255.0, 0.0),
+                &display_mat.clone(),
+                &mut display_mat,
+                &Mat::default(),
+                opencv::core::CV_8U,
+            )?;
+        }
 
         let image_bevy = loop {
             if self.stream_state.current_t_ticks as u128
@@ -353,7 +377,7 @@ impl AdderPlayer {
             Some(s) => s,
         };
 
-        let display_mat = &mut self.display_mat;
+        let mut display_mat = &mut self.display_mat;
 
         let image_bevy = if frame_sequence.is_frame_0_filled() {
             let mut idx = 0;
@@ -376,6 +400,168 @@ impl AdderPlayer {
                     }
                 }
             }
+
+            if self.view_mode == FramedViewMode::DeltaT {
+                opencv::core::normalize(
+                    &display_mat.clone(),
+                    &mut display_mat,
+                    0.0,
+                    255.0,
+                    opencv::core::NORM_MINMAX,
+                    opencv::core::CV_8U,
+                    &Mat::default(),
+                )?;
+                opencv::core::subtract(
+                    &Scalar::new(255.0, 255.0, 255.0, 0.0),
+                    &display_mat.clone(),
+                    &mut display_mat,
+                    &Mat::default(),
+                    opencv::core::CV_8U,
+                )?;
+            } else if self.view_mode == FramedViewMode::D {
+                // Loop through each element and find all the ones that have neighboring pixels
+                // in two directions that have a different D value. If so, set the pixel to white.
+
+                // let mut corner_mat = Mat::new_rows_cols_with_default(
+                //     meta.plane.h() as i32,
+                //     meta.plane.w() as i32,
+                //     opencv::core::CV_8U,
+                //     Scalar::new(0.0, 0.0, 0.0, 0.0),
+                // )?
+                // .clone();
+                //
+                // let db = display_mat.data_bytes()?;
+                // let corner_db = corner_mat.data_bytes_mut()?;
+                // // Loop through the pixels
+                // for y in 0..meta.plane.h() {
+                //     for x in 0..meta.plane.w() {
+                //         let idx = y as usize * meta.plane.w_usize() + x as usize;
+                //
+                //         let mut neighbors = vec![255; 4];
+                //         let mut neighbors_2 = vec![255; 4];
+                //         let mut neighbors_3 = vec![255; 4];
+                //         let mut neighbors_4 = vec![255; 4];
+                //
+                //         // Left
+                //         if x > 3 {
+                //             neighbors[0] = db[idx - 1];
+                //             neighbors_2[0] = db[idx - 2];
+                //             neighbors_3[0] = db[idx - 3];
+                //             neighbors_4[0] = db[idx - 4];
+                //         }
+                //         // Up
+                //         if y > 3 {
+                //             neighbors[1] = db[idx - meta.plane.w_usize()];
+                //             neighbors_2[1] = db[idx - meta.plane.w_usize() * 2];
+                //             neighbors_3[1] = db[idx - meta.plane.w_usize() * 3];
+                //             neighbors_4[1] = db[idx - meta.plane.w_usize() * 4];
+                //         }
+                //         // Right
+                //         if x < meta.plane.w() - 4 {
+                //             neighbors[2] = db[idx + 1];
+                //             neighbors_2[2] = db[idx + 2];
+                //             neighbors_3[2] = db[idx + 3];
+                //             neighbors_4[2] = db[idx + 4];
+                //         }
+                //
+                //         // Down
+                //         if y < meta.plane.h() - 4 {
+                //             neighbors[3] = db[idx + meta.plane.w_usize()];
+                //             neighbors_2[3] = db[idx + meta.plane.w_usize() * 2];
+                //             neighbors_3[3] = db[idx + meta.plane.w_usize() * 3];
+                //             neighbors_4[3] = db[idx + meta.plane.w_usize() * 4];
+                //         }
+                //
+                //         // Check
+                //         let mut count = 0;
+                //         let mut window_num = 0;
+                //         neighbors.windows(2).enumerate().for_each(|(index, w)| {
+                //             if w[0] == db[idx] && w[1] == db[idx] {
+                //                 // corner_db[idx] = 255;
+                //                 count += 1;
+                //                 window_num = index;
+                //             }
+                //         });
+                //         if neighbors[0] == db[idx] && neighbors[3] == db[idx] {
+                //             // corner_db[idx] = 255;
+                //             count += 1;
+                //             window_num = 3;
+                //         }
+                //
+                //         if count == 1 {
+                //             // corner_db[idx] = 255;
+                //             // Check neighbors_2
+                //             match window_num {
+                //                 0 => {
+                //                     if neighbors_2[0] == db[idx]
+                //                         && neighbors_2[1] == db[idx]
+                //                         && neighbors_3[0] == db[idx]
+                //                         && neighbors_3[1] == db[idx]
+                //                         && neighbors_4[0] == db[idx]
+                //                         && neighbors_4[1] == db[idx]
+                //                     {
+                //                         corner_db[idx] = 255;
+                //                     }
+                //                 }
+                //                 1 => {
+                //                     if neighbors_2[1] == db[idx]
+                //                         && neighbors_2[2] == db[idx]
+                //                         && neighbors_3[1] == db[idx]
+                //                         && neighbors_3[2] == db[idx]
+                //                         && neighbors_4[1] == db[idx]
+                //                         && neighbors_4[2] == db[idx]
+                //                     {
+                //                         corner_db[idx] = 255;
+                //                     }
+                //                 }
+                //                 2 => {
+                //                     if neighbors_2[2] == db[idx]
+                //                         && neighbors_2[3] == db[idx]
+                //                         && neighbors_3[2] == db[idx]
+                //                         && neighbors_3[3] == db[idx]
+                //                         && neighbors_4[2] == db[idx]
+                //                         && neighbors_4[3] == db[idx]
+                //                     {
+                //                         corner_db[idx] = 255;
+                //                     }
+                //                 }
+                //                 3 => {
+                //                     if neighbors_2[3] == db[idx]
+                //                         && neighbors_2[0] == db[idx]
+                //                         && neighbors_3[3] == db[idx]
+                //                         && neighbors_3[0] == db[idx]
+                //                         && neighbors_4[3] == db[idx]
+                //                         && neighbors_4[0] == db[idx]
+                //                     {
+                //                         corner_db[idx] = 255;
+                //                     }
+                //                 }
+                //                 _ => {}
+                //             }
+                //         }
+                //
+                //         // if neighbors.iter().filter(|&x| *x != db[idx]).count() == 2 {
+                //         //     corner_db[idx] = 255;
+                //         // } else {
+                //         //     corner_db[idx] = 0;
+                //         // }
+                //     }
+                // }
+                // show_display_force("cornerss", &corner_mat, 1)?;
+            }
+
+            let mut keypoints = Vector::<KeyPoint>::new();
+            opencv::features2d::fast(display_mat, &mut keypoints, 50, true)?;
+            let mut keypoint_mat = Mat::default();
+            opencv::features2d::draw_keypoints(
+                display_mat,
+                &keypoints,
+                &mut keypoint_mat,
+                Scalar::new(0.0, 0.0, 255.0, 0.0),
+                opencv::features2d::DrawMatchesFlags::DEFAULT,
+            )?;
+            show_display_force("keypoints", &keypoint_mat, 1)?;
+
             frame_sequence.state.frames_written += 1;
             self.stream_state.current_t_ticks += frame_sequence.state.tpf;
 
@@ -397,6 +583,10 @@ impl AdderPlayer {
             None
         };
 
+        if image_bevy.is_some() {
+            return Ok((0, image_bevy));
+        }
+
         loop {
             match stream.decoder.digest_event(&mut stream.bitreader) {
                 Ok(mut event) => {
@@ -407,7 +597,9 @@ impl AdderPlayer {
                 }
                 Err(e) => {
                     eprintln!("{}", e);
-                    // Loop back to the beginning
+
+                    // TODO: Need to reset the UI event count events_ppc count when looping back here
+                    // Loop/restart back to the beginning
                     stream.decoder.set_input_stream_position(
                         &mut stream.bitreader,
                         meta.header_size as u64,

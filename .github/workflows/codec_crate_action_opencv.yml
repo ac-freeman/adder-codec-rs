@@ -53,47 +53,6 @@ jobs:
         run: adder-codec-rs/ci/script.sh
         shell: bash
 
-#   vcpkg:
-#     strategy:
-#       fail-fast: false
-#       matrix:
-#         os:
-#           - image: ubuntu-20.04
-#             family: linux
-#         rust:
-#           - stable
-#           - beta
-#         version:
-#           - vcpkg: 4
-#     runs-on: ${{ matrix.os.image }}
-#     env:
-#       OS_FAMILY: ${{ matrix.os.family }}
-#       RUST_TOOLCHAIN: ${{ matrix.rust }}
-#       VCPKG_OPENCV_VERSION: ${{ matrix.version.vcpkg }}
-#       VCPKG_TREE_COMMIT: 2022.02.23
-#     steps:
-#       - uses: actions/checkout@v2
-
-#       - name: Cache dependencies
-#         uses: actions/cache@v1
-#         with:
-#           path: ~/build
-#           key: ${{ runner.os }}-${{ matrix.version.vcpkg }}-build
-
-#       - name: Install dependencies
-#         run: adder-codec-rs/ci/install.sh
-#         shell: bash
-
-#       - name: Install Rust
-#         uses: actions-rs/toolchain@v1
-#         with:
-#           toolchain: ${{ matrix.rust }}
-#           default: true
-          
-#       - name: Test project
-#         run: adder-codec-rs/ci/script.sh
-#         shell: bash
-
   bin:
     strategy:
       fail-fast: false

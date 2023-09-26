@@ -14,6 +14,7 @@ pub trait FrameValue {
         practical_d_max: f32,
         delta_t_max: DeltaT,
         view_mode: FramedViewMode,
+        sae_time_since: f64,
     ) -> Self::Output;
 
     /// The maximum value of the type, as an f32
@@ -29,6 +30,7 @@ impl FrameValue for EventCoordless {
         _practical_d_max: f32,
         _delta_t_max: DeltaT,
         _view_mode: FramedViewMode,
+        _sae_time_since: f64,
     ) -> Self::Output {
         EventCoordless {
             d: event.d,
@@ -51,6 +53,7 @@ impl FrameValue for u8 {
         practical_d_max: f32,
         delta_t_max: DeltaT,
         view_mode: FramedViewMode,
+        sae_time_since: f64,
     ) -> Self::Output {
         match view_mode {
             FramedViewMode::Intensity => {
@@ -80,7 +83,17 @@ impl FrameValue for u8 {
                 ((f32::from(event.d) / practical_d_max) * f32::from(u8::MAX)) as u8
             }
             FramedViewMode::DeltaT => {
+                if event.coord.x == 0 && event.coord.y == 0 {
+                    dbg!(event.delta_t);
+                    dbg!(delta_t_max);
+                    dbg!(((event.delta_t as f32 / delta_t_max as f32) * f32::from(u8::MAX)) as u8);
+                }
                 ((event.delta_t as f32 / delta_t_max as f32) * f32::from(u8::MAX)) as u8
+            }
+            FramedViewMode::SAE => {
+                // Convert deltaT to absolute time
+                ((delta_t_max / 255 as u32) - (delta_t_max as f64 / sae_time_since) as u32) as u8
+                // We assume that the dt component is an absolute_t in this case
             }
         }
     }
@@ -100,6 +113,7 @@ impl FrameValue for u16 {
         practical_d_max: f32,
         delta_t_max: DeltaT,
         view_mode: FramedViewMode,
+        sae_time_since: f64,
     ) -> Self::Output {
         match view_mode {
             FramedViewMode::Intensity => {
@@ -131,6 +145,9 @@ impl FrameValue for u16 {
             FramedViewMode::DeltaT => {
                 ((event.delta_t as f32 / delta_t_max as f32) * f32::from(u16::MAX)) as u16
             }
+            FramedViewMode::SAE => {
+                todo!()
+            }
         }
     }
 
@@ -149,6 +166,7 @@ impl FrameValue for u32 {
         practical_d_max: f32,
         delta_t_max: DeltaT,
         view_mode: FramedViewMode,
+        sae_time_since: f64,
     ) -> Self::Output {
         match view_mode {
             FramedViewMode::Intensity => {
@@ -178,6 +196,9 @@ impl FrameValue for u32 {
             FramedViewMode::DeltaT => {
                 ((event.delta_t as f32 / delta_t_max as f32) * u32::MAX as f32) as u32
             }
+            FramedViewMode::SAE => {
+                todo!()
+            }
         }
     }
 
@@ -196,6 +217,7 @@ impl FrameValue for u64 {
         practical_d_max: f32,
         delta_t_max: DeltaT,
         view_mode: FramedViewMode,
+        sae_time_since: f64,
     ) -> Self::Output {
         match view_mode {
             FramedViewMode::Intensity => {
@@ -222,6 +244,9 @@ impl FrameValue for u64 {
             FramedViewMode::D => ((f32::from(event.d) / practical_d_max) * u64::MAX as f32) as u64,
             FramedViewMode::DeltaT => {
                 ((event.delta_t as f32 / delta_t_max as f32) * u64::MAX as f32) as u64
+            }
+            FramedViewMode::SAE => {
+                todo!()
             }
         }
     }

@@ -82,7 +82,7 @@ pub fn migrate_v2<W: Write + 'static, R: Read + Seek>(
             }
         }
 
-        output_stream.ingest_event(&event)?;
+        output_stream.ingest_event(event)?;
     }
     Ok(output_stream)
 }
@@ -140,9 +140,9 @@ mod tests {
             d: 5,
             delta_t: 600,
         };
-        stream.ingest_event(&event)?;
-        stream.ingest_event(&event)?;
-        stream.ingest_event(&event)?;
+        stream.ingest_event(event)?;
+        stream.ingest_event(event)?;
+        stream.ingest_event(event)?;
         let event: Event = Event {
             coord: Coord {
                 x: 0,
@@ -152,7 +152,7 @@ mod tests {
             d: 5,
             delta_t: 123,
         };
-        stream.ingest_event(&event)?;
+        stream.ingest_event(event)?;
 
         let writer = stream.close_writer().unwrap().unwrap();
         let bytes = writer.into_inner().unwrap();
