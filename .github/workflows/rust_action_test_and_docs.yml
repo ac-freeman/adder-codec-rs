@@ -51,7 +51,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: run llvm-cov test
         # should test with --all-features if gpu support.
-        run: cargo llvm-cov --workspace --lcov --output-path lcov.info
+        run: cargo llvm-cov -p adder-codec-core -p adder-codec-rs -p adder-info -p adder-to-dvs -p adder-viz --lcov --output-path lcov.info
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
         with:
