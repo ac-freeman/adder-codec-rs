@@ -58,7 +58,7 @@ jobs:
           files: lcov.info
           fail_ci_if_error: false
       - name: Run a documentation generation test
-        run: cargo doc -vv -p adder-codec_old-rs --features=docs-only
+        run: cargo doc -vv -p adder-codec-rs --features=docs-only
   check_windows:
     name: Check and test on Windows
     runs-on: windows-2022
