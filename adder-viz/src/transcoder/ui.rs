@@ -196,18 +196,14 @@ impl TranscoderState {
                     self.ui_info_state.input_path_1 = Some(path.clone());
                 }
             }
-            if ui.button("Go!").clicked() {
-                if self.ui_info_state.input_path_0.is_some()
-                    && self.ui_info_state.input_path_1.is_some()
-                {
-                    replace_adder_transcoder(
-                        self,
-                        self.ui_info_state.input_path_0.clone(),
-                        self.ui_info_state.input_path_1.clone(),
-                        self.ui_info_state.output_path.clone(),
-                        0,
-                    );
-                }
+            if ui.button("Go!").clicked() && self.ui_info_state.input_path_0.is_some() && self.ui_info_state.input_path_1.is_some() {
+                replace_adder_transcoder(
+                    self,
+                    self.ui_info_state.input_path_0.clone(),
+                    self.ui_info_state.input_path_1.clone(),
+                    self.ui_info_state.output_path.clone(),
+                    0,
+                );
             }
         });
         ui.label(self.ui_info_state.source_name.clone());

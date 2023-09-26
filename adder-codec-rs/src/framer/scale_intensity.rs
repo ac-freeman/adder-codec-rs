@@ -92,7 +92,7 @@ impl FrameValue for u8 {
             }
             FramedViewMode::SAE => {
                 // Convert deltaT to absolute time
-                ((delta_t_max / 255 as u32) - (delta_t_max as f64 / sae_time_since) as u32) as u8
+                ((delta_t_max / 255_u32) - (delta_t_max as f64 / sae_time_since) as u32) as u8
                 // We assume that the dt component is an absolute_t in this case
             }
         }
@@ -113,7 +113,7 @@ impl FrameValue for u16 {
         practical_d_max: f32,
         delta_t_max: DeltaT,
         view_mode: FramedViewMode,
-        sae_time_since: f64,
+        _sae_time_since: f64,
     ) -> Self::Output {
         match view_mode {
             FramedViewMode::Intensity => {
@@ -166,7 +166,7 @@ impl FrameValue for u32 {
         practical_d_max: f32,
         delta_t_max: DeltaT,
         view_mode: FramedViewMode,
-        sae_time_since: f64,
+        _sae_time_since: f64,
     ) -> Self::Output {
         match view_mode {
             FramedViewMode::Intensity => {
@@ -217,7 +217,7 @@ impl FrameValue for u64 {
         practical_d_max: f32,
         delta_t_max: DeltaT,
         view_mode: FramedViewMode,
-        sae_time_since: f64,
+        _sae_time_since: f64,
     ) -> Self::Output {
         match view_mode {
             FramedViewMode::Intensity => {

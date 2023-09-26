@@ -19,21 +19,14 @@ use adder_codec_rs::transcoder::source::video::VideoBuilder;
 use bevy_egui::egui::{Color32, RichText};
 use opencv::Result;
 
+#[derive(Default)]
 pub struct AdderTranscoder {
     pub(crate) framed_source: Option<Framed<BufWriter<File>>>,
     pub(crate) davis_source: Option<Davis<BufWriter<File>>>,
     pub(crate) live_image: Image,
 }
 
-impl Default for AdderTranscoder {
-    fn default() -> Self {
-        Self {
-            framed_source: None,
-            davis_source: None,
-            live_image: Image::default(),
-        }
-    }
-}
+
 
 #[derive(Debug)]
 struct AdderTranscoderError(String);
@@ -156,17 +149,12 @@ impl AdderTranscoder {
                             simulate_latency = false;
                         }
 
-                        let filename_1 = match input_path_buf_1 {
-                            None => None,
-                            Some(input_path_buf_1) => Some(
-                                input_path_buf_1
+                        let filename_1 = input_path_buf_1.as_ref().map(|input_path_buf_1| input_path_buf_1
                                     .file_name()
                                     .expect("File must exist")
                                     .to_str()
                                     .expect("Bad filename")
-                                    .to_string(),
-                            ),
-                        };
+                                    .to_string());
 
                         let reconstructor = rt.block_on(Reconstructor::new(
                             dir + "/",
@@ -214,7 +202,7 @@ impl AdderTranscoder {
                         }
 
                         if let Some(output_string) = output_string {
-                            let writer = BufWriter::new(File::create(&output_string)?);
+                            let writer = BufWriter::new(File::create(output_string)?);
                             davis_source = *davis_source.write_out(
                                 DavisU8,
                                 ui_state.time_mode,

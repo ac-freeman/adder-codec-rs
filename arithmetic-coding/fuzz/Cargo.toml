@@ -1,0 +1,25 @@
+[package]
+name = "arithmetic-coding-fuzz"
+version = "0.0.0"
+authors = ["Automatically generated"]
+publish = false
+edition = "2018"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+arithmetic-coding = { path = ".." }
+bitstream-io = "1.2.0"
+fenwick-model = { path = "../fenwick-model" }
+
+# Prevent this from interfering with workspaces
+[workspace]
+members = ["."]
+
+[[bin]]
+name = "fuzz_target_1"
+path = "fuzz_targets/fuzz_target_1.rs"
+test = false
+doc = false

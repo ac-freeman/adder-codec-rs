@@ -184,7 +184,7 @@ impl<W: Write + 'static> Source<W> for Framed<W> {
 }
 
 impl<W: Write + 'static> VideoBuilder<W> for Framed<W> {
-    fn contrast_thresholds(mut self, c_thresh_pos: u8, c_thresh_neg: u8) -> Self {
+    fn contrast_thresholds(mut self, c_thresh_pos: u8, _c_thresh_neg: u8) -> Self {
         self.video = self.video.c_thresh_pos(c_thresh_pos);
         // self.video = self.video.c_thresh_neg(c_thresh_neg);
         self

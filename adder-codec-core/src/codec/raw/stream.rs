@@ -2,7 +2,7 @@
 use crate::codec::compressed::adu::frame::Adu;
 use crate::codec::header::{Magic, MAGIC_RAW};
 use crate::codec::{CodecError, CodecMetadata, ReadCompression, WriteCompression};
-use crate::{Coord, DeltaT, Event, EventSingle, EOF_PX_ADDRESS};
+use crate::{Coord, Event, EventSingle, EOF_PX_ADDRESS};
 use bincode::config::{FixintEncoding, WithOtherEndian, WithOtherIntEncoding};
 use bincode::{DefaultOptions, Options};
 use bitstream_io::{BigEndian, BitRead, BitReader};
@@ -98,7 +98,7 @@ impl<W: Write> WriteCompression<W> for RawOutput<W> {
         };
         self.bincode.serialize_into(self.stream(), &eof).unwrap();
         self.flush_writer().unwrap();
-        std::mem::replace(&mut self.stream, None)
+        self.stream.take()
     }
 
     fn flush_writer(&mut self) -> std::io::Result<()> {
@@ -209,7 +209,7 @@ impl<W: Write> WriteCompression<W> for RawOutputInterleaved<W> {
         };
         self.bincode.serialize_into(self.stream(), &eof).unwrap();
         self.flush_writer().unwrap();
-        std::mem::replace(&mut self.stream, None)
+        self.stream.take()
     }
 
     fn flush_writer(&mut self) -> std::io::Result<()> {
@@ -253,6 +253,12 @@ impl<W: Write> WriteCompression<W> for RawOutputInterleaved<W> {
     #[cfg(feature = "compression")]
     fn ingest_event_debug(&mut self, event: Event) -> Result<Option<Adu>, CodecError> {
         todo!()
+    }
+}
+
+impl<R: Read + Seek> Default for RawInput<R> {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
