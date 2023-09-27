@@ -8,7 +8,7 @@ pub mod framed;
 pub mod video;
 
 #[rustfmt::skip]
-static CRF: [[f32; 5]; 10] = [ 
+pub static CRF: [[f32; 5]; 10] = [ 
 // baseline C     max C    Dt_max mutliplier    C increase velocity             feature radius
 //                           (X*dt_ref)    (+1 C every X*dt_ref time)   (X * min resolution, in pixels)
 /*0*/    [0.0,     0.0,         20.0,                10.0,                     1.0/20.0],
@@ -23,4 +23,4 @@ static CRF: [[f32; 5]; 10] = [
 /*9*/    [8.0,   40.0,         65.0,                 1.0,                     1.0/40.0],
 ];
 
-const DEFAULT_CRF_QUALITY: u8 = 5;
+pub const DEFAULT_CRF_QUALITY: u8 = 5;
