@@ -58,6 +58,7 @@ pub struct PixelArena {
     pub need_to_pop_top: bool,
     pub arena: SmallVec<[PixelNode; 6]>,
     pub(crate) c_thresh: u8,
+    pub(crate) c_increase_counter: u8,
 }
 
 impl PixelArena {
@@ -75,6 +76,7 @@ impl PixelArena {
             need_to_pop_top: false,
             arena,
             c_thresh: 10,
+            c_increase_counter: 1,
         }
     }
 
@@ -266,7 +268,8 @@ impl PixelArena {
         mode: Mode,
         dtm: DeltaT,
         ref_time: DeltaT,
-        c_thresh: u8,
+        c_thresh_max: u8,
+        c_increase_velocity: u8,
     ) {
         let tail = &mut self.arena[self.length - 1];
         if tail.state.delta_t == 0.0 && tail.state.integration == 0.0 {
@@ -323,9 +326,14 @@ impl PixelArena {
             // safely cast it to integer [`D`] type.
             unsafe { self.arena[0].state.delta_t.to_int_unchecked::<DeltaT>() } >= dtm;
 
-        if self.c_thresh < c_thresh {
-            // Increment the threshold
-            self.c_thresh += 1;
+        if self.c_thresh < c_thresh_max {
+            if self.c_increase_counter == c_increase_velocity - 1 {
+                // Increment the threshold
+                self.c_thresh += 1;
+                self.c_increase_counter = 0;
+            } else {
+                self.c_increase_counter += 1;
+            }
         }
     }
 

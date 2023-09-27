@@ -11,7 +11,7 @@ pub mod codec;
 mod codec_old;
 pub use bitstream_io;
 use bitstream_io::{BigEndian, BitReader};
-use std::cmp::{Ordering};
+use std::cmp::Ordering;
 use std::fs::File;
 use std::io::BufReader;
 use std::ops::Add;
@@ -54,7 +54,7 @@ use crate::codec::compressed::blocks::{DeltaTResidual, EventResidual};
 use crate::codec::compressed::stream::CompressedInput;
 use crate::codec::decoder::Decoder;
 use crate::codec::raw::stream::RawInput;
-use crate::codec::{CodecError};
+use crate::codec::CodecError;
 use serde::{Deserialize, Serialize};
 
 /// The type of time used in the ADΔER representation
@@ -153,6 +153,16 @@ impl PlaneSize {
     /// The total number of 3D pixels in the image plane (2D pixels * color depth)
     pub fn volume(&self) -> usize {
         self.area_wh() * self.channels as usize
+    }
+
+    /// The smaller of the width and height dimensions
+    pub fn min_resolution(&self) -> u16 {
+        self.width.min(self.height)
+    }
+
+    /// The larger of the width and height dimensions
+    pub fn max_resolution(&self) -> u16 {
+        self.width.max(self.height)
     }
 }
 

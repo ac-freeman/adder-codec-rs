@@ -6,9 +6,7 @@ use std::mem::swap;
 use adder_codec_core::codec::empty::stream::EmptyOutput;
 use adder_codec_core::codec::encoder::Encoder;
 use adder_codec_core::codec::raw::stream::{RawOutput, RawOutputInterleaved};
-use adder_codec_core::codec::{
-    CodecError, CodecMetadata, EncoderType, LATEST_CODEC_VERSION,
-};
+use adder_codec_core::codec::{CodecError, CodecMetadata, EncoderType, LATEST_CODEC_VERSION};
 use adder_codec_core::{
     Coord, DeltaT, Event, Mode, PlaneError, PlaneSize, SourceCamera, SourceType, TimeMode,
 };
@@ -20,12 +18,12 @@ use opencv::highgui;
 use opencv::imgproc::resize;
 use opencv::prelude::*;
 
-use crate::framer::scale_intensity::{FrameValue};
+use crate::framer::scale_intensity::FrameValue;
 use crate::transcoder::event_pixel_tree::{Intensity32, PixelArena};
 
 #[cfg(feature = "compression")]
 use adder_codec_core::codec::compressed::stream::CompressedOutput;
-use adder_codec_core::Mode::{Continuous};
+use adder_codec_core::Mode::Continuous;
 use davis_edi_rs::util::reconstructor::ReconstructionError;
 use itertools::Itertools;
 use ndarray::{Array, Array3, Axis, ShapeError};
@@ -34,7 +32,7 @@ use rayon::iter::ParallelIterator;
 use rayon::iter::{IndexedParallelIterator, IntoParallelRefMutIterator};
 use rayon::ThreadPool;
 
-
+use crate::transcoder::source::{CRF, DEFAULT_CRF_QUALITY};
 use thiserror::Error;
 use tokio::task::JoinError;
 
@@ -134,34 +132,64 @@ pub struct VideoState {
 
     /// The number of input intervals (of fixed time) processed so far
     pub in_interval_count: u32,
-    pub(crate) c_thresh_pos: u8,
-    pub(crate) c_thresh_neg: u8,
+    // pub(crate) c_thresh_pos: u8,
+    // pub(crate) c_thresh_neg: u8,
+    pub(crate) c_thresh_baseline: u8,
+    pub(crate) c_thresh_max: u8,
+    pub(crate) c_increase_velocity: u8,
     pub(crate) delta_t_max: u32,
     pub(crate) ref_time: u32,
     pub(crate) ref_time_divisor: f64,
     pub(crate) tps: DeltaT,
+
+    /// Constant Rate Factor (CRF) quality setting for the encoder. 0 is lossless, 49 is worst quality.
+    /// Determines:
+    /// * The baseline (starting) c-threshold for all pixels
+    /// * The maximum c-threshold for all pixels
+    /// * The Dt_max multiplier
+    /// * The c-threshold increase velocity (how often to increase C if the intensity is stable)
+    /// * The radius for which to reset the c-threshold for neighboring pixels (if feature detection is enabled)
+    pub crf_quality: u8,
     pub(crate) show_display: bool,
     pub(crate) show_live: bool,
     pub feature_detection: bool,
+    feature_c_radius: u16,
 }
 
 impl Default for VideoState {
     fn default() -> Self {
-        VideoState {
+        let mut state = VideoState {
             plane: PlaneSize::default(),
             pixel_tree_mode: Continuous,
             chunk_rows: 64,
             in_interval_count: 1,
-            c_thresh_pos: 0,
-            c_thresh_neg: 0,
+            c_thresh_baseline: 0,
+            c_thresh_max: 0,
+            c_increase_velocity: 1,
             delta_t_max: 7650,
             ref_time: 255,
             ref_time_divisor: 1.0,
             tps: 7650,
+            crf_quality: 0,
             show_display: false,
             show_live: false,
             feature_detection: false,
-        }
+            feature_c_radius: 0,
+        };
+        state.update_crf(DEFAULT_CRF_QUALITY);
+        state
+    }
+}
+
+impl VideoState {
+    fn update_crf(&mut self, crf: u8) {
+        self.crf_quality = crf;
+        self.c_thresh_baseline = CRF[crf as usize][0] as u8;
+        self.c_thresh_max = CRF[crf as usize][1] as u8;
+        // self.c_thresh_neg = CRF[crf as usize][0] as u8;
+        self.delta_t_max = CRF[crf as usize][2] as u32 * self.ref_time;
+        self.c_increase_velocity = CRF[crf as usize][3] as u8;
+        self.feature_c_radius = (CRF[crf as usize][4] * self.plane.min_resolution() as f32) as u16;
     }
 }
 
@@ -350,7 +378,7 @@ impl<W: Write + 'static> Video<W> {
         for px in self.event_pixel_trees.iter_mut() {
             px.c_thresh = c_thresh_pos;
         }
-        self.state.c_thresh_pos = c_thresh_pos;
+        self.state.c_thresh_baseline = c_thresh_pos;
         self
     }
 
@@ -787,7 +815,7 @@ impl<W: Write + 'static> Video<W> {
         for px in self.event_pixel_trees.iter_mut() {
             px.c_thresh = c;
         }
-        self.state.c_thresh_pos = c;
+        self.state.c_thresh_baseline = c;
     }
 
     /// Set a new value for `c_thresh_neg`
@@ -814,8 +842,7 @@ impl<W: Write + 'static> Video<W> {
             }
 
             // Reset the threshold for that pixel and its neighbors
-
-            let radius = 30;
+            let radius = self.state.feature_c_radius as i32;
             for r in (e.coord.y() as i32 - radius).max(0)
                 ..(e.coord.y() as i32 + radius).min(self.state.plane.h() as i32)
             {
@@ -823,7 +850,7 @@ impl<W: Write + 'static> Video<W> {
                     ..(e.coord.x() as i32 + radius).min(self.state.plane.w() as i32)
                 {
                     self.event_pixel_trees[[r as usize, c as usize, e.coord.c_usize()]].c_thresh =
-                        1;
+                        self.state.c_thresh_baseline;
                 }
             }
         }
@@ -845,8 +872,7 @@ impl<W: Write + 'static> Video<W> {
             (e.coord.y as i32 + circle3_[4][1]) as usize,
             (e.coord.x as i32 + circle3_[4][0]) as usize,
             0,
-        )]
-            - candidate)
+        )] - candidate)
             .abs()
             > INTENSITY_THRESHOLD
         {
@@ -856,8 +882,7 @@ impl<W: Write + 'static> Video<W> {
             (e.coord.y as i32 + circle3_[12][1]) as usize,
             (e.coord.x as i32 + circle3_[12][0]) as usize,
             0,
-        )]
-            - candidate)
+        )] - candidate)
             .abs()
             > INTENSITY_THRESHOLD
         {
@@ -867,8 +892,7 @@ impl<W: Write + 'static> Video<W> {
             (e.coord.y as i32 + circle3_[1][1]) as usize,
             (e.coord.x as i32 + circle3_[1][0]) as usize,
             0,
-        )]
-            - candidate)
+        )] - candidate)
             .abs()
             > INTENSITY_THRESHOLD
         {
@@ -879,8 +903,7 @@ impl<W: Write + 'static> Video<W> {
             (e.coord.y as i32 + circle3_[7][1]) as usize,
             (e.coord.x as i32 + circle3_[7][0]) as usize,
             0,
-        )]
-            - candidate)
+        )] - candidate)
             .abs()
             > INTENSITY_THRESHOLD
         {
@@ -899,8 +922,7 @@ impl<W: Write + 'static> Video<W> {
                 (e.coord.y as i32 + circle3_[i][1]) as usize,
                 (e.coord.x as i32 + circle3_[i][0]) as usize,
                 0,
-            )]
-                > candidate;
+            )] > candidate;
 
             let mut did_break = false;
 
@@ -910,8 +932,7 @@ impl<W: Write + 'static> Video<W> {
                         (e.coord.y as i32 + circle3_[(i + j) % 16][1]) as usize,
                         (e.coord.x as i32 + circle3_[(i + j) % 16][0]) as usize,
                         0,
-                    )]
-                        <= candidate + INTENSITY_THRESHOLD
+                    )] <= candidate + INTENSITY_THRESHOLD
                     {
                         did_break = true;
                     }
@@ -919,8 +940,7 @@ impl<W: Write + 'static> Video<W> {
                     (e.coord.y as i32 + circle3_[(i + j) % 16][1]) as usize,
                     (e.coord.x as i32 + circle3_[(i + j) % 16][0]) as usize,
                     0,
-                )]
-                    >= candidate - INTENSITY_THRESHOLD
+                )] >= candidate - INTENSITY_THRESHOLD
                 {
                     did_break = true;
                 }
@@ -1004,7 +1024,8 @@ pub fn integrate_for_px(
         state.pixel_tree_mode,
         state.delta_t_max,
         state.ref_time,
-        state.c_thresh_pos,
+        state.c_thresh_max,
+        state.c_increase_velocity,
     );
 
     if px.need_to_pop_top {

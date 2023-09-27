@@ -345,7 +345,8 @@ impl<W: Write + 'static> Integration<W> {
                                 Continuous,
                                 video.state.delta_t_max,
                                 video.state.ref_time,
-                                video.state.c_thresh_pos,
+                                video.state.c_thresh_max,
+                                video.state.c_increase_velocity,
                             );
                             let running_t_after = px.running_t;
                             debug_assert_eq!(
@@ -378,8 +379,8 @@ impl<W: Write + 'static> Integration<W> {
 
                             let frame_val_u8 = frame_val as u8; // TODO: don't let this be lossy here
 
-                            if frame_val_u8 < base_val.saturating_sub(video.state.c_thresh_neg)
-                                || frame_val_u8 > base_val.saturating_add(video.state.c_thresh_pos)
+                            if frame_val_u8 < base_val.saturating_sub(px.c_thresh)
+                                || frame_val_u8 > base_val.saturating_add(px.c_thresh)
                             {
                                 px.pop_best_events(&mut buffer, Continuous, video.state.ref_time);
                                 px.base_val = frame_val_u8;
