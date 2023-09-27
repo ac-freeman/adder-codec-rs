@@ -226,9 +226,11 @@ pub trait VideoBuilder<W> {
     ) -> Self;
 
     /// Set the positive contrast threshold
+    #[deprecated(since = "0.3.4", note = "please use `crf` or `quality_manual` instead")]
     fn c_thresh_pos(self, c_thresh_pos: u8) -> Self;
 
     /// Set the negative contrast threshold
+    #[deprecated(since = "0.3.4", note = "please use `crf` or `quality_manual` instead")]
     fn c_thresh_neg(self, c_thresh_neg: u8) -> Self;
 
     /// Set the chunk rows
@@ -401,6 +403,10 @@ impl<W: Write + 'static> Video<W> {
     }
 
     /// Set the positive contrast threshold
+    #[deprecated(
+        since = "0.3.4",
+        note = "please use `update_crf` or `update_quality_manual` instead"
+    )]
     pub fn c_thresh_pos(mut self, c_thresh_pos: u8) -> Self {
         for px in self.event_pixel_trees.iter_mut() {
             px.c_thresh = c_thresh_pos;
@@ -410,6 +416,10 @@ impl<W: Write + 'static> Video<W> {
     }
 
     /// Set the negative contrast threshold
+    #[deprecated(
+        since = "0.3.4",
+        note = "please use `update_crf` or `update_quality_manual` instead"
+    )]
     pub fn c_thresh_neg(self, _c_thresh_neg: u8) -> Self {
         unimplemented!();
         // for px in self.event_pixel_trees.iter_mut() {
@@ -838,6 +848,10 @@ impl<W: Write + 'static> Video<W> {
     }
 
     /// Set a new value for `c_thresh_pos`
+    #[deprecated(
+        since = "0.3.4",
+        note = "please use `update_crf` or `update_quality_manual` instead"
+    )]
     pub fn update_adder_thresh_pos(&mut self, c: u8) {
         for px in self.event_pixel_trees.iter_mut() {
             px.c_thresh = c;
@@ -846,6 +860,10 @@ impl<W: Write + 'static> Video<W> {
     }
 
     /// Set a new value for `c_thresh_neg`
+    #[deprecated(
+        since = "0.3.4",
+        note = "please use `update_crf` or `update_quality_manual` instead"
+    )]
     pub fn update_adder_thresh_neg(&mut self, _c: u8) {
         unimplemented!();
         // for px in self.event_pixel_trees.iter_mut() {
