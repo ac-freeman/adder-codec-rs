@@ -550,17 +550,17 @@ impl AdderPlayer {
                 // show_display_force("cornerss", &corner_mat, 1)?;
             }
 
-            let mut keypoints = Vector::<KeyPoint>::new();
-            opencv::features2d::fast(display_mat, &mut keypoints, 50, true)?;
-            let mut keypoint_mat = Mat::default();
-            opencv::features2d::draw_keypoints(
-                display_mat,
-                &keypoints,
-                &mut keypoint_mat,
-                Scalar::new(0.0, 0.0, 255.0, 0.0),
-                opencv::features2d::DrawMatchesFlags::DEFAULT,
-            )?;
-            show_display_force("keypoints", &keypoint_mat, 1)?;
+            // let mut keypoints = Vector::<KeyPoint>::new();
+            // opencv::features2d::fast(display_mat, &mut keypoints, 50, true)?;
+            // let mut keypoint_mat = Mat::default();
+            // opencv::features2d::draw_keypoints(
+            //     display_mat,
+            //     &keypoints,
+            //     &mut keypoint_mat,
+            //     Scalar::new(0.0, 0.0, 255.0, 0.0),
+            //     opencv::features2d::DrawMatchesFlags::DEFAULT,
+            // )?;
+            // show_display_force("keypoints", &keypoint_mat, 1)?;
 
             frame_sequence.state.frames_written += 1;
             self.stream_state.current_t_ticks += frame_sequence.state.tpf;
@@ -587,11 +587,22 @@ impl AdderPlayer {
             return Ok((0, image_bevy));
         }
 
+        let mut last_event: Option<Event> = None;
         loop {
             match stream.decoder.digest_event(&mut stream.bitreader) {
                 Ok(mut event) => {
                     event_count += 1;
-                    if frame_sequence.ingest_event(&mut event) {
+                    let filled = frame_sequence.ingest_event(&mut event);
+
+                    if let Some(last) = last_event {
+                        if event.delta_t != last.delta_t {
+                            // TODO: Do the feature test
+                        }
+                    }
+
+                    last_event = Some(event.clone());
+
+                    if filled {
                         return Ok((event_count, image_bevy));
                     }
                 }

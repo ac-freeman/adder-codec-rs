@@ -777,19 +777,18 @@ impl<W: Write + 'static> Video<W> {
             )?;
         }
 
-        // TODO: Add a toggle option to only calculate features if user says so
         if self.state.feature_detection && !color {
-            let mut keypoints = Vector::<KeyPoint>::new();
-            opencv::features2d::fast(&self.instantaneous_frame, &mut keypoints, 50, true)?;
-            let mut keypoint_mat = Mat::default();
-            opencv::features2d::draw_keypoints(
-                &self.instantaneous_frame,
-                &keypoints,
-                &mut keypoint_mat,
-                Scalar::new(0.0, 0.0, 255.0, 0.0),
-                opencv::features2d::DrawMatchesFlags::DEFAULT,
-            )?;
-            show_display_force("keypoints", &keypoint_mat, 1)?;
+            // let mut keypoints = Vector::<KeyPoint>::new();
+            // opencv::features2d::fast(&self.instantaneous_frame, &mut keypoints, 50, true)?;
+            // let mut keypoint_mat = Mat::default();
+            // opencv::features2d::draw_keypoints(
+            //     &self.instantaneous_frame,
+            //     &keypoints,
+            //     &mut keypoint_mat,
+            //     Scalar::new(0.0, 0.0, 255.0, 0.0),
+            //     opencv::features2d::DrawMatchesFlags::DEFAULT,
+            // )?;
+            // show_display_force("keypoints", &keypoint_mat, 1)?;
 
             for events in &big_buffer {
                 for (e1, e2) in events.iter().tuple_windows() {
