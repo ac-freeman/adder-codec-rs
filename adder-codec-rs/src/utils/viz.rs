@@ -1,4 +1,5 @@
-use opencv::core::{Mat, MatTraitConst, MatTraitConstManual};
+use adder_codec_core::Event;
+use opencv::core::{Mat, MatTrait, MatTraitConst, MatTraitConstManual};
 use std::error::Error;
 use std::fs::File;
 use std::io;
@@ -65,6 +66,16 @@ pub async fn download_file(
         let mut file_out = File::create(path_str)?;
         let mut data_in = Cursor::new(resp.bytes().await?);
         std::io::copy(&mut data_in, &mut file_out)?;
+    }
+    Ok(())
+}
+
+pub fn draw_feature(e: &Event, img: &mut Mat) -> Result<(), Box<dyn Error>> {
+    let color: u8 = 255;
+    let radius = 2;
+    for i in -radius..=radius {
+        *img.at_2d_mut(e.coord.y as i32 + i, e.coord.x as i32)? = color;
+        *img.at_2d_mut(e.coord.y as i32, e.coord.x as i32 + i)? = color;
     }
     Ok(())
 }

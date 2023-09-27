@@ -5,5 +5,6 @@ pub mod simulproc;
 /// A module for migrating streams from one format to another
 pub mod stream_migration;
 
+pub mod cv;
 /// A module for visualizing streams
 pub mod viz;

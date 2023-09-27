@@ -33,6 +33,8 @@ use rayon::iter::{IndexedParallelIterator, IntoParallelRefMutIterator};
 use rayon::ThreadPool;
 
 use crate::transcoder::source::{CRF, DEFAULT_CRF_QUALITY};
+use crate::utils::cv::is_feature;
+use crate::utils::viz::draw_feature;
 use thiserror::Error;
 use tokio::task::JoinError;
 
@@ -872,18 +874,9 @@ impl<W: Write + 'static> Video<W> {
     }
 
     pub(crate) fn feature_test(&mut self, e: &Event) -> Result<(), Box<dyn Error>> {
-        if self.is_feature(e)? {
+        if is_feature(e, self.state.plane, &self.running_intensities)? {
             // Display the feature on the viz frame
-            let color: u8 = 255;
-            let radius = 2;
-            for i in -radius..=radius {
-                *self
-                    .instantaneous_frame
-                    .at_2d_mut(e.coord.y as i32 + i, e.coord.x as i32)? = color;
-                *self
-                    .instantaneous_frame
-                    .at_2d_mut(e.coord.y as i32, e.coord.x as i32 + i)? = color;
-            }
+            draw_feature(e, &mut self.instantaneous_frame)?;
 
             // Reset the threshold for that pixel and its neighbors
             let radius = self.state.feature_c_radius as i32;
@@ -899,103 +892,6 @@ impl<W: Write + 'static> Video<W> {
             }
         }
         Ok(())
-    }
-
-    fn is_feature(&self, e: &Event) -> Result<bool, Box<dyn Error>> {
-        if e.coord
-            .is_border(self.state.plane.w_usize(), self.state.plane.h_usize(), 3)
-        {
-            return Ok(false);
-        }
-
-        let img = &self.running_intensities;
-        let candidate: i32 = img[(e.coord.y_usize(), e.coord.x_usize(), 0)];
-
-        let mut count = 0;
-        if (img[(
-            (e.coord.y as i32 + circle3_[4][1]) as usize,
-            (e.coord.x as i32 + circle3_[4][0]) as usize,
-            0,
-        )] - candidate)
-            .abs()
-            > INTENSITY_THRESHOLD
-        {
-            count += 1;
-        }
-        if (img[(
-            (e.coord.y as i32 + circle3_[12][1]) as usize,
-            (e.coord.x as i32 + circle3_[12][0]) as usize,
-            0,
-        )] - candidate)
-            .abs()
-            > INTENSITY_THRESHOLD
-        {
-            count += 1;
-        }
-        if (img[(
-            (e.coord.y as i32 + circle3_[1][1]) as usize,
-            (e.coord.x as i32 + circle3_[1][0]) as usize,
-            0,
-        )] - candidate)
-            .abs()
-            > INTENSITY_THRESHOLD
-        {
-            count += 1;
-        }
-
-        if (img[(
-            (e.coord.y as i32 + circle3_[7][1]) as usize,
-            (e.coord.x as i32 + circle3_[7][0]) as usize,
-            0,
-        )] - candidate)
-            .abs()
-            > INTENSITY_THRESHOLD
-        {
-            count += 1;
-        }
-
-        if count <= 2 {
-            return Ok(false);
-        }
-
-        let streak_size = 12;
-
-        for i in 0..16 {
-            // Are we looking at a bright or dark streak?
-            let brighter = img[(
-                (e.coord.y as i32 + circle3_[i][1]) as usize,
-                (e.coord.x as i32 + circle3_[i][0]) as usize,
-                0,
-            )] > candidate;
-
-            let mut did_break = false;
-
-            for j in 0..streak_size {
-                if brighter {
-                    if img[(
-                        (e.coord.y as i32 + circle3_[(i + j) % 16][1]) as usize,
-                        (e.coord.x as i32 + circle3_[(i + j) % 16][0]) as usize,
-                        0,
-                    )] <= candidate + INTENSITY_THRESHOLD
-                    {
-                        did_break = true;
-                    }
-                } else if img[(
-                    (e.coord.y as i32 + circle3_[(i + j) % 16][1]) as usize,
-                    (e.coord.x as i32 + circle3_[(i + j) % 16][0]) as usize,
-                    0,
-                )] >= candidate - INTENSITY_THRESHOLD
-                {
-                    did_break = true;
-                }
-            }
-
-            if !did_break {
-                return Ok(true);
-            }
-        }
-
-        Ok(false)
     }
 
     pub fn detect_features(mut self, detect_features: bool) -> Self {
@@ -1034,16 +930,6 @@ impl<W: Write + 'static> Video<W> {
         }
     }
 }
-
-const INTENSITY_THRESHOLD: i32 = 30;
-
-#[rustfmt::skip]
-const circle3_: [[i32; 2]; 16] = [
-    [0, 3], [1, 3], [2, 2], [3, 1],
-    [3, 0], [3, -1], [2, -2], [1, -3],
-    [0, -3], [-1, -3], [-2, -2], [-3, -1],
-    [-3, 0], [-3, 1], [-2, 2], [-1, 3]
-];
 
 /// Integrate an intensity value for a pixel, over a given time span
 ///
