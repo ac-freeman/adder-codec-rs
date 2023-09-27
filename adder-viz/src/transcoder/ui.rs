@@ -17,6 +17,8 @@ use adder_codec_core::codec::EncoderType;
 use adder_codec_core::TimeMode;
 use adder_codec_rs::transcoder::source::davis::TranscoderMode::RawDvs;
 use adder_codec_rs::transcoder::source::{CRF, DEFAULT_CRF_QUALITY};
+use bevy_egui::egui::plot::Corner::LeftTop;
+use bevy_egui::egui::plot::Legend;
 use egui::plot::{Line, Plot, PlotPoints};
 use std::default::Default;
 use std::fs::File;
@@ -106,7 +108,8 @@ pub struct InfoUiState {
     pub(crate) input_path_0: Option<PathBuf>,
     pub(crate) input_path_1: Option<PathBuf>,
     pub(crate) output_path: Option<PathBuf>,
-    pub(crate) plot_points_y: VecDeque<f64>,
+    pub(crate) plot_points_eventrate_y: VecDeque<f64>,
+    pub(crate) plot_points_latency_y: VecDeque<f64>,
     pub view_mode_radio_state: FramedViewMode, // TODO: Move to different struct
 }
 
@@ -124,7 +127,7 @@ impl Default for OutputName {
 
 impl Default for InfoUiState {
     fn default() -> Self {
-        let plot_points = (0..1000).map(|i| 0.0).collect();
+        let plot_points: VecDeque<f64> = (0..1000).map(|i| 0.0).collect();
 
         InfoUiState {
             events_per_sec: 0.,
@@ -137,7 +140,8 @@ impl Default for InfoUiState {
             input_path_0: None,
             input_path_1: None,
             output_path: None,
-            plot_points_y: plot_points,
+            plot_points_eventrate_y: plot_points.clone(),
+            plot_points_latency_y: plot_points,
             view_mode_radio_state: FramedViewMode::Intensity,
         }
     }
@@ -281,21 +285,39 @@ impl TranscoderState {
         }
 
         self.ui_info_state
-            .plot_points_y
+            .plot_points_eventrate_y
             .push_back(self.ui_info_state.events_ppc_per_sec);
-        self.ui_info_state.plot_points_y.pop_front();
+        self.ui_info_state.plot_points_eventrate_y.pop_front();
+
+        self.ui_info_state
+            .plot_points_latency_y
+            .push_back(self.ui_info_state.davis_latency as f64);
+        self.ui_info_state.plot_points_latency_y.pop_front();
 
         let plot_points: PlotPoints = (0..1000)
             .map(|i| {
                 let x = i as f64;
-                [x, self.ui_info_state.plot_points_y[i]]
+                [x, self.ui_info_state.plot_points_eventrate_y[i]]
             })
             .collect();
-        let line = Line::new(plot_points);
+        let line_eventrate = Line::new(plot_points).name("Events PPC per sec");
+
+        let plot_points: PlotPoints = (0..1000)
+            .map(|i| {
+                let x = i as f64;
+                [x, self.ui_info_state.plot_points_latency_y[i]]
+            })
+            .collect();
+        let line_latency = Line::new(plot_points).name("Latency");
+
         Plot::new("my_plot")
             .height(100.0)
-            .allow_drag(false)
-            .show(ui, |plot_ui| plot_ui.line(line));
+            .allow_drag(true)
+            .legend(Legend::default().position(LeftTop))
+            .show(ui, |plot_ui| {
+                plot_ui.line(line_eventrate);
+                plot_ui.line(line_latency);
+            });
     }
 
     pub fn update_adder_params(&mut self) {
