@@ -177,7 +177,6 @@ mod tests {
             .crf(0)
             .time_parameters(5000 * 30, 5000, 120_000, Some(TimeMode::DeltaT))?
             .frame_start(args.frame_idx_start)?
-            .c_thresh_pos(args.c_thresh_pos)
             .show_display(args.show_display);
 
         let source_fps = source.source_fps;

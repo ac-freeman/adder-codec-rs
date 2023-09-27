@@ -216,6 +216,15 @@ pub trait VideoBuilder<W> {
 
     fn crf(self, crf: u8) -> Self;
 
+    fn quality_manual(
+        self,
+        c_thresh_baseline: u8,
+        c_thresh_max: u8,
+        delta_t_max_multiplier: u32,
+        c_increase_velocity: u8,
+        feature_c_radius_denom: f32,
+    ) -> Self;
+
     /// Set the positive contrast threshold
     fn c_thresh_pos(self, c_thresh_pos: u8) -> Self;
 
