@@ -371,7 +371,7 @@ impl TranscoderState {
         let video = source.get_video_mut();
 
         if self.ui_state.auto_quality {
-            video.state.update_crf(self.ui_state.crf);
+            video.update_crf(self.ui_state.crf);
 
             // Update ui state to match
             self.ui_state.adder_tresh_baseline = CRF[self.ui_state.crf as usize][0] as u8;
@@ -385,7 +385,7 @@ impl TranscoderState {
             self.ui_state.feature_radius = CRF[self.ui_state.crf as usize][4];
             self.ui_state.feature_radius_slider = self.ui_state.feature_radius;
         } else {
-            video.state.update_quality_manual(
+            video.update_quality_manual(
                 self.ui_state.adder_tresh_baseline,
                 self.ui_state.adder_tresh_max,
                 self.ui_state.delta_t_max_mult,
@@ -519,7 +519,7 @@ fn side_panel_grid_contents(
         &mut ui_state.crf_slider,
         0..=CRF.len() as u8 - 1,
         vec![],
-        10,
+        1,
     );
     ui.end_row();
 

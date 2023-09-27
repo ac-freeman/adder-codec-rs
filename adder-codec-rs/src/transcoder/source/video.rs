@@ -182,7 +182,7 @@ impl Default for VideoState {
 }
 
 impl VideoState {
-    pub fn update_crf(&mut self, crf: u8) {
+    fn update_crf(&mut self, crf: u8) {
         self.crf_quality = crf;
         self.c_thresh_baseline = CRF[crf as usize][0] as u8;
         self.c_thresh_max = CRF[crf as usize][1] as u8;
@@ -192,7 +192,7 @@ impl VideoState {
         self.feature_c_radius = (CRF[crf as usize][4] * self.plane.min_resolution() as f32) as u16;
     }
 
-    pub fn update_quality_manual(
+    fn update_quality_manual(
         &mut self,
         c_thresh_baseline: u8,
         c_thresh_max: u8,
@@ -973,6 +973,37 @@ impl<W: Write + 'static> Video<W> {
     pub fn detect_features(mut self, detect_features: bool) -> Self {
         self.state.feature_detection = detect_features;
         self
+    }
+
+    pub fn update_crf(&mut self, crf: u8) {
+        self.state.update_crf(crf);
+
+        for px in self.event_pixel_trees.iter_mut() {
+            px.c_thresh = self.state.c_thresh_baseline;
+            px.c_increase_counter = 0;
+        }
+    }
+
+    pub fn update_quality_manual(
+        &mut self,
+        c_thresh_baseline: u8,
+        c_thresh_max: u8,
+        delta_t_max_multiplier: u32,
+        c_increase_velocity: u8,
+        feature_c_radius_denom: f32,
+    ) {
+        self.state.update_quality_manual(
+            c_thresh_baseline,
+            c_thresh_max,
+            delta_t_max_multiplier,
+            c_increase_velocity,
+            feature_c_radius_denom,
+        );
+
+        for px in self.event_pixel_trees.iter_mut() {
+            px.c_thresh = c_thresh_baseline;
+            px.c_increase_counter = 0;
+        }
     }
 }
 
