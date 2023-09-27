@@ -190,6 +190,11 @@ impl<W: Write + 'static> VideoBuilder<W> for Framed<W> {
         self
     }
 
+    fn crf(mut self, crf: u8) -> Self {
+        self.video.update_crf(crf);
+        self
+    }
+
     fn c_thresh_pos(mut self, c_thresh_pos: u8) -> Self {
         self.video = self.video.c_thresh_pos(c_thresh_pos);
         self

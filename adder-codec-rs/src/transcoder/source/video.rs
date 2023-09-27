@@ -214,6 +214,8 @@ pub trait VideoBuilder<W> {
     /// Set both the positive and negative contrast thresholds
     fn contrast_thresholds(self, c_thresh_pos: u8, c_thresh_neg: u8) -> Self;
 
+    fn crf(self, crf: u8) -> Self;
+
     /// Set the positive contrast threshold
     fn c_thresh_pos(self, c_thresh_pos: u8) -> Self;
 
