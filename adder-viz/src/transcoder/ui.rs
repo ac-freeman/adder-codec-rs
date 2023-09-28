@@ -127,7 +127,7 @@ impl Default for OutputName {
 
 impl Default for InfoUiState {
     fn default() -> Self {
-        let plot_points: VecDeque<f64> = (0..1000).map(|i| 0.0).collect();
+        let plot_points: VecDeque<f64> = (0..1000).map(|_| 0.0).collect();
 
         InfoUiState {
             events_per_sec: 0.,

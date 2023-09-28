@@ -279,8 +279,6 @@ pub struct Video<W: Write> {
     /// The current instantaneous frame, for determining features
     pub running_intensities: Array3<i32>,
 
-    abs_intensity_mat: Mat,
-
     /// The current view mode of the instantaneous frame
     pub instantaneous_view_mode: FramedViewMode,
 
@@ -350,7 +348,6 @@ impl<W: Write + 'static> Video<W> {
                 sae_mat.create_rows_cols(plane.h() as i32, plane.w() as i32, CV_32FC3)?;
             },
         }
-        let abs_intensity_mat = sae_mat.clone();
 
         let running_intensities = Array::zeros((plane.h_usize(), plane.w_usize(), plane.c_usize()));
 
@@ -377,7 +374,6 @@ impl<W: Write + 'static> Video<W> {
                     event_pixel_trees,
                     instantaneous_frame,
                     running_intensities,
-                    abs_intensity_mat,
                     instantaneous_view_mode,
                     event_sender,
                     encoder,
@@ -394,7 +390,6 @@ impl<W: Write + 'static> Video<W> {
                     event_pixel_trees,
                     instantaneous_frame,
                     running_intensities,
-                    abs_intensity_mat,
                     instantaneous_view_mode,
                     event_sender,
                     encoder,
@@ -740,9 +735,7 @@ impl<W: Write + 'static> Video<W> {
 
                 if self.instantaneous_view_mode == FramedViewMode::SAE {
                     // let tmp = sae_mat.at_2d::<f32>(y as i32, x as i32).unwrap();
-                    unsafe {
-                        *sae_mat.at_2d_mut::<f32>(y as i32, x as i32).unwrap() = sae_time as f32;
-                    }
+                    *sae_mat.at_2d_mut::<f32>(y as i32, x as i32).unwrap() = sae_time as f32;
                 }
             });
 
