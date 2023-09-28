@@ -328,9 +328,7 @@ impl<W: Write + 'static> Integration<W> {
                                 * delta_t_ticks)
                                 .max(0.0);
 
-                            let mut buffer_grew = false;
                             if px.need_to_pop_top {
-                                buffer_grew = true;
                                 buffer.push(px.pop_top_event(
                                     first_integration,
                                     Continuous,
@@ -355,7 +353,6 @@ impl<W: Write + 'static> Integration<W> {
                             );
 
                             if px.need_to_pop_top {
-                                buffer_grew = true;
                                 buffer.push(px.pop_top_event(
                                     first_integration,
                                     Continuous,

@@ -70,6 +70,7 @@ pub async fn download_file(
     Ok(())
 }
 
+/// Assuming the given event is a feature, draw it on the given `img` as a white cross
 pub fn draw_feature(e: &Event, img: &mut Mat) -> Result<(), Box<dyn Error>> {
     let color: u8 = 255;
     let radius = 2;

@@ -183,8 +183,13 @@ pub const D_ZERO_INTEGRATION: D = 254;
 
 #[derive(Clone, Copy, PartialEq, Default)]
 pub enum Mode {
+    /// Preserve temporal coherence for framed inputs. When an event fires, the ticks
+    /// remaining for that input frame (and its associated intensity) are discarded. The
+    /// difference in time is implied since the number of ticks per input frame is constant.
     #[default]
     FramePerfect,
+
+    /// Do not do the above ^
     Continuous,
 }
 /// Precision for maximum intensity representable with allowed [`D`] values
@@ -331,6 +336,8 @@ pub const D_START: D = 7;
 /// Number of ticks elapsed since a given pixel last fired an [`Event`]
 pub type DeltaT = u32;
 
+/// Absolute firing time (in ticks) of an event. For a given pixel, this will always
+/// be grater than or equal to that of the pixel's last fired event.
 pub type AbsoluteT = u32;
 
 /// Large count of ticks (e.g., for tracking the running timestamp of a sequence of [Events](Event)
@@ -581,6 +588,7 @@ pub struct EventCoordless {
 }
 
 impl EventCoordless {
+    /// Get the t or dt value
     #[inline(always)]
     pub fn t(&self) -> AbsoluteT {
         self.delta_t as AbsoluteT

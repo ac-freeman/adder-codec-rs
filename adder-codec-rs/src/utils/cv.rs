@@ -13,6 +13,7 @@ const CIRCLE3: [[i32; 2]; 16] = [
     [-3, 0], [-3, 1], [-2, 2], [-1, 3]
 ];
 
+/// Check if the given event is a feature
 pub fn is_feature(e: &Event, plane: PlaneSize, img: &Array3<i32>) -> Result<bool, Box<dyn Error>> {
     if e.coord.is_border(plane.w_usize(), plane.h_usize(), 3) {
         return Ok(false);

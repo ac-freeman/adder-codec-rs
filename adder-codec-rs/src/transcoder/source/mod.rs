@@ -7,6 +7,7 @@ pub mod framed;
 /// Common functions and structs for all transcoder sources
 pub mod video;
 
+/// Constant Rate Factor lookup table
 #[rustfmt::skip]
 pub static CRF: [[f32; 5]; 10] = [ 
 // baseline C     max C    Dt_max mutliplier    C increase velocity             feature radius
@@ -23,4 +24,5 @@ pub static CRF: [[f32; 5]; 10] = [
 /*9*/    [8.0,   40.0,         65.0,                 1.0,                     1.0/40.0],
 ];
 
+/// The default CRF quality level
 pub const DEFAULT_CRF_QUALITY: u8 = 5;

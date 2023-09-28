@@ -7,21 +7,38 @@ use enum_dispatch::enum_dispatch;
 use std::io;
 use std::io::{Read, Seek, Sink, Write};
 
+/// Different options for what to with the events we're given
 #[enum_dispatch(WriteCompression<W>)]
 pub enum WriteCompressionEnum<W: Write> {
+    /// Perform (possibly lossy) compression on the ADΔER stream, and arithmetic coding
     #[cfg(feature = "compression")]
     CompressedOutput(CompressedOutput<W>),
+
+    /// Write the ADΔER stream as raw events
     RawOutput(RawOutput<W>),
+
+    /// Write the ADΔER stream as raw events, but make sure that they are ordered perfectly according
+    /// to their firing times
     RawOutputInterleaved(RawOutputInterleaved<W>),
+
+    /// Do not write any data to the output stream
     EmptyOutput(EmptyOutput<Sink>),
 }
 
+/// Specifies the output type of the encoder
 #[derive(Default, Clone, Copy, PartialEq)]
 pub enum EncoderType {
+    /// Perform (possibly lossy) compression on the ADΔER stream, and arithmetic coding
     Compressed,
+
+    /// Write the ADΔER stream as raw events
     Raw,
+
+    /// Write the ADΔER stream as raw events, but make sure that they are ordered perfectly according
+    /// to their firing times
     RawInterleaved,
 
+    /// Do not write any data to the output stream
     #[default]
     Empty,
 }
