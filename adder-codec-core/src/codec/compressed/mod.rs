@@ -1,4 +1,4 @@
 pub mod adu;
 pub mod blocks;
-/// Compressed codec_old
+/// Compressed codec
 pub mod stream;

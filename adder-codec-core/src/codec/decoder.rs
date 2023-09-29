@@ -2,8 +2,13 @@ use crate::codec::{CodecError, CodecMetadata, ReadCompression, ReadCompressionEn
 use crate::SourceType::*;
 use crate::{Event, PlaneSize, SourceCamera, SourceType};
 
+#[cfg(feature = "compression")]
 use crate::codec::compressed::adu::frame::Adu;
+#[cfg(feature = "compression")]
 use crate::codec::compressed::stream::CompressedInput;
+#[cfg(feature = "compression")]
+use crate::codec::CompressedOutput;
+
 use crate::codec::header::{
     EventStreamHeader, EventStreamHeaderExtensionV1, EventStreamHeaderExtensionV2,
 };
@@ -28,6 +33,7 @@ pub struct Decoder<R: Read + Seek> {
 #[allow(dead_code)]
 impl<R: Read + Seek> Decoder<R> {
     /// Create a new decoder with the given compression scheme
+    #[cfg(feature = "compression")]
     pub fn new_compressed(
         compression: CompressedInput<R>,
         reader: &mut BitReader<R, BigEndian>,
@@ -190,6 +196,7 @@ impl<R: Read + Seek> Decoder<R> {
     }
 
     /// Read and decode the next event from the input stream
+    #[cfg(feature = "compression")]
     #[inline]
     pub fn digest_event_debug(
         &mut self,
@@ -235,7 +242,7 @@ impl<R: Read + Seek> Decoder<R> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::codec::compressed::stream::{CompressedInput, CompressedOutput};
+
     use crate::codec::encoder::Encoder;
     use crate::codec::raw::stream::{RawInput, RawOutput, RawOutputInterleaved};
 
@@ -312,6 +319,7 @@ mod tests {
         writer.into_inner().unwrap()
     }
 
+    #[cfg(feature = "compression")]
     fn setup_encoded_compressed(codec_version: u8) -> Vec<u8> {
         let output = Vec::new();
 
@@ -380,6 +388,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "compression")]
     fn header_v0_compressed() {
         let output = setup_encoded_compressed(0);
         let tmp = Cursor::new(&*output);
@@ -392,6 +401,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "compression")]
     fn header_v1_compressed() {
         let output = setup_encoded_compressed(1);
         let tmp = Cursor::new(&*output);
@@ -404,6 +414,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "compression")]
     fn header_v2_compressed() {
         let output = setup_encoded_compressed(2);
         let tmp = Cursor::new(&*output);

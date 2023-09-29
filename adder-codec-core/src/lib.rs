@@ -8,9 +8,11 @@
 pub mod codec;
 mod codec_old;
 
+#[cfg(feature = "compression")]
+mod codec_old;
 pub use bitstream_io;
 use bitstream_io::{BigEndian, BitReader};
-use std::cmp::{max, min, Ordering};
+use std::cmp::{Ordering};
 use std::fs::File;
 use std::io::BufReader;
 use std::ops::Add;
@@ -47,12 +49,13 @@ pub enum SourceCamera {
     Asint,
 }
 
+#[cfg(feature = "compression")]
 use crate::codec::compressed::blocks::{DeltaTResidual, EventResidual};
+#[cfg(feature = "compression")]
 use crate::codec::compressed::stream::CompressedInput;
 use crate::codec::decoder::Decoder;
 use crate::codec::raw::stream::RawInput;
-use crate::codec::{CodecError, ReadCompression};
-use crate::codec_old::compressed::compression::DResidual;
+use crate::codec::{CodecError};
 use serde::{Deserialize, Serialize};
 
 /// The type of time used in the ADΔER representation
@@ -533,7 +536,7 @@ pub fn open_file_decoder(
     ),
     CodecError,
 > {
-    let mut bufreader = BufReader::new(File::open(file_path)?);
+    let bufreader = BufReader::new(File::open(file_path)?);
     let compression = RawInput::new();
     let mut bitreader = BitReader::endian(bufreader, BigEndian);
 
@@ -541,10 +544,16 @@ pub fn open_file_decoder(
     let stream = match Decoder::new_raw(compression, &mut bitreader) {
         Ok(reader) => reader,
         Err(CodecError::WrongMagic) => {
-            bufreader = BufReader::new(File::open(file_path)?);
-            let compression = CompressedInput::new(0, 0); // TODO: temporary args. Need to refactor.
-            bitreader = BitReader::endian(bufreader, BigEndian);
-            Decoder::new_compressed(compression, &mut bitreader)?
+            #[cfg(feature = "compression")]
+            {
+                bufreader = BufReader::new(File::open(file_path)?);
+                let compression = CompressedInput::new(0, 0); // TODO: temporary args. Need to refactor.
+                bitreader = BitReader::endian(bufreader, BigEndian);
+                Decoder::new_compressed(compression, &mut bitreader)?
+            }
+
+            #[cfg(not(feature = "compression"))]
+            return Err(CodecError::WrongMagic);
         }
         Err(e) => {
             return Err(e);

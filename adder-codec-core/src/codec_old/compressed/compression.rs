@@ -1,3 +1,4 @@
+#[cfg(feature = "compression")]
 use arithmetic_coding::{Decoder, Encoder};
 use bitstream_io::{BigEndian, BitReader, BitWrite, BitWriter};
 use std::cmp::{max, min};
@@ -16,6 +17,7 @@ use std::io::{BufReader, BufWriter};
 // Calculate what the EXPECTED delta_t is based on the previous delta_t and the NEW D.
 // Get the residual between the pixel's current delta_t and the expected delta_t. Encode that
 
+#[cfg(feature = "compression")]
 use crate::codec::compressed::blocks::D_ENCODE_NO_EVENT;
 use crate::codec::CodecMetadata;
 use crate::codec_old::compressed::blocks::{Block, ZigZag, ZIGZAG_ORDER};

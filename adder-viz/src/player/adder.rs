@@ -82,7 +82,7 @@ impl AdderPlayer {
 
                     reconstructed_frame_rate /= playback_speed as f64;
 
-                    let framer_builder: FramerBuilder = FramerBuilder::new(meta.plane.clone(), 260)
+                    let framer_builder: FramerBuilder = FramerBuilder::new(meta.plane, 260)
                         .codec_version(meta.codec_version, meta.time_mode)
                         .time_parameters(
                             meta.tps,

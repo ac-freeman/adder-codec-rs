@@ -9,6 +9,7 @@ use std::io::{Read, Seek, Sink, Write};
 
 #[enum_dispatch(WriteCompression<W>)]
 pub enum WriteCompressionEnum<W: Write> {
+    #[cfg(feature = "compression")]
     CompressedOutput(CompressedOutput<W>),
     RawOutput(RawOutput<W>),
     RawOutputInterleaved(RawOutputInterleaved<W>),
@@ -30,11 +31,13 @@ pub enum EncoderOptions {
 
 #[enum_dispatch(ReadCompression<R>)]
 enum ReadCompressionEnum<R: Read + Seek> {
+    #[cfg(feature = "compression")]
     CompressedInput(CompressedInput<R>),
     RawInput(RawInput<R>),
 }
 
-/// Compressed codec_old utilities
+/// Compressed codec utilities
+#[cfg(feature = "compression")]
 pub mod compressed;
 
 /// ADΔER stream decoder
@@ -120,6 +123,8 @@ pub trait WriteCompression<W: Write> {
     /// Take in an event and process it. May or may not write to the output, depending on the state
     /// of the stream (Is it ready to write events? Is it accumulating/reorganizing events? etc.)
     fn ingest_event(&mut self, event: Event) -> Result<(), CodecError>;
+  
+    #[cfg(feature = "compression")]
     fn ingest_event_debug(&mut self, event: Event) -> Result<Option<Adu>, CodecError>;
 }
 
@@ -154,6 +159,7 @@ pub trait ReadCompression<R: Read> {
     /// Read the next event from the stream. Returns `None` if the stream is exhausted.
     fn digest_event(&mut self, reader: &mut BitReader<R, BigEndian>) -> Result<Event, CodecError>;
 
+    #[cfg(feature = "compression")]
     fn digest_event_debug(
         &mut self,
         reader: &mut BitReader<R, BigEndian>,
@@ -172,13 +178,12 @@ pub trait ReadCompression<R: Read> {
 }
 
 // unsafe impl<R: Read> Send for ReadCompression {}
-
-use crate::codec::compressed::stream::{CompressedInput, CompressedOutput};
-// use crate::codec::empty::stream::EmptyOutput;
+#[cfg(feature = "compression")]
 use crate::codec::compressed::adu::frame::Adu;
+#[cfg(feature = "compression")]
+use crate::codec::compressed::stream::{CompressedInput, CompressedOutput};
 use crate::codec::empty::stream::EmptyOutput;
 use crate::codec::raw::stream::{RawInput, RawOutput, RawOutputInterleaved, RawOutputBandwidthLimited};
-use crate::codec_old::compressed::fenwick::ValueError;
 use thiserror::Error;
 
 #[allow(missing_docs)]
@@ -217,9 +222,11 @@ pub enum CodecError {
     #[error("Plane error")]
     PlaneError(#[from] crate::PlaneError),
 
+    #[cfg(feature = "compression")]
     #[error("Blocking error")]
     BlockError(#[from] crate::codec::compressed::blocks::block::BlockError),
 
+    #[cfg(feature = "compression")]
     #[error("Arithmetic coding error")]
     ArithmeticCodingError(#[from] arithmetic_coding::Error),
 }

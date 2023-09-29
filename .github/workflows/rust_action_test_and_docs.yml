@@ -38,32 +38,31 @@ jobs:
         run: sudo apt-get install -y portaudio19-dev build-essential libpulse-dev libdbus-1-dev pkg-config libx11-dev libatk1.0-dev libgtk-3-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libwayland-dev libxkbcommon-dev
 
       - name: Check project
-        run: cargo check
+        run: cargo check -p adder-codec-core -p adder-codec-rs -p adder-info -p adder-to-dvs -p adder-viz
 
       - name: Build binaries for testing
         run: cargo build -p adder-info
 
       - name: Test project
-        run: cargo test -vv
+        run: cargo test -vv -p adder-codec-core -p adder-codec-rs -p adder-info -p adder-to-dvs -p adder-viz
       
-      - name: Install cargo-llvm-cov
-        uses: taiki-e/install-action@cargo-llvm-cov
-      - uses: Swatinem/rust-cache@v2
-      - name: run llvm-cov test
-        # should test with --all-features if gpu support.
-        run: cargo llvm-cov --workspace --lcov --output-path lcov.info
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
-        with:
-          files: lcov.info
-          fail_ci_if_error: false
+      # - name: Install cargo-llvm-cov
+      #   uses: taiki-e/install-action@cargo-llvm-cov
+      # - uses: Swatinem/rust-cache@v2
+      # - name: run llvm-cov test
+      #   # should test with --all-features if gpu support.
+      #   run: cargo llvm-cov -p adder-codec-core -p adder-codec-rs -p adder-info -p adder-to-dvs -p adder-viz --lcov --output-path lcov.info
+      # - name: Upload coverage to Codecov
+      #   uses: codecov/codecov-action@v3
+      #   with:
+      #     files: lcov.info
+      #     fail_ci_if_error: false
       - name: Run a documentation generation test
-        run: cargo doc -vv
+        run: cargo doc -vv -p adder-codec-rs --features=docs-only
   check_windows:
     name: Check and test on Windows
     runs-on: windows-2022
     env:
-      LLVM_VERSION: 15.0.7
       OPENCV_VERSION: 4.6.0
     steps:
       - uses: actions/checkout@v2
@@ -75,7 +74,7 @@ jobs:
           override: true
 
       - name: Install LLVM/clang
-        run: choco install -y llvm --version "$LLVM_VERSION"
+        run: choco install -y llvm
         shell: bash
 
       - name: Install OpenCV
@@ -101,5 +100,5 @@ jobs:
           export OPENCV_LINK_PATHS="/C/tools/opencv/build/x64/vc15/lib"
           export OPENCV_LINK_LIBS="opencv_world${OPENCV_VERSION//./}"
           export OPENCV_INCLUDE_PATHS="/C/tools/opencv/build/include"
-          cargo test -vv
+          cargo test -vv -p adder-codec-core -p adder-codec-rs -p adder-info -p adder-to-dvs -p adder-viz
         shell: bash

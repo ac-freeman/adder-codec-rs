@@ -5,13 +5,17 @@ use crate::{Event, EventSingle, SourceCamera, SourceType, EOF_EVENT};
 use std::io;
 use std::io::{Sink, Write};
 
+#[cfg(feature = "compression")]
 use crate::codec::compressed::adu::frame::Adu;
+#[cfg(feature = "compression")]
 use crate::codec::compressed::stream::CompressedOutput;
+
 use crate::codec::empty::stream::EmptyOutput;
 use crate::codec::header::{
     EventStreamHeader, EventStreamHeaderExtensionV0, EventStreamHeaderExtensionV1,
     EventStreamHeaderExtensionV2,
 };
+
 use crate::codec::raw::stream::{RawOutput, RawOutputInterleaved, RawOutputBandwidthLimited};
 use crate::SourceType::U8;
 use bincode::config::{FixintEncoding, WithOtherEndian, WithOtherIntEncoding};
@@ -44,6 +48,7 @@ impl<W: Write + 'static> Encoder<W> {
     }
 
     /// Create a new [`Encoder`] with the given compression scheme
+    #[cfg(feature = "compression")]
     pub fn new_compressed(compression: CompressedOutput<W>) -> Self
     where
         Self: Sized,
@@ -220,6 +225,7 @@ impl<W: Write + 'static> Encoder<W> {
         self.output.ingest_event(event)
     }
     /// Ingest an event
+    #[cfg(feature = "compression")]
     pub fn ingest_event_debug(&mut self, event: Event) -> Result<Option<Adu>, CodecError> {
         self.output.ingest_event_debug(event)
     }
@@ -246,13 +252,12 @@ impl<W: Write + 'static> Encoder<W> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::codec::compressed::stream::CompressedOutput;
     use crate::codec::raw::stream::RawOutput;
     use crate::codec::{CodecMetadata, LATEST_CODEC_VERSION};
 
     use crate::codec::compressed::adu::frame::Adu;
     use crate::{Coord, PlaneSize};
-    use bitstream_io::{BigEndian, BitWriter};
+    
     use std::io::BufWriter;
 
     #[test]
@@ -358,6 +363,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "compression")]
     fn compressed() {
         let output = Vec::new();
         let bufwriter = BufWriter::new(output);
@@ -388,6 +394,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "compression")]
     fn compressed2() {
         let output = Vec::new();
         let bufwriter = BufWriter::new(output);
@@ -414,6 +421,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "compression")]
     fn compressed3() {
         let output = Vec::new();
         let bufwriter = BufWriter::new(output);

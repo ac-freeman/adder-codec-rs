@@ -46,6 +46,7 @@ pub struct ParamsUiState {
     alpha_slider: f64,
     pub(crate) time_mode: TimeMode,
     pub(crate) encoder_options: EncoderOptions,
+    pub(crate) detect_features: bool,
 }
 
 impl Default for ParamsUiState {
@@ -77,6 +78,7 @@ impl Default for ParamsUiState {
             alpha_slider: 0.999,
             time_mode: TimeMode::default(),
             encoder_options: EncoderOptions::default(),
+            detect_features: false,
         }
     }
 }
@@ -203,18 +205,14 @@ impl TranscoderState {
                     self.ui_info_state.input_path_1 = Some(path.clone());
                 }
             }
-            if ui.button("Go!").clicked() {
-                if self.ui_info_state.input_path_0.is_some()
-                    && self.ui_info_state.input_path_1.is_some()
-                {
-                    replace_adder_transcoder(
-                        self,
-                        self.ui_info_state.input_path_0.clone(),
-                        self.ui_info_state.input_path_1.clone(),
-                        self.ui_info_state.output_path.clone(),
-                        0,
-                    );
-                }
+            if ui.button("Go!").clicked() && self.ui_info_state.input_path_0.is_some() && self.ui_info_state.input_path_1.is_some() {
+                replace_adder_transcoder(
+                    self,
+                    self.ui_info_state.input_path_0.clone(),
+                    self.ui_info_state.input_path_1.clone(),
+                    self.ui_info_state.output_path.clone(),
+                    0,
+                );
             }
         });
         ui.label(self.ui_info_state.source_name.clone());
@@ -308,7 +306,7 @@ impl TranscoderState {
                     if source.scale != self.ui_state.scale
                         || source.get_ref_time() != self.ui_state.delta_t_ref as u32
                         || source.time_mode != self.ui_state.time_mode
-                        || source.get_video_ref().encoder_options != self.ui_state.encoder_options
+                        || source.get_video_ref().encoder_type != self.ui_state.encoder_type
                         || match source.get_video_ref().state.plane.c() {
                             1 => {
                                 // True if the transcoder is gray, but the user wants color
@@ -338,9 +336,10 @@ impl TranscoderState {
 
         let video = source.get_video_mut();
         video.update_adder_thresh_pos(self.ui_state.adder_tresh as u8);
-        video.update_adder_thresh_neg(self.ui_state.adder_tresh as u8);
+        // video.update_adder_thresh_neg(self.ui_state.adder_tresh as u8);
         video.update_delta_t_max(self.ui_state.delta_t_max_mult * video.get_ref_time());
         video.instantaneous_view_mode = self.ui_state.view_mode_radio_state;
+        video.update_detect_features(self.ui_state.detect_features);
     }
 
     pub fn consume_source(
@@ -664,6 +663,13 @@ fn side_panel_grid_contents(
             0.8, 0.9, 0.999, 0.99999, 1.0
         ],
         0.001,
+    );
+    ui.end_row();
+  
+    ui.label("Processing:");
+    ui.add_enabled(
+        true,
+        egui::Checkbox::new(&mut ui_state.detect_features, "Detect features"),
     );
     ui.end_row();
 }
