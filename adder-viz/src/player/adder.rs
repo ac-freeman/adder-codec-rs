@@ -8,6 +8,7 @@ use adder_codec_rs::framer::scale_intensity::event_to_intensity;
 use adder_codec_rs::transcoder::source::video::{show_display_force, FramedViewMode};
 use bevy::prelude::Image;
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
+use ndarray::Array3;
 use opencv::core::{
     create_continuous, KeyPoint, Mat, MatTraitConstManual, MatTraitManual, Scalar, Vector, CV_8UC1,
     CV_8UC3,
@@ -28,6 +29,8 @@ pub struct StreamState {
     pub(crate) tps: DeltaT,
     pub(crate) file_pos: u64,
     pub(crate) volume: usize,
+    // The current instantaneous frame, for determining features
+    // pub running_intensities: Array3<i32>,
 }
 
 // TODO: allow flexibility with decoding non-file inputs

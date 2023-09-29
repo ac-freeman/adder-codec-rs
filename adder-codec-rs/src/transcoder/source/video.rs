@@ -715,6 +715,8 @@ impl<W: Write + 'static> Video<W> {
                 // let sae_time_since = self.event_pixel_trees[[y, x, c]].running_t
                 //     - self.event_pixel_trees[[y, x, c]].last_fired_t;
                 let sae_time = self.event_pixel_trees[[y, x, c]].last_fired_t;
+
+                // Set the instantaneous frame value to the best queue'd event for the pixel
                 *val = match self.event_pixel_trees[[y, x, c]].arena[0].best_event {
                     Some(event) => u8::get_frame_value(
                         &event.into(),
