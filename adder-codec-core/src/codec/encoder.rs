@@ -181,7 +181,7 @@ impl<W: Write + 'static> Encoder<W> {
         );
         self.bincode.serialize_into(&mut buffer, &header)?;
 
-        // Encode the header extensions (for newer versions of the codec_old)
+        // Encode the header extensions (for newer versions of the codec)
         buffer = self.encode_header_extension(buffer)?;
 
         self.output.write_bytes(&buffer)?;
@@ -254,10 +254,7 @@ mod tests {
     use super::*;
     use crate::codec::raw::stream::RawOutput;
     use crate::codec::{CodecMetadata, LATEST_CODEC_VERSION};
-
-    use crate::codec::compressed::adu::frame::Adu;
     use crate::{Coord, PlaneSize};
-    
     use std::io::BufWriter;
 
     #[test]

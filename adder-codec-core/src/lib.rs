@@ -1,12 +1,11 @@
 #![warn(missing_docs)]
 
-//! # adder-codec_old-core
+//! # adder-codec-core
 //!
 //! The core types and utilities for encoding and decoding ADΔER events
 
 /// Expose public API for encoding and decoding
 pub mod codec;
-mod codec_old;
 
 #[cfg(feature = "compression")]
 mod codec_old;

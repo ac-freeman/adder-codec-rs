@@ -34,13 +34,6 @@ use rayon::iter::IntoParallelIterator;
 use rayon::iter::ParallelIterator;
 use rayon::iter::{IndexedParallelIterator, IntoParallelRefMutIterator};
 use rayon::ThreadPool;
-
-use opencv::{
-    features2d::FastFeatureDetector,
-    highgui::{imshow, wait_key},
-    imgcodecs::imread,
-    prelude::*,
-};
 use thiserror::Error;
 use tokio::task::JoinError;
 
@@ -964,121 +957,6 @@ impl<W: Write + 'static> Video<W> {
     pub fn detect_features(mut self, detect_features: bool) -> Self {
         self.state.feature_detection = detect_features;
         self
-    }
-
-    pub(crate) fn feature_test(&mut self, e: &Event) -> Result<(), Box<dyn Error>> {
-        if self.is_feature(e)? {
-            let color: u8 = 255;
-            let radius = 2;
-            for i in -radius..=radius {
-                *self
-                    .instantaneous_frame
-                    .at_2d_mut(e.coord.y as i32 + i, e.coord.x as i32)? = color;
-                *self
-                    .instantaneous_frame
-                    .at_2d_mut(e.coord.y as i32, e.coord.x as i32 + i)? = color;
-            }
-        }
-        Ok(())
-    }
-
-    fn is_feature(&self, e: &Event) -> Result<bool, Box<dyn Error>> {
-        if e.coord
-            .is_border(self.state.plane.w_usize(), self.state.plane.h_usize(), 3)
-        {
-            return Ok(false);
-        }
-
-        let img = &self.instantaneous_frame;
-        let candidate: i32 = (*img.at_2d::<u8>(e.coord.y as i32, e.coord.x as i32)?) as i32;
-
-        let mut count = 0;
-        if (*img.at_2d::<u8>(
-            (e.coord.y as i32 + circle3_[4][1]),
-            (e.coord.x as i32 + circle3_[4][0]),
-        )? as i32
-            - candidate)
-            .abs()
-            > INTENSITY_THRESHOLD
-        {
-            count += 1;
-        }
-        if (*img.at_2d::<u8>(
-            (e.coord.y as i32 + circle3_[12][1]),
-            (e.coord.x as i32 + circle3_[12][0]),
-        )? as i32
-            - candidate)
-            .abs()
-            > INTENSITY_THRESHOLD
-        {
-            count += 1;
-        }
-        if (*img.at_2d::<u8>(
-            (e.coord.y as i32 + circle3_[1][1]),
-            (e.coord.x as i32 + circle3_[1][0]),
-        )? as i32
-            - candidate)
-            .abs()
-            > INTENSITY_THRESHOLD
-        {
-            count += 1;
-        }
-
-        if (*img.at_2d::<u8>(
-            (e.coord.y as i32 + circle3_[7][1]),
-            (e.coord.x as i32 + circle3_[7][0]),
-        )? as i32
-            - candidate)
-            .abs()
-            > INTENSITY_THRESHOLD
-        {
-            count += 1;
-        }
-
-        if count <= 2 {
-            return Ok(false);
-        }
-
-        let streak_size = 12;
-
-        for i in 0..16 {
-            // Are we looking at a bright or dark streak?
-            let brighter = *img.at_2d::<u8>(
-                (e.coord.y as i32 + circle3_[i][1]),
-                (e.coord.x as i32 + circle3_[i][0]),
-            )? as i32
-                > candidate;
-
-            let mut did_break = false;
-
-            for j in 0..streak_size {
-                if brighter {
-                    if *img.at_2d::<u8>(
-                        (e.coord.y as i32 + circle3_[(i + j) % 16][1]),
-                        (e.coord.x as i32 + circle3_[(i + j) % 16][0]),
-                    )? as i32
-                        <= candidate + INTENSITY_THRESHOLD
-                    {
-                        did_break = true;
-                    }
-                } else {
-                    if *img.at_2d::<u8>(
-                        (e.coord.y as i32 + circle3_[(i + j) % 16][1]),
-                        (e.coord.x as i32 + circle3_[(i + j) % 16][0]),
-                    )? as i32
-                        >= candidate - INTENSITY_THRESHOLD
-                    {
-                        did_break = true;
-                    }
-                }
-            }
-
-            if !did_break {
-                return Ok(true);
-            }
-        }
-
-        return Ok(false);
     }
 }
 

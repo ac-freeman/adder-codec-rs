@@ -107,7 +107,7 @@ impl FramerBuilder {
         self
     }
 
-    /// Set the codec_old version and time mode.
+    /// Set the codec version and time mode.
     #[must_use]
     pub fn codec_version(mut self, codec_version: u8, time_mode: TimeMode) -> FramerBuilder {
         self.codec_version = codec_version;

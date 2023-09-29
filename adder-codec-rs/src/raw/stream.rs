@@ -415,8 +415,7 @@ fn encode_header_extension(
             raw.bincode.serialize_into(
                 &mut *stream,
                 &EventStreamHeaderExtensionV1 {
-                    source: source_camera
-                        .expect("source_camera must be set for codec_old version 1"),
+                    source: source_camera.expect("source_camera must be set for codec version 1"),
                 },
             )?;
             if raw.codec_version == 1 {
@@ -426,7 +425,7 @@ fn encode_header_extension(
             raw.bincode.serialize_into(
                 &mut *stream,
                 &EventStreamHeaderExtensionV2 {
-                    time_mode: time_mode.expect("time_mode must be set for codec_old version 2"),
+                    time_mode: time_mode.expect("time_mode must be set for codec version 2"),
                 },
             )?;
             if raw.codec_version == 2 {
