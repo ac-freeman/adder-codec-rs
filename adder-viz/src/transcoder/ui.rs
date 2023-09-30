@@ -306,7 +306,9 @@ impl TranscoderState {
                     if source.scale != self.ui_state.scale
                         || source.get_ref_time() != self.ui_state.delta_t_ref as u32
                         || source.time_mode != self.ui_state.time_mode
-                        || source.get_video_ref().encoder_type != self.ui_state.encoder_type
+                        || source.get_video_ref().encoder_options != self.ui_state.encoder_options
+                        // TODO: better way to do this
+                        || match source.get_video_ref().encoder_options { EncoderOptions::RawBandwidthLimited {target_bitrate, alpha} => target_bitrate != self.ui_state.target_bitrate || alpha != self.ui_state.alpha, _ => false }
                         || match source.get_video_ref().state.plane.c() {
                             1 => {
                                 // True if the transcoder is gray, but the user wants color

@@ -16,6 +16,12 @@
       <sourceFolder url="file://$MODULE_DIR$/adder-viz/examples" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/adder-viz/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/adder-codec-core/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/arithmetic-coding/arithmetic-coding-core/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/arithmetic-coding/benches" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/arithmetic-coding/examples" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/arithmetic-coding/fenwick-model/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/arithmetic-coding/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/arithmetic-coding/tests" isTestSource="true" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
       <excludeFolder url="file://$MODULE_DIR$/adder-codec-core/target" />
     </content>
@@ -23,4 +29,3 @@
     <orderEntry type="sourceFolder" forTests="false" />
   </component>
 </module>
-

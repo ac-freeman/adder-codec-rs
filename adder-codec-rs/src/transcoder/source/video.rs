@@ -7,7 +7,7 @@ use adder_codec_core::codec::empty::stream::EmptyOutput;
 use adder_codec_core::codec::encoder::Encoder;
 use adder_codec_core::codec::raw::stream::{RawOutput, RawOutputInterleaved, RawOutputBandwidthLimited};
 use adder_codec_core::codec::{
-    CodecError, CodecMetadata, EncoderType, LATEST_CODEC_VERSION,
+    CodecError, CodecMetadata, EncoderOptions, LATEST_CODEC_VERSION,
 };
 use adder_codec_core::{
     Coord, DeltaT, Event, Mode, PlaneError, PlaneSize, SourceCamera, SourceType, TimeMode,
@@ -443,7 +443,7 @@ impl<W: Write + 'static> Video<W> {
         write: W,
     ) -> Result<Self, SourceError> {
         // TODO: Allow for compressed representation (not just raw)
-        let encoder: Encoder<_> = match encoder_type {
+        let encoder: Encoder<_> = match encoder_options {
             EncoderOptions::Compressed => {
                 #[cfg(feature = "compression")]
                 {
