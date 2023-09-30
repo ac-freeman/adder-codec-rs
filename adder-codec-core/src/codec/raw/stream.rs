@@ -216,8 +216,8 @@ impl<W: Write> WriteCompression<W> for RawOutputBandwidthLimited<W> {
             delta_t: 0,
         };
         self.bincode.serialize_into(self.stream(), &eof).unwrap();
-        self.flush_writer().unwrap();
-        std::mem::replace(&mut self.stream, None)
+        self.flush_writer().unwrap();=
+        self.stream.take()
     }
 
     fn flush_writer(&mut self) -> std::io::Result<()> {
@@ -242,7 +242,6 @@ impl<W: Write> WriteCompression<W> for RawOutputBandwidthLimited<W> {
 
         if new_bitrate > self.target_bitrate {
             //dbg!("Skipping event!");
-            // TODO: Montek said something about adjusting diff 2^d briefly?
             self.current_bitrate = self.alpha * self.current_bitrate;
             return Ok(()); // skip this event
         }

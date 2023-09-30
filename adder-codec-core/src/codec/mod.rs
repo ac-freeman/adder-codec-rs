@@ -53,7 +53,7 @@ mod header;
 /// Raw codec utilities
 pub mod raw;
 
-/// Current latest version of the codec_old.
+/// Current latest version of the codec.
 ///
 /// This is the version which will be written to the header.
 pub const LATEST_CODEC_VERSION: u8 = 2;
