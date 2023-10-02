@@ -30,6 +30,7 @@ pub struct StreamState {
     pub(crate) tps: DeltaT,
     pub(crate) file_pos: u64,
     pub(crate) volume: usize,
+    pub(crate) last_timestamps: Array3<DeltaT>,
     // The current instantaneous frame, for determining features
     pub running_intensities: Array3<i32>,
 }
@@ -138,6 +139,11 @@ impl AdderPlayer {
                                 meta.plane.w_usize(),
                                 meta.plane.c_usize(),
                             )),
+                            last_timestamps: Array::zeros((
+                                meta.plane.h_usize(),
+                                meta.plane.w_usize(),
+                                meta.plane.c_usize(),
+                            )),
                         },
                         framer_builder: Some(framer_builder),
                         frame_sequence: Some(frame_sequence),
@@ -242,13 +248,6 @@ impl AdderPlayer {
             Some(s) => s,
         };
 
-        let _frame_sequence = match &mut self.frame_sequence {
-            None => {
-                return Ok((0, None));
-            }
-            Some(s) => s,
-        };
-
         let meta = *stream.decoder.meta();
 
         let frame_length = meta.ref_interval as f64 * self.playback_speed as f64; //TODO: temp
@@ -303,13 +302,59 @@ impl AdderPlayer {
             }
 
             match stream.decoder.digest_event(&mut stream.bitreader) {
-                Ok(event) if event.d <= D_ZERO_INTEGRATION => {
+                Ok(mut event) if event.d <= D_ZERO_INTEGRATION => {
                     event_count += 1;
                     let y = event.coord.y as i32;
                     let x = event.coord.x as i32;
                     let c = event.coord.c.unwrap_or(0) as i32;
-                    if (y | x | c) == 0x0 {
-                        self.stream_state.current_t_ticks += event.delta_t;
+                    // if (y | x | c) == 0x0 {
+                    //     self.stream_state.current_t_ticks += event.delta_t;
+                    // }
+
+                    if meta.time_mode == TimeMode::AbsoluteT {
+                        if event.delta_t > self.stream_state.current_t_ticks {
+                            self.stream_state.current_t_ticks = event.delta_t;
+                        }
+                        let dt = event.delta_t
+                            - self.stream_state.last_timestamps
+                                [[y as usize, x as usize, c as usize]];
+                        self.stream_state.last_timestamps[[y as usize, x as usize, c as usize]] =
+                            event.delta_t;
+                        if self.stream_state.last_timestamps[[y as usize, x as usize, c as usize]]
+                            % meta.ref_interval
+                            != 0
+                        {
+                            self.stream_state.last_timestamps
+                                [[y as usize, x as usize, c as usize]] = ((self
+                                .stream_state
+                                .last_timestamps[[y as usize, x as usize, c as usize]]
+                                / meta.ref_interval)
+                                + 1)
+                                * meta.ref_interval;
+                        }
+                        event.delta_t = dt;
+                    } else {
+                        self.stream_state.last_timestamps[[y as usize, x as usize, c as usize]] +=
+                            event.delta_t;
+                        if self.stream_state.last_timestamps[[y as usize, x as usize, c as usize]]
+                            % meta.ref_interval
+                            != 0
+                        {
+                            self.stream_state.last_timestamps
+                                [[y as usize, x as usize, c as usize]] = ((self
+                                .stream_state
+                                .last_timestamps[[y as usize, x as usize, c as usize]]
+                                / meta.ref_interval)
+                                + 1)
+                                * meta.ref_interval;
+                        }
+
+                        if self.stream_state.last_timestamps[[y as usize, x as usize, c as usize]]
+                            > self.stream_state.current_t_ticks
+                        {
+                            self.stream_state.current_t_ticks = self.stream_state.last_timestamps
+                                [[y as usize, x as usize, c as usize]];
+                        }
                     }
 
                     // TODO: Support D and Dt view modes here
