@@ -587,6 +587,12 @@ pub struct EventCoordless {
     pub delta_t: DeltaT,
 }
 
+impl Into<f64> for EventCoordless {
+    fn into(self) -> f64 {
+        panic!("Not implemented")
+    }
+}
+
 impl EventCoordless {
     /// Get the t or dt value
     #[inline(always)]

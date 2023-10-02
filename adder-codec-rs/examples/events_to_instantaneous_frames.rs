@@ -48,7 +48,7 @@ fn main() {
     loop {
         match reader.digest_event(&mut bitreader) {
             Ok(mut event) => {
-                if frame_sequence.ingest_event(&mut event) {
+                if frame_sequence.ingest_event(&mut event, None) {
                     match frame_sequence.write_multi_frame_bytes(&mut output_stream) {
                         Ok(0) => {
                             panic!("Should have frame, but didn't")

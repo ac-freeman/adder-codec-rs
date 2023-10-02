@@ -386,7 +386,7 @@ impl<
     ///         d: 5,
     ///         delta_t: 1000
     ///     };
-    /// frame_sequence.ingest_event(&mut event);
+    /// frame_sequence.ingest_event(&mut event, None);
     /// let elem = frame_sequence.px_at_current(5, 5, 1).unwrap();
     /// assert_eq!(*elem, Some(32));
     /// ```

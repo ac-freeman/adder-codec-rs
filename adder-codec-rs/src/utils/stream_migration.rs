@@ -336,7 +336,7 @@ mod tests {
                     break;
                 }
             };
-            if frame_sequence_t.ingest_event(&mut event_t.clone()) {
+            if frame_sequence_t.ingest_event(&mut event_t.clone(), None) {
                 t_frame = frame_sequence_t.pop_next_frame();
             }
 
@@ -346,7 +346,7 @@ mod tests {
                     break;
                 }
             };
-            if frame_sequence_dt.ingest_event(&mut event_dt.clone()) {
+            if frame_sequence_dt.ingest_event(&mut event_dt.clone(), None) {
                 dt_frame = frame_sequence_dt.pop_next_frame();
 
                 let dt_val = dt_frame.unwrap()[0][[0, 0, 0]].unwrap();
@@ -448,7 +448,7 @@ mod tests {
                 dbg!(event_t);
             }
 
-            let a_t = frame_sequence_t.ingest_event(&mut event_t.clone());
+            let a_t = frame_sequence_t.ingest_event(&mut event_t.clone(), None);
 
             if a_t {
                 t_frame = frame_sequence_t.pop_next_frame();
@@ -460,7 +460,7 @@ mod tests {
                     break;
                 }
             };
-            let a_dt = frame_sequence_dt.ingest_event(&mut event_dt.clone());
+            let a_dt = frame_sequence_dt.ingest_event(&mut event_dt.clone(), None);
 
             if a_dt {
                 dt_frame = frame_sequence_dt.pop_next_frame();
