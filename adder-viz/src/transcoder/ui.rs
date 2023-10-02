@@ -334,7 +334,8 @@ impl TranscoderState {
                             || source.get_reconstructor().as_ref().unwrap().output_fps
                                 != self.ui_state.davis_output_fps
                             || source.time_mode != self.ui_state.time_mode
-                            || source.get_video_ref().encoder_type != self.ui_state.encoder_type
+                            || (source.get_video_ref().encoder_type != self.ui_state.encoder_type
+                                && self.ui_info_state.output_path.is_some())
                         {
                             if self.ui_state.davis_mode_radio_state == RawDvs {
                                 // self.ui_state.davis_output_fps = 1000000.0;
@@ -362,7 +363,8 @@ impl TranscoderState {
                     if source.scale != self.ui_state.scale
                         || source.get_ref_time() != self.ui_state.delta_t_ref as u32
                         || source.time_mode != self.ui_state.time_mode
-                        || source.get_video_ref().encoder_type != self.ui_state.encoder_type
+                        || (source.get_video_ref().encoder_type != self.ui_state.encoder_type
+                            && self.ui_info_state.output_path.is_some())
                         || match source.get_video_ref().state.plane.c() {
                             1 => {
                                 // True if the transcoder is gray, but the user wants color

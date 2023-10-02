@@ -788,7 +788,7 @@ impl<W: Write + 'static> Video<W> {
 
         for events in &big_buffer {
             for (e1, e2) in events.iter().circular_tuple_windows() {
-                riself.encoder.ingest_event(*e1)?;
+                self.encoder.ingest_event(*e1)?;
                 if self.state.feature_detection && !color {
                     if e2.delta_t != e1.delta_t {
                         self.feature_test(e1);
