@@ -8,6 +8,7 @@ use adder_codec_rs::framer::scale_intensity::event_to_intensity;
 use adder_codec_rs::transcoder::source::video::{show_display_force, FramedViewMode};
 use bevy::prelude::Image;
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
+use ndarray::Array;
 use ndarray::Array3;
 use opencv::core::{
     create_continuous, KeyPoint, Mat, MatTraitConstManual, MatTraitManual, Scalar, Vector, CV_8UC1,
@@ -23,14 +24,14 @@ use std::path::Path;
 pub type PlayerArtifact = (u64, Option<Image>);
 pub type PlayerStreamArtifact = (u64, StreamState, Option<Image>);
 
-#[derive(Default, Copy, Clone, Debug)]
+#[derive(Default, Clone, Debug)]
 pub struct StreamState {
     pub(crate) current_t_ticks: DeltaT,
     pub(crate) tps: DeltaT,
     pub(crate) file_pos: u64,
     pub(crate) volume: usize,
     // The current instantaneous frame, for determining features
-    // pub running_intensities: Array3<i32>,
+    pub running_intensities: Array3<i32>,
 }
 
 // TODO: allow flexibility with decoding non-file inputs
@@ -71,6 +72,7 @@ impl AdderPlayer {
         path_buf: &Path,
         playback_speed: f32,
         view_mode: FramedViewMode,
+        detect_features: bool,
     ) -> Result<Self, Box<dyn Error>> {
         match path_buf.extension() {
             None => Err(Box::new(AdderPlayerError("Invalid file type".into()))),
@@ -95,6 +97,7 @@ impl AdderPlayer {
                         )
                         .mode(INSTANTANEOUS)
                         .view_mode(view_mode)
+                        .detect_features(detect_features)
                         .source(stream.get_source_type(), meta.source_camera);
 
                     let frame_sequence: FrameSequence<u8> = framer_builder.clone().finish();
@@ -130,6 +133,11 @@ impl AdderPlayer {
                             tps: meta.tps,
                             file_pos: 0,
                             volume: meta.plane.volume(),
+                            running_intensities: Array::zeros((
+                                meta.plane.h_usize(),
+                                meta.plane.w_usize(),
+                                meta.plane.c_usize(),
+                            )),
                         },
                         framer_builder: Some(framer_builder),
                         frame_sequence: Some(frame_sequence),
@@ -180,7 +188,7 @@ impl AdderPlayer {
     pub fn consume_source(&mut self) -> PlayerStreamArtifact {
         let stream = match &mut self.input_stream {
             None => {
-                return (0, self.stream_state, None);
+                return (0, self.stream_state.clone(), None);
             }
             Some(s) => s,
         };
@@ -216,8 +224,8 @@ impl AdderPlayer {
                 .unwrap_or(0),
         };
         match res {
-            Ok(a) => (a.0, self.stream_state, a.1),
-            Err(_b) => (0, self.stream_state, None),
+            Ok(a) => (a.0, self.stream_state.clone(), a.1),
+            Err(_b) => (0, self.stream_state.clone(), None),
         }
     }
 
@@ -400,6 +408,25 @@ impl AdderPlayer {
                     }
                     None => {
                         println!("Couldn't pop chunk {chunk_num}!")
+                    }
+                }
+                let features = frame_sequence.pop_features();
+                if features.len() > 0 {
+                    for feature in features {
+                        let db = display_mat.data_bytes_mut()?;
+
+                        let color: u8 = 255;
+                        let radius = 2;
+                        for i in -radius..=radius {
+                            let idx = ((feature.y as i32 + i) * meta.plane.w() as i32
+                                + feature.x as i32) as usize;
+                            db[idx] = color;
+
+                            let idx = (feature.y as i32 * meta.plane.w() as i32
+                                + (feature.x as i32 + i))
+                                as usize;
+                            db[idx] = color;
+                        }
                     }
                 }
             }

@@ -8,7 +8,7 @@ use std::error::Error;
 use std::fmt;
 
 use adder_codec_core::{
-    BigT, DeltaT, Event, PlaneSize, SourceCamera, SourceType, TimeMode, D_EMPTY,
+    BigT, Coord, DeltaT, Event, PlaneSize, SourceCamera, SourceType, TimeMode, D_EMPTY,
 };
 use std::fs::File;
 use std::io::BufWriter;
@@ -44,6 +44,7 @@ pub struct FramerBuilder {
     time_mode: TimeMode,
     ref_interval: DeltaT,
     delta_t_max: DeltaT,
+    detect_features: bool,
 
     /// The number of rows to process in each chunk (thread).
     pub chunk_rows: usize,
@@ -66,6 +67,7 @@ impl FramerBuilder {
             time_mode: TimeMode::default(),
             ref_interval: 5000,
             delta_t_max: 5000,
+            detect_features: false,
         }
     }
 
@@ -126,9 +128,15 @@ impl FramerBuilder {
             + Serialize
             + Sync
             + std::marker::Copy
-            + num_traits::Zero,
+            + num_traits::Zero
+            + Into<f64>,
     {
         FrameSequence::<T>::new(self)
+    }
+
+    pub fn detect_features(mut self, detect_features: bool) -> FramerBuilder {
+        self.detect_features = detect_features;
+        self
     }
 }
 
@@ -204,6 +212,7 @@ impl From<FrameSequenceError> for Box<dyn std::error::Error> {
 pub struct FrameSequenceState {
     /// The number of frames written to the output so far
     pub frames_written: i64,
+    plane: PlaneSize,
 
     /// Ticks per output frame
     pub tpf: DeltaT,
@@ -228,15 +237,20 @@ pub struct FrameSequence<T> {
     pub(crate) last_frame_intensity_tracker: Vec<Array3<T>>,
     chunk_filled_tracker: Vec<bool>,
     pub(crate) mode: FramerMode,
+    pub(crate) detect_features: bool,
+    pub(crate) features: Vec<Coord>,
+
+    pub(crate) running_intensities: Array3<i32>,
 
     /// Number of rows per chunk (per thread)
     pub chunk_rows: usize,
     bincode: WithOtherEndian<WithOtherIntEncoding<DefaultOptions, FixintEncoding>, BigEndian>,
 }
 
-use ndarray::Array3;
+use ndarray::{Array, Array3};
 
 use crate::transcoder::source::video::FramedViewMode;
+use crate::utils::cv::is_feature;
 use rayon::prelude::IntoParallelIterator;
 use serde::Serialize;
 
@@ -248,7 +262,8 @@ impl<
             + Serialize
             + Send
             + Sync
-            + num_traits::identities::Zero,
+            + num_traits::identities::Zero
+            + Into<f64>,
     > Framer for FrameSequence<T>
 {
     type Output = T;
@@ -309,6 +324,7 @@ impl<
         // Array3::<Option<T>>::new(num_rows, num_cols, num_channels);
         FrameSequence {
             state: FrameSequenceState {
+                plane: *plane,
                 frames_written: 0,
                 view_mode: builder.view_mode,
                 tpf: builder.tps / builder.output_fps as u32,
@@ -326,6 +342,13 @@ impl<
             last_frame_intensity_tracker,
             chunk_filled_tracker: vec![false; num_chunks],
             mode: builder.mode,
+            running_intensities: Array::zeros((
+                builder.plane.h_usize(),
+                builder.plane.w_usize(),
+                builder.plane.c_usize(),
+            )),
+            detect_features: builder.detect_features,
+            features: vec![],
             chunk_rows,
             bincode: DefaultOptions::new()
                 .with_fixint_encoding()
@@ -389,6 +412,18 @@ impl<
             last_frame_intensity_ref,
             &self.state,
         );
+
+        if self.detect_features {
+            // Revert the y coordinate
+            event.coord.y += (chunk_num * self.chunk_rows) as u16;
+            self.running_intensities
+                [[event.coord.y.into(), event.coord.x.into(), channel.into()]] =
+                <T as Into<f64>>::into(*last_frame_intensity_ref) as i32;
+            if is_feature(event, self.state.plane, &self.running_intensities).unwrap() {
+                self.features.push(event.coord);
+            }
+        }
+
         for chunk in &self.chunk_filled_tracker {
             if !chunk {
                 return false;
@@ -558,6 +593,12 @@ impl<T: Clone + Default + FrameValue<Output = T> + Serialize> FrameSequence<T> {
             }
         }
         true
+    }
+
+    pub fn pop_features(&mut self) -> Vec<Coord> {
+        let mut ret = vec![];
+        std::mem::swap(&mut ret, &mut self.features);
+        ret
     }
 
     /// Pop the next frame for all chunks

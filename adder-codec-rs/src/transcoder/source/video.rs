@@ -144,7 +144,7 @@ pub struct VideoState {
     pub(crate) ref_time_divisor: f64,
     pub(crate) tps: DeltaT,
 
-    /// Constant Rate Factor (CRF) quality setting for the encoder. 0 is lossless, 49 is worst quality.
+    /// Constant Rate Factor (CRF) quality setting for the encoder. 0 is lossless, 9 is worst quality.
     /// Determines:
     /// * The baseline (starting) c-threshold for all pixels
     /// * The maximum c-threshold for all pixels
