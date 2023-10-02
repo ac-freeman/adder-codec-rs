@@ -143,19 +143,29 @@ fn main() -> Result<(), Box<dyn Error>> {
                     }
                     let dt = event.delta_t - last_timestamps[[y as usize, x as usize, c as usize]];
                     last_timestamps[[y as usize, x as usize, c as usize]] = event.delta_t;
-                    last_timestamps[[y as usize, x as usize, c as usize]] = ((last_timestamps
-                        [[y as usize, x as usize, c as usize]]
-                        / stream.meta().ref_interval)
-                        + 1)
-                        * stream.meta().ref_interval;
+                    if last_timestamps[[y as usize, x as usize, c as usize]]
+                        % stream.meta().ref_interval
+                        != 0
+                    {
+                        last_timestamps[[y as usize, x as usize, c as usize]] = ((last_timestamps
+                            [[y as usize, x as usize, c as usize]]
+                            / stream.meta().ref_interval)
+                            + 1)
+                            * stream.meta().ref_interval;
+                    }
                     event.delta_t = dt;
                 } else {
                     last_timestamps[[y as usize, x as usize, c as usize]] += event.delta_t;
-                    last_timestamps[[y as usize, x as usize, c as usize]] = ((last_timestamps
-                        [[y as usize, x as usize, c as usize]]
-                        / stream.meta().ref_interval)
-                        + 1)
-                        * stream.meta().ref_interval;
+                    if last_timestamps[[y as usize, x as usize, c as usize]]
+                        % stream.meta().ref_interval
+                        != 0
+                    {
+                        last_timestamps[[y as usize, x as usize, c as usize]] = ((last_timestamps
+                            [[y as usize, x as usize, c as usize]]
+                            / stream.meta().ref_interval)
+                            + 1)
+                            * stream.meta().ref_interval;
+                    }
 
                     if last_timestamps[[y as usize, x as usize, c as usize]] > current_t {
                         current_t = last_timestamps[[y as usize, x as usize, c as usize]];
