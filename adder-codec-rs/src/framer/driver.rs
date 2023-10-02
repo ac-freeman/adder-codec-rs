@@ -348,7 +348,9 @@ impl<
                 builder.plane.c_usize(),
             )),
             detect_features: builder.detect_features,
-            features: vec![].into(),
+            features: VecDeque::with_capacity(
+                (builder.delta_t_max / builder.ref_interval) as usize,
+            ),
             chunk_rows,
             bincode: DefaultOptions::new()
                 .with_fixint_encoding()
@@ -392,6 +394,7 @@ impl<
         let channel = event.coord.c.unwrap_or(0);
         let chunk_num = event.coord.y as usize / self.chunk_rows;
 
+        let time = event.delta_t;
         event.coord.y -= (chunk_num * self.chunk_rows) as u16; // Modify the coordinate here, so it gets ingested at the right place
 
         let frame_chunk = &mut self.frames[chunk_num];
@@ -420,11 +423,7 @@ impl<
                 [[event.coord.y.into(), event.coord.x.into(), channel.into()]] =
                 <T as Into<f64>>::into(*last_frame_intensity_ref) as i32;
             if is_feature(event, self.state.plane, &self.running_intensities).unwrap() {
-                let idx = (*last_filled_frame_ref - self.state.frames_written + 1) as usize;
-                dbg!(event.delta_t);
-                dbg!(idx);
-                dbg!(self.state.frames_written);
-                dbg!(self.features.len());
+                let idx = (time / self.state.tpf - self.state.frames_written as u32) as usize;
                 if idx >= self.features.len() {
                     self.features.resize(idx + 1, vec![]);
                 }
@@ -605,6 +604,7 @@ impl<T: Clone + Default + FrameValue<Output = T> + Serialize> FrameSequence<T> {
     }
 
     pub fn pop_features(&mut self) -> Option<Vec<Coord>> {
+        self.features.push_back(vec![]);
         self.features.pop_front()
     }
 
