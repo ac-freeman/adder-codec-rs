@@ -26,7 +26,7 @@ pub enum WriteCompressionEnum<W: Write> {
 }
 
 /// Specifies the output type of the encoder
-#[derive(Default, Clone, Copy, PartialEq)]
+#[derive(Default, Clone, Copy, PartialEq, Debug)]
 pub enum EncoderType {
     /// Perform (possibly lossy) compression on the ADΔER stream, and arithmetic coding
     Compressed,
