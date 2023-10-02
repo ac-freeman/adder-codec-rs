@@ -392,13 +392,13 @@ impl AdderPlayer {
 
         let image_bevy = if frame_sequence.is_frame_0_filled() {
             let mut idx = 0;
+            let db = display_mat.data_bytes_mut()?;
             for chunk_num in 0..frame_sequence.get_frame_chunks_num() {
                 match frame_sequence.pop_next_frame_for_chunk(chunk_num) {
                     Some(arr) => {
                         for px in arr.iter() {
                             match px {
                                 Some(event) => {
-                                    let db = display_mat.data_bytes_mut()?;
                                     db[idx] = *event;
                                     idx += 1;
                                 }
@@ -411,6 +411,13 @@ impl AdderPlayer {
                     }
                 }
             }
+
+            // TODO: temporary, for testing what the running intensities look like
+            // let running_intensities = frame_sequence.get_running_intensities();
+            // for px in running_intensities.iter() {
+            //     db[idx] = *px as u8;
+            //     idx += 1;
+            // }
 
             if let Some(features) = frame_sequence.pop_features() {
                 for feature in features {
@@ -621,13 +628,7 @@ impl AdderPlayer {
             match stream.decoder.digest_event(&mut stream.bitreader) {
                 Ok(mut event) => {
                     event_count += 1;
-                    let filled = frame_sequence.ingest_event(&mut event);
-
-                    if let Some(last) = last_event {
-                        if event.delta_t != last.delta_t {
-                            // TODO: Do the feature test
-                        }
-                    }
+                    let filled = frame_sequence.ingest_event(&mut event, last_event);
 
                     last_event = Some(event.clone());
 

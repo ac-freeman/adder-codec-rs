@@ -155,7 +155,7 @@ pub trait Framer {
     ///
     /// If [INTEGRATION](FramerMode::INTEGRATION), this function will integrate this [`Event`] value for the corresponding
     /// output frame(s)
-    fn ingest_event(&mut self, event: &mut Event) -> bool;
+    fn ingest_event(&mut self, event: &mut Event, last_event: Option<Event>) -> bool;
 
     /// Ingest a vector of a vector of ADΔER events.
     fn ingest_events_events(&mut self, events: Vec<Vec<Event>>) -> bool;
@@ -390,7 +390,7 @@ impl<
     /// let elem = frame_sequence.px_at_current(5, 5, 1).unwrap();
     /// assert_eq!(*elem, Some(32));
     /// ```
-    fn ingest_event(&mut self, event: &mut Event) -> bool {
+    fn ingest_event(&mut self, event: &mut Event, last_event: Option<Event>) -> bool {
         let channel = event.coord.c.unwrap_or(0);
         let chunk_num = event.coord.y as usize / self.chunk_rows;
 
@@ -422,13 +422,28 @@ impl<
             self.running_intensities
                 [[event.coord.y.into(), event.coord.x.into(), channel.into()]] =
                 <T as Into<f64>>::into(*last_frame_intensity_ref) as i32;
-            if is_feature(event, self.state.plane, &self.running_intensities).unwrap() {
-                let idx = (time / self.state.tpf - self.state.frames_written as u32) as usize;
-                if idx >= self.features.len() {
-                    self.features.resize(idx + 1, vec![]);
-                }
+            if self.running_intensities
+                [[event.coord.y.into(), event.coord.x.into(), channel.into()]]
+                > 255
+            {
+                dbg!(
+                    self.running_intensities
+                        [[event.coord.y.into(), event.coord.x.into(), channel.into()]]
+                );
+            }
 
-                self.features[idx].push(event.coord);
+            if let Some(last) = last_event {
+                if time != last.delta_t {
+                    if is_feature(event, self.state.plane, &self.running_intensities).unwrap() {
+                        let idx =
+                            (time / self.state.tpf - self.state.frames_written as u32) as usize;
+                        if idx >= self.features.len() {
+                            self.features.resize(idx + 1, vec![]);
+                        }
+
+                        self.features[idx].push(event.coord);
+                    }
+                }
             }
         }
 
@@ -601,6 +616,10 @@ impl<T: Clone + Default + FrameValue<Output = T> + Serialize> FrameSequence<T> {
             }
         }
         true
+    }
+
+    pub fn get_running_intensities(&self) -> &Array3<i32> {
+        &self.running_intensities
     }
 
     pub fn pop_features(&mut self) -> Option<Vec<Coord>> {
