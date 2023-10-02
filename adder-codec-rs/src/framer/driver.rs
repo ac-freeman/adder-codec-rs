@@ -238,7 +238,7 @@ pub struct FrameSequence<T> {
     chunk_filled_tracker: Vec<bool>,
     pub(crate) mode: FramerMode,
     pub(crate) detect_features: bool,
-    pub(crate) features: Vec<Coord>,
+    pub(crate) features: VecDeque<Vec<Coord>>,
 
     pub(crate) running_intensities: Array3<i32>,
 
@@ -348,7 +348,7 @@ impl<
                 builder.plane.c_usize(),
             )),
             detect_features: builder.detect_features,
-            features: vec![],
+            features: vec![].into(),
             chunk_rows,
             bincode: DefaultOptions::new()
                 .with_fixint_encoding()
@@ -420,7 +420,16 @@ impl<
                 [[event.coord.y.into(), event.coord.x.into(), channel.into()]] =
                 <T as Into<f64>>::into(*last_frame_intensity_ref) as i32;
             if is_feature(event, self.state.plane, &self.running_intensities).unwrap() {
-                self.features.push(event.coord);
+                let idx = (*last_filled_frame_ref - self.state.frames_written + 1) as usize;
+                dbg!(event.delta_t);
+                dbg!(idx);
+                dbg!(self.state.frames_written);
+                dbg!(self.features.len());
+                if idx >= self.features.len() {
+                    self.features.resize(idx + 1, vec![]);
+                }
+
+                self.features[idx].push(event.coord);
             }
         }
 
@@ -595,10 +604,8 @@ impl<T: Clone + Default + FrameValue<Output = T> + Serialize> FrameSequence<T> {
         true
     }
 
-    pub fn pop_features(&mut self) -> Vec<Coord> {
-        let mut ret = vec![];
-        std::mem::swap(&mut ret, &mut self.features);
-        ret
+    pub fn pop_features(&mut self) -> Option<Vec<Coord>> {
+        self.features.pop_front()
     }
 
     /// Pop the next frame for all chunks

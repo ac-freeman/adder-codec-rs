@@ -410,23 +410,22 @@ impl AdderPlayer {
                         println!("Couldn't pop chunk {chunk_num}!")
                     }
                 }
-                let features = frame_sequence.pop_features();
-                if features.len() > 0 {
-                    for feature in features {
-                        let db = display_mat.data_bytes_mut()?;
+            }
 
-                        let color: u8 = 255;
-                        let radius = 2;
-                        for i in -radius..=radius {
-                            let idx = ((feature.y as i32 + i) * meta.plane.w() as i32
-                                + feature.x as i32) as usize;
-                            db[idx] = color;
+            if let Some(features) = frame_sequence.pop_features() {
+                for feature in features {
+                    let db = display_mat.data_bytes_mut()?;
 
-                            let idx = (feature.y as i32 * meta.plane.w() as i32
-                                + (feature.x as i32 + i))
-                                as usize;
-                            db[idx] = color;
-                        }
+                    let color: u8 = 255;
+                    let radius = 2;
+                    for i in -radius..=radius {
+                        let idx = ((feature.y as i32 + i) * meta.plane.w() as i32
+                            + feature.x as i32) as usize;
+                        db[idx] = color;
+
+                        let idx = (feature.y as i32 * meta.plane.w() as i32
+                            + (feature.x as i32 + i)) as usize;
+                        db[idx] = color;
                     }
                 }
             }
