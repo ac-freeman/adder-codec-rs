@@ -33,7 +33,7 @@ pub enum PlaneError {
 }
 
 #[allow(missing_docs)]
-#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq)]
 pub enum SourceCamera {
     #[default]
     FramedU8,

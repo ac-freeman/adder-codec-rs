@@ -1,11 +1,12 @@
 use adder_codec_core::codec::decoder::Decoder;
 use adder_codec_core::codec::raw::stream::RawInput;
-use adder_codec_core::SourceCamera;
 use adder_codec_core::D_ZERO_INTEGRATION;
+use adder_codec_core::{SourceCamera, TimeMode};
 use adder_codec_rs::framer::scale_intensity::event_to_intensity;
 use adder_codec_rs::transcoder::source::video::show_display_force;
 use bitstream_io::{BigEndian, BitReader};
 use clap::Parser;
+use ndarray::{Array, Array3};
 use opencv::core::{create_continuous, Mat, MatTraitManual, CV_64F, CV_64FC3};
 use std::cmp::max;
 use std::error::Error;
@@ -72,6 +73,14 @@ fn main() -> Result<(), Box<dyn Error>> {
     let stdout = io::stdout();
     let mut handle = io::BufWriter::new(stdout.lock());
 
+    let mut last_timestamps = Array::zeros((
+        stream.meta().plane.h_usize(),
+        stream.meta().plane.w_usize(),
+        stream.meta().plane.c_usize(),
+    ));
+
+    let time_mode = stream.meta().time_mode;
+
     stream.set_input_stream_position(&mut bitreader, first_event_position)?;
 
     let mut display_mat = Mat::default();
@@ -122,14 +131,44 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
 
         match stream.digest_event(&mut bitreader) {
-            Ok(event) if event.d <= D_ZERO_INTEGRATION => {
+            Ok(mut event) if event.d <= D_ZERO_INTEGRATION => {
                 event_count += 1;
                 let y = i32::from(event.coord.y);
                 let x = i32::from(event.coord.x);
                 let c = i32::from(event.coord.c.unwrap_or(0));
-                if (y | x | c) == 0x0 {
-                    current_t += event.delta_t;
+
+                if time_mode == TimeMode::AbsoluteT {
+                    if event.delta_t > current_t {
+                        current_t = event.delta_t;
+                    }
+                    let dt = event.delta_t - last_timestamps[[y as usize, x as usize, c as usize]];
+                    last_timestamps[[y as usize, x as usize, c as usize]] = event.delta_t;
+                    last_timestamps[[y as usize, x as usize, c as usize]] = ((last_timestamps
+                        [[y as usize, x as usize, c as usize]]
+                        / stream.meta().ref_interval)
+                        + 1)
+                        * stream.meta().ref_interval;
+                    event.delta_t = dt;
+                } else {
+                    last_timestamps[[y as usize, x as usize, c as usize]] += event.delta_t;
+                    last_timestamps[[y as usize, x as usize, c as usize]] = ((last_timestamps
+                        [[y as usize, x as usize, c as usize]]
+                        / stream.meta().ref_interval)
+                        + 1)
+                        * stream.meta().ref_interval;
+
+                    if last_timestamps[[y as usize, x as usize, c as usize]] > current_t {
+                        current_t = last_timestamps[[y as usize, x as usize, c as usize]];
+                    }
                 }
+
+                // else if (y | x | c) == 0x0 {
+                //     current_t += event.delta_t;
+                //     if stream.meta().source_camera == SourceCamera::FramedU8 {
+                //         current_t = ((current_t / stream.meta().ref_interval) + 1)
+                //             * stream.meta().ref_interval;
+                //     }
+                // }
 
                 let frame_intensity = (event_to_intensity(&event) * f64::from(meta.ref_interval))
                     / match meta.source_camera {
