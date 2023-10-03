@@ -134,6 +134,7 @@ impl FramerBuilder {
         FrameSequence::<T>::new(self)
     }
 
+    /// Set whether to detect features.
     pub fn detect_features(mut self, detect_features: bool) -> FramerBuilder {
         self.detect_features = detect_features;
         self
@@ -231,7 +232,7 @@ pub struct FrameSequence<T> {
     /// The state of the frame sequence
     pub state: FrameSequenceState,
     pub(crate) frames: Vec<VecDeque<Frame<Option<T>>>>,
-    pub frame_idx_offsets: Vec<i64>,
+    pub(crate) frame_idx_offsets: Vec<i64>,
     pub(crate) pixel_ts_tracker: Vec<Array3<BigT>>,
     pub(crate) last_filled_tracker: Vec<Array3<i64>>,
     pub(crate) last_frame_intensity_tracker: Vec<Array3<T>>,
@@ -618,10 +619,12 @@ impl<T: Clone + Default + FrameValue<Output = T> + Serialize> FrameSequence<T> {
         true
     }
 
+    /// Get the instantaneous intensity for each pixel
     pub fn get_running_intensities(&self) -> &Array3<i32> {
         &self.running_intensities
     }
 
+    /// Get the features detected for the next frame, and pop that off the feature vec
     pub fn pop_features(&mut self) -> Option<Vec<Coord>> {
         self.features.push_back(vec![]);
         self.features.pop_front()

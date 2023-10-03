@@ -10,7 +10,7 @@ use bevy::ecs::system::Resource;
 use bevy::prelude::*;
 use bevy::window::{PresentMode, PrimaryWindow, WindowResolution};
 
-use bevy_egui::{egui, EguiContext, EguiContexts, EguiPlugin, EguiSettings};
+use bevy_egui::{egui, EguiContexts, EguiPlugin, EguiSettings};
 // use egui_dock::egui as dock_egui;
 use bevy_egui::egui::{emath, global_dark_light_mode_switch, Rounding, Ui, Widget, WidgetText};
 
@@ -67,14 +67,14 @@ fn main() {
             }),
             ..default()
         }))
-        .add_plugin(EguiPlugin)
-        .add_system(configure_menu_bar.before(draw_ui))
-        .add_startup_system(configure_visuals)
-        .add_system(update_ui_scale_factor)
-        .add_system(draw_ui)
-        .add_system(file_drop)
-        .add_system(update_adder_params)
-        .add_system(consume_source)
+        .add_plugins(EguiPlugin)
+        .add_systems(Update, configure_menu_bar.before(draw_ui))
+        .add_systems(Startup, configure_visuals)
+        .add_systems(Update, update_ui_scale_factor)
+        .add_systems(Update, draw_ui)
+        .add_systems(Update, file_drop)
+        .add_systems(Update, update_adder_params)
+        .add_systems(Update, consume_source)
         .run();
 }
 
@@ -301,7 +301,7 @@ fn file_drop(
     query_ui_droptarget: Query<&Interaction, With<MyDropTarget>>,
 ) {
     for ev in dnd_evr.iter() {
-        if let FileDragAndDrop::DroppedFile { window, path_buf } = ev {
+        if let FileDragAndDrop::DroppedFile { path_buf, .. } = ev {
             for interaction in query_ui_droptarget.iter() {
                 if *interaction == Interaction::Hovered {
                     // it was dropped over our UI element
