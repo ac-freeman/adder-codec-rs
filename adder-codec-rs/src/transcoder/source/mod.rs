@@ -25,4 +25,4 @@ pub static CRF: [[f32; 5]; 10] = [
 ];
 
 /// The default CRF quality level
-pub const DEFAULT_CRF_QUALITY: u8 = 5;
+pub const DEFAULT_CRF_QUALITY: u8 = 3;

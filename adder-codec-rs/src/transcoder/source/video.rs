@@ -155,6 +155,7 @@ pub struct VideoState {
     pub(crate) show_display: bool,
     pub(crate) show_live: bool,
     pub feature_detection: bool,
+    show_features: bool,
     feature_c_radius: u16,
 }
 
@@ -176,6 +177,7 @@ impl Default for VideoState {
             show_display: false,
             show_live: false,
             feature_detection: false,
+            show_features: false,
             feature_c_radius: 0,
         };
         state.update_crf(DEFAULT_CRF_QUALITY);
@@ -261,7 +263,7 @@ pub trait VideoBuilder<W> {
     /// Set whether or not the show the live display
     fn show_display(self, show_display: bool) -> Self;
 
-    fn detect_features(self, detect_features: bool) -> Self;
+    fn detect_features(self, detect_features: bool, show_features: bool) -> Self;
 }
 
 // impl VideoBuilder for Video {}
@@ -838,9 +840,10 @@ impl<W: Write + 'static> Video<W> {
     }
 
     /// Set a new bool for `feature_detection`
-    pub fn update_detect_features(&mut self, detect_features: bool) {
+    pub fn update_detect_features(&mut self, detect_features: bool, show_features: bool) {
         // Validate new value
         self.state.feature_detection = detect_features;
+        self.state.show_features = show_features;
     }
 
     /// Set a new value for `c_thresh_pos`
@@ -870,8 +873,10 @@ impl<W: Write + 'static> Video<W> {
 
     pub(crate) fn feature_test(&mut self, e: &Event) -> Result<(), Box<dyn Error>> {
         if is_feature(e, self.state.plane, &self.running_intensities)? {
-            // Display the feature on the viz frame
-            draw_feature(e, &mut self.instantaneous_frame)?;
+            if self.state.show_features {
+                // Display the feature on the viz frame
+                draw_feature(e, &mut self.instantaneous_frame)?;
+            }
 
             // Reset the threshold for that pixel and its neighbors
             let radius = self.state.feature_c_radius as i32;
@@ -889,8 +894,9 @@ impl<W: Write + 'static> Video<W> {
         Ok(())
     }
 
-    pub fn detect_features(mut self, detect_features: bool) -> Self {
+    pub fn detect_features(mut self, detect_features: bool, show_features: bool) -> Self {
         self.state.feature_detection = detect_features;
+        self.state.show_features = show_features;
         self
     }
 

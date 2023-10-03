@@ -46,6 +46,7 @@ pub struct ParamsUiState {
     pub(crate) time_mode: TimeMode,
     pub(crate) encoder_type: EncoderType,
     pub(crate) detect_features: bool,
+    pub(crate) show_features: bool,
     pub(crate) auto_quality: bool,
     pub(crate) crf: u8,
     pub(crate) crf_slider: u8,
@@ -82,6 +83,7 @@ impl Default for ParamsUiState {
             time_mode: TimeMode::default(),
             encoder_type: EncoderType::default(),
             detect_features: false,
+            show_features: false,
             auto_quality: false,
             crf: DEFAULT_CRF_QUALITY,
             crf_slider: DEFAULT_CRF_QUALITY,
@@ -418,7 +420,7 @@ impl TranscoderState {
             )
         }
         video.instantaneous_view_mode = self.ui_state.view_mode_radio_state;
-        video.update_detect_features(self.ui_state.detect_features);
+        video.update_detect_features(self.ui_state.detect_features, self.ui_state.show_features);
     }
 
     pub fn consume_source(
@@ -767,9 +769,16 @@ fn side_panel_grid_contents(
     ui.end_row();
 
     ui.label("Processing:");
-    ui.add_enabled(
-        true,
-        egui::Checkbox::new(&mut ui_state.detect_features, "Detect features"),
-    );
+    ui.vertical(|ui| {
+        ui.add_enabled(
+            true,
+            egui::Checkbox::new(&mut ui_state.detect_features, "Detect features"),
+        );
+
+        ui.add_enabled(
+            ui_state.detect_features,
+            egui::Checkbox::new(&mut ui_state.show_features, "Show features"),
+        );
+    });
     ui.end_row();
 }

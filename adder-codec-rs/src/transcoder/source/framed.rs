@@ -263,8 +263,8 @@ impl<W: Write + 'static> VideoBuilder<W> for Framed<W> {
         self
     }
 
-    fn detect_features(mut self, detect_features: bool) -> Self {
-        self.video = self.video.detect_features(detect_features);
+    fn detect_features(mut self, detect_features: bool, show_features: bool) -> Self {
+        self.video = self.video.detect_features(detect_features, show_features);
         self
     }
 }
