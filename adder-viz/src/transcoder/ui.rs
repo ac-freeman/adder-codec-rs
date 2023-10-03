@@ -84,7 +84,7 @@ impl Default for ParamsUiState {
             encoder_type: EncoderType::default(),
             detect_features: false,
             show_features: false,
-            auto_quality: false,
+            auto_quality: true,
             crf: DEFAULT_CRF_QUALITY,
             crf_slider: DEFAULT_CRF_QUALITY,
             feature_radius: 0.0,
@@ -401,7 +401,7 @@ impl TranscoderState {
             // Update ui state to match
             self.ui_state.adder_tresh_baseline = video.state.c_thresh_baseline;
             self.ui_state.adder_tresh_baseline_slider = self.ui_state.adder_tresh_baseline;
-            self.ui_state.adder_tresh_max = video.state.delta_t_max as u8;
+            self.ui_state.adder_tresh_max = video.state.c_thresh_max as u8;
             self.ui_state.adder_tresh_max_slider = self.ui_state.adder_tresh_max;
             self.ui_state.delta_t_max_mult = video.state.delta_t_max / video.state.ref_time;
             self.ui_state.delta_t_max_mult_slider = self.ui_state.delta_t_max_mult;
@@ -602,14 +602,14 @@ fn side_panel_grid_contents(
     );
     ui.end_row();
 
-    ui.label("Feature radius denominator:");
+    ui.label("Feature radius:");
     slider_pm(
         !ui_state.auto_quality,
         false,
         ui,
         &mut ui_state.feature_radius,
         &mut ui_state.feature_radius_slider,
-        20.0..=40.0,
+        0.0..=100.0,
         vec![],
         1.0,
     );

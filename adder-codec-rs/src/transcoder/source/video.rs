@@ -124,6 +124,7 @@ pub enum FramedViewMode {
 }
 
 /// Running state of the video transcode
+#[derive(Debug)]
 pub struct VideoState {
     /// The size of the imaging plane
     pub plane: PlaneSize,
@@ -204,14 +205,13 @@ impl VideoState {
         c_thresh_max: u8,
         delta_t_max_multiplier: u32,
         c_increase_velocity: u8,
-        feature_c_radius_denom: f32,
+        feature_c_radius: f32,
     ) {
         self.c_thresh_baseline = c_thresh_baseline;
         self.c_thresh_max = c_thresh_max;
         self.delta_t_max = delta_t_max_multiplier * self.ref_time;
         self.c_increase_velocity = c_increase_velocity;
-        self.feature_c_radius =
-            (feature_c_radius_denom * self.plane.min_resolution() as f32) as u16;
+        self.feature_c_radius = feature_c_radius as u16; // The absolute pixel count radius
     }
 }
 

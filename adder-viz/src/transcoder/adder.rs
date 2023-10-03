@@ -66,15 +66,12 @@ impl AdderTranscoder {
                         )?
                         .frame_start(current_frame)?
                         .chunk_rows(64)
-                        // .c_thresh_pos(ui_state.adder_tresh_baseline as u8)
-                        // .c_thresh_neg(ui_state.adder_tresh as u8)
                         .auto_time_parameters(
                             ui_state.delta_t_ref as u32,
                             ui_state.delta_t_max_mult * ui_state.delta_t_ref as u32,
-                            None,
+                            Some(ui_state.time_mode),
                         )?
                         .crf(DEFAULT_CRF_QUALITY)
-                        .time_mode(ui_state.time_mode)
                         .show_display(false);
 
                         // TODO: Change the builder to take in a pathbuf directly, not a string,

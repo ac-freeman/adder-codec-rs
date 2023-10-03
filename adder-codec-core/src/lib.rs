@@ -72,7 +72,7 @@ pub enum TimeMode {
 }
 
 /// The size of the image plane in pixels
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct PlaneSize {
     width: u16,
     height: u16,
@@ -181,7 +181,7 @@ pub const D_ZERO_INTEGRATION: D = 254;
 /// Special symbol signifying no [`Event`] exists
 // pub const D_NO_EVENT: D = 253;
 
-#[derive(Clone, Copy, PartialEq, Default)]
+#[derive(Clone, Copy, PartialEq, Default, Debug)]
 pub enum Mode {
     /// Preserve temporal coherence for framed inputs. When an event fires, the ticks
     /// remaining for that input frame (and its associated intensity) are discarded. The
