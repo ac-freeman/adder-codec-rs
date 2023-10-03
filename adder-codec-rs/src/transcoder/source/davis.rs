@@ -873,6 +873,10 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Davis<W> {
         ret
     }
 
+    fn crf(&mut self, crf: u8) {
+        self.video.update_crf(crf, true);
+    }
+
     fn get_video_mut(&mut self) -> &mut Video<W> {
         &mut self.video
     }
@@ -894,7 +898,7 @@ impl<W: Write + 'static> VideoBuilder<W> for Davis<W> {
     }
 
     fn crf(mut self, crf: u8) -> Self {
-        self.video.update_crf(crf);
+        self.video.update_crf(crf, false);
         self
     }
 

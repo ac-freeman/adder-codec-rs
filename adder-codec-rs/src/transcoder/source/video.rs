@@ -140,7 +140,7 @@ pub struct VideoState {
     pub c_thresh_max: u8,
     pub c_increase_velocity: u8,
     pub delta_t_max: u32,
-    pub(crate) ref_time: u32,
+    pub ref_time: u32,
     pub(crate) ref_time_divisor: f64,
     pub(crate) tps: DeltaT,
 
@@ -156,7 +156,7 @@ pub struct VideoState {
     pub(crate) show_live: bool,
     pub feature_detection: bool,
     show_features: bool,
-    feature_c_radius: u16,
+    pub feature_c_radius: u16,
 }
 
 impl Default for VideoState {
@@ -180,18 +180,20 @@ impl Default for VideoState {
             show_features: false,
             feature_c_radius: 0,
         };
-        state.update_crf(DEFAULT_CRF_QUALITY);
+        state.update_crf(DEFAULT_CRF_QUALITY, false);
         state
     }
 }
 
 impl VideoState {
-    fn update_crf(&mut self, crf: u8) {
+    fn update_crf(&mut self, crf: u8, update_time_params: bool) {
         self.crf_quality = crf;
         self.c_thresh_baseline = CRF[crf as usize][0] as u8;
         self.c_thresh_max = CRF[crf as usize][1] as u8;
-        // self.c_thresh_neg = CRF[crf as usize][0] as u8;
-        self.delta_t_max = CRF[crf as usize][2] as u32 * self.ref_time;
+
+        if update_time_params {
+            self.delta_t_max = CRF[crf as usize][2] as u32 * self.ref_time;
+        }
         self.c_increase_velocity = CRF[crf as usize][3] as u8;
         self.feature_c_radius = (CRF[crf as usize][4] * self.plane.min_resolution() as f32) as u16;
     }
@@ -900,8 +902,8 @@ impl<W: Write + 'static> Video<W> {
         self
     }
 
-    pub fn update_crf(&mut self, crf: u8) {
-        self.state.update_crf(crf);
+    pub(crate) fn update_crf(&mut self, crf: u8, update_time_params: bool) {
+        self.state.update_crf(crf, update_time_params);
 
         for px in self.event_pixel_trees.iter_mut() {
             px.c_thresh = self.state.c_thresh_baseline;
@@ -1057,6 +1059,7 @@ pub trait Source<W: Write> {
         view_interval: u32,
         thread_pool: &ThreadPool,
     ) -> Result<Vec<Vec<Event>>, SourceError>;
+    fn crf(&mut self, crf: u8);
 
     /// Get a mutable reference to the [`Video`] object associated with this [`Source`].
     fn get_video_mut(&mut self) -> &mut Video<W>;

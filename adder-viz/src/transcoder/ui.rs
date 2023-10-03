@@ -394,23 +394,23 @@ impl TranscoderState {
             }
         };
 
-        let video = source.get_video_mut();
-
         if self.ui_state.auto_quality {
-            video.update_crf(self.ui_state.crf);
+            source.crf(self.ui_state.crf);
 
+            let video = source.get_video_ref();
             // Update ui state to match
-            self.ui_state.adder_tresh_baseline = CRF[self.ui_state.crf as usize][0] as u8;
+            self.ui_state.adder_tresh_baseline = video.state.c_thresh_baseline;
             self.ui_state.adder_tresh_baseline_slider = self.ui_state.adder_tresh_baseline;
-            self.ui_state.adder_tresh_max = CRF[self.ui_state.crf as usize][1] as u8;
+            self.ui_state.adder_tresh_max = video.state.delta_t_max as u8;
             self.ui_state.adder_tresh_max_slider = self.ui_state.adder_tresh_max;
-            self.ui_state.delta_t_max_mult = CRF[self.ui_state.crf as usize][2] as u32;
+            self.ui_state.delta_t_max_mult = video.state.delta_t_max / video.state.ref_time;
             self.ui_state.delta_t_max_mult_slider = self.ui_state.delta_t_max_mult;
-            self.ui_state.adder_tresh_velocity = CRF[self.ui_state.crf as usize][3] as u8;
+            self.ui_state.adder_tresh_velocity = video.state.c_increase_velocity;
             self.ui_state.adder_tresh_velocity_slider = self.ui_state.adder_tresh_velocity;
-            self.ui_state.feature_radius = CRF[self.ui_state.crf as usize][4];
+            self.ui_state.feature_radius = video.state.feature_c_radius as f32;
             self.ui_state.feature_radius_slider = self.ui_state.feature_radius;
         } else {
+            let video = source.get_video_mut();
             video.update_quality_manual(
                 self.ui_state.adder_tresh_baseline,
                 self.ui_state.adder_tresh_max,
@@ -419,6 +419,7 @@ impl TranscoderState {
                 self.ui_state.feature_radius,
             )
         }
+        let video = source.get_video_mut();
         video.instantaneous_view_mode = self.ui_state.view_mode_radio_state;
         video.update_detect_features(self.ui_state.detect_features, self.ui_state.show_features);
     }
