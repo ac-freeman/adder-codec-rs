@@ -6,7 +6,7 @@ use adder_codec_rs::framer::scale_intensity::event_to_intensity;
 use adder_codec_rs::transcoder::source::video::show_display_force;
 use bitstream_io::{BigEndian, BitReader};
 use clap::Parser;
-use ndarray::{Array, Array3};
+use ndarray::Array;
 use opencv::core::{create_continuous, Mat, MatTraitManual, CV_64F, CV_64FC3};
 use std::cmp::max;
 use std::error::Error;

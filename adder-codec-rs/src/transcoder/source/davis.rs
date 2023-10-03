@@ -446,7 +446,9 @@ impl<W: Write + 'static> Integration<W> {
             for (e1, e2) in events.iter().tuple_windows() {
                 video.encoder.ingest_event(*e1)?;
                 if e2.delta_t != e1.delta_t {
-                    video.feature_test(e1);
+                    if let Err(e) = video.feature_test(e1) {
+                        return Err(CodecError::VisionError(e.to_string()));
+                    }
                 }
             }
         }
@@ -568,9 +570,6 @@ impl<W: Write + 'static> Integration<W> {
         for events in &big_buffer {
             for (e1, e2) in events.iter().tuple_windows() {
                 video.encoder.ingest_event(*e1)?;
-                if e2.delta_t != e1.delta_t {
-                    video.feature_test(e1);
-                }
             }
         }
 
@@ -873,6 +872,10 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Davis<W> {
         ret
     }
 
+    fn crf(&mut self, crf: u8) {
+        self.video.update_crf(crf, true);
+    }
+
     fn get_video_mut(&mut self) -> &mut Video<W> {
         &mut self.video
     }
@@ -894,7 +897,7 @@ impl<W: Write + 'static> VideoBuilder<W> for Davis<W> {
     }
 
     fn crf(mut self, crf: u8) -> Self {
-        self.video.update_crf(crf);
+        self.video.update_crf(crf, false);
         self
     }
 
@@ -963,8 +966,8 @@ impl<W: Write + 'static> VideoBuilder<W> for Davis<W> {
         self
     }
 
-    fn detect_features(mut self, detect_features: bool) -> Self {
-        self.video = self.video.detect_features(detect_features);
+    fn detect_features(mut self, detect_features: bool, show_features: bool) -> Self {
+        self.video = self.video.detect_features(detect_features, show_features);
         self
     }
 }

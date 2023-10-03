@@ -8,9 +8,9 @@ use crate::player::ui::PlayerState;
 use crate::transcoder::ui::TranscoderState;
 use bevy::ecs::system::Resource;
 use bevy::prelude::*;
-use bevy::window::PresentMode;
+use bevy::window::{PresentMode, PrimaryWindow, WindowResolution};
 
-use bevy_egui::{egui, EguiContext, EguiPlugin, EguiSettings};
+use bevy_egui::{egui, EguiContexts, EguiPlugin, EguiSettings};
 // use egui_dock::egui as dock_egui;
 use bevy_egui::egui::{emath, global_dark_light_mode_switch, Rounding, Ui, Widget, WidgetText};
 
@@ -50,7 +50,7 @@ use crate::utils::slider::NotchedSlider;
 fn main() {
     App::new()
         .insert_resource(ClearColor(Color::rgb(0.0, 0.0, 0.0)))
-        .insert_resource(Msaa { samples: 4 })
+        .insert_resource(Msaa::default())
         .insert_resource(Images::default())
         .insert_resource(MainUiState {
             view: Tabs::Transcoder,
@@ -59,23 +59,22 @@ fn main() {
         .init_resource::<TranscoderState>()
         .init_resource::<PlayerState>()
         .add_plugins(DefaultPlugins.set(WindowPlugin {
-            window: WindowDescriptor {
+            primary_window: Some(Window {
                 title: "ADΔER Tuner".to_string(),
-                width: 1280.,
-                height: 720.,
+                resolution: WindowResolution::default(),
                 present_mode: PresentMode::AutoVsync,
                 ..default()
-            },
+            }),
             ..default()
         }))
-        .add_plugin(EguiPlugin)
-        .add_system(configure_menu_bar.before(draw_ui))
-        .add_startup_system(configure_visuals)
-        .add_system(update_ui_scale_factor)
-        .add_system(draw_ui)
-        .add_system(file_drop)
-        .add_system(update_adder_params)
-        .add_system(consume_source)
+        .add_plugins(EguiPlugin)
+        .add_systems(Update, configure_menu_bar.before(draw_ui))
+        .add_systems(Startup, configure_visuals)
+        .add_systems(Update, update_ui_scale_factor)
+        .add_systems(Update, draw_ui)
+        .add_systems(Update, file_drop)
+        .add_systems(Update, update_adder_params)
+        .add_systems(Update, consume_source)
         .run();
 }
 
@@ -85,7 +84,7 @@ pub struct Images {
     image_view: Handle<Image>,
 }
 
-fn configure_visuals(mut egui_ctx: ResMut<EguiContext>) {
+fn configure_visuals(mut egui_ctx: EguiContexts) {
     egui_ctx.ctx_mut().set_visuals(bevy_egui::egui::Visuals {
         window_rounding: 5.0.into(),
         ..Default::default()
@@ -96,12 +95,12 @@ fn update_ui_scale_factor(
     keyboard_input: Res<Input<KeyCode>>,
     mut toggle_scale_factor: Local<Option<bool>>,
     mut egui_settings: ResMut<EguiSettings>,
-    windows: Res<Windows>,
+    windows: Query<&Window, With<PrimaryWindow>>,
 ) {
     if keyboard_input.just_pressed(KeyCode::Slash) || toggle_scale_factor.is_none() {
         *toggle_scale_factor = Some(!toggle_scale_factor.unwrap_or(false));
 
-        if let Some(window) = windows.get_primary() {
+        if let Ok(window) = windows.get_single() {
             let scale_factor = if toggle_scale_factor.unwrap_or(true) {
                 eprintln!("using default scale factor");
                 1.0
@@ -119,10 +118,10 @@ fn update_ui_scale_factor(
 
 fn configure_menu_bar(
     mut main_ui_state: ResMut<MainUiState>,
-    mut egui_ctx: ResMut<EguiContext>,
+    mut egui_ctx: EguiContexts,
     mut images: ResMut<Assets<Image>>,
 ) {
-    let style = (*(*egui_ctx).ctx_mut().clone().style()).clone();
+    let style = (*(egui_ctx).ctx_mut().clone().style()).clone();
 
     egui::TopBottomPanel::top("top_panel").show(egui_ctx.ctx_mut(), |ui| {
         egui::menu::bar(ui, |ui| {
@@ -173,7 +172,7 @@ fn draw_ui(
     time: Res<Time>, // Time passed since last frame
     handles: Res<Images>,
     mut images: ResMut<Assets<Image>>,
-    mut egui_ctx: ResMut<EguiContext>,
+    mut egui_ctx: EguiContexts,
     mut transcoder_state: ResMut<TranscoderState>,
     mut player_state: ResMut<PlayerState>,
     main_ui_state: Res<MainUiState>,
@@ -200,7 +199,7 @@ fn draw_ui(
         ),
     };
 
-    egui::CentralPanel::default().show(egui_ctx.clone().ctx_mut(), |ui| {
+    egui::CentralPanel::default().show(egui_ctx.ctx_mut(), |ui| {
         egui::warn_if_debug_build(ui);
 
         match main_ui_state.view {
@@ -302,11 +301,7 @@ fn file_drop(
     query_ui_droptarget: Query<&Interaction, With<MyDropTarget>>,
 ) {
     for ev in dnd_evr.iter() {
-        if let FileDragAndDrop::DroppedFile { id, path_buf } = ev {
-            if id.is_primary() {
-                // it was dropped over the main window
-            }
-
+        if let FileDragAndDrop::DroppedFile { path_buf, .. } = ev {
             for interaction in query_ui_droptarget.iter() {
                 if *interaction == Interaction::Hovered {
                     // it was dropped over our UI element

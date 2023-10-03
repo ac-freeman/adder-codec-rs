@@ -92,6 +92,10 @@ pub enum SourceError {
     /// Handle join error
     #[error("Handle join error")]
     JoinError(#[from] JoinError),
+
+    /// Vision application error
+    #[error("Vision application error")]
+    VisionError(String),
 }
 
 impl From<opencv::Error> for SourceError {
@@ -124,6 +128,7 @@ pub enum FramedViewMode {
 }
 
 /// Running state of the video transcode
+#[derive(Debug)]
 pub struct VideoState {
     /// The size of the imaging plane
     pub plane: PlaneSize,
@@ -136,11 +141,21 @@ pub struct VideoState {
     pub in_interval_count: u32,
     // pub(crate) c_thresh_pos: u8,
     // pub(crate) c_thresh_neg: u8,
+    /// The baseline (starting) contrast threshold for all pixels
     pub c_thresh_baseline: u8,
+
+    /// The maximum contrast threshold for all pixels
     pub c_thresh_max: u8,
+
+    /// The velocity at which to increase the contrast threshold for all pixels (increment c by 1
+    /// for every X input intervals, if it's stable)
     pub c_increase_velocity: u8,
+
+    /// The maximum time difference between events of the same pixel, in ticks
     pub delta_t_max: u32,
-    pub(crate) ref_time: u32,
+
+    /// The reference time in ticks
+    pub ref_time: u32,
     pub(crate) ref_time_divisor: f64,
     pub(crate) tps: DeltaT,
 
@@ -154,8 +169,15 @@ pub struct VideoState {
     pub crf_quality: u8,
     pub(crate) show_display: bool,
     pub(crate) show_live: bool,
+
+    /// Whether or not to detect features
     pub feature_detection: bool,
-    feature_c_radius: u16,
+
+    /// Whether or not to draw the features on the display mat
+    show_features: bool,
+
+    /// The radius for which to reset the c-threshold for neighboring pixels (if feature detection is enabled)
+    pub feature_c_radius: u16,
 }
 
 impl Default for VideoState {
@@ -176,20 +198,23 @@ impl Default for VideoState {
             show_display: false,
             show_live: false,
             feature_detection: false,
+            show_features: false,
             feature_c_radius: 0,
         };
-        state.update_crf(DEFAULT_CRF_QUALITY);
+        state.update_crf(DEFAULT_CRF_QUALITY, false);
         state
     }
 }
 
 impl VideoState {
-    fn update_crf(&mut self, crf: u8) {
+    fn update_crf(&mut self, crf: u8, update_time_params: bool) {
         self.crf_quality = crf;
         self.c_thresh_baseline = CRF[crf as usize][0] as u8;
         self.c_thresh_max = CRF[crf as usize][1] as u8;
-        // self.c_thresh_neg = CRF[crf as usize][0] as u8;
-        self.delta_t_max = CRF[crf as usize][2] as u32 * self.ref_time;
+
+        if update_time_params {
+            self.delta_t_max = CRF[crf as usize][2] as u32 * self.ref_time;
+        }
         self.c_increase_velocity = CRF[crf as usize][3] as u8;
         self.feature_c_radius = (CRF[crf as usize][4] * self.plane.min_resolution() as f32) as u16;
     }
@@ -200,14 +225,13 @@ impl VideoState {
         c_thresh_max: u8,
         delta_t_max_multiplier: u32,
         c_increase_velocity: u8,
-        feature_c_radius_denom: f32,
+        feature_c_radius: f32,
     ) {
         self.c_thresh_baseline = c_thresh_baseline;
         self.c_thresh_max = c_thresh_max;
         self.delta_t_max = delta_t_max_multiplier * self.ref_time;
         self.c_increase_velocity = c_increase_velocity;
-        self.feature_c_radius =
-            (feature_c_radius_denom * self.plane.min_resolution() as f32) as u16;
+        self.feature_c_radius = feature_c_radius as u16; // The absolute pixel count radius
     }
 }
 
@@ -216,8 +240,10 @@ pub trait VideoBuilder<W> {
     /// Set both the positive and negative contrast thresholds
     fn contrast_thresholds(self, c_thresh_pos: u8, c_thresh_neg: u8) -> Self;
 
+    /// Set the Constant Rate Factor (CRF) quality setting for the encoder. 0 is lossless, 9 is worst quality.
     fn crf(self, crf: u8) -> Self;
 
+    /// Manually set the parameters dictating quality
     fn quality_manual(
         self,
         c_thresh_baseline: u8,
@@ -261,7 +287,8 @@ pub trait VideoBuilder<W> {
     /// Set whether or not the show the live display
     fn show_display(self, show_display: bool) -> Self;
 
-    fn detect_features(self, detect_features: bool) -> Self;
+    /// Set whether or not to detect features, and whether or not to display the features
+    fn detect_features(self, detect_features: bool, show_features: bool) -> Self;
 }
 
 // impl VideoBuilder for Video {}
@@ -285,6 +312,8 @@ pub struct Video<W: Write> {
     /// Channel for sending events to the encoder
     pub event_sender: Sender<Vec<Event>>,
     pub(crate) encoder: Encoder<W>,
+
+    /// The type of encoder
     pub encoder_type: EncoderType,
     // TODO: Hold multiple encoder options and an enum, so that boxing isn't required.
     // Also hold a state for whether or not to write out events at all, so that a null writer isn't required.
@@ -791,7 +820,9 @@ impl<W: Write + 'static> Video<W> {
                 self.encoder.ingest_event(*e1)?;
                 if self.state.feature_detection && !color {
                     if e2.delta_t != e1.delta_t {
-                        self.feature_test(e1);
+                        if let Err(e) = self.feature_test(e1) {
+                            return Err(SourceError::VisionError(e.to_string()));
+                        }
                     }
                 }
             }
@@ -838,9 +869,10 @@ impl<W: Write + 'static> Video<W> {
     }
 
     /// Set a new bool for `feature_detection`
-    pub fn update_detect_features(&mut self, detect_features: bool) {
+    pub fn update_detect_features(&mut self, detect_features: bool, show_features: bool) {
         // Validate new value
         self.state.feature_detection = detect_features;
+        self.state.show_features = show_features;
     }
 
     /// Set a new value for `c_thresh_pos`
@@ -870,8 +902,10 @@ impl<W: Write + 'static> Video<W> {
 
     pub(crate) fn feature_test(&mut self, e: &Event) -> Result<(), Box<dyn Error>> {
         if is_feature(e, self.state.plane, &self.running_intensities)? {
-            // Display the feature on the viz frame
-            draw_feature(e, &mut self.instantaneous_frame)?;
+            if self.state.show_features {
+                // Display the feature on the viz frame
+                draw_feature(e, &mut self.instantaneous_frame)?;
+            }
 
             // Reset the threshold for that pixel and its neighbors
             let radius = self.state.feature_c_radius as i32;
@@ -889,13 +923,16 @@ impl<W: Write + 'static> Video<W> {
         Ok(())
     }
 
-    pub fn detect_features(mut self, detect_features: bool) -> Self {
+    /// Set whether or not to detect features, and whether or not to display the features
+    pub fn detect_features(mut self, detect_features: bool, show_features: bool) -> Self {
         self.state.feature_detection = detect_features;
+        self.state.show_features = show_features;
         self
     }
 
-    pub fn update_crf(&mut self, crf: u8) {
-        self.state.update_crf(crf);
+    /// Update the CRF value and set the baseline c for all pixels
+    pub(crate) fn update_crf(&mut self, crf: u8, update_time_params: bool) {
+        self.state.update_crf(crf, update_time_params);
 
         for px in self.event_pixel_trees.iter_mut() {
             px.c_thresh = self.state.c_thresh_baseline;
@@ -903,6 +940,7 @@ impl<W: Write + 'static> Video<W> {
         }
     }
 
+    /// Manually set the parameters dictating quality
     pub fn update_quality_manual(
         &mut self,
         c_thresh_baseline: u8,
@@ -1051,6 +1089,9 @@ pub trait Source<W: Write> {
         view_interval: u32,
         thread_pool: &ThreadPool,
     ) -> Result<Vec<Vec<Event>>, SourceError>;
+
+    /// Set the Constant Rate Factor (CRF) quality setting for the encoder. 0 is lossless, 9 is worst quality.
+    fn crf(&mut self, crf: u8);
 
     /// Get a mutable reference to the [`Video`] object associated with this [`Source`].
     fn get_video_mut(&mut self) -> &mut Video<W>;

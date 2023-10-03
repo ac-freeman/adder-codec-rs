@@ -170,6 +170,10 @@ impl<W: Write + 'static> Source<W> for Framed<W> {
         })
     }
 
+    fn crf(&mut self, crf: u8) {
+        self.video.update_crf(crf, true);
+    }
+
     fn get_video_mut(&mut self) -> &mut Video<W> {
         &mut self.video
     }
@@ -191,7 +195,7 @@ impl<W: Write + 'static> VideoBuilder<W> for Framed<W> {
     }
 
     fn crf(mut self, crf: u8) -> Self {
-        self.video.update_crf(crf);
+        self.video.update_crf(crf, true);
         self
     }
 
@@ -263,8 +267,8 @@ impl<W: Write + 'static> VideoBuilder<W> for Framed<W> {
         self
     }
 
-    fn detect_features(mut self, detect_features: bool) -> Self {
-        self.video = self.video.detect_features(detect_features);
+    fn detect_features(mut self, detect_features: bool, show_features: bool) -> Self {
+        self.video = self.video.detect_features(detect_features, show_features);
         self
     }
 }

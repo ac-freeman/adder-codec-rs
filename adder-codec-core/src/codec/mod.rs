@@ -242,4 +242,8 @@ pub enum CodecError {
     #[cfg(feature = "compression")]
     #[error("Arithmetic coding error")]
     ArithmeticCodingError(#[from] arithmetic_coding::Error),
+
+    /// Vision application error
+    #[error("Vision application error")]
+    VisionError(String),
 }

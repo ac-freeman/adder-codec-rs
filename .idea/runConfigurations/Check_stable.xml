@@ -1,6 +1,6 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="Run adder-viz dynamic" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
-    <option name="command" value="run -p adder-viz --features bevy/dynamic_linking" />
+  <configuration default="false" name="Check stable" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
+    <option name="command" value="check -vv -p adder-codec-core -p adder-codec-rs -p adder-info -p adder-to-dvs -p adder-viz" />
     <option name="workingDirectory" value="file://$PROJECT_DIR$" />
     <option name="emulateTerminal" value="false" />
     <option name="channel" value="DEFAULT" />
@@ -9,9 +9,7 @@
     <option name="withSudo" value="false" />
     <option name="buildTarget" value="REMOTE" />
     <option name="backtrace" value="SHORT" />
-    <envs>
-      <env name="LD_LIBRARY_PATH" value="$PROJECT_DIR$/target/debug/deps/:$PROJECT_DIR$/target/debug/libbevy_dylib.so:$LD_LIBRARY_PATH" />
-    </envs>
+    <envs />
     <option name="isRedirectInput" value="false" />
     <option name="redirectInputPath" value="" />
     <method v="2">
