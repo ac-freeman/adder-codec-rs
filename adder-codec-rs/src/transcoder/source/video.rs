@@ -6,9 +6,7 @@ use std::mem::swap;
 use adder_codec_core::codec::empty::stream::EmptyOutput;
 use adder_codec_core::codec::encoder::Encoder;
 use adder_codec_core::codec::raw::stream::{RawOutput, RawOutputInterleaved};
-use adder_codec_core::codec::{
-    CodecError, CodecMetadata, EncoderType, LATEST_CODEC_VERSION,
-};
+use adder_codec_core::codec::{CodecError, CodecMetadata, EncoderType, LATEST_CODEC_VERSION};
 use adder_codec_core::{
     Coord, DeltaT, Event, Mode, PlaneError, PlaneSize, SourceCamera, SourceType, TimeMode,
 };
@@ -20,12 +18,12 @@ use opencv::highgui;
 use opencv::imgproc::resize;
 use opencv::prelude::*;
 
-use crate::framer::scale_intensity::{FrameValue};
+use crate::framer::scale_intensity::FrameValue;
 use crate::transcoder::event_pixel_tree::{Intensity32, PixelArena};
 
 #[cfg(feature = "compression")]
 use adder_codec_core::codec::compressed::stream::CompressedOutput;
-use adder_codec_core::Mode::{Continuous};
+use adder_codec_core::Mode::Continuous;
 use davis_edi_rs::util::reconstructor::ReconstructionError;
 use itertools::Itertools;
 use ndarray::{Array, Array3, Axis, ShapeError};
@@ -34,7 +32,9 @@ use rayon::iter::ParallelIterator;
 use rayon::iter::{IndexedParallelIterator, IntoParallelRefMutIterator};
 use rayon::ThreadPool;
 
-
+use crate::transcoder::source::{CRF, DEFAULT_CRF_QUALITY};
+use crate::utils::cv::is_feature;
+use crate::utils::viz::draw_feature;
 use thiserror::Error;
 use tokio::task::JoinError;
 
@@ -134,34 +134,80 @@ pub struct VideoState {
 
     /// The number of input intervals (of fixed time) processed so far
     pub in_interval_count: u32,
-    pub(crate) c_thresh_pos: u8,
-    pub(crate) c_thresh_neg: u8,
-    pub(crate) delta_t_max: u32,
+    // pub(crate) c_thresh_pos: u8,
+    // pub(crate) c_thresh_neg: u8,
+    pub c_thresh_baseline: u8,
+    pub c_thresh_max: u8,
+    pub c_increase_velocity: u8,
+    pub delta_t_max: u32,
     pub(crate) ref_time: u32,
     pub(crate) ref_time_divisor: f64,
     pub(crate) tps: DeltaT,
+
+    /// Constant Rate Factor (CRF) quality setting for the encoder. 0 is lossless, 9 is worst quality.
+    /// Determines:
+    /// * The baseline (starting) c-threshold for all pixels
+    /// * The maximum c-threshold for all pixels
+    /// * The Dt_max multiplier
+    /// * The c-threshold increase velocity (how often to increase C if the intensity is stable)
+    /// * The radius for which to reset the c-threshold for neighboring pixels (if feature detection is enabled)
+    pub crf_quality: u8,
     pub(crate) show_display: bool,
     pub(crate) show_live: bool,
     pub feature_detection: bool,
+    feature_c_radius: u16,
 }
 
 impl Default for VideoState {
     fn default() -> Self {
-        VideoState {
+        let mut state = VideoState {
             plane: PlaneSize::default(),
             pixel_tree_mode: Continuous,
             chunk_rows: 64,
             in_interval_count: 1,
-            c_thresh_pos: 0,
-            c_thresh_neg: 0,
+            c_thresh_baseline: 0,
+            c_thresh_max: 0,
+            c_increase_velocity: 1,
             delta_t_max: 7650,
             ref_time: 255,
             ref_time_divisor: 1.0,
             tps: 7650,
+            crf_quality: 0,
             show_display: false,
             show_live: false,
             feature_detection: false,
-        }
+            feature_c_radius: 0,
+        };
+        state.update_crf(DEFAULT_CRF_QUALITY);
+        state
+    }
+}
+
+impl VideoState {
+    fn update_crf(&mut self, crf: u8) {
+        self.crf_quality = crf;
+        self.c_thresh_baseline = CRF[crf as usize][0] as u8;
+        self.c_thresh_max = CRF[crf as usize][1] as u8;
+        // self.c_thresh_neg = CRF[crf as usize][0] as u8;
+        self.delta_t_max = CRF[crf as usize][2] as u32 * self.ref_time;
+        self.c_increase_velocity = CRF[crf as usize][3] as u8;
+        self.feature_c_radius = (CRF[crf as usize][4] * self.plane.min_resolution() as f32) as u16;
+    }
+
+    fn update_quality_manual(
+        &mut self,
+        c_thresh_baseline: u8,
+        c_thresh_max: u8,
+        delta_t_max_multiplier: u32,
+        c_increase_velocity: u8,
+        feature_c_radius_denom: f32,
+    ) {
+        self.c_thresh_baseline = c_thresh_baseline;
+        self.c_thresh_max = c_thresh_max;
+        self.delta_t_max = delta_t_max_multiplier * self.ref_time;
+        self.c_increase_velocity = c_increase_velocity;
+        self.feature_c_radius =
+            (feature_c_radius_denom * self.plane.min_resolution() as f32) as u16;
     }
 }
 
@@ -170,10 +216,23 @@ pub trait VideoBuilder<W> {
     /// Set both the positive and negative contrast thresholds
     fn contrast_thresholds(self, c_thresh_pos: u8, c_thresh_neg: u8) -> Self;
 
+    fn crf(self, crf: u8) -> Self;
+
+    fn quality_manual(
+        self,
+        c_thresh_baseline: u8,
+        c_thresh_max: u8,
+        delta_t_max_multiplier: u32,
+        c_increase_velocity: u8,
+        feature_c_radius_denom: f32,
+    ) -> Self;
+
     /// Set the positive contrast threshold
+    #[deprecated(since = "0.3.4", note = "please use `crf` or `quality_manual` instead")]
     fn c_thresh_pos(self, c_thresh_pos: u8) -> Self;
 
     /// Set the negative contrast threshold
+    #[deprecated(since = "0.3.4", note = "please use `crf` or `quality_manual` instead")]
     fn c_thresh_neg(self, c_thresh_neg: u8) -> Self;
 
     /// Set the chunk rows
@@ -219,8 +278,6 @@ pub struct Video<W: Write> {
 
     /// The current instantaneous frame, for determining features
     pub running_intensities: Array3<i32>,
-
-    abs_intensity_mat: Mat,
 
     /// The current view mode of the instantaneous frame
     pub instantaneous_view_mode: FramedViewMode,
@@ -291,7 +348,6 @@ impl<W: Write + 'static> Video<W> {
                 sae_mat.create_rows_cols(plane.h() as i32, plane.w() as i32, CV_32FC3)?;
             },
         }
-        let abs_intensity_mat = sae_mat.clone();
 
         let running_intensities = Array::zeros((plane.h_usize(), plane.w_usize(), plane.c_usize()));
 
@@ -318,7 +374,6 @@ impl<W: Write + 'static> Video<W> {
                     event_pixel_trees,
                     instantaneous_frame,
                     running_intensities,
-                    abs_intensity_mat,
                     instantaneous_view_mode,
                     event_sender,
                     encoder,
@@ -335,7 +390,6 @@ impl<W: Write + 'static> Video<W> {
                     event_pixel_trees,
                     instantaneous_frame,
                     running_intensities,
-                    abs_intensity_mat,
                     instantaneous_view_mode,
                     event_sender,
                     encoder,
@@ -346,15 +400,23 @@ impl<W: Write + 'static> Video<W> {
     }
 
     /// Set the positive contrast threshold
+    #[deprecated(
+        since = "0.3.4",
+        note = "please use `update_crf` or `update_quality_manual` instead"
+    )]
     pub fn c_thresh_pos(mut self, c_thresh_pos: u8) -> Self {
         for px in self.event_pixel_trees.iter_mut() {
             px.c_thresh = c_thresh_pos;
         }
-        self.state.c_thresh_pos = c_thresh_pos;
+        self.state.c_thresh_baseline = c_thresh_pos;
         self
     }
 
     /// Set the negative contrast threshold
+    #[deprecated(
+        since = "0.3.4",
+        note = "please use `update_crf` or `update_quality_manual` instead"
+    )]
     pub fn c_thresh_neg(self, _c_thresh_neg: u8) -> Self {
         unimplemented!();
         // for px in self.event_pixel_trees.iter_mut() {
@@ -653,6 +715,8 @@ impl<W: Write + 'static> Video<W> {
                 // let sae_time_since = self.event_pixel_trees[[y, x, c]].running_t
                 //     - self.event_pixel_trees[[y, x, c]].last_fired_t;
                 let sae_time = self.event_pixel_trees[[y, x, c]].last_fired_t;
+
+                // Set the instantaneous frame value to the best queue'd event for the pixel
                 *val = match self.event_pixel_trees[[y, x, c]].arena[0].best_event {
                     Some(event) => u8::get_frame_value(
                         &event.into(),
@@ -673,9 +737,7 @@ impl<W: Write + 'static> Video<W> {
 
                 if self.instantaneous_view_mode == FramedViewMode::SAE {
                     // let tmp = sae_mat.at_2d::<f32>(y as i32, x as i32).unwrap();
-                    unsafe {
-                        *sae_mat.at_2d_mut::<f32>(y as i32, x as i32).unwrap() = sae_time as f32;
-                    }
+                    *sae_mat.at_2d_mut::<f32>(y as i32, x as i32).unwrap() = sae_time as f32;
                 }
             });
 
@@ -712,23 +774,22 @@ impl<W: Write + 'static> Video<W> {
             )?;
         }
 
-        // TODO: Add a toggle option to only calculate features if user says so
-        if self.state.feature_detection && !color {
-            let mut keypoints = Vector::<KeyPoint>::new();
-            opencv::features2d::fast(&self.instantaneous_frame, &mut keypoints, 50, true)?;
-            let mut keypoint_mat = Mat::default();
-            opencv::features2d::draw_keypoints(
-                &self.instantaneous_frame,
-                &keypoints,
-                &mut keypoint_mat,
-                Scalar::new(0.0, 0.0, 255.0, 0.0),
-                opencv::features2d::DrawMatchesFlags::DEFAULT,
-            )?;
-            show_display_force("keypoints", &keypoint_mat, 1)?;
+        // let mut keypoints = Vector::<KeyPoint>::new();
+        // opencv::features2d::fast(&self.instantaneous_frame, &mut keypoints, 50, true)?;
+        // let mut keypoint_mat = Mat::default();
+        // opencv::features2d::draw_keypoints(
+        //     &self.instantaneous_frame,
+        //     &keypoints,
+        //     &mut keypoint_mat,
+        //     Scalar::new(0.0, 0.0, 255.0, 0.0),
+        //     opencv::features2d::DrawMatchesFlags::DEFAULT,
+        // )?;
+        // show_display_force("keypoints", &keypoint_mat, 1)?;
 
-            for events in &big_buffer {
-                for (e1, e2) in events.iter().tuple_windows() {
-                    self.encoder.ingest_event(*e1)?;
+        for events in &big_buffer {
+            for (e1, e2) in events.iter().circular_tuple_windows() {
+                self.encoder.ingest_event(*e1)?;
+                if self.state.feature_detection && !color {
                     if e2.delta_t != e1.delta_t {
                         self.feature_test(e1);
                     }
@@ -783,14 +844,22 @@ impl<W: Write + 'static> Video<W> {
     }
 
     /// Set a new value for `c_thresh_pos`
+    #[deprecated(
+        since = "0.3.4",
+        note = "please use `update_crf` or `update_quality_manual` instead"
+    )]
     pub fn update_adder_thresh_pos(&mut self, c: u8) {
         for px in self.event_pixel_trees.iter_mut() {
             px.c_thresh = c;
         }
-        self.state.c_thresh_pos = c;
+        self.state.c_thresh_baseline = c;
     }
 
     /// Set a new value for `c_thresh_neg`
+    #[deprecated(
+        since = "0.3.4",
+        note = "please use `update_crf` or `update_quality_manual` instead"
+    )]
     pub fn update_adder_thresh_neg(&mut self, _c: u8) {
         unimplemented!();
         // for px in self.event_pixel_trees.iter_mut() {
@@ -800,22 +869,12 @@ impl<W: Write + 'static> Video<W> {
     }
 
     pub(crate) fn feature_test(&mut self, e: &Event) -> Result<(), Box<dyn Error>> {
-        if self.is_feature(e)? {
+        if is_feature(e, self.state.plane, &self.running_intensities)? {
             // Display the feature on the viz frame
-            let color: u8 = 255;
-            let radius = 2;
-            for i in -radius..=radius {
-                *self
-                    .instantaneous_frame
-                    .at_2d_mut(e.coord.y as i32 + i, e.coord.x as i32)? = color;
-                *self
-                    .instantaneous_frame
-                    .at_2d_mut(e.coord.y as i32, e.coord.x as i32 + i)? = color;
-            }
+            draw_feature(e, &mut self.instantaneous_frame)?;
 
             // Reset the threshold for that pixel and its neighbors
-
-            let radius = 30;
+            let radius = self.state.feature_c_radius as i32;
             for r in (e.coord.y() as i32 - radius).max(0)
                 ..(e.coord.y() as i32 + radius).min(self.state.plane.h() as i32)
             {
@@ -823,132 +882,49 @@ impl<W: Write + 'static> Video<W> {
                     ..(e.coord.x() as i32 + radius).min(self.state.plane.w() as i32)
                 {
                     self.event_pixel_trees[[r as usize, c as usize, e.coord.c_usize()]].c_thresh =
-                        1;
+                        self.state.c_thresh_baseline;
                 }
             }
         }
         Ok(())
     }
 
-    fn is_feature(&self, e: &Event) -> Result<bool, Box<dyn Error>> {
-        if e.coord
-            .is_border(self.state.plane.w_usize(), self.state.plane.h_usize(), 3)
-        {
-            return Ok(false);
-        }
-
-        let img = &self.running_intensities;
-        let candidate: i32 = img[(e.coord.y_usize(), e.coord.x_usize(), 0)];
-
-        let mut count = 0;
-        if (img[(
-            (e.coord.y as i32 + circle3_[4][1]) as usize,
-            (e.coord.x as i32 + circle3_[4][0]) as usize,
-            0,
-        )]
-            - candidate)
-            .abs()
-            > INTENSITY_THRESHOLD
-        {
-            count += 1;
-        }
-        if (img[(
-            (e.coord.y as i32 + circle3_[12][1]) as usize,
-            (e.coord.x as i32 + circle3_[12][0]) as usize,
-            0,
-        )]
-            - candidate)
-            .abs()
-            > INTENSITY_THRESHOLD
-        {
-            count += 1;
-        }
-        if (img[(
-            (e.coord.y as i32 + circle3_[1][1]) as usize,
-            (e.coord.x as i32 + circle3_[1][0]) as usize,
-            0,
-        )]
-            - candidate)
-            .abs()
-            > INTENSITY_THRESHOLD
-        {
-            count += 1;
-        }
-
-        if (img[(
-            (e.coord.y as i32 + circle3_[7][1]) as usize,
-            (e.coord.x as i32 + circle3_[7][0]) as usize,
-            0,
-        )]
-            - candidate)
-            .abs()
-            > INTENSITY_THRESHOLD
-        {
-            count += 1;
-        }
-
-        if count <= 2 {
-            return Ok(false);
-        }
-
-        let streak_size = 12;
-
-        for i in 0..16 {
-            // Are we looking at a bright or dark streak?
-            let brighter = img[(
-                (e.coord.y as i32 + circle3_[i][1]) as usize,
-                (e.coord.x as i32 + circle3_[i][0]) as usize,
-                0,
-            )]
-                > candidate;
-
-            let mut did_break = false;
-
-            for j in 0..streak_size {
-                if brighter {
-                    if img[(
-                        (e.coord.y as i32 + circle3_[(i + j) % 16][1]) as usize,
-                        (e.coord.x as i32 + circle3_[(i + j) % 16][0]) as usize,
-                        0,
-                    )]
-                        <= candidate + INTENSITY_THRESHOLD
-                    {
-                        did_break = true;
-                    }
-                } else if img[(
-                    (e.coord.y as i32 + circle3_[(i + j) % 16][1]) as usize,
-                    (e.coord.x as i32 + circle3_[(i + j) % 16][0]) as usize,
-                    0,
-                )]
-                    >= candidate - INTENSITY_THRESHOLD
-                {
-                    did_break = true;
-                }
-            }
-
-            if !did_break {
-                return Ok(true);
-            }
-        }
-
-        Ok(false)
-    }
-
     pub fn detect_features(mut self, detect_features: bool) -> Self {
         self.state.feature_detection = detect_features;
         self
     }
+
+    pub fn update_crf(&mut self, crf: u8) {
+        self.state.update_crf(crf);
+
+        for px in self.event_pixel_trees.iter_mut() {
+            px.c_thresh = self.state.c_thresh_baseline;
+            px.c_increase_counter = 0;
+        }
+    }
+
+    pub fn update_quality_manual(
+        &mut self,
+        c_thresh_baseline: u8,
+        c_thresh_max: u8,
+        delta_t_max_multiplier: u32,
+        c_increase_velocity: u8,
+        feature_c_radius_denom: f32,
+    ) {
+        self.state.update_quality_manual(
+            c_thresh_baseline,
+            c_thresh_max,
+            delta_t_max_multiplier,
+            c_increase_velocity,
+            feature_c_radius_denom,
+        );
+
+        for px in self.event_pixel_trees.iter_mut() {
+            px.c_thresh = c_thresh_baseline;
+            px.c_increase_counter = 0;
+        }
+    }
 }
-
-const INTENSITY_THRESHOLD: i32 = 30;
-
-#[rustfmt::skip]
-const circle3_: [[i32; 2]; 16] = [
-    [0, 3], [1, 3], [2, 2], [3, 1],
-    [3, 0], [3, -1], [2, -2], [1, -3],
-    [0, -3], [-1, -3], [-2, -2], [-3, -1],
-    [-3, 0], [-3, 1], [-2, 2], [-1, 3]
-];
 
 /// Integrate an intensity value for a pixel, over a given time span
 ///
@@ -1004,7 +980,8 @@ pub fn integrate_for_px(
         state.pixel_tree_mode,
         state.delta_t_max,
         state.ref_time,
-        state.c_thresh_pos,
+        state.c_thresh_max,
+        state.c_increase_velocity,
     );
 
     if px.need_to_pop_top {

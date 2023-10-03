@@ -133,7 +133,8 @@ impl<W: Write + 'static> SimulProcessor<W> {
             + std::marker::Copy
             + FrameValue<Output = T>
             + Serialize
-            + num_traits::Zero,
+            + num_traits::Zero
+            + Into<f64>,
     {
         let thread_pool_framer = rayon::ThreadPoolBuilder::new()
             .num_threads(max(num_threads / 2, 1))

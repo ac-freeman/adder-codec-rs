@@ -190,6 +190,29 @@ impl<W: Write + 'static> VideoBuilder<W> for Framed<W> {
         self
     }
 
+    fn crf(mut self, crf: u8) -> Self {
+        self.video.update_crf(crf);
+        self
+    }
+
+    fn quality_manual(
+        mut self,
+        c_thresh_baseline: u8,
+        c_thresh_max: u8,
+        delta_t_max_multiplier: u32,
+        c_increase_velocity: u8,
+        feature_c_radius_denom: f32,
+    ) -> Self {
+        self.video.update_quality_manual(
+            c_thresh_baseline,
+            c_thresh_max,
+            delta_t_max_multiplier,
+            c_increase_velocity,
+            feature_c_radius_denom,
+        );
+        self
+    }
+
     fn c_thresh_pos(mut self, c_thresh_pos: u8) -> Self {
         self.video = self.video.c_thresh_pos(c_thresh_pos);
         self

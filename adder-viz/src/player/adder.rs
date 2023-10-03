@@ -8,6 +8,8 @@ use adder_codec_rs::framer::scale_intensity::event_to_intensity;
 use adder_codec_rs::transcoder::source::video::{show_display_force, FramedViewMode};
 use bevy::prelude::Image;
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
+use ndarray::Array;
+use ndarray::Array3;
 use opencv::core::{
     create_continuous, KeyPoint, Mat, MatTraitConstManual, MatTraitManual, Scalar, Vector, CV_8UC1,
     CV_8UC3,
@@ -22,12 +24,15 @@ use std::path::Path;
 pub type PlayerArtifact = (u64, Option<Image>);
 pub type PlayerStreamArtifact = (u64, StreamState, Option<Image>);
 
-#[derive(Default, Copy, Clone, Debug)]
+#[derive(Default, Clone, Debug)]
 pub struct StreamState {
     pub(crate) current_t_ticks: DeltaT,
     pub(crate) tps: DeltaT,
     pub(crate) file_pos: u64,
     pub(crate) volume: usize,
+    pub(crate) last_timestamps: Array3<DeltaT>,
+    // The current instantaneous frame, for determining features
+    pub running_intensities: Array3<i32>,
 }
 
 // TODO: allow flexibility with decoding non-file inputs
@@ -68,6 +73,7 @@ impl AdderPlayer {
         path_buf: &Path,
         playback_speed: f32,
         view_mode: FramedViewMode,
+        detect_features: bool,
     ) -> Result<Self, Box<dyn Error>> {
         match path_buf.extension() {
             None => Err(Box::new(AdderPlayerError("Invalid file type".into()))),
@@ -92,6 +98,7 @@ impl AdderPlayer {
                         )
                         .mode(INSTANTANEOUS)
                         .view_mode(view_mode)
+                        .detect_features(detect_features)
                         .source(stream.get_source_type(), meta.source_camera);
 
                     let frame_sequence: FrameSequence<u8> = framer_builder.clone().finish();
@@ -127,6 +134,16 @@ impl AdderPlayer {
                             tps: meta.tps,
                             file_pos: 0,
                             volume: meta.plane.volume(),
+                            running_intensities: Array::zeros((
+                                meta.plane.h_usize(),
+                                meta.plane.w_usize(),
+                                meta.plane.c_usize(),
+                            )),
+                            last_timestamps: Array::zeros((
+                                meta.plane.h_usize(),
+                                meta.plane.w_usize(),
+                                meta.plane.c_usize(),
+                            )),
                         },
                         framer_builder: Some(framer_builder),
                         frame_sequence: Some(frame_sequence),
@@ -177,7 +194,7 @@ impl AdderPlayer {
     pub fn consume_source(&mut self) -> PlayerStreamArtifact {
         let stream = match &mut self.input_stream {
             None => {
-                return (0, self.stream_state, None);
+                return (0, self.stream_state.clone(), None);
             }
             Some(s) => s,
         };
@@ -213,8 +230,8 @@ impl AdderPlayer {
                 .unwrap_or(0),
         };
         match res {
-            Ok(a) => (a.0, self.stream_state, a.1),
-            Err(_b) => (0, self.stream_state, None),
+            Ok(a) => (a.0, self.stream_state.clone(), a.1),
+            Err(_b) => (0, self.stream_state.clone(), None),
         }
     }
 
@@ -225,13 +242,6 @@ impl AdderPlayer {
             self.current_frame = 1; // TODO: temporary hack
         }
         let stream = match &mut self.input_stream {
-            None => {
-                return Ok((0, None));
-            }
-            Some(s) => s,
-        };
-
-        let _frame_sequence = match &mut self.frame_sequence {
             None => {
                 return Ok((0, None));
             }
@@ -292,13 +302,59 @@ impl AdderPlayer {
             }
 
             match stream.decoder.digest_event(&mut stream.bitreader) {
-                Ok(event) if event.d <= D_ZERO_INTEGRATION => {
+                Ok(mut event) if event.d <= D_ZERO_INTEGRATION => {
                     event_count += 1;
                     let y = event.coord.y as i32;
                     let x = event.coord.x as i32;
                     let c = event.coord.c.unwrap_or(0) as i32;
-                    if (y | x | c) == 0x0 {
-                        self.stream_state.current_t_ticks += event.delta_t;
+                    // if (y | x | c) == 0x0 {
+                    //     self.stream_state.current_t_ticks += event.delta_t;
+                    // }
+
+                    if meta.time_mode == TimeMode::AbsoluteT {
+                        if event.delta_t > self.stream_state.current_t_ticks {
+                            self.stream_state.current_t_ticks = event.delta_t;
+                        }
+                        let dt = event.delta_t
+                            - self.stream_state.last_timestamps
+                                [[y as usize, x as usize, c as usize]];
+                        self.stream_state.last_timestamps[[y as usize, x as usize, c as usize]] =
+                            event.delta_t;
+                        if self.stream_state.last_timestamps[[y as usize, x as usize, c as usize]]
+                            % meta.ref_interval
+                            != 0
+                        {
+                            self.stream_state.last_timestamps
+                                [[y as usize, x as usize, c as usize]] = ((self
+                                .stream_state
+                                .last_timestamps[[y as usize, x as usize, c as usize]]
+                                / meta.ref_interval)
+                                + 1)
+                                * meta.ref_interval;
+                        }
+                        event.delta_t = dt;
+                    } else {
+                        self.stream_state.last_timestamps[[y as usize, x as usize, c as usize]] +=
+                            event.delta_t;
+                        if self.stream_state.last_timestamps[[y as usize, x as usize, c as usize]]
+                            % meta.ref_interval
+                            != 0
+                        {
+                            self.stream_state.last_timestamps
+                                [[y as usize, x as usize, c as usize]] = ((self
+                                .stream_state
+                                .last_timestamps[[y as usize, x as usize, c as usize]]
+                                / meta.ref_interval)
+                                + 1)
+                                * meta.ref_interval;
+                        }
+
+                        if self.stream_state.last_timestamps[[y as usize, x as usize, c as usize]]
+                            > self.stream_state.current_t_ticks
+                        {
+                            self.stream_state.current_t_ticks = self.stream_state.last_timestamps
+                                [[y as usize, x as usize, c as usize]];
+                        }
                     }
 
                     // TODO: Support D and Dt view modes here
@@ -381,13 +437,13 @@ impl AdderPlayer {
 
         let image_bevy = if frame_sequence.is_frame_0_filled() {
             let mut idx = 0;
+            let db = display_mat.data_bytes_mut()?;
             for chunk_num in 0..frame_sequence.get_frame_chunks_num() {
                 match frame_sequence.pop_next_frame_for_chunk(chunk_num) {
                     Some(arr) => {
                         for px in arr.iter() {
                             match px {
                                 Some(event) => {
-                                    let db = display_mat.data_bytes_mut()?;
                                     db[idx] = *event;
                                     idx += 1;
                                 }
@@ -397,6 +453,31 @@ impl AdderPlayer {
                     }
                     None => {
                         println!("Couldn't pop chunk {chunk_num}!")
+                    }
+                }
+            }
+
+            // TODO: temporary, for testing what the running intensities look like
+            // let running_intensities = frame_sequence.get_running_intensities();
+            // for px in running_intensities.iter() {
+            //     db[idx] = *px as u8;
+            //     idx += 1;
+            // }
+
+            if let Some(features) = frame_sequence.pop_features() {
+                for feature in features {
+                    let db = display_mat.data_bytes_mut()?;
+
+                    let color: u8 = 255;
+                    let radius = 2;
+                    for i in -radius..=radius {
+                        let idx = ((feature.y as i32 + i) * meta.plane.w() as i32
+                            + feature.x as i32) as usize;
+                        db[idx] = color;
+
+                        let idx = (feature.y as i32 * meta.plane.w() as i32
+                            + (feature.x as i32 + i)) as usize;
+                        db[idx] = color;
                     }
                 }
             }
@@ -550,17 +631,17 @@ impl AdderPlayer {
                 // show_display_force("cornerss", &corner_mat, 1)?;
             }
 
-            let mut keypoints = Vector::<KeyPoint>::new();
-            opencv::features2d::fast(display_mat, &mut keypoints, 50, true)?;
-            let mut keypoint_mat = Mat::default();
-            opencv::features2d::draw_keypoints(
-                display_mat,
-                &keypoints,
-                &mut keypoint_mat,
-                Scalar::new(0.0, 0.0, 255.0, 0.0),
-                opencv::features2d::DrawMatchesFlags::DEFAULT,
-            )?;
-            show_display_force("keypoints", &keypoint_mat, 1)?;
+            // let mut keypoints = Vector::<KeyPoint>::new();
+            // opencv::features2d::fast(display_mat, &mut keypoints, 50, true)?;
+            // let mut keypoint_mat = Mat::default();
+            // opencv::features2d::draw_keypoints(
+            //     display_mat,
+            //     &keypoints,
+            //     &mut keypoint_mat,
+            //     Scalar::new(0.0, 0.0, 255.0, 0.0),
+            //     opencv::features2d::DrawMatchesFlags::DEFAULT,
+            // )?;
+            // show_display_force("keypoints", &keypoint_mat, 1)?;
 
             frame_sequence.state.frames_written += 1;
             self.stream_state.current_t_ticks += frame_sequence.state.tpf;
@@ -587,11 +668,16 @@ impl AdderPlayer {
             return Ok((0, image_bevy));
         }
 
+        let mut last_event: Option<Event> = None;
         loop {
             match stream.decoder.digest_event(&mut stream.bitreader) {
                 Ok(mut event) => {
                     event_count += 1;
-                    if frame_sequence.ingest_event(&mut event) {
+                    let filled = frame_sequence.ingest_event(&mut event, last_event);
+
+                    last_event = Some(event.clone());
+
+                    if filled {
                         return Ok((event_count, image_bevy));
                     }
                 }

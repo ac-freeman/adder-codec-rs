@@ -30,6 +30,7 @@ rfd = "0.10.0"
 strum = "0.24.1"
 strum_macros = "0.24.3"
 tokio = { version = "1.20.1", features = ["full"] }
+ndarray = "0.15.6"
 
 [dependencies.opencv]
 version = '0.84.5'

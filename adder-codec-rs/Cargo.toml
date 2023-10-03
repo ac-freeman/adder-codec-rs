@@ -20,10 +20,10 @@ default-run = "adder_simulproc"
 
 [features]
 default = ["transcoder"]
-transcoder = ["opencv", "dep:fast-math", "dep:adder-codec-core"]
+transcoder = ["opencv", "dep:fast-math", "adder-codec-core"]
 compression = ["opencv", "dep:fast-math", "adder-codec-core/compression"]
 raw-codec = []
-docs-only = ["opencv", "dep:fast-math", "dep:adder-codec-core"]
+docs-only = ["opencv", "dep:fast-math", "adder-codec-core"]
 
 
 [dependencies]

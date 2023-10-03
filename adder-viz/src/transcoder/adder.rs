@@ -26,8 +26,6 @@ pub struct AdderTranscoder {
     pub(crate) live_image: Image,
 }
 
-
-
 #[derive(Debug)]
 struct AdderTranscoderError(String);
 
@@ -67,13 +65,14 @@ impl AdderTranscoder {
                         )?
                         .frame_start(current_frame)?
                         .chunk_rows(64)
-                        .c_thresh_pos(ui_state.adder_tresh as u8)
+                        // .c_thresh_pos(ui_state.adder_tresh_baseline as u8)
                         // .c_thresh_neg(ui_state.adder_tresh as u8)
                         .auto_time_parameters(
                             ui_state.delta_t_ref as u32,
                             ui_state.delta_t_max_mult * ui_state.delta_t_ref as u32,
                             None,
                         )?
+                        .crf(5)
                         .time_mode(ui_state.time_mode)
                         .show_display(false);
 
@@ -149,12 +148,14 @@ impl AdderTranscoder {
                             simulate_latency = false;
                         }
 
-                        let filename_1 = input_path_buf_1.as_ref().map(|input_path_buf_1| input_path_buf_1
-                                    .file_name()
-                                    .expect("File must exist")
-                                    .to_str()
-                                    .expect("Bad filename")
-                                    .to_string());
+                        let filename_1 = input_path_buf_1.as_ref().map(|input_path_buf_1| {
+                            input_path_buf_1
+                                .file_name()
+                                .expect("File must exist")
+                                .to_str()
+                                .expect("Bad filename")
+                                .to_string()
+                        });
 
                         let reconstructor = rt.block_on(Reconstructor::new(
                             dir + "/",
@@ -188,8 +189,8 @@ impl AdderTranscoder {
                                     (1_000_000.0 * ui_state.delta_t_max_mult as f32) as u32,
                                     Some(ui_state.time_mode),
                                 )? // TODO
-                                .c_thresh_pos(ui_state.adder_tresh as u8)
-                                .c_thresh_neg(ui_state.adder_tresh as u8);
+                                .c_thresh_pos(ui_state.adder_tresh_baseline as u8)
+                                .c_thresh_neg(ui_state.adder_tresh_baseline as u8);
 
                         // Override time parameters if we're in framed mode
                         if ui_state.davis_mode_radio_state == TranscoderMode::Framed {
