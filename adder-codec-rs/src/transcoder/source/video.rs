@@ -646,7 +646,7 @@ impl<W: Write + 'static> Video<W> {
         matrix: Mat,
         time_spanned: f32,
         view_interval: u32,
-    ) -> std::result::Result<Vec<Vec<Event>>, SourceError> {
+    ) -> Result<Vec<Vec<Event>>, SourceError> {
         let color = self.state.plane.c() != 1;
 
         let frame_arr: &[u8] = match matrix.data_bytes() {
@@ -1102,4 +1102,6 @@ pub trait Source<W: Write> {
     /// Get the [`Video`] object associated with this [`Source`], consuming the [`Source`] in the
     /// process.
     fn get_video(self) -> Video<W>;
+
+    fn get_input(&self) -> &Mat;
 }

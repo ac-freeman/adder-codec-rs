@@ -3,7 +3,7 @@ use crate::{slider_pm, Images};
 use adder_codec_rs::transcoder::source::davis::TranscoderMode;
 use adder_codec_rs::transcoder::source::video::{FramedViewMode, Source, SourceError};
 use bevy::ecs::system::Resource;
-use bevy::prelude::{Assets, Commands, Image, Res, ResMut, Time};
+use bevy::prelude::{dbg, Assets, Commands, Image, Res, ResMut, Time};
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
 use bevy_egui::egui;
 use bevy_egui::egui::{RichText, Ui};
@@ -36,6 +36,7 @@ pub struct ParamsUiState {
     pub(crate) thread_count: usize,
     thread_count_slider: usize,
     pub(crate) color: bool,
+    show_original: bool,
     view_mode_radio_state: FramedViewMode,
     pub(crate) davis_mode_radio_state: TranscoderMode,
     pub(crate) davis_output_fps: f64,
@@ -73,6 +74,7 @@ impl Default for ParamsUiState {
             thread_count: rayon::current_num_threads() - 1,
             thread_count_slider: rayon::current_num_threads() - 1,
             color: true,
+            show_original: true,
             view_mode_radio_state: FramedViewMode::Intensity,
             davis_mode_radio_state: TranscoderMode::RawDavis,
             davis_output_fps: 500.0,
@@ -503,8 +505,30 @@ impl TranscoderState {
         self.transcoder.live_image = image_bevy;
 
         handles.last_image_view = handles.image_view.clone();
+        handles.last_input_view = handles.input_view.clone();
         let handle = images.add(self.transcoder.live_image.clone());
         handles.image_view = handle;
+
+        // Repeat for the input view
+        if self.ui_state.show_original {
+            let image_mat = source.get_input();
+            let mut image_mat_bgra = Mat::default();
+            imgproc::cvt_color(image_mat, &mut image_mat_bgra, imgproc::COLOR_BGR2BGRA, 4)?;
+
+            let image_bevy = Image::new(
+                Extent3d {
+                    width: source.get_video_ref().state.plane.w().into(),
+                    height: source.get_video_ref().state.plane.h().into(),
+                    depth_or_array_layers: 1,
+                },
+                TextureDimension::D2,
+                Vec::from(image_mat_bgra.data_bytes()?),
+                TextureFormat::Bgra8UnormSrgb,
+            );
+            let handle = images.add(image_bevy);
+            handles.input_view = handle;
+        }
+
         Ok(())
     }
 }
@@ -646,22 +670,28 @@ fn side_panel_grid_contents(
     ui.end_row();
 
     ui.label("View mode:");
-    ui.horizontal(|ui| {
-        ui.radio_value(
-            &mut ui_state.view_mode_radio_state,
-            FramedViewMode::Intensity,
-            "Intensity",
-        );
-        ui.radio_value(&mut ui_state.view_mode_radio_state, FramedViewMode::D, "D");
-        ui.radio_value(
-            &mut ui_state.view_mode_radio_state,
-            FramedViewMode::DeltaT,
-            "Δt",
-        );
-        ui.radio_value(
-            &mut ui_state.view_mode_radio_state,
-            FramedViewMode::SAE,
-            "SAE",
+    ui.vertical(|ui| {
+        ui.horizontal(|ui| {
+            ui.radio_value(
+                &mut ui_state.view_mode_radio_state,
+                FramedViewMode::Intensity,
+                "Intensity",
+            );
+            ui.radio_value(&mut ui_state.view_mode_radio_state, FramedViewMode::D, "D");
+            ui.radio_value(
+                &mut ui_state.view_mode_radio_state,
+                FramedViewMode::DeltaT,
+                "Δt",
+            );
+            ui.radio_value(
+                &mut ui_state.view_mode_radio_state,
+                FramedViewMode::SAE,
+                "SAE",
+            );
+        });
+        ui.add_enabled(
+            enabled,
+            egui::Checkbox::new(&mut ui_state.show_original, "Show original?"),
         );
     });
     ui.end_row();

@@ -133,6 +133,10 @@ impl<W: Write + 'static> Framed<W> {
     pub fn get_ref_time(&self) -> u32 {
         self.video.state.ref_time
     }
+
+    pub fn get_last_input_frame_scaled(&self) -> &Mat {
+        &self.input_frame_scaled
+    }
 }
 
 impl<W: Write + 'static> Source<W> for Framed<W> {
@@ -184,6 +188,10 @@ impl<W: Write + 'static> Source<W> for Framed<W> {
 
     fn get_video(self) -> Video<W> {
         todo!()
+    }
+
+    fn get_input(&self) -> &Mat {
+        self.get_last_input_frame_scaled()
     }
 }
 

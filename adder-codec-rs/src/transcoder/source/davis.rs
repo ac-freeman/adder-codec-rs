@@ -887,6 +887,10 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Davis<W> {
     fn get_video(self) -> Video<W> {
         self.video
     }
+
+    fn get_input(&self) -> &Mat {
+        unimplemented!("Davis::get_input");
+    }
 }
 
 impl<W: Write + 'static> VideoBuilder<W> for Davis<W> {
