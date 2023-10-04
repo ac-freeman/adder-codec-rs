@@ -438,6 +438,8 @@ impl TranscoderState {
         let ui_info_state = &mut self.ui_info_state;
         ui_info_state.events_per_sec = 0.;
 
+        let mut is_framed = false;
+
         let source: &mut dyn Source<BufWriter<File>> = {
             match &mut self.transcoder.framed_source {
                 None => match &mut self.transcoder.davis_source {
@@ -449,7 +451,10 @@ impl TranscoderState {
                         source
                     }
                 },
-                Some(source) => source,
+                Some(source) => {
+                    is_framed = true;
+                    source
+                }
             }
         };
 
@@ -510,7 +515,7 @@ impl TranscoderState {
         handles.image_view = handle;
 
         // Repeat for the input view
-        if self.ui_state.show_original {
+        if is_framed && self.ui_state.show_original {
             let image_mat = source.get_input();
             let mut image_mat_bgra = Mat::default();
             imgproc::cvt_color(image_mat, &mut image_mat_bgra, imgproc::COLOR_BGR2BGRA, 4)?;
