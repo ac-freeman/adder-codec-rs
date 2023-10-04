@@ -13,6 +13,7 @@ use rayon::current_num_threads;
 use std::collections::VecDeque;
 use std::error::Error;
 
+use crate::utils::PlotY;
 use adder_codec_core::codec::EncoderType;
 use adder_codec_core::{PlaneSize, TimeMode};
 use adder_codec_rs::transcoder::source::davis::TranscoderMode::RawDvs;
@@ -856,25 +857,4 @@ fn side_panel_grid_contents(
         );
     });
     ui.end_row();
-}
-
-pub(crate) struct PlotY {
-    pub points: VecDeque<f64>,
-}
-
-impl PlotY {
-    fn get_plotline(&self, name: &str) -> Line {
-        let plot_points: PlotPoints = (0..1000)
-            .map(|i| {
-                let x = i as f64;
-                [x, self.points[i]]
-            })
-            .collect();
-        Line::new(plot_points).name(name)
-    }
-
-    fn update(&mut self, new_point: f64) {
-        self.points.push_back(new_point);
-        self.points.pop_front();
-    }
 }

@@ -1,4 +1,5 @@
 use crossbeam_channel::{bounded, Receiver};
+use std::collections::VecDeque;
 use std::error::Error;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -15,6 +16,8 @@ use crate::player::adder::{AdderPlayer, PlayerStreamArtifact, StreamState};
 use crate::{add_checkbox_row, add_radio_row, add_slider_row, Images};
 use bevy_egui::egui;
 
+use crate::utils::PlotY;
+use adder_codec_core::PlaneSize;
 use rayon::current_num_threads;
 
 #[derive(PartialEq)]
@@ -82,18 +85,28 @@ pub struct InfoUiState {
     events_ppc_per_sec: f64,
     events_ppc_total: f64,
     events_total: u64,
+    event_size: u8,
+    plane: PlaneSize,
     source_name: RichText,
+    pub(crate) plot_points_raw_adder_bitrate_y: PlotY,
 }
 
 impl Default for InfoUiState {
     fn default() -> Self {
+        let plot_points: VecDeque<f64> = (0..1000).map(|_| 0.0).collect();
+
         InfoUiState {
             stream_state: Default::default(),
             events_per_sec: 0.,
             events_ppc_per_sec: 0.,
             events_ppc_total: 0.0,
             events_total: 0,
+            event_size: 0,
+            plane: Default::default(),
             source_name: RichText::new("No file selected yet"),
+            plot_points_raw_adder_bitrate_y: PlotY {
+                points: plot_points.clone(),
+            },
         }
     }
 }
@@ -312,6 +325,15 @@ impl PlayerState {
             self.ui_info_state.events_total as f64 / self.ui_info_state.stream_state.volume as f64;
         self.ui_info_state.events_ppc_per_sec = self.ui_info_state.events_ppc_total / duration_secs;
 
+        let bitrate = self.ui_info_state.events_ppc_per_sec
+            * self.ui_info_state.event_size as f64
+            * self.ui_info_state.plane.volume() as f64
+            / 1024.0
+            / 1024.0; // transcoded raw in megabytes per sec
+        self.ui_info_state
+            .plot_points_raw_adder_bitrate_y
+            .update(bitrate);
+
         // TODO: make fps accurate and meaningful here
         ui.label(format!(
             "{:.2} transcoded FPS\t\
@@ -378,6 +400,17 @@ impl PlayerState {
 
         player = player.reconstruction_method(self.ui_state.reconstruction_method.clone());
         player = player.stream_pos(self.ui_info_state.stream_state.file_pos);
+
+        let plane = player
+            .input_stream
+            .as_ref()
+            .unwrap()
+            .decoder
+            .meta()
+            .plane
+            .clone();
+        self.ui_info_state.event_size = if plane.c() == 1 { 9 } else { 11 };
+        self.ui_info_state.plane = plane;
 
         self.ui_state.current_frame = 1;
 

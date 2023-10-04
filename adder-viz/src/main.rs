@@ -323,17 +323,54 @@ fn draw_ui(
                                 ..Default::default()
                             },
                         );
-                        let str = format!(
-                            "{number:.prec$} MB/s | ",
-                            prec = 2,
-                            number = transcoder_state
-                                .ui_info_state
-                                .plot_points_raw_adder_bitrate_y
-                                .points
-                                .iter()
-                                .last()
-                                .unwrap_or(&-999.0)
-                        );
+
+                        let (bitrate, percentage_str, color) = match main_ui_state.view {
+                            Tabs::Transcoder => {
+                                let bitrate = transcoder_state
+                                    .ui_info_state
+                                    .plot_points_raw_adder_bitrate_y
+                                    .points
+                                    .iter()
+                                    .last()
+                                    .unwrap_or(&-999.0);
+                                let percentage = transcoder_state
+                                    .ui_info_state
+                                    .plot_points_raw_adder_bitrate_y
+                                    .points
+                                    .iter()
+                                    .last()
+                                    .unwrap_or(&-999.0)
+                                    / transcoder_state
+                                        .ui_info_state
+                                        .plot_points_raw_source_bitrate_y
+                                        .points
+                                        .iter()
+                                        .last()
+                                        .unwrap_or(&-999.0)
+                                    * 100.0;
+
+                                let percentage_str =
+                                    format!("{number:.prec$}%", prec = 2, number = percentage);
+                                let color = if percentage < 100.0 {
+                                    Color32::GREEN
+                                } else {
+                                    Color32::RED
+                                };
+                                (bitrate, percentage_str, color)
+                            }
+                            Tabs::Player => {
+                                let bitrate = player_state
+                                    .ui_info_state
+                                    .plot_points_raw_adder_bitrate_y
+                                    .points
+                                    .iter()
+                                    .last()
+                                    .unwrap_or(&-999.0);
+                                (bitrate, "".to_string(), Color32::WHITE)
+                            }
+                        };
+
+                        let str = format!("{number:.prec$} MB/s | ", prec = 2, number = bitrate);
                         job.append(
                             &str,
                             0.0,
@@ -343,29 +380,6 @@ fn draw_ui(
                             },
                         );
 
-                        let percentage = transcoder_state
-                            .ui_info_state
-                            .plot_points_raw_adder_bitrate_y
-                            .points
-                            .iter()
-                            .last()
-                            .unwrap_or(&-999.0)
-                            / transcoder_state
-                                .ui_info_state
-                                .plot_points_raw_source_bitrate_y
-                                .points
-                                .iter()
-                                .last()
-                                .unwrap_or(&-999.0)
-                            * 100.0;
-
-                        let percentage_str =
-                            format!("{number:.prec$}%", prec = 2, number = percentage);
-                        let color = if percentage < 100.0 {
-                            Color32::GREEN
-                        } else {
-                            Color32::RED
-                        };
                         job.append(
                             &percentage_str,
                             0.0,
