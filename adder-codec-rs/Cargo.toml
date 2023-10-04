@@ -33,7 +33,7 @@ bincode = "1.3.3"
 bitvec = "1.0.1"
 bumpalo = "3.11.0"
 clap = { version = "4.0.17", features = ["derive"] }
-davis-edi-rs = { git = "https://github.com/ac-freeman/davis-EDI-rs" }
+davis-edi-rs = "0.2.3"
 duplicate = "0.4.1"
 fast-math = { version = "0.1", optional = true }
 fenwick = "2.0.1"

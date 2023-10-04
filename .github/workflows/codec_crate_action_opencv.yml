@@ -111,4 +111,3 @@ jobs:
         - name: Run a documentation generation test
           run: adder-codec-rs/ci/docs-rs.sh
           shell: bash
-

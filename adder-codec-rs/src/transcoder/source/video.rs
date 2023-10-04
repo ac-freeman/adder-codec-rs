@@ -597,7 +597,6 @@ impl<W: Write + 'static> Video<W> {
                 Encoder::new_raw_interleaved(compression)
             }
             EncoderOptions::RawBandwidthLimited {target_bitrate, alpha} => {
-                // TODO: wip (Eric)
                 let compression = RawOutputBandwidthLimited::new(
                     CodecMetadata {
                         codec_version: LATEST_CODEC_VERSION,

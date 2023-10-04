@@ -154,7 +154,6 @@ impl<W: Write> WriteCompression<W> for RawOutput<W> {
     }
 }
 
-// TODO: wip
 impl<W: Write> RawOutputBandwidthLimited<W> {
     /// Create a new raw bandwidth limited output stream.
     pub fn new(mut meta: CodecMetadata, writer: W, target_bitrate: f64, alpha: f64) -> Self {
@@ -226,7 +225,6 @@ impl<W: Write> WriteCompression<W> for RawOutputBandwidthLimited<W> {
 
     /// Ingest an event into the codec_old.
     fn ingest_event(&mut self, event: Event) -> Result<(), CodecError> {
-        // TODO: Eric
         // NOTE: for speed, the following checks only run in debug builds. It's entirely
         // possibly to encode nonsensical events if you want to.
         debug_assert!(event.coord.x < self.meta.plane.width || event.coord.x == EOF_PX_ADDRESS);
@@ -241,13 +239,9 @@ impl<W: Write> WriteCompression<W> for RawOutputBandwidthLimited<W> {
         let new_bitrate = self.alpha * self.current_bitrate + (1.0 - self.alpha) / t_diff;
 
         if new_bitrate > self.target_bitrate {
-            //dbg!("Skipping event!");
             self.current_bitrate = self.alpha * self.current_bitrate;
             return Ok(()); // skip this event
         }
-
-        //dbg!("Not skipping event!");
-        //dbg!("{}", new_bitrate);
 
         self.last_event = now; // update time
         self.current_bitrate = new_bitrate;
