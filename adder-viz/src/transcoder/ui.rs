@@ -116,8 +116,8 @@ pub struct InfoUiState {
     pub(crate) input_path_1: Option<PathBuf>,
     pub(crate) output_path: Option<PathBuf>,
     plot_points_eventrate_y: PlotY,
-    plot_points_raw_adder_bitrate_y: PlotY,
-    plot_points_raw_source_bitrate_y: PlotY,
+    pub(crate) plot_points_raw_adder_bitrate_y: PlotY,
+    pub(crate) plot_points_raw_source_bitrate_y: PlotY,
     plot_points_latency_y: PlotY,
     pub view_mode_radio_state: FramedViewMode, // TODO: Move to different struct
 }
@@ -322,6 +322,10 @@ impl TranscoderState {
             * self.ui_info_state.plane.volume() as f64
             / 1024.0
             / 1024.0; // transcoded raw in megabytes per sec
+        self.ui_info_state
+            .plot_points_raw_adder_bitrate_y
+            .update(bitrate);
+
         let raw_source_bitrate = self.ui_info_state.source_samples_per_sec
             * self.ui_info_state.plane.volume() as f64
             / 1024.0
@@ -854,8 +858,8 @@ fn side_panel_grid_contents(
     ui.end_row();
 }
 
-struct PlotY {
-    points: VecDeque<f64>,
+pub(crate) struct PlotY {
+    pub points: VecDeque<f64>,
 }
 
 impl PlotY {

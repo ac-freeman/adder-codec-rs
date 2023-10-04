@@ -2,6 +2,10 @@ mod player;
 mod transcoder;
 mod utils;
 
+use bevy_egui::egui::epaint::{
+    text::{LayoutJob, TextFormat},
+    Color32, FontFamily, FontId,
+};
 use std::ops::RangeInclusive;
 
 use crate::player::ui::PlayerState;
@@ -12,7 +16,9 @@ use bevy::window::{PresentMode, PrimaryWindow, WindowResolution};
 
 use bevy_egui::{egui, EguiContexts, EguiPlugin, EguiSettings};
 // use egui_dock::egui as dock_egui;
-use bevy_egui::egui::{emath, global_dark_light_mode_switch, Rounding, Ui, Widget, WidgetText};
+use bevy_egui::egui::{
+    emath, global_dark_light_mode_switch, Align, Rounding, Ui, Widget, WidgetText,
+};
 
 use crate::transcoder::adder::replace_adder_transcoder;
 use strum::IntoEnumIterator;
@@ -234,10 +240,47 @@ fn draw_ui(
 
             ui.vertical(|ui| {
                 if let (Some(input), Some(input_texture_id)) = (input, input_texture_id) {
-                    ui.label("Input");
-                    has_input = true;
                     let mut avail_size = ui.available_size();
                     avail_size.x = avail_size.x / 2.0 - ui.spacing().item_spacing.y / 2.0;
+
+                    ui.set_max_size(avail_size);
+
+                    // Right-align the text so it's easier to compare to the ADDER version
+                    ui.with_layout(egui::Layout::top_down(Align::Max), |ui| {
+                        let mut job = LayoutJob::default();
+                        job.append(
+                            "Input\n",
+                            0.0,
+                            TextFormat {
+                                font_id: FontId::new(24.0, FontFamily::Proportional),
+                                color: Color32::WHITE,
+                                ..Default::default()
+                            },
+                        );
+
+                        let str = format!(
+                            "{number:.prec$} MB/s",
+                            prec = 2,
+                            number = transcoder_state
+                                .ui_info_state
+                                .plot_points_raw_source_bitrate_y
+                                .points
+                                .iter()
+                                .last()
+                                .unwrap_or(&-999.0)
+                        );
+                        job.append(
+                            &str,
+                            0.0,
+                            TextFormat {
+                                font_id: FontId::new(14.0, FontFamily::Proportional),
+                                ..Default::default()
+                            },
+                        );
+                        ui.label(job);
+                    });
+                    has_input = true;
+
                     let size = match (
                         input.texture_descriptor.size.width as f32,
                         input.texture_descriptor.size.height as f32,
@@ -269,7 +312,73 @@ fn draw_ui(
 
             ui.vertical(|ui| {
                 if let (Some(image), Some(texture_id)) = (image, texture_id) {
-                    ui.label("ADDER");
+                    ui.with_layout(egui::Layout::top_down(Align::Min), |ui| {
+                        let mut job = LayoutJob::default();
+                        job.append(
+                            "ADΔER\n",
+                            0.0,
+                            TextFormat {
+                                font_id: FontId::new(24.0, FontFamily::Proportional),
+                                color: Color32::WHITE,
+                                ..Default::default()
+                            },
+                        );
+                        let str = format!(
+                            "{number:.prec$} MB/s | ",
+                            prec = 2,
+                            number = transcoder_state
+                                .ui_info_state
+                                .plot_points_raw_adder_bitrate_y
+                                .points
+                                .iter()
+                                .last()
+                                .unwrap_or(&-999.0)
+                        );
+                        job.append(
+                            &str,
+                            0.0,
+                            TextFormat {
+                                font_id: FontId::new(14.0, FontFamily::Proportional),
+                                ..Default::default()
+                            },
+                        );
+
+                        let percentage = transcoder_state
+                            .ui_info_state
+                            .plot_points_raw_adder_bitrate_y
+                            .points
+                            .iter()
+                            .last()
+                            .unwrap_or(&-999.0)
+                            / transcoder_state
+                                .ui_info_state
+                                .plot_points_raw_source_bitrate_y
+                                .points
+                                .iter()
+                                .last()
+                                .unwrap_or(&-999.0)
+                            * 100.0;
+
+                        let percentage_str =
+                            format!("{number:.prec$}%", prec = 2, number = percentage);
+                        let color = if percentage < 100.0 {
+                            Color32::GREEN
+                        } else {
+                            Color32::RED
+                        };
+                        job.append(
+                            &percentage_str,
+                            0.0,
+                            TextFormat {
+                                font_id: FontId::new(14.0, FontFamily::Proportional),
+                                color,
+                                ..Default::default()
+                            },
+                        );
+
+                        ui.label(job);
+                    });
+
                     let avail_size = ui.available_size();
                     let size = match (
                         image.texture_descriptor.size.width as f32,
@@ -296,6 +405,7 @@ fn draw_ui(
                             }
                         }
                     };
+
                     ui.image(texture_id, size);
                 }
             });
