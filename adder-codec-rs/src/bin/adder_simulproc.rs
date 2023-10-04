@@ -132,7 +132,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
 #[cfg(test)]
 mod tests {
-    use adder_codec_core::codec::EncoderType;
+    use adder_codec_core::codec::EncoderOptions;
     use adder_codec_core::DeltaT;
     use adder_codec_core::SourceCamera::FramedU8;
     use adder_codec_core::TimeMode;
@@ -147,7 +147,6 @@ mod tests {
     use std::process::Command;
     use std::thread::sleep;
     use std::time::Duration;
-    use adder_codec_core::codec::EncoderOptions;
 
     #[test]
     fn dark() -> Result<(), Box<dyn Error>> {
