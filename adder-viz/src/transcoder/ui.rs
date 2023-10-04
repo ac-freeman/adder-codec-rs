@@ -327,14 +327,6 @@ impl TranscoderState {
             .plot_points_raw_adder_bitrate_y
             .update(bitrate);
 
-        let raw_source_bitrate = self.ui_info_state.source_samples_per_sec
-            * self.ui_info_state.plane.volume() as f64
-            / 1024.0
-            / 1024.0; // source in megabytes per sec
-        self.ui_info_state
-            .plot_points_raw_source_bitrate_y
-            .update(raw_source_bitrate);
-
         self.ui_info_state
             .plot_points_latency_y
             .update(self.ui_info_state.davis_latency as f64);
@@ -459,8 +451,6 @@ impl TranscoderState {
         let video = source.get_video_mut();
         self.ui_info_state.event_size = video.get_event_size();
         self.ui_info_state.plane = video.state.plane;
-        self.ui_info_state.source_samples_per_sec =
-            video.get_tps() as f64 / video.get_ref_time() as f64;
 
         video.instantaneous_view_mode = self.ui_state.view_mode_radio_state;
         video.update_detect_features(self.ui_state.detect_features, self.ui_state.show_features);
@@ -573,6 +563,11 @@ impl TranscoderState {
             let handle = images.add(image_bevy);
             handles.input_view = handle;
         }
+
+        let raw_source_bitrate = source.get_running_input_bitrate() / 8.0 / 1024.0 / 1024.0; // source in megabytes per sec
+        self.ui_info_state
+            .plot_points_raw_source_bitrate_y
+            .update(raw_source_bitrate);
 
         Ok(())
     }

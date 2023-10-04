@@ -193,6 +193,13 @@ impl<W: Write + 'static> Source<W> for Framed<W> {
     fn get_input(&self) -> &Mat {
         self.get_last_input_frame_scaled()
     }
+
+    fn get_running_input_bitrate(&self) -> f64 {
+        let video = self.get_video_ref();
+        video.get_tps() as f64 / video.get_ref_time() as f64
+            * video.state.plane.volume() as f64
+            * 8.0
+    }
 }
 
 impl<W: Write + 'static> VideoBuilder<W> for Framed<W> {
