@@ -962,6 +962,10 @@ impl<W: Write + 'static> Video<W> {
             px.c_increase_counter = 0;
         }
     }
+
+    pub fn get_event_size(&self) -> u8 {
+        self.encoder.meta().event_size
+    }
 }
 
 /// Integrate an intensity value for a pixel, over a given time span

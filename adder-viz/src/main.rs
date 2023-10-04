@@ -231,67 +231,74 @@ fn draw_ui(
         let avail_size = ui.available_size();
         ui.horizontal(|ui| {
             ui.set_max_size(avail_size);
-            if let (Some(input), Some(input_texture_id)) = (input, input_texture_id) {
-                has_input = true;
-                let mut avail_size = ui.available_size();
-                avail_size.x = avail_size.x / 2.0 - ui.spacing().item_spacing.y / 2.0;
-                let size = match (
-                    input.texture_descriptor.size.width as f32,
-                    input.texture_descriptor.size.height as f32,
-                ) {
-                    (a, b) if a / b > avail_size.x / avail_size.y => {
-                        /*
-                        The available space has a taller aspect ratio than the video
-                        Fill the available horizontal space.
-                         */
-                        egui::Vec2 {
-                            x: avail_size.x,
-                            y: (avail_size.x / a) * b,
-                        }
-                    }
-                    (a, b) => {
-                        /*
-                        The available space has a shorter aspect ratio than the video
-                        Fill the available vertical space.
-                         */
-                        egui::Vec2 {
-                            x: (avail_size.y / b) * a,
-                            y: avail_size.y,
-                        }
-                    }
-                };
-                ui.image(input_texture_id, size);
-            }
 
-            if let (Some(image), Some(texture_id)) = (image, texture_id) {
-                let avail_size = ui.available_size();
-                let size = match (
-                    image.texture_descriptor.size.width as f32,
-                    image.texture_descriptor.size.height as f32,
-                ) {
-                    (a, b) if a / b > avail_size.x / avail_size.y => {
-                        /*
-                        The available space has a taller aspect ratio than the video
-                        Fill the available horizontal space.
-                         */
-                        egui::Vec2 {
-                            x: avail_size.x,
-                            y: (avail_size.x / a) * b,
+            ui.vertical(|ui| {
+                if let (Some(input), Some(input_texture_id)) = (input, input_texture_id) {
+                    ui.label("Input");
+                    has_input = true;
+                    let mut avail_size = ui.available_size();
+                    avail_size.x = avail_size.x / 2.0 - ui.spacing().item_spacing.y / 2.0;
+                    let size = match (
+                        input.texture_descriptor.size.width as f32,
+                        input.texture_descriptor.size.height as f32,
+                    ) {
+                        (a, b) if a / b > avail_size.x / avail_size.y => {
+                            /*
+                            The available space has a taller aspect ratio than the video
+                            Fill the available horizontal space.
+                             */
+                            egui::Vec2 {
+                                x: avail_size.x,
+                                y: (avail_size.x / a) * b,
+                            }
                         }
-                    }
-                    (a, b) => {
-                        /*
-                        The available space has a shorter aspect ratio than the video
-                        Fill the available vertical space.
-                         */
-                        egui::Vec2 {
-                            x: (avail_size.y / b) * a,
-                            y: avail_size.y,
+                        (a, b) => {
+                            /*
+                            The available space has a shorter aspect ratio than the video
+                            Fill the available vertical space.
+                             */
+                            egui::Vec2 {
+                                x: (avail_size.y / b) * a,
+                                y: avail_size.y,
+                            }
                         }
-                    }
-                };
-                ui.image(texture_id, size);
-            }
+                    };
+                    ui.image(input_texture_id, size);
+                }
+            });
+
+            ui.vertical(|ui| {
+                if let (Some(image), Some(texture_id)) = (image, texture_id) {
+                    ui.label("ADDER");
+                    let avail_size = ui.available_size();
+                    let size = match (
+                        image.texture_descriptor.size.width as f32,
+                        image.texture_descriptor.size.height as f32,
+                    ) {
+                        (a, b) if a / b > avail_size.x / avail_size.y => {
+                            /*
+                            The available space has a taller aspect ratio than the video
+                            Fill the available horizontal space.
+                             */
+                            egui::Vec2 {
+                                x: avail_size.x,
+                                y: (avail_size.x / a) * b,
+                            }
+                        }
+                        (a, b) => {
+                            /*
+                            The available space has a shorter aspect ratio than the video
+                            Fill the available vertical space.
+                             */
+                            egui::Vec2 {
+                                x: (avail_size.y / b) * a,
+                                y: avail_size.y,
+                            }
+                        }
+                    };
+                    ui.image(texture_id, size);
+                }
+            });
         });
 
         if let Some(msg) = main_ui_state.error_msg.as_ref() {

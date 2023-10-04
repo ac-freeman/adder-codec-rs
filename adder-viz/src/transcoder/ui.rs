@@ -14,7 +14,7 @@ use std::collections::VecDeque;
 use std::error::Error;
 
 use adder_codec_core::codec::EncoderType;
-use adder_codec_core::TimeMode;
+use adder_codec_core::{PlaneSize, TimeMode};
 use adder_codec_rs::transcoder::source::davis::TranscoderMode::RawDvs;
 use adder_codec_rs::transcoder::source::{CRF, DEFAULT_CRF_QUALITY};
 use bevy_egui::egui::plot::Corner::LeftTop;
@@ -106,14 +106,19 @@ pub struct InfoUiState {
     pub events_ppc_per_sec: f64,
     pub events_ppc_total: f64,
     pub events_total: u64,
+    pub event_size: u8,
+    source_samples_per_sec: f64,
+    plane: PlaneSize,
     pub source_name: RichText,
     pub output_name: OutputName,
     pub davis_latency: u128,
     pub(crate) input_path_0: Option<PathBuf>,
     pub(crate) input_path_1: Option<PathBuf>,
     pub(crate) output_path: Option<PathBuf>,
-    pub(crate) plot_points_eventrate_y: VecDeque<f64>,
-    pub(crate) plot_points_latency_y: VecDeque<f64>,
+    plot_points_eventrate_y: PlotY,
+    plot_points_raw_adder_bitrate_y: PlotY,
+    plot_points_raw_source_bitrate_y: PlotY,
+    plot_points_latency_y: PlotY,
     pub view_mode_radio_state: FramedViewMode, // TODO: Move to different struct
 }
 
@@ -138,14 +143,27 @@ impl Default for InfoUiState {
             events_ppc_per_sec: 0.,
             events_ppc_total: 0.0,
             events_total: 0,
+            event_size: 0,
+            source_samples_per_sec: 0.0,
+            plane: Default::default(),
             source_name: RichText::new("No input file selected yet"),
             output_name: Default::default(),
             davis_latency: 0,
             input_path_0: None,
             input_path_1: None,
             output_path: None,
-            plot_points_eventrate_y: plot_points.clone(),
-            plot_points_latency_y: plot_points,
+            plot_points_eventrate_y: PlotY {
+                points: plot_points.clone(),
+            },
+            plot_points_raw_adder_bitrate_y: PlotY {
+                points: plot_points.clone(),
+            },
+            plot_points_raw_source_bitrate_y: PlotY {
+                points: plot_points.clone(),
+            },
+            plot_points_latency_y: PlotY {
+                points: plot_points,
+            },
             view_mode_radio_state: FramedViewMode::Intensity,
         }
     }
@@ -290,29 +308,41 @@ impl TranscoderState {
 
         self.ui_info_state
             .plot_points_eventrate_y
-            .push_back(self.ui_info_state.events_ppc_per_sec);
-        self.ui_info_state.plot_points_eventrate_y.pop_front();
+            .update(self.ui_info_state.events_ppc_per_sec);
+
+        if self.ui_info_state.event_size == 0 {
+            self.ui_info_state.event_size = if self.ui_info_state.plane.c() == 1 {
+                9
+            } else {
+                11
+            };
+        }
+        let bitrate = self.ui_info_state.events_ppc_per_sec
+            * self.ui_info_state.event_size as f64
+            * self.ui_info_state.plane.volume() as f64
+            / 1024.0
+            / 1024.0; // transcoded raw in megabytes per sec
+        let raw_source_bitrate = self.ui_info_state.source_samples_per_sec
+            * self.ui_info_state.plane.volume() as f64
+            / 1024.0
+            / 1024.0; // source in megabytes per sec
+        self.ui_info_state
+            .plot_points_raw_source_bitrate_y
+            .update(raw_source_bitrate);
 
         self.ui_info_state
             .plot_points_latency_y
-            .push_back(self.ui_info_state.davis_latency as f64);
-        self.ui_info_state.plot_points_latency_y.pop_front();
+            .update(self.ui_info_state.davis_latency as f64);
 
-        let plot_points: PlotPoints = (0..1000)
-            .map(|i| {
-                let x = i as f64;
-                [x, self.ui_info_state.plot_points_eventrate_y[i]]
-            })
-            .collect();
-        let line_eventrate = Line::new(plot_points).name("Events PPC per sec");
+        let line_eventrate = self
+            .ui_info_state
+            .plot_points_eventrate_y
+            .get_plotline("Events PPC per sec");
 
-        let plot_points: PlotPoints = (0..1000)
-            .map(|i| {
-                let x = i as f64;
-                [x, self.ui_info_state.plot_points_latency_y[i]]
-            })
-            .collect();
-        let line_latency = Line::new(plot_points).name("Latency");
+        let line_latency = self
+            .ui_info_state
+            .plot_points_latency_y
+            .get_plotline("Latency");
 
         Plot::new("my_plot")
             .height(100.0)
@@ -422,6 +452,11 @@ impl TranscoderState {
             )
         }
         let video = source.get_video_mut();
+        self.ui_info_state.event_size = video.get_event_size();
+        self.ui_info_state.plane = video.state.plane;
+        self.ui_info_state.source_samples_per_sec =
+            video.get_tps() as f64 / video.get_ref_time() as f64;
+
         video.instantaneous_view_mode = self.ui_state.view_mode_radio_state;
         video.update_detect_features(self.ui_state.detect_features, self.ui_state.show_features);
     }
@@ -817,4 +852,25 @@ fn side_panel_grid_contents(
         );
     });
     ui.end_row();
+}
+
+struct PlotY {
+    points: VecDeque<f64>,
+}
+
+impl PlotY {
+    fn get_plotline(&self, name: &str) -> Line {
+        let plot_points: PlotPoints = (0..1000)
+            .map(|i| {
+                let x = i as f64;
+                [x, self.points[i]]
+            })
+            .collect();
+        Line::new(plot_points).name(name)
+    }
+
+    fn update(&mut self, new_point: f64) {
+        self.points.push_back(new_point);
+        self.points.pop_front();
+    }
 }
