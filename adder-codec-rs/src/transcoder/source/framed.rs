@@ -170,6 +170,10 @@ impl<W: Write + 'static> Source<W> for Framed<W> {
         })
     }
 
+    fn crf(&mut self, crf: u8) {
+        self.video.update_crf(crf, true);
+    }
+
     fn get_video_mut(&mut self) -> &mut Video<W> {
         &mut self.video
     }
@@ -187,6 +191,29 @@ impl<W: Write + 'static> VideoBuilder<W> for Framed<W> {
     fn contrast_thresholds(mut self, c_thresh_pos: u8, _c_thresh_neg: u8) -> Self {
         self.video = self.video.c_thresh_pos(c_thresh_pos);
         // self.video = self.video.c_thresh_neg(c_thresh_neg);
+        self
+    }
+
+    fn crf(mut self, crf: u8) -> Self {
+        self.video.update_crf(crf, true);
+        self
+    }
+
+    fn quality_manual(
+        mut self,
+        c_thresh_baseline: u8,
+        c_thresh_max: u8,
+        delta_t_max_multiplier: u32,
+        c_increase_velocity: u8,
+        feature_c_radius_denom: f32,
+    ) -> Self {
+        self.video.update_quality_manual(
+            c_thresh_baseline,
+            c_thresh_max,
+            delta_t_max_multiplier,
+            c_increase_velocity,
+            feature_c_radius_denom,
+        );
         self
     }
 
@@ -240,8 +267,8 @@ impl<W: Write + 'static> VideoBuilder<W> for Framed<W> {
         self
     }
 
-    fn detect_features(mut self, detect_features: bool) -> Self {
-        self.video = self.video.detect_features(detect_features);
+    fn detect_features(mut self, detect_features: bool, show_features: bool) -> Self {
+        self.video = self.video.detect_features(detect_features, show_features);
         self
     }
 }

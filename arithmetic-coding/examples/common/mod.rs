@@ -26,7 +26,7 @@ where
     I: IntoIterator<Item = M::Symbol>,
 {
     let mut bitwriter = BitWriter::endian(Vec::new(), BigEndian);
-    let mut encoder = Encoder::new(model, &mut bitwriter);
+    let mut encoder = Encoder::new(model);
 
     encoder.encode_all(input).unwrap();
     bitwriter.byte_align().unwrap();

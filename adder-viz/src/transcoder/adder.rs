@@ -16,6 +16,7 @@ use adder_codec_rs::davis_edi_rs::util::reconstructor::Reconstructor;
 use crate::transcoder::ui::{ParamsUiState, TranscoderState};
 use adder_codec_core::SourceCamera::{DavisU8, FramedU8};
 use adder_codec_rs::transcoder::source::video::VideoBuilder;
+use adder_codec_rs::transcoder::source::DEFAULT_CRF_QUALITY;
 use bevy_egui::egui::{Color32, RichText};
 use opencv::Result;
 
@@ -25,8 +26,6 @@ pub struct AdderTranscoder {
     pub(crate) davis_source: Option<Davis<BufWriter<File>>>,
     pub(crate) live_image: Image,
 }
-
-
 
 #[derive(Debug)]
 struct AdderTranscoderError(String);
@@ -67,14 +66,12 @@ impl AdderTranscoder {
                         )?
                         .frame_start(current_frame)?
                         .chunk_rows(64)
-                        .c_thresh_pos(ui_state.adder_tresh as u8)
-                        // .c_thresh_neg(ui_state.adder_tresh as u8)
                         .auto_time_parameters(
                             ui_state.delta_t_ref as u32,
                             ui_state.delta_t_max_mult * ui_state.delta_t_ref as u32,
-                            None,
+                            Some(ui_state.time_mode),
                         )?
-                        .time_mode(ui_state.time_mode)
+                        .crf(DEFAULT_CRF_QUALITY)
                         .show_display(false);
 
                         // TODO: Change the builder to take in a pathbuf directly, not a string,
@@ -149,12 +146,14 @@ impl AdderTranscoder {
                             simulate_latency = false;
                         }
 
-                        let filename_1 = input_path_buf_1.as_ref().map(|input_path_buf_1| input_path_buf_1
-                                    .file_name()
-                                    .expect("File must exist")
-                                    .to_str()
-                                    .expect("Bad filename")
-                                    .to_string());
+                        let filename_1 = input_path_buf_1.as_ref().map(|input_path_buf_1| {
+                            input_path_buf_1
+                                .file_name()
+                                .expect("File must exist")
+                                .to_str()
+                                .expect("Bad filename")
+                                .to_string()
+                        });
 
                         let reconstructor = rt.block_on(Reconstructor::new(
                             dir + "/",
@@ -182,14 +181,13 @@ impl AdderTranscoder {
                                 .optimize_adder_controller(false) // TODO
                                 .mode(ui_state.davis_mode_radio_state)
                                 .time_mode(ui_state.time_mode)
+                                .crf(DEFAULT_CRF_QUALITY)
                                 .time_parameters(
                                     1000000_u32,
                                     (1_000_000.0 / ui_state.davis_output_fps) as DeltaT,
                                     (1_000_000.0 * ui_state.delta_t_max_mult as f32) as u32,
                                     Some(ui_state.time_mode),
-                                )? // TODO
-                                .c_thresh_pos(ui_state.adder_tresh as u8)
-                                .c_thresh_neg(ui_state.adder_tresh as u8);
+                                )?;
 
                         // Override time parameters if we're in framed mode
                         if ui_state.davis_mode_radio_state == TranscoderMode::Framed {

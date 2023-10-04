@@ -11,7 +11,7 @@ pub mod codec;
 mod codec_old;
 pub use bitstream_io;
 use bitstream_io::{BigEndian, BitReader};
-use std::cmp::{Ordering};
+use std::cmp::Ordering;
 use std::fs::File;
 use std::io::BufReader;
 use std::ops::Add;
@@ -33,7 +33,7 @@ pub enum PlaneError {
 }
 
 #[allow(missing_docs)]
-#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq)]
 pub enum SourceCamera {
     #[default]
     FramedU8,
@@ -54,7 +54,7 @@ use crate::codec::compressed::blocks::{DeltaTResidual, EventResidual};
 use crate::codec::compressed::stream::CompressedInput;
 use crate::codec::decoder::Decoder;
 use crate::codec::raw::stream::RawInput;
-use crate::codec::{CodecError};
+use crate::codec::CodecError;
 use serde::{Deserialize, Serialize};
 
 /// The type of time used in the ADΔER representation
@@ -72,7 +72,7 @@ pub enum TimeMode {
 }
 
 /// The size of the image plane in pixels
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct PlaneSize {
     width: u16,
     height: u16,
@@ -154,6 +154,16 @@ impl PlaneSize {
     pub fn volume(&self) -> usize {
         self.area_wh() * self.channels as usize
     }
+
+    /// The smaller of the width and height dimensions
+    pub fn min_resolution(&self) -> u16 {
+        self.width.min(self.height)
+    }
+
+    /// The larger of the width and height dimensions
+    pub fn max_resolution(&self) -> u16 {
+        self.width.max(self.height)
+    }
 }
 
 /// Decimation value; a pixel's sensitivity.
@@ -171,10 +181,15 @@ pub const D_ZERO_INTEGRATION: D = 254;
 /// Special symbol signifying no [`Event`] exists
 // pub const D_NO_EVENT: D = 253;
 
-#[derive(Clone, Copy, PartialEq, Default)]
+#[derive(Clone, Copy, PartialEq, Default, Debug)]
 pub enum Mode {
+    /// Preserve temporal coherence for framed inputs. When an event fires, the ticks
+    /// remaining for that input frame (and its associated intensity) are discarded. The
+    /// difference in time is implied since the number of ticks per input frame is constant.
     #[default]
     FramePerfect,
+
+    /// Do not do the above ^
     Continuous,
 }
 /// Precision for maximum intensity representable with allowed [`D`] values
@@ -321,6 +336,8 @@ pub const D_START: D = 7;
 /// Number of ticks elapsed since a given pixel last fired an [`Event`]
 pub type DeltaT = u32;
 
+/// Absolute firing time (in ticks) of an event. For a given pixel, this will always
+/// be grater than or equal to that of the pixel's last fired event.
 pub type AbsoluteT = u32;
 
 /// Large count of ticks (e.g., for tracking the running timestamp of a sequence of [Events](Event)
@@ -570,7 +587,14 @@ pub struct EventCoordless {
     pub delta_t: DeltaT,
 }
 
+impl Into<f64> for EventCoordless {
+    fn into(self) -> f64 {
+        panic!("Not implemented")
+    }
+}
+
 impl EventCoordless {
+    /// Get the t or dt value
     #[inline(always)]
     pub fn t(&self) -> AbsoluteT {
         self.delta_t as AbsoluteT

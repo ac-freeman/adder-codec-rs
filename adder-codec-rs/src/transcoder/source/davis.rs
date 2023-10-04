@@ -328,9 +328,7 @@ impl<W: Write + 'static> Integration<W> {
                                 * delta_t_ticks)
                                 .max(0.0);
 
-                            let mut buffer_grew = false;
                             if px.need_to_pop_top {
-                                buffer_grew = true;
                                 buffer.push(px.pop_top_event(
                                     first_integration,
                                     Continuous,
@@ -345,7 +343,8 @@ impl<W: Write + 'static> Integration<W> {
                                 Continuous,
                                 video.state.delta_t_max,
                                 video.state.ref_time,
-                                video.state.c_thresh_pos,
+                                video.state.c_thresh_max,
+                                video.state.c_increase_velocity,
                             );
                             let running_t_after = px.running_t;
                             debug_assert_eq!(
@@ -354,7 +353,6 @@ impl<W: Write + 'static> Integration<W> {
                             );
 
                             if px.need_to_pop_top {
-                                buffer_grew = true;
                                 buffer.push(px.pop_top_event(
                                     first_integration,
                                     Continuous,
@@ -378,8 +376,8 @@ impl<W: Write + 'static> Integration<W> {
 
                             let frame_val_u8 = frame_val as u8; // TODO: don't let this be lossy here
 
-                            if frame_val_u8 < base_val.saturating_sub(video.state.c_thresh_neg)
-                                || frame_val_u8 > base_val.saturating_add(video.state.c_thresh_pos)
+                            if frame_val_u8 < base_val.saturating_sub(px.c_thresh)
+                                || frame_val_u8 > base_val.saturating_add(px.c_thresh)
                             {
                                 px.pop_best_events(&mut buffer, Continuous, video.state.ref_time);
                                 px.base_val = frame_val_u8;
@@ -448,7 +446,9 @@ impl<W: Write + 'static> Integration<W> {
             for (e1, e2) in events.iter().tuple_windows() {
                 video.encoder.ingest_event(*e1)?;
                 if e2.delta_t != e1.delta_t {
-                    video.feature_test(e1);
+                    if let Err(e) = video.feature_test(e1) {
+                        return Err(CodecError::VisionError(e.to_string()));
+                    }
                 }
             }
         }
@@ -570,9 +570,6 @@ impl<W: Write + 'static> Integration<W> {
         for events in &big_buffer {
             for (e1, e2) in events.iter().tuple_windows() {
                 video.encoder.ingest_event(*e1)?;
-                if e2.delta_t != e1.delta_t {
-                    video.feature_test(e1);
-                }
             }
         }
 
@@ -875,6 +872,10 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Davis<W> {
         ret
     }
 
+    fn crf(&mut self, crf: u8) {
+        self.video.update_crf(crf, true);
+    }
+
     fn get_video_mut(&mut self) -> &mut Video<W> {
         &mut self.video
     }
@@ -892,6 +893,29 @@ impl<W: Write + 'static> VideoBuilder<W> for Davis<W> {
     fn contrast_thresholds(mut self, c_thresh_pos: u8, _c_thresh_neg: u8) -> Self {
         self.video = self.video.c_thresh_pos(c_thresh_pos);
         // self.video = self.video.c_thresh_neg(c_thresh_neg);
+        self
+    }
+
+    fn crf(mut self, crf: u8) -> Self {
+        self.video.update_crf(crf, false);
+        self
+    }
+
+    fn quality_manual(
+        mut self,
+        c_thresh_baseline: u8,
+        c_thresh_max: u8,
+        delta_t_max_multiplier: u32,
+        c_increase_velocity: u8,
+        feature_c_radius_denom: f32,
+    ) -> Self {
+        self.video.update_quality_manual(
+            c_thresh_baseline,
+            c_thresh_max,
+            delta_t_max_multiplier,
+            c_increase_velocity,
+            feature_c_radius_denom,
+        );
         self
     }
 
@@ -942,8 +966,8 @@ impl<W: Write + 'static> VideoBuilder<W> for Davis<W> {
         self
     }
 
-    fn detect_features(mut self, detect_features: bool) -> Self {
-        self.video = self.video.detect_features(detect_features);
+    fn detect_features(mut self, detect_features: bool, show_features: bool) -> Self {
+        self.video = self.video.detect_features(detect_features, show_features);
         self
     }
 }

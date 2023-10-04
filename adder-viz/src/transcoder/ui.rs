@@ -10,11 +10,16 @@ use bevy_egui::egui::{RichText, Ui};
 use opencv::core::{Mat, MatTraitConstManual};
 use opencv::imgproc;
 use rayon::current_num_threads;
+use std::collections::VecDeque;
 use std::error::Error;
 
 use adder_codec_core::codec::EncoderOptions;
 use adder_codec_core::TimeMode;
 use adder_codec_rs::transcoder::source::davis::TranscoderMode::RawDvs;
+use adder_codec_rs::transcoder::source::{CRF, DEFAULT_CRF_QUALITY};
+use bevy_egui::egui::plot::Corner::LeftTop;
+use bevy_egui::egui::plot::Legend;
+use egui::plot::{Line, Plot, PlotPoints};
 use std::default::Default;
 use std::fs::File;
 use std::io::BufWriter;
@@ -24,10 +29,8 @@ pub struct ParamsUiState {
     pub(crate) delta_t_ref: f32,
     pub(crate) delta_t_ref_max: f32,
     pub(crate) delta_t_max_mult: u32,
-    pub(crate) adder_tresh: f32,
     delta_t_ref_slider: f32,
     delta_t_max_mult_slider: u32,
-    adder_tresh_slider: f32,
     pub(crate) scale: f64,
     scale_slider: f64,
     pub(crate) thread_count: usize,
@@ -47,6 +50,18 @@ pub struct ParamsUiState {
     pub(crate) time_mode: TimeMode,
     pub(crate) encoder_options: EncoderOptions,
     pub(crate) detect_features: bool,
+    pub(crate) show_features: bool,
+    pub(crate) auto_quality: bool,
+    pub(crate) crf: u8,
+    pub(crate) crf_slider: u8,
+    feature_radius: f32,
+    feature_radius_slider: f32,
+    adder_tresh_velocity: u8,
+    adder_tresh_velocity_slider: u8,
+    adder_tresh_max: u8,
+    adder_tresh_max_slider: u8,
+    pub(crate) adder_tresh_baseline: u8,
+    adder_tresh_baseline_slider: u8,
 }
 
 impl Default for ParamsUiState {
@@ -55,10 +70,8 @@ impl Default for ParamsUiState {
             delta_t_ref: 255.0,
             delta_t_ref_max: 255.0,
             delta_t_max_mult: 120,
-            adder_tresh: 10.0,
             delta_t_ref_slider: 255.0,
             delta_t_max_mult_slider: 120,
-            adder_tresh_slider: 10.0,
             scale: 0.5,
             scale_slider: 0.5,
             thread_count: rayon::current_num_threads() - 1,
@@ -79,6 +92,18 @@ impl Default for ParamsUiState {
             time_mode: TimeMode::default(),
             encoder_options: EncoderOptions::default(),
             detect_features: false,
+            show_features: false,
+            auto_quality: true,
+            crf: DEFAULT_CRF_QUALITY,
+            crf_slider: DEFAULT_CRF_QUALITY,
+            feature_radius: 0.0,
+            feature_radius_slider: 0.0,
+            adder_tresh_velocity: 1,
+            adder_tresh_velocity_slider: 1,
+            adder_tresh_max: 10,
+            adder_tresh_max_slider: 10,
+            adder_tresh_baseline: 10,
+            adder_tresh_baseline_slider: 10,
         }
     }
 }
@@ -94,6 +119,8 @@ pub struct InfoUiState {
     pub(crate) input_path_0: Option<PathBuf>,
     pub(crate) input_path_1: Option<PathBuf>,
     pub(crate) output_path: Option<PathBuf>,
+    pub(crate) plot_points_eventrate_y: VecDeque<f64>,
+    pub(crate) plot_points_latency_y: VecDeque<f64>,
     pub view_mode_radio_state: FramedViewMode, // TODO: Move to different struct
 }
 
@@ -111,6 +138,8 @@ impl Default for OutputName {
 
 impl Default for InfoUiState {
     fn default() -> Self {
+        let plot_points: VecDeque<f64> = (0..1000).map(|_| 0.0).collect();
+
         InfoUiState {
             events_per_sec: 0.,
             events_ppc_per_sec: 0.,
@@ -122,6 +151,8 @@ impl Default for InfoUiState {
             input_path_0: None,
             input_path_1: None,
             output_path: None,
+            plot_points_eventrate_y: plot_points.clone(),
+            plot_points_latency_y: plot_points,
             view_mode_radio_state: FramedViewMode::Intensity,
         }
     }
@@ -205,7 +236,10 @@ impl TranscoderState {
                     self.ui_info_state.input_path_1 = Some(path.clone());
                 }
             }
-            if ui.button("Go!").clicked() && self.ui_info_state.input_path_0.is_some() && self.ui_info_state.input_path_1.is_some() {
+            if ui.button("Go!").clicked()
+                && self.ui_info_state.input_path_0.is_some()
+                && self.ui_info_state.input_path_1.is_some()
+            {
                 replace_adder_transcoder(
                     self,
                     self.ui_info_state.input_path_0.clone(),
@@ -260,6 +294,41 @@ impl TranscoderState {
                 self.ui_info_state.davis_latency
             ));
         }
+
+        self.ui_info_state
+            .plot_points_eventrate_y
+            .push_back(self.ui_info_state.events_ppc_per_sec);
+        self.ui_info_state.plot_points_eventrate_y.pop_front();
+
+        self.ui_info_state
+            .plot_points_latency_y
+            .push_back(self.ui_info_state.davis_latency as f64);
+        self.ui_info_state.plot_points_latency_y.pop_front();
+
+        let plot_points: PlotPoints = (0..1000)
+            .map(|i| {
+                let x = i as f64;
+                [x, self.ui_info_state.plot_points_eventrate_y[i]]
+            })
+            .collect();
+        let line_eventrate = Line::new(plot_points).name("Events PPC per sec");
+
+        let plot_points: PlotPoints = (0..1000)
+            .map(|i| {
+                let x = i as f64;
+                [x, self.ui_info_state.plot_points_latency_y[i]]
+            })
+            .collect();
+        let line_latency = Line::new(plot_points).name("Latency");
+
+        Plot::new("my_plot")
+            .height(100.0)
+            .allow_drag(true)
+            .legend(Legend::default().position(LeftTop))
+            .show(ui, |plot_ui| {
+                plot_ui.line(line_eventrate);
+                plot_ui.line(line_latency);
+            });
     }
 
     pub fn update_adder_params(&mut self) {
@@ -276,9 +345,10 @@ impl TranscoderState {
                             || source.get_reconstructor().as_ref().unwrap().output_fps
                                 != self.ui_state.davis_output_fps
                             || source.time_mode != self.ui_state.time_mode
-                            || source.get_video_ref().encoder_options != self.ui_state.encoder_options
+                            || ((source.get_video_ref().encoder_options != self.ui_state.encoder_options)
                             // TODO: better way to do this
-                            || match source.get_video_ref().encoder_options { EncoderOptions::RawBandwidthLimited {target_bitrate, alpha} => target_bitrate != self.ui_state.target_bitrate || alpha != self.ui_state.alpha, _ => false }
+                            || (match source.get_video_ref().encoder_options { EncoderOptions::RawBandwidthLimited {target_bitrate, alpha} => target_bitrate != self.ui_state.target_bitrate || alpha != self.ui_state.alpha, _ => false })
+                                && self.ui_info_state.output_path.is_some())
                         {
                             if self.ui_state.davis_mode_radio_state == RawDvs {
                                 // self.ui_state.davis_output_fps = 1000000.0;
@@ -306,9 +376,10 @@ impl TranscoderState {
                     if source.scale != self.ui_state.scale
                         || source.get_ref_time() != self.ui_state.delta_t_ref as u32
                         || source.time_mode != self.ui_state.time_mode
-                        || source.get_video_ref().encoder_options != self.ui_state.encoder_options
+                        || ((source.get_video_ref().encoder_options != self.ui_state.encoder_options)
                         // TODO: better way to do this
-                        || match source.get_video_ref().encoder_options { EncoderOptions::RawBandwidthLimited {target_bitrate, alpha} => target_bitrate != self.ui_state.target_bitrate || alpha != self.ui_state.alpha, _ => false }
+                        || (match source.get_video_ref().encoder_options { EncoderOptions::RawBandwidthLimited {target_bitrate, alpha} => target_bitrate != self.ui_state.target_bitrate || alpha != self.ui_state.alpha, _ => false })
+                            && self.ui_info_state.output_path.is_some())
                         || match source.get_video_ref().state.plane.c() {
                             1 => {
                                 // True if the transcoder is gray, but the user wants color
@@ -336,12 +407,34 @@ impl TranscoderState {
             }
         };
 
+        if self.ui_state.auto_quality {
+            source.crf(self.ui_state.crf);
+
+            let video = source.get_video_ref();
+            // Update ui state to match
+            self.ui_state.adder_tresh_baseline = video.state.c_thresh_baseline;
+            self.ui_state.adder_tresh_baseline_slider = self.ui_state.adder_tresh_baseline;
+            self.ui_state.adder_tresh_max = video.state.c_thresh_max as u8;
+            self.ui_state.adder_tresh_max_slider = self.ui_state.adder_tresh_max;
+            self.ui_state.delta_t_max_mult = video.state.delta_t_max / video.state.ref_time;
+            self.ui_state.delta_t_max_mult_slider = self.ui_state.delta_t_max_mult;
+            self.ui_state.adder_tresh_velocity = video.state.c_increase_velocity;
+            self.ui_state.adder_tresh_velocity_slider = self.ui_state.adder_tresh_velocity;
+            self.ui_state.feature_radius = video.state.feature_c_radius as f32;
+            self.ui_state.feature_radius_slider = self.ui_state.feature_radius;
+        } else {
+            let video = source.get_video_mut();
+            video.update_quality_manual(
+                self.ui_state.adder_tresh_baseline,
+                self.ui_state.adder_tresh_max,
+                self.ui_state.delta_t_max_mult,
+                self.ui_state.adder_tresh_velocity,
+                self.ui_state.feature_radius,
+            )
+        }
         let video = source.get_video_mut();
-        video.update_adder_thresh_pos(self.ui_state.adder_tresh as u8);
-        // video.update_adder_thresh_neg(self.ui_state.adder_tresh as u8);
-        video.update_delta_t_max(self.ui_state.delta_t_max_mult * video.get_ref_time());
         video.instantaneous_view_mode = self.ui_state.view_mode_radio_state;
-        video.update_detect_features(self.ui_state.detect_features);
+        video.update_detect_features(self.ui_state.detect_features, self.ui_state.show_features);
     }
 
     pub fn consume_source(
@@ -449,9 +542,30 @@ fn side_panel_grid_contents(
     );
     ui.end_row();
 
+    ui.label("Quality parameters:");
+    ui.add_enabled(
+        true,
+        egui::Checkbox::new(&mut ui_state.auto_quality, "Auto mode?"),
+    );
+    // ui.toggle_value(&mut ui_state.auto_quality, "Auto mode?");
+    ui.end_row();
+
+    ui.label("CRF quality:");
+    slider_pm(
+        ui_state.auto_quality,
+        false,
+        ui,
+        &mut ui_state.crf,
+        &mut ui_state.crf_slider,
+        0..=CRF.len() as u8 - 1,
+        vec![],
+        1,
+    );
+    ui.end_row();
+
     ui.label("Δt_max multiplier:");
     slider_pm(
-        true,
+        !ui_state.auto_quality,
         false,
         ui,
         &mut ui_state.delta_t_max_mult,
@@ -462,14 +576,53 @@ fn side_panel_grid_contents(
     );
     ui.end_row();
 
-    ui.label("ADΔER threshold:");
+    ui.label("Threshold baseline:");
     slider_pm(
-        true,
+        !ui_state.auto_quality,
         false,
         ui,
-        &mut ui_state.adder_tresh,
-        &mut ui_state.adder_tresh_slider,
-        0.0..=255.0,
+        &mut ui_state.adder_tresh_baseline,
+        &mut ui_state.adder_tresh_baseline_slider,
+        0..=255,
+        vec![],
+        1,
+    );
+    ui.end_row();
+
+    ui.label("Threshold max:");
+    slider_pm(
+        !ui_state.auto_quality,
+        false,
+        ui,
+        &mut ui_state.adder_tresh_max,
+        &mut ui_state.adder_tresh_max_slider,
+        0..=255,
+        vec![],
+        1,
+    );
+    ui.end_row();
+
+    ui.label("Threshold velocity:");
+    slider_pm(
+        !ui_state.auto_quality,
+        false,
+        ui,
+        &mut ui_state.adder_tresh_velocity,
+        &mut ui_state.adder_tresh_velocity_slider,
+        1..=30,
+        vec![],
+        1,
+    );
+    ui.end_row();
+
+    ui.label("Feature radius:");
+    slider_pm(
+        !ui_state.auto_quality,
+        false,
+        ui,
+        &mut ui_state.feature_radius,
+        &mut ui_state.feature_radius_slider,
+        0.0..=100.0,
         vec![],
         1.0,
     );
@@ -669,9 +822,16 @@ fn side_panel_grid_contents(
     ui.end_row();
   
     ui.label("Processing:");
-    ui.add_enabled(
-        true,
-        egui::Checkbox::new(&mut ui_state.detect_features, "Detect features"),
-    );
+    ui.vertical(|ui| {
+        ui.add_enabled(
+            true,
+            egui::Checkbox::new(&mut ui_state.detect_features, "Detect features"),
+        );
+
+        ui.add_enabled(
+            ui_state.detect_features,
+            egui::Checkbox::new(&mut ui_state.show_features, "Show features"),
+        );
+    });
     ui.end_row();
 }

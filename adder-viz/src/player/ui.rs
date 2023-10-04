@@ -55,6 +55,7 @@ pub struct PlayerUiState {
     total_time: f32,
     ui_sliders: PlayerUiSliders,
     ui_sliders_drag: PlayerUiSliders,
+    pub(crate) detect_features: bool,
 }
 
 impl Default for PlayerUiState {
@@ -70,6 +71,7 @@ impl Default for PlayerUiState {
             total_time: 0.0,
             ui_sliders: Default::default(),
             ui_sliders_drag: Default::default(),
+            detect_features: false,
         }
     }
 }
@@ -273,6 +275,15 @@ impl PlayerState {
             &mut self.ui_state.reconstruction_method,
         );
 
+        ui.label("Processing:");
+        need_to_update |= ui
+            .add_enabled(
+                true,
+                egui::Checkbox::new(&mut self.ui_state.detect_features, "Detect features"),
+            )
+            .changed();
+        ui.end_row();
+
         if need_to_update {
             self.reset_update_adder_params(true)
         }
@@ -350,6 +361,7 @@ impl PlayerState {
             path_buf,
             self.ui_state.ui_sliders.playback_speed,
             self.ui_state.view_mode,
+            self.ui_state.detect_features,
         ) {
             Ok(player) => {
                 self.ui_info_state.source_name = RichText::from(match path_buf.to_str() {

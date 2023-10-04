@@ -7,11 +7,18 @@ use enum_dispatch::enum_dispatch;
 use std::io;
 use std::io::{Read, Seek, Sink, Write};
 
+/// Different options for what to with the events we're given
 #[enum_dispatch(WriteCompression<W>)]
 pub enum WriteCompressionEnum<W: Write> {
+    /// Perform (possibly lossy) compression on the ADΔER stream, and arithmetic coding
     #[cfg(feature = "compression")]
     CompressedOutput(CompressedOutput<W>),
+
+    /// Write the ADΔER stream as raw events
     RawOutput(RawOutput<W>),
+
+    /// Write the ADΔER stream as raw events, but make sure that they are ordered perfectly according
+    /// to their firing times
     RawOutputInterleaved(RawOutputInterleaved<W>),
     RawOutputBandwidthLimited(RawOutputBandwidthLimited<W>),
     EmptyOutput(EmptyOutput<Sink>),
@@ -20,11 +27,18 @@ pub enum WriteCompressionEnum<W: Write> {
 /// The encoder type, along with any associated options
 #[derive(Default, Clone, Copy, PartialEq)]
 pub enum EncoderOptions {
+    /// Perform (possibly lossy) compression on the ADΔER stream, and arithmetic coding
     Compressed,
+
+    /// Write the ADΔER stream as raw events
     Raw,
+
+    /// Write the ADΔER stream as raw events, but make sure that they are ordered perfectly according
+    /// to their firing times
     RawInterleaved,
     RawBandwidthLimited {target_bitrate: f64, alpha: f64},
 
+    /// Do not write any data to the output stream
     #[default]
     Empty,
 }
@@ -229,4 +243,8 @@ pub enum CodecError {
     #[cfg(feature = "compression")]
     #[error("Arithmetic coding error")]
     ArithmeticCodingError(#[from] arithmetic_coding::Error),
+
+    /// Vision application error
+    #[error("Vision application error")]
+    VisionError(String),
 }
