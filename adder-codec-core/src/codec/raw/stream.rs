@@ -216,7 +216,7 @@ impl<W: Write> WriteCompression<W> for RawOutputBandwidthLimited<W> {
             delta_t: 0,
         };
         self.bincode.serialize_into(self.stream(), &eof).unwrap();
-        self.flush_writer().unwrap();=
+        self.flush_writer().unwrap();
         self.stream.take()
     }
 
