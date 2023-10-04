@@ -39,11 +39,11 @@ pub struct RawOutputBandwidthLimited<W> {
         WithOtherIntEncoding<DefaultOptions, FixintEncoding>,
         bincode::config::BigEndian,
     >,
-    target_bitrate: f64,
+    target_event_rate: f64,
     /// This is basically the decay rate.
     /// Should be between 0 and 1.
     alpha: f64,
-    current_bitrate: f64,
+    current_event_rate: f64,
     last_event: Instant,
     pub(crate) stream: Option<W>,
 }
@@ -156,7 +156,7 @@ impl<W: Write> WriteCompression<W> for RawOutput<W> {
 
 impl<W: Write> RawOutputBandwidthLimited<W> {
     /// Create a new raw bandwidth limited output stream.
-    pub fn new(mut meta: CodecMetadata, writer: W, target_bitrate: f64, alpha: f64) -> Self {
+    pub fn new(mut meta: CodecMetadata, writer: W, target_event_rate: f64, alpha: f64) -> Self {
         let bincode = DefaultOptions::new()
             .with_fixint_encoding()
             .with_big_endian();
@@ -167,9 +167,9 @@ impl<W: Write> RawOutputBandwidthLimited<W> {
         Self {
             meta,
             bincode,
-            target_bitrate,
+            target_event_rate,
             alpha,
-            current_bitrate: 0.0,
+            current_event_rate: 0.0,
             last_event: Instant::now(),
             stream: Some(writer),
         }
@@ -236,15 +236,15 @@ impl<W: Write> WriteCompression<W> for RawOutputBandwidthLimited<W> {
         // it could be faster to use as_nanos here
         let t_diff = now.duration_since(self.last_event).as_secs_f64();
 
-        let new_bitrate = self.alpha * self.current_bitrate + (1.0 - self.alpha) / t_diff;
+        let new_event_rate = self.alpha * self.current_event_rate + (1.0 - self.alpha) / t_diff;
 
-        if new_bitrate > self.target_bitrate {
-            self.current_bitrate = self.alpha * self.current_bitrate;
+        if new_event_rate > self.target_event_rate {
+            self.current_event_rate = self.alpha * self.current_event_rate;
             return Ok(()); // skip this event
         }
 
         self.last_event = now; // update time
-        self.current_bitrate = new_bitrate;
+        self.current_event_rate = new_event_rate;
 
         let output_event: EventSingle;
         if self.meta.plane.channels == 1 {

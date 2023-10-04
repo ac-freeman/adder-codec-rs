@@ -36,7 +36,7 @@ pub enum EncoderOptions {
     /// Write the ADΔER stream as raw events, but make sure that they are ordered perfectly according
     /// to their firing times
     RawInterleaved,
-    RawBandwidthLimited {target_bitrate: f64, alpha: f64},
+    RawBandwidthLimited {target_event_rate: f64, alpha: f64},
 
     /// Do not write any data to the output stream
     #[default]

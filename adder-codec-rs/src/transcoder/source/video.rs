@@ -596,7 +596,7 @@ impl<W: Write + 'static> Video<W> {
                 );
                 Encoder::new_raw_interleaved(compression)
             }
-            EncoderOptions::RawBandwidthLimited {target_bitrate, alpha} => {
+            EncoderOptions::RawBandwidthLimited {target_event_rate, alpha} => {
                 let compression = RawOutputBandwidthLimited::new(
                     CodecMetadata {
                         codec_version: LATEST_CODEC_VERSION,
@@ -610,7 +610,7 @@ impl<W: Write + 'static> Video<W> {
                         source_camera: source_camera.unwrap_or_default(),
                     },
                     write,
-                    target_bitrate,
+                    target_event_rate,
                     alpha
                 );
                 Encoder::new_raw_bandwidth(compression)

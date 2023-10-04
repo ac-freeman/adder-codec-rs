@@ -43,8 +43,8 @@ pub struct ParamsUiState {
     pub(crate) optimize_c: bool,
     pub(crate) optimize_c_frequency: u32,
     pub(crate) optimize_c_frequency_slider: u32,
-    pub(crate) target_bitrate: f64,
-    target_bitrate_slider: f64,
+    pub(crate) target_event_rate: f64,
+    target_event_rate_slider: f64,
     pub(crate) alpha: f64,
     alpha_slider: f64,
     pub(crate) time_mode: TimeMode,
@@ -85,8 +85,8 @@ impl Default for ParamsUiState {
             optimize_c_frequency: 10,
             optimize_c_frequency_slider: 10,
             // TODO: these are good defaults, but maybe there are better
-            target_bitrate: 5_000_000.0,
-            target_bitrate_slider: 5_000_000.0,
+            target_event_rate: 5_000_000.0,
+            target_event_rate_slider: 5_000_000.0,
             alpha: 0.999,
             alpha_slider: 0.999,
             time_mode: TimeMode::default(),
@@ -347,7 +347,7 @@ impl TranscoderState {
                             || source.time_mode != self.ui_state.time_mode
                             || ((source.get_video_ref().encoder_options != self.ui_state.encoder_options)
                             // TODO: better way to do this
-                            || (match source.get_video_ref().encoder_options { EncoderOptions::RawBandwidthLimited {target_bitrate, alpha} => target_bitrate != self.ui_state.target_bitrate || alpha != self.ui_state.alpha, _ => false })
+                            || (match source.get_video_ref().encoder_options { EncoderOptions::RawBandwidthLimited {target_event_rate, alpha} => target_event_rate != self.ui_state.target_event_rate || alpha != self.ui_state.alpha, _ => false })
                                 && self.ui_info_state.output_path.is_some())
                         {
                             if self.ui_state.davis_mode_radio_state == RawDvs {
@@ -378,7 +378,7 @@ impl TranscoderState {
                         || source.time_mode != self.ui_state.time_mode
                         || ((source.get_video_ref().encoder_options != self.ui_state.encoder_options)
                         // TODO: better way to do this
-                        || (match source.get_video_ref().encoder_options { EncoderOptions::RawBandwidthLimited {target_bitrate, alpha} => target_bitrate != self.ui_state.target_bitrate || alpha != self.ui_state.alpha, _ => false })
+                        || (match source.get_video_ref().encoder_options { EncoderOptions::RawBandwidthLimited {target_event_rate, alpha} => target_event_rate != self.ui_state.target_event_rate || alpha != self.ui_state.alpha, _ => false })
                             && self.ui_info_state.output_path.is_some())
                         || match source.get_video_ref().state.plane.c() {
                             1 => {
@@ -720,7 +720,7 @@ fn side_panel_grid_contents(
                 );
             });
             ui.horizontal(|ui| {
-                ui.radio_value(&mut ui_state.encoder_options, EncoderOptions::RawBandwidthLimited {target_bitrate: *&mut ui_state.target_bitrate, alpha: *&mut ui_state.alpha }, "Raw, bandwidth limited (WIP)");
+                ui.radio_value(&mut ui_state.encoder_options, EncoderOptions::RawBandwidthLimited {target_event_rate: *&mut ui_state.target_event_rate, alpha: *&mut ui_state.alpha }, "Raw, bandwidth limited");
             });
         });
     });
@@ -793,8 +793,8 @@ fn side_panel_grid_contents(
         match ui_state.encoder_options {EncoderOptions::RawBandwidthLimited {..} => true, _ => false},
         true,
         ui,
-        &mut ui_state.target_bitrate,
-        &mut ui_state.target_bitrate_slider,
+        &mut ui_state.target_event_rate,
+        &mut ui_state.target_event_rate_slider,
         1_000_000.0..=100_000_000.0, // TODO: range
         vec![ // TODO: tune slider values
             1_000_000.0, 2_500_000.0, 5_000_000.0, 7_500_000.0, 10_000_000.0
