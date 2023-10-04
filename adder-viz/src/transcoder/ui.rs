@@ -349,6 +349,22 @@ impl TranscoderState {
                 plot_ui.line(line_eventrate);
                 plot_ui.line(line_latency);
             });
+        Plot::new("bitrate_plot")
+            .height(100.0)
+            .allow_drag(true)
+            .legend(Legend::default().position(LeftTop))
+            .show(ui, |plot_ui| {
+                plot_ui.line(
+                    self.ui_info_state
+                        .plot_points_raw_adder_bitrate_y
+                        .get_plotline("Raw ADΔER MB/s"),
+                );
+                plot_ui.line(
+                    self.ui_info_state
+                        .plot_points_raw_source_bitrate_y
+                        .get_plotline("Raw source MB/s"),
+                );
+            });
     }
 
     pub fn update_adder_params(&mut self) {
