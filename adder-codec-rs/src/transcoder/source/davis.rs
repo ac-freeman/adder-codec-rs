@@ -24,7 +24,7 @@ use std::io::Write;
 use std::mem::swap;
 use std::thread;
 
-use adder_codec_core::codec::{CodecError, EncoderType};
+use adder_codec_core::codec::{CodecError, EncoderOptions, EncoderType};
 use adder_codec_core::{Event, PlaneSize, SourceCamera, SourceType, TimeMode};
 
 use crate::framer::scale_intensity::FrameValue;
@@ -97,9 +97,6 @@ pub struct Davis<W: Write> {
     /// The EDI reconstruction mode, determining how intensities are integrated for the ADΔER model
     pub mode: TranscoderMode,
 
-    /// The time mode of the transcoded ADΔER video
-    pub time_mode: TimeMode,
-
     time_change: f64,
     num_dvs_events: usize,
 }
@@ -171,7 +168,6 @@ impl<W: Write + 'static> Davis<W> {
 
             optimize_adder_controller: false,
             mode: TranscoderMode::Framed,
-            time_mode: TimeMode::default(),
             time_change: 0.0,
             num_dvs_events: 0,
         };
@@ -190,12 +186,6 @@ impl<W: Write + 'static> Davis<W> {
     /// Set the [`TranscoderMode`] (default: [`TranscoderMode::Framed`])
     pub fn mode(mut self, mode: TranscoderMode) -> Self {
         self.mode = mode;
-        self
-    }
-
-    /// Set the [`TimeMode`]
-    pub fn time_mode(mut self, time_mode: TimeMode) -> Self {
-        self.time_mode = time_mode;
         self
     }
 
@@ -981,7 +971,6 @@ impl<W: Write + 'static> VideoBuilder<W> for Davis<W> {
         delta_t_max: DeltaT,
         time_mode: Option<TimeMode>,
     ) -> Result<Self, SourceError> {
-        self = self.time_mode(time_mode.unwrap_or_default());
         self.video = self
             .video
             .time_parameters(tps, ref_time, delta_t_max, time_mode)?;
@@ -993,11 +982,16 @@ impl<W: Write + 'static> VideoBuilder<W> for Davis<W> {
         source_camera: SourceCamera,
         time_mode: TimeMode,
         encoder_type: EncoderType,
+        encoder_options: EncoderOptions,
         write: W,
     ) -> Result<Box<Self>, SourceError> {
-        self.video =
-            self.video
-                .write_out(Some(source_camera), Some(time_mode), encoder_type, write)?;
+        self.video = self.video.write_out(
+            Some(source_camera),
+            Some(time_mode),
+            encoder_type,
+            encoder_options,
+            write,
+        )?;
         Ok(Box::new(self))
     }
 

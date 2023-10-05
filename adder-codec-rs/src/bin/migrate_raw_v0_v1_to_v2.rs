@@ -1,6 +1,7 @@
 use adder_codec_core::codec::decoder::Decoder;
 use adder_codec_core::codec::encoder::Encoder;
 use adder_codec_core::codec::raw::stream::{RawInput, RawOutput};
+use adder_codec_core::codec::EncoderOptions;
 use adder_codec_core::TimeMode;
 use adder_codec_rs::utils::stream_migration::migrate_v2;
 use bitstream_io::{BigEndian, BitReader};
@@ -46,7 +47,8 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let mut new_meta = *input_stream.meta();
     new_meta.time_mode = time_mode;
     let compression = RawOutput::new(new_meta, bufwriter);
-    let mut encoder: Encoder<BufWriter<File>> = Encoder::new_raw(compression);
+    let mut encoder: Encoder<BufWriter<File>> =
+        Encoder::new_raw(compression, EncoderOptions::default());
 
     encoder = migrate_v2(input_stream, &mut bitreader, encoder)?;
 

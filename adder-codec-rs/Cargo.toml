@@ -53,12 +53,11 @@ serde_json = "1.0"
 smallvec = "1.9.0"
 thiserror = "1.0.34"
 tokio = { version = "1.20.1", features = ["full"] }
-#davis-edi-rs = { path = "../../davis-EDI-rs" }
 toml = "0.5.8"
 bitstream-io = "1.6.0"
 
 [dependencies.opencv]
-version = '0.84.5'
+version = "0.84.5"
 package = 'opencv'
 default-features = false
 features = ['videoio', 'imgproc', 'highgui']

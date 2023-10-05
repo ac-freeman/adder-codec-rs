@@ -1,9 +1,14 @@
-use crate::codec::{CodecError, CodecMetadata, WriteCompression, WriteCompressionEnum};
+use crate::codec::{
+    CodecError, CodecMetadata, EncoderOptions, EventDrop, EventOrder, WriteCompression,
+    WriteCompressionEnum,
+};
 use crate::SourceType::*;
 use crate::{Event, EventSingle, SourceCamera, SourceType, EOF_EVENT};
+use std::collections::BinaryHeap;
 
 use std::io;
 use std::io::{Sink, Write};
+use std::time::Instant;
 
 #[cfg(feature = "compression")]
 use crate::codec::compressed::adu::frame::Adu;
@@ -15,7 +20,8 @@ use crate::codec::header::{
     EventStreamHeader, EventStreamHeaderExtensionV0, EventStreamHeaderExtensionV1,
     EventStreamHeaderExtensionV2,
 };
-use crate::codec::raw::stream::{RawOutput, RawOutputInterleaved};
+
+use crate::codec::raw::stream::RawOutput;
 use crate::SourceType::U8;
 use bincode::config::{FixintEncoding, WithOtherEndian, WithOtherIntEncoding};
 use bincode::{DefaultOptions, Options};
@@ -27,6 +33,24 @@ pub struct Encoder<W: Write> {
         WithOtherIntEncoding<DefaultOptions, FixintEncoding>,
         bincode::config::BigEndian,
     >,
+    options: EncoderOptions,
+    state: EncoderState,
+}
+
+struct EncoderState {
+    current_event_rate: f64,
+    last_event_ts: Instant,
+    queue: BinaryHeap<Event>,
+}
+
+impl Default for EncoderState {
+    fn default() -> Self {
+        EncoderState {
+            current_event_rate: 0.0,
+            last_event_ts: Instant::now(),
+            queue: BinaryHeap::new(),
+        }
+    }
 }
 
 #[allow(dead_code)]
@@ -41,6 +65,8 @@ impl<W: Write + 'static> Encoder<W> {
             bincode: DefaultOptions::new()
                 .with_fixint_encoding()
                 .with_big_endian(),
+            options: EncoderOptions::default(),
+            state: EncoderState::default(),
         };
         encoder.encode_header().unwrap();
         encoder
@@ -48,7 +74,7 @@ impl<W: Write + 'static> Encoder<W> {
 
     /// Create a new [`Encoder`] with the given compression scheme
     #[cfg(feature = "compression")]
-    pub fn new_compressed(compression: CompressedOutput<W>) -> Self
+    pub fn new_compressed(compression: CompressedOutput<W>, options: EncoderOptions) -> Self
     where
         Self: Sized,
     {
@@ -57,13 +83,14 @@ impl<W: Write + 'static> Encoder<W> {
             bincode: DefaultOptions::new()
                 .with_fixint_encoding()
                 .with_big_endian(),
+            options,
         };
         encoder.encode_header().unwrap();
         encoder
     }
 
     /// Create a new [`Encoder`] with the given raw compression scheme
-    pub fn new_raw(compression: RawOutput<W>) -> Self
+    pub fn new_raw(compression: RawOutput<W>, options: EncoderOptions) -> Self
     where
         Self: Sized,
     {
@@ -72,21 +99,8 @@ impl<W: Write + 'static> Encoder<W> {
             bincode: DefaultOptions::new()
                 .with_fixint_encoding()
                 .with_big_endian(),
-        };
-        encoder.encode_header().unwrap();
-        encoder
-    }
-
-    /// Create a new [`Encoder`] with the given raw compression scheme
-    pub fn new_raw_interleaved(compression: RawOutputInterleaved<W>) -> Self
-    where
-        Self: Sized,
-    {
-        let mut encoder = Self {
-            output: WriteCompressionEnum::RawOutputInterleaved(compression),
-            bincode: DefaultOptions::new()
-                .with_fixint_encoding()
-                .with_big_endian(),
+            options,
+            state: Default::default(),
         };
         encoder.encode_header().unwrap();
         encoder
@@ -206,7 +220,45 @@ impl<W: Write + 'static> Encoder<W> {
     /// Ingest an event
     #[inline(always)]
     pub fn ingest_event(&mut self, event: Event) -> Result<(), CodecError> {
-        self.output.ingest_event(event)
+        match self.options.event_drop {
+            EventDrop::None => {}
+            EventDrop::Manual {
+                target_event_rate,
+                alpha,
+            } => {
+                let now = Instant::now();
+                let t_diff = now.duration_since(self.state.last_event_ts).as_secs_f64();
+                let new_event_rate = alpha * self.state.current_event_rate + (1.0 - alpha) / t_diff;
+                if new_event_rate > target_event_rate {
+                    self.state.current_event_rate = alpha * self.state.current_event_rate;
+                    return Ok(()); // skip this event
+                }
+                self.state.last_event_ts = now; // update time
+                self.state.current_event_rate = new_event_rate;
+            }
+            EventDrop::Auto => {
+                todo!()
+            }
+        }
+
+        match self.options.event_order {
+            EventOrder::Unchanged => self.output.ingest_event(event),
+            EventOrder::Interleaved => {
+                let dt = event.delta_t;
+                // First, push the event to the queue
+                self.state.queue.push(event);
+
+                let mut res = Ok(());
+                if let Some(first_item_addr) = self.state.queue.peek() {
+                    if first_item_addr.delta_t < dt.saturating_sub(self.meta().delta_t_max) {
+                        if let Some(first_item) = self.state.queue.pop() {
+                            res = self.output.ingest_event(first_item);
+                        }
+                    }
+                }
+                res
+            }
+        }
     }
     /// Ingest an event
     #[cfg(feature = "compression")]
@@ -231,6 +283,10 @@ impl<W: Write + 'static> Encoder<W> {
         }
         Ok(())
     }
+
+    pub fn get_options(&self) -> EncoderOptions {
+        self.options
+    }
 }
 
 #[cfg(test)]
@@ -238,9 +294,7 @@ mod tests {
     use super::*;
     use crate::codec::raw::stream::RawOutput;
     use crate::codec::{CodecMetadata, LATEST_CODEC_VERSION};
-
     use crate::{Coord, PlaneSize};
-    
     use std::io::BufWriter;
 
     #[test]
@@ -269,6 +323,8 @@ mod tests {
             bincode: DefaultOptions::new()
                 .with_fixint_encoding()
                 .with_big_endian(),
+            options: EncoderOptions::default(),
+            state: EncoderState::default(),
         };
         let mut writer = encoder.close_writer().unwrap().unwrap();
         writer.flush().unwrap();
@@ -298,6 +354,8 @@ mod tests {
             bincode: DefaultOptions::new()
                 .with_fixint_encoding()
                 .with_big_endian(),
+            options: EncoderOptions::default(),
+            state: EncoderState::default(),
         };
         let mut writer = encoder.close_writer().unwrap().unwrap();
         writer.flush().unwrap();
@@ -326,7 +384,8 @@ mod tests {
             },
             bufwriter,
         );
-        let mut encoder: Encoder<BufWriter<Vec<u8>>> = Encoder::new_raw(compression);
+        let mut encoder: Encoder<BufWriter<Vec<u8>>> =
+            Encoder::new_raw(compression, Default::default());
 
         let event = Event {
             coord: Coord {
