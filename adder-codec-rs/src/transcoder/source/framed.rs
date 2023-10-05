@@ -5,7 +5,7 @@ use crate::transcoder::source::video::{Source, VideoBuilder};
 use adder_codec_core::Mode::FramePerfect;
 use adder_codec_core::{DeltaT, Event, PlaneSize, SourceCamera, TimeMode};
 
-use adder_codec_core::codec::EncoderType;
+use adder_codec_core::codec::{EncoderOptions, EncoderType};
 use opencv::core::{Mat, Size};
 use opencv::videoio::{VideoCapture, CAP_PROP_FPS, CAP_PROP_FRAME_COUNT, CAP_PROP_POS_FRAMES};
 use opencv::{imgproc, prelude::*, videoio, Result};
@@ -32,9 +32,6 @@ pub struct Framed<W: Write + 'static> {
     color_input: bool,
 
     pub(crate) video: Video<W>,
-
-    /// Time mode of the source
-    pub time_mode: TimeMode,
 }
 unsafe impl<W: Write> Sync for Framed<W> {}
 
@@ -87,7 +84,6 @@ impl<W: Write + 'static> Framed<W> {
             scale,
             color_input,
             video,
-            time_mode: TimeMode::default(),
         })
     }
 
@@ -101,12 +97,6 @@ impl<W: Write + 'static> Framed<W> {
             .set(CAP_PROP_POS_FRAMES, f64::from(frame_idx_start))?;
         self.frame_idx_start = frame_idx_start;
         Ok(self)
-    }
-
-    /// Set the [`TimeMode`](adder_codec_core::TimeMode) for the source
-    pub fn time_mode(mut self, time_mode: TimeMode) -> Self {
-        self.time_mode = time_mode;
-        self
     }
 
     /// Automatically derive the ticks per second from the source FPS and `ref_time`
@@ -254,11 +244,16 @@ impl<W: Write + 'static> VideoBuilder<W> for Framed<W> {
         source_camera: SourceCamera,
         time_mode: TimeMode,
         encoder_type: EncoderType,
+        encoder_options: EncoderOptions,
         write: W,
     ) -> Result<Box<Self>, SourceError> {
-        self.video =
-            self.video
-                .write_out(Some(source_camera), Some(time_mode), encoder_type, write)?;
+        self.video = self.video.write_out(
+            Some(source_camera),
+            Some(time_mode),
+            encoder_type,
+            encoder_options,
+            write,
+        )?;
         Ok(Box::new(self))
     }
 

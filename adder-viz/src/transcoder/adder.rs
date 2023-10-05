@@ -3,7 +3,7 @@ use std::error::Error;
 use adder_codec_core::DeltaT;
 use adder_codec_rs::transcoder::source::davis::Davis;
 use adder_codec_rs::transcoder::source::framed::Framed;
-use bevy::prelude::Image;
+use bevy::prelude::{dbg, Image};
 use std::fmt;
 use std::fs::File;
 use std::io::BufWriter;
@@ -85,6 +85,7 @@ impl AdderTranscoder {
                                     FramedU8,
                                     ui_state.time_mode,
                                     ui_state.encoder_type,
+                                    ui_state.encoder_options,
                                     writer,
                                 )?;
                                 //     .output_events_filename(match output_path.to_str() {
@@ -180,7 +181,6 @@ impl AdderTranscoder {
                             Davis::new(reconstructor, rt, ui_state.davis_mode_radio_state)?
                                 .optimize_adder_controller(false) // TODO
                                 .mode(ui_state.davis_mode_radio_state)
-                                .time_mode(ui_state.time_mode)
                                 .crf(DEFAULT_CRF_QUALITY)
                                 .time_parameters(
                                     1000000_u32,
@@ -200,11 +200,12 @@ impl AdderTranscoder {
                         }
 
                         if let Some(output_string) = output_string {
-                            let writer = BufWriter::new(File::create(output_string)?);
+                            let writer = BufWriter::new(File::create(&output_string)?);
                             davis_source = *davis_source.write_out(
                                 DavisU8,
                                 ui_state.time_mode,
                                 ui_state.encoder_type,
+                                ui_state.encoder_options,
                                 writer,
                             )?;
                         }

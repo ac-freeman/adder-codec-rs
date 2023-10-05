@@ -128,7 +128,7 @@ mod tests {
             },
             bufwriter,
         );
-        let mut stream = Encoder::new_raw(compression);
+        let mut stream = Encoder::new_raw(compression, Default::default());
 
         // Encode the events
         let event: Event = Event {
@@ -178,7 +178,7 @@ mod tests {
             },
             bufwriter,
         );
-        let mut stream = Encoder::new_raw(compression);
+        let mut stream = Encoder::new_raw(compression, Default::default());
 
         stream = migrate_v2(reader, &mut bitreader, stream)?;
 
@@ -232,7 +232,7 @@ mod tests {
         meta.codec_version = 2;
         meta.time_mode = AbsoluteT;
         let compression = RawOutput::new(meta, bufwriter);
-        let mut stream = Encoder::new_raw(compression);
+        let mut stream = Encoder::new_raw(compression, Default::default());
 
         stream = migrate_v2(reader, &mut bitreader, stream)?;
 

@@ -8,7 +8,7 @@ use serde::Deserialize;
 
 use adder_codec_core::DeltaT;
 
-use adder_codec_core::codec::EncoderType;
+use adder_codec_core::codec::{EncoderOptions, EncoderType};
 use adder_codec_core::SourceCamera::DavisU8;
 use adder_codec_core::TimeMode;
 use adder_codec_rs::transcoder::source::davis::TranscoderMode::{Framed, RawDavis, RawDvs};
@@ -147,7 +147,13 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             .c_thresh_pos(args.adder_c_thresh_pos)
             .c_thresh_neg(args.adder_c_thresh_neg),
     )
-    .write_out(DavisU8, TimeMode::AbsoluteT, EncoderType::Raw, writer)?;
+    .write_out(
+        DavisU8,
+        TimeMode::AbsoluteT,
+        EncoderType::Raw,
+        EncoderOptions::default(),
+        writer,
+    )?;
 
     let mut now = Instant::now();
     let start_time = std::time::Instant::now();

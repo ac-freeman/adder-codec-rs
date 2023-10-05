@@ -244,8 +244,9 @@ mod tests {
     use super::*;
 
     use crate::codec::encoder::Encoder;
-    use crate::codec::raw::stream::{RawInput, RawOutput, RawOutputInterleaved};
+    use crate::codec::raw::stream::{RawInput, RawOutput};
 
+    use crate::codec::{EncoderOptions, EventOrder};
     use crate::Coord;
     use std::io::{BufReader, BufWriter, Cursor, Write};
 
@@ -279,7 +280,8 @@ mod tests {
             },
             bufwriter,
         );
-        let mut encoder: Encoder<BufWriter<Vec<u8>>> = Encoder::new_raw(compression);
+        let mut encoder: Encoder<BufWriter<Vec<u8>>> =
+            Encoder::new_raw(compression, EncoderOptions::default());
 
         let event = stock_event();
         encoder.ingest_event(event).unwrap();
@@ -294,7 +296,7 @@ mod tests {
         let output = Vec::new();
 
         let bufwriter = BufWriter::new(output);
-        let compression = RawOutputInterleaved::new(
+        let compression = RawOutput::new(
             CodecMetadata {
                 codec_version,
                 header_size: 0,
@@ -308,7 +310,13 @@ mod tests {
             },
             bufwriter,
         );
-        let mut encoder: Encoder<BufWriter<Vec<u8>>> = Encoder::new_raw_interleaved(compression);
+        let mut encoder: Encoder<BufWriter<Vec<u8>>> = Encoder::new_raw(
+            compression,
+            EncoderOptions {
+                event_drop: Default::default(),
+                event_order: EventOrder::Interleaved,
+            },
+        );
 
         let event = stock_event();
         encoder.ingest_event(event).unwrap();

@@ -5,8 +5,10 @@ use std::mem::swap;
 
 use adder_codec_core::codec::empty::stream::EmptyOutput;
 use adder_codec_core::codec::encoder::Encoder;
-use adder_codec_core::codec::raw::stream::{RawOutput, RawOutputInterleaved};
-use adder_codec_core::codec::{CodecError, CodecMetadata, EncoderType, LATEST_CODEC_VERSION};
+use adder_codec_core::codec::raw::stream::RawOutput;
+use adder_codec_core::codec::{
+    CodecError, CodecMetadata, EncoderOptions, EncoderType, LATEST_CODEC_VERSION,
+};
 use adder_codec_core::{
     Coord, DeltaT, Event, Mode, PlaneError, PlaneSize, SourceCamera, SourceType, TimeMode,
 };
@@ -281,6 +283,7 @@ pub trait VideoBuilder<W> {
         source_camera: SourceCamera,
         time_mode: TimeMode,
         encoder_type: EncoderType,
+        encoder_options: EncoderOptions,
         write: W,
     ) -> Result<Box<Self>, SourceError>;
 
@@ -313,10 +316,10 @@ pub struct Video<W: Write> {
     pub event_sender: Sender<Vec<Event>>,
     pub(crate) encoder: Encoder<W>,
 
-    /// The type of encoder
     pub encoder_type: EncoderType,
     // TODO: Hold multiple encoder options and an enum, so that boxing isn't required.
     // Also hold a state for whether or not to write out events at all, so that a null writer isn't required.
+    // Eric: this is somewhat addressed above
 }
 unsafe impl<W: Write> Send for Video<W> {}
 
@@ -413,6 +416,7 @@ impl<W: Write + 'static> Video<W> {
                 let encoder = Encoder::new_raw(
                     // TODO: Allow for compressed representation (not just raw)
                     RawOutput::new(meta, w),
+                    EncoderOptions::default(),
                 );
                 Ok(Video {
                     state,
@@ -530,6 +534,7 @@ impl<W: Write + 'static> Video<W> {
         source_camera: Option<SourceCamera>,
         time_mode: Option<TimeMode>,
         encoder_type: EncoderType,
+        encoder_options: EncoderOptions,
         write: W,
     ) -> Result<Self, SourceError> {
         // TODO: Allow for compressed representation (not just raw)
@@ -551,7 +556,7 @@ impl<W: Write + 'static> Video<W> {
                         },
                         write,
                     );
-                    Encoder::new_compressed(compression)
+                    Encoder::new_compressed(compression, encoder_options)
                 }
                 #[cfg(not(feature = "compression"))]
                 {
@@ -576,24 +581,7 @@ impl<W: Write + 'static> Video<W> {
                     },
                     write,
                 );
-                Encoder::new_raw(compression)
-            }
-            EncoderType::RawInterleaved => {
-                let compression = RawOutputInterleaved::new(
-                    CodecMetadata {
-                        codec_version: LATEST_CODEC_VERSION,
-                        header_size: 0,
-                        time_mode: time_mode.unwrap_or_default(),
-                        plane: self.state.plane,
-                        tps: self.state.tps,
-                        ref_interval: self.state.ref_time,
-                        delta_t_max: self.state.delta_t_max,
-                        event_size: 0,
-                        source_camera: source_camera.unwrap_or_default(),
-                    },
-                    write,
-                );
-                Encoder::new_raw_interleaved(compression)
+                Encoder::new_raw(compression, encoder_options)
             }
             EncoderType::Empty => {
                 let compression = EmptyOutput::new(
@@ -727,7 +715,6 @@ impl<W: Write + 'static> Video<W> {
                 )?;
             }
         }
-
         sae_mat = sae_mat.clone();
 
         // TODO: When there's full support for various bit-depth sources, modify this accordingly
@@ -940,6 +927,13 @@ impl<W: Write + 'static> Video<W> {
         }
     }
 
+    pub fn get_encoder_options(&self) -> EncoderOptions {
+        self.encoder.get_options()
+    }
+    pub fn get_time_mode(&self) -> TimeMode {
+        self.encoder.meta().time_mode
+    }
+
     /// Manually set the parameters dictating quality
     pub fn update_quality_manual(
         &mut self,
@@ -1026,7 +1020,6 @@ pub fn integrate_for_px(
         buffer.push(px.pop_top_event(intensity, state.pixel_tree_mode, state.ref_time));
         grew_buffer = true;
     }
-
     grew_buffer
 }
 
