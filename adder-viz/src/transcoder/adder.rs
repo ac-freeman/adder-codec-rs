@@ -181,7 +181,6 @@ impl AdderTranscoder {
                             Davis::new(reconstructor, rt, ui_state.davis_mode_radio_state)?
                                 .optimize_adder_controller(false) // TODO
                                 .mode(ui_state.davis_mode_radio_state)
-                                .time_mode(ui_state.time_mode)
                                 .crf(DEFAULT_CRF_QUALITY)
                                 .time_parameters(
                                     1000000_u32,

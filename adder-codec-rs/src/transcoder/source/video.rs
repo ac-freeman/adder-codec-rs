@@ -930,6 +930,9 @@ impl<W: Write + 'static> Video<W> {
     pub fn get_encoder_options(&self) -> EncoderOptions {
         self.encoder.get_options()
     }
+    pub fn get_time_mode(&self) -> TimeMode {
+        self.encoder.meta().time_mode
+    }
 
     /// Manually set the parameters dictating quality
     pub fn update_quality_manual(

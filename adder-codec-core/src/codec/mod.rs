@@ -253,13 +253,13 @@ Encoder options below
  */
 
 /// Options for what to do with the events we're given, before encoding them
-#[derive(Default, Copy, Clone, PartialEq)]
+#[derive(Default, Copy, Clone, PartialEq, Debug)]
 pub struct EncoderOptions {
     pub event_drop: EventDrop,
     pub event_order: EventOrder,
 }
 
-#[derive(Default, Copy, Clone, PartialEq)]
+#[derive(Default, Copy, Clone, PartialEq, Debug)]
 pub enum EventDrop {
     #[default]
     None,
@@ -275,7 +275,7 @@ pub enum EventDrop {
     Auto,
 }
 
-#[derive(Default, Copy, Clone, PartialEq)]
+#[derive(Default, Copy, Clone, PartialEq, Debug)]
 pub enum EventOrder {
     /// Pass on the events in the order they're received in
     #[default]
