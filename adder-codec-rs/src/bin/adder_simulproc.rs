@@ -138,7 +138,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
 #[cfg(test)]
 mod tests {
-    use adder_codec_core::codec::EncoderType;
+    use adder_codec_core::codec::{EncoderOptions, EncoderType};
     use adder_codec_core::DeltaT;
     use adder_codec_core::SourceCamera::FramedU8;
     use adder_codec_core::TimeMode;
@@ -195,7 +195,13 @@ mod tests {
         if !args.output_events_filename.is_empty() {
             let file = File::create(args.output_events_filename)?;
             let writer = BufWriter::new(file);
-            source = *source.write_out(FramedU8, TimeMode::DeltaT, EncoderType::Raw, writer)?;
+            source = *source.write_out(
+                FramedU8,
+                TimeMode::DeltaT,
+                EncoderType::Raw,
+                EncoderOptions::default(),
+                writer,
+            )?;
         }
         let ref_time = source.get_ref_time();
 

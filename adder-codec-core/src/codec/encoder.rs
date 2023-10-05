@@ -323,6 +323,8 @@ mod tests {
             bincode: DefaultOptions::new()
                 .with_fixint_encoding()
                 .with_big_endian(),
+            options: EncoderOptions::default(),
+            state: EncoderState::default(),
         };
         let mut writer = encoder.close_writer().unwrap().unwrap();
         writer.flush().unwrap();
@@ -352,6 +354,8 @@ mod tests {
             bincode: DefaultOptions::new()
                 .with_fixint_encoding()
                 .with_big_endian(),
+            options: EncoderOptions::default(),
+            state: EncoderState::default(),
         };
         let mut writer = encoder.close_writer().unwrap().unwrap();
         writer.flush().unwrap();
@@ -380,7 +384,8 @@ mod tests {
             },
             bufwriter,
         );
-        let mut encoder: Encoder<BufWriter<Vec<u8>>> = Encoder::new_raw(compression);
+        let mut encoder: Encoder<BufWriter<Vec<u8>>> =
+            Encoder::new_raw(compression, Default::default());
 
         let event = Event {
             coord: Coord {

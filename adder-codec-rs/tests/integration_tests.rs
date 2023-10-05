@@ -267,7 +267,7 @@ fn setup_raw_writer_v0(rand_num: u32) -> Encoder<BufWriter<File>> {
         },
         bufwriter,
     );
-    let encoder: Encoder<BufWriter<File>> = Encoder::new_raw(compression);
+    let encoder: Encoder<BufWriter<File>> = Encoder::new_raw(compression, Default::default());
     encoder
 }
 
@@ -291,7 +291,7 @@ fn setup_raw_writer_v1(rand_num: u32) -> Encoder<BufWriter<File>> {
         },
         bufwriter,
     );
-    let encoder: Encoder<BufWriter<File>> = Encoder::new_raw(compression);
+    let encoder: Encoder<BufWriter<File>> = Encoder::new_raw(compression, Default::default());
     encoder
 }
 
@@ -315,7 +315,7 @@ fn setup_raw_writer_v2(rand_num: u32) -> Encoder<BufWriter<File>> {
         },
         bufwriter,
     );
-    let encoder: Encoder<BufWriter<File>> = Encoder::new_raw(compression);
+    let encoder: Encoder<BufWriter<File>> = Encoder::new_raw(compression, Default::default());
     encoder
 }
 
