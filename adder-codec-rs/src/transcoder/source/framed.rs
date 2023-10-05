@@ -5,7 +5,7 @@ use crate::transcoder::source::video::{Source, VideoBuilder};
 use adder_codec_core::Mode::FramePerfect;
 use adder_codec_core::{DeltaT, Event, PlaneSize, SourceCamera, TimeMode};
 
-use adder_codec_core::codec::EncoderOptions;
+use adder_codec_core::codec::{EncoderOptions, EncoderType};
 use opencv::core::{Mat, Size};
 use opencv::videoio::{VideoCapture, CAP_PROP_FPS, CAP_PROP_FRAME_COUNT, CAP_PROP_POS_FRAMES};
 use opencv::{imgproc, prelude::*, videoio, Result};
@@ -253,12 +253,17 @@ impl<W: Write + 'static> VideoBuilder<W> for Framed<W> {
         mut self,
         source_camera: SourceCamera,
         time_mode: TimeMode,
+        encoder_type: EncoderType,
         encoder_options: EncoderOptions,
         write: W,
     ) -> Result<Box<Self>, SourceError> {
-        self.video =
-            self.video
-                .write_out(Some(source_camera), Some(time_mode), encoder_options, write)?;
+        self.video = self.video.write_out(
+            Some(source_camera),
+            Some(time_mode),
+            encoder_type,
+            encoder_options,
+            write,
+        )?;
         Ok(Box::new(self))
     }
 

@@ -6,6 +6,7 @@ use bitstream_io::{BigEndian, BitReader};
 use enum_dispatch::enum_dispatch;
 use std::io;
 use std::io::{Read, Seek, Sink, Write};
+use std::time::Instant;
 
 /// Different options for what to with the events we're given
 #[enum_dispatch(WriteCompression<W>)]
@@ -17,27 +18,25 @@ pub enum WriteCompressionEnum<W: Write> {
     /// Write the ADΔER stream as raw events
     RawOutput(RawOutput<W>),
 
-    /// Write the ADΔER stream as raw events, but make sure that they are ordered perfectly according
-    /// to their firing times
-    RawOutputInterleaved(RawOutputInterleaved<W>),
-    RawOutputBandwidthLimited(RawOutputBandwidthLimited<W>),
     EmptyOutput(EmptyOutput<Sink>),
 }
 
 /// The encoder type, along with any associated options
 #[derive(Default, Clone, Copy, PartialEq, Debug)]
-pub enum EncoderOptions {
+pub enum EncoderType {
     /// Perform (possibly lossy) compression on the ADΔER stream, and arithmetic coding
     Compressed,
 
     /// Write the ADΔER stream as raw events
     Raw,
 
-    /// Write the ADΔER stream as raw events, but make sure that they are ordered perfectly according
-    /// to their firing times
-    RawInterleaved,
-    RawBandwidthLimited {target_event_rate: f64, alpha: f64},
-
+    // /// Write the ADΔER stream as raw events, but make sure that they are ordered perfectly according
+    // /// to their firing times
+    // RawInterleaved,
+    // RawBandwidthLimited {
+    //     target_event_rate: f64,
+    //     alpha: f64,
+    // },
     /// Do not write any data to the output stream
     #[default]
     Empty,
@@ -137,7 +136,7 @@ pub trait WriteCompression<W: Write> {
     /// Take in an event and process it. May or may not write to the output, depending on the state
     /// of the stream (Is it ready to write events? Is it accumulating/reorganizing events? etc.)
     fn ingest_event(&mut self, event: Event) -> Result<(), CodecError>;
-  
+
     #[cfg(feature = "compression")]
     fn ingest_event_debug(&mut self, event: Event) -> Result<Option<Adu>, CodecError>;
 }
@@ -197,7 +196,7 @@ use crate::codec::compressed::adu::frame::Adu;
 #[cfg(feature = "compression")]
 use crate::codec::compressed::stream::{CompressedInput, CompressedOutput};
 use crate::codec::empty::stream::EmptyOutput;
-use crate::codec::raw::stream::{RawInput, RawOutput, RawOutputInterleaved, RawOutputBandwidthLimited};
+use crate::codec::raw::stream::{RawInput, RawOutput};
 use thiserror::Error;
 
 #[allow(missing_docs)]
@@ -247,4 +246,41 @@ pub enum CodecError {
     /// Vision application error
     #[error("Vision application error")]
     VisionError(String),
+}
+
+/*
+Encoder options below
+ */
+
+/// Options for what to do with the events we're given, before encoding them
+#[derive(Default, Copy, Clone, PartialEq)]
+pub struct EncoderOptions {
+    pub event_drop: EventDrop,
+    pub event_order: EventOrder,
+}
+
+#[derive(Default, Copy, Clone, PartialEq)]
+pub enum EventDrop {
+    #[default]
+    None,
+    Manual {
+        target_event_rate: f64,
+
+        /// The decay rate in [0., 1.]
+        alpha: f64,
+    },
+
+    /// TODO: Implement this. Query the actual network bandwidth accoring to some stream handle
+    /// and drop events accordingly.
+    Auto,
+}
+
+#[derive(Default, Copy, Clone, PartialEq)]
+pub enum EventOrder {
+    /// Pass on the events in the order they're received in
+    #[default]
+    Unchanged,
+
+    /// Reorder the events according to their firing times
+    Interleaved,
 }

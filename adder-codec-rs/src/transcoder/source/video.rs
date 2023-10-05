@@ -5,8 +5,10 @@ use std::mem::swap;
 
 use adder_codec_core::codec::empty::stream::EmptyOutput;
 use adder_codec_core::codec::encoder::Encoder;
-use adder_codec_core::codec::raw::stream::{RawOutput, RawOutputInterleaved, RawOutputBandwidthLimited};
-use adder_codec_core::codec::{CodecError, CodecMetadata, EncoderOptions, LATEST_CODEC_VERSION};
+use adder_codec_core::codec::raw::stream::RawOutput;
+use adder_codec_core::codec::{
+    CodecError, CodecMetadata, EncoderOptions, EncoderType, LATEST_CODEC_VERSION,
+};
 use adder_codec_core::{
     Coord, DeltaT, Event, Mode, PlaneError, PlaneSize, SourceCamera, SourceType, TimeMode,
 };
@@ -280,6 +282,7 @@ pub trait VideoBuilder<W> {
         self,
         source_camera: SourceCamera,
         time_mode: TimeMode,
+        encoder_type: EncoderType,
         encoder_options: EncoderOptions,
         write: W,
     ) -> Result<Box<Self>, SourceError>;
@@ -313,7 +316,7 @@ pub struct Video<W: Write> {
     pub event_sender: Sender<Vec<Event>>,
     pub(crate) encoder: Encoder<W>,
 
-    pub encoder_options: EncoderOptions,
+    pub encoder_type: EncoderType,
     // TODO: Hold multiple encoder options and an enum, so that boxing isn't required.
     // Also hold a state for whether or not to write out events at all, so that a null writer isn't required.
     // Eric: this is somewhat addressed above
@@ -406,13 +409,14 @@ impl<W: Write + 'static> Video<W> {
                     instantaneous_view_mode,
                     event_sender,
                     encoder,
-                    encoder_options: EncoderOptions::Empty,
+                    encoder_type: EncoderType::Empty,
                 })
             }
             Some(w) => {
                 let encoder = Encoder::new_raw(
                     // TODO: Allow for compressed representation (not just raw)
                     RawOutput::new(meta, w),
+                    EncoderOptions::default(),
                 );
                 Ok(Video {
                     state,
@@ -422,7 +426,7 @@ impl<W: Write + 'static> Video<W> {
                     instantaneous_view_mode,
                     event_sender,
                     encoder,
-                    encoder_options: EncoderOptions::Empty,
+                    encoder_type: EncoderType::Empty,
                 })
             }
         }
@@ -529,13 +533,13 @@ impl<W: Write + 'static> Video<W> {
         mut self,
         source_camera: Option<SourceCamera>,
         time_mode: Option<TimeMode>,
-
+        encoder_type: EncoderType,
         encoder_options: EncoderOptions,
         write: W,
     ) -> Result<Self, SourceError> {
         // TODO: Allow for compressed representation (not just raw)
-        let encoder: Encoder<_> = match encoder_options {
-            EncoderOptions::Compressed => {
+        let encoder: Encoder<_> = match encoder_type {
+            EncoderType::Compressed => {
                 #[cfg(feature = "compression")]
                 {
                     let compression = CompressedOutput::new(
@@ -552,7 +556,7 @@ impl<W: Write + 'static> Video<W> {
                         },
                         write,
                     );
-                    Encoder::new_compressed(compression)
+                    Encoder::new_compressed(compression, encoder_options)
                 }
                 #[cfg(not(feature = "compression"))]
                 {
@@ -562,7 +566,7 @@ impl<W: Write + 'static> Video<W> {
                     ));
                 }
             }
-            EncoderOptions::Raw => {
+            EncoderType::Raw => {
                 let compression = RawOutput::new(
                     CodecMetadata {
                         codec_version: LATEST_CODEC_VERSION,
@@ -577,45 +581,9 @@ impl<W: Write + 'static> Video<W> {
                     },
                     write,
                 );
-                Encoder::new_raw(compression)
+                Encoder::new_raw(compression, encoder_options)
             }
-            EncoderOptions::RawInterleaved => {
-                let compression = RawOutputInterleaved::new(
-                    CodecMetadata {
-                        codec_version: LATEST_CODEC_VERSION,
-                        header_size: 0,
-                        time_mode: time_mode.unwrap_or_default(),
-                        plane: self.state.plane,
-                        tps: self.state.tps,
-                        ref_interval: self.state.ref_time,
-                        delta_t_max: self.state.delta_t_max,
-                        event_size: 0,
-                        source_camera: source_camera.unwrap_or_default(),
-                    },
-                    write,
-                );
-                Encoder::new_raw_interleaved(compression)
-            }
-            EncoderOptions::RawBandwidthLimited {target_event_rate, alpha} => {
-                let compression = RawOutputBandwidthLimited::new(
-                    CodecMetadata {
-                        codec_version: LATEST_CODEC_VERSION,
-                        header_size: 0,
-                        time_mode: time_mode.unwrap_or_default(),
-                        plane: self.state.plane,
-                        tps: self.state.tps,
-                        ref_interval: self.state.ref_time,
-                        delta_t_max: self.state.delta_t_max,
-                        event_size: 0,
-                        source_camera: source_camera.unwrap_or_default(),
-                    },
-                    write,
-                    target_event_rate,
-                    alpha
-                );
-                Encoder::new_raw_bandwidth(compression)
-            }
-            EncoderOptions::Empty => {
+            EncoderType::Empty => {
                 let compression = EmptyOutput::new(
                     CodecMetadata {
                         codec_version: LATEST_CODEC_VERSION,
@@ -635,7 +603,7 @@ impl<W: Write + 'static> Video<W> {
         };
 
         self.encoder = encoder;
-        self.encoder_options = encoder_options;
+        self.encoder_type = encoder_type;
 
         self.event_pixel_trees.par_map_inplace(|px| {
             px.time_mode(time_mode);
@@ -957,6 +925,10 @@ impl<W: Write + 'static> Video<W> {
             px.c_thresh = self.state.c_thresh_baseline;
             px.c_increase_counter = 0;
         }
+    }
+
+    pub fn get_encoder_options(&self) -> EncoderOptions {
+        self.encoder.get_options()
     }
 
     /// Manually set the parameters dictating quality

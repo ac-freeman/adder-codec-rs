@@ -13,7 +13,7 @@ use rayon::current_num_threads;
 use std::collections::VecDeque;
 use std::error::Error;
 
-use adder_codec_core::codec::EncoderOptions;
+use adder_codec_core::codec::{EncoderOptions, EncoderType, EventDrop, EventOrder};
 use adder_codec_core::TimeMode;
 use adder_codec_rs::transcoder::source::davis::TranscoderMode::RawDvs;
 use adder_codec_rs::transcoder::source::{CRF, DEFAULT_CRF_QUALITY};
@@ -43,12 +43,14 @@ pub struct ParamsUiState {
     pub(crate) optimize_c: bool,
     pub(crate) optimize_c_frequency: u32,
     pub(crate) optimize_c_frequency_slider: u32,
-    pub(crate) target_event_rate: f64,
-    target_event_rate_slider: f64,
-    pub(crate) alpha: f64,
+    limit_bandwidth: bool,
+    pub(crate) bandwidth_target_event_rate: f64,
+    bandwidth_target_event_rate_slider: f64,
+    pub(crate) encoder_options: EncoderOptions,
+    pub(crate) bandwidth_alpha: f64,
     alpha_slider: f64,
     pub(crate) time_mode: TimeMode,
-    pub(crate) encoder_options: EncoderOptions,
+    pub(crate) encoder_type: EncoderType,
     pub(crate) detect_features: bool,
     pub(crate) show_features: bool,
     pub(crate) auto_quality: bool,
@@ -84,13 +86,14 @@ impl Default for ParamsUiState {
             optimize_c: true,
             optimize_c_frequency: 10,
             optimize_c_frequency_slider: 10,
-            // TODO: these are good defaults, but maybe there are better
-            target_event_rate: 5_000_000.0,
-            target_event_rate_slider: 5_000_000.0,
-            alpha: 0.999,
+            limit_bandwidth: false,
+            bandwidth_target_event_rate: 5_000_000.0,
+            bandwidth_target_event_rate_slider: 5_000_000.0,
+            encoder_options: Default::default(),
+            bandwidth_alpha: 0.999,
             alpha_slider: 0.999,
             time_mode: TimeMode::default(),
-            encoder_options: EncoderOptions::default(),
+            encoder_type: EncoderType::default(),
             detect_features: false,
             show_features: false,
             auto_quality: true,
@@ -344,10 +347,11 @@ impl TranscoderState {
                         if source.mode != self.ui_state.davis_mode_radio_state
                             || source.get_reconstructor().as_ref().unwrap().output_fps
                                 != self.ui_state.davis_output_fps
-                            || source.time_mode != self.ui_state.time_mode
-                            || ((source.get_video_ref().encoder_options != self.ui_state.encoder_options)
-                            // TODO: better way to do this
-                            || (match source.get_video_ref().encoder_options { EncoderOptions::RawBandwidthLimited {target_event_rate, alpha} => target_event_rate != self.ui_state.target_event_rate || alpha != self.ui_state.alpha, _ => false })
+                            || ((source.time_mode != self.ui_state.time_mode
+                                || source.get_video_ref().encoder_type
+                                    != self.ui_state.encoder_type
+                                || source.get_video_ref().get_encoder_options()
+                                    != self.ui_state.encoder_options)
                                 && self.ui_info_state.output_path.is_some())
                         {
                             if self.ui_state.davis_mode_radio_state == RawDvs {
@@ -375,10 +379,10 @@ impl TranscoderState {
                 Some(source) => {
                     if source.scale != self.ui_state.scale
                         || source.get_ref_time() != self.ui_state.delta_t_ref as u32
-                        || source.time_mode != self.ui_state.time_mode
-                        || ((source.get_video_ref().encoder_options != self.ui_state.encoder_options)
-                        // TODO: better way to do this
-                        || (match source.get_video_ref().encoder_options { EncoderOptions::RawBandwidthLimited {target_event_rate, alpha} => target_event_rate != self.ui_state.target_event_rate || alpha != self.ui_state.alpha, _ => false })
+                        || ((source.time_mode != self.ui_state.time_mode
+                            || source.get_video_ref().encoder_type != self.ui_state.encoder_type
+                            || source.get_video_ref().get_encoder_options()
+                                != self.ui_state.encoder_options)
                             && self.ui_info_state.output_path.is_some())
                         || match source.get_video_ref().state.plane.c() {
                             1 => {
@@ -701,26 +705,18 @@ fn side_panel_grid_contents(
         ui.vertical(|ui| {
             ui.horizontal(|ui| {
                 ui.radio_value(
-                    &mut ui_state.encoder_options,
-                    EncoderOptions::Empty,
+                    &mut ui_state.encoder_type,
+                    EncoderType::Empty,
                     "Empty (don't write)",
                 );
-                ui.radio_value(&mut ui_state.encoder_options, EncoderOptions::Raw, "Raw");
+                ui.radio_value(&mut ui_state.encoder_type, EncoderType::Raw, "Raw");
             });
             ui.horizontal(|ui| {
                 ui.radio_value(
-                    &mut ui_state.encoder_options,
-                    EncoderOptions::RawInterleaved,
-                    "Raw, temporally interleaved",
-                );
-                ui.radio_value(
-                    &mut ui_state.encoder_options,
-                    EncoderOptions::Compressed,
+                    &mut ui_state.encoder_type,
+                    EncoderType::Compressed,
                     "Compressed",
                 );
-            });
-            ui.horizontal(|ui| {
-                ui.radio_value(&mut ui_state.encoder_options, EncoderOptions::RawBandwidthLimited {target_event_rate: *&mut ui_state.target_event_rate, alpha: *&mut ui_state.alpha }, "Raw, bandwidth limited");
             });
         });
     });
@@ -785,19 +781,47 @@ fn side_panel_grid_contents(
     );
     ui.end_row();
 
+    let enable_encoder_options = ui_state.encoder_type != EncoderType::Empty;
+
+    ui.label("Event output order:");
+    ui.add_enabled_ui(enable_encoder_options, |ui| {
+        ui.horizontal(|ui| {
+            ui.radio_value(
+                &mut ui_state.encoder_options.event_order,
+                EventOrder::Unchanged,
+                "Unchanged",
+            );
+            ui.radio_value(
+                &mut ui_state.encoder_options.event_order,
+                EventOrder::Interleaved,
+                "Interleaved",
+            );
+        });
+    });
+    ui.end_row();
+
+    ui.label("Bandwidth limiting:");
+    ui.add_enabled(
+        enable_encoder_options,
+        egui::Checkbox::new(&mut ui_state.limit_bandwidth, "Limit bandwidth?"),
+    );
+    ui.end_row();
+
     ui.label("Bandwidth limiting rate:");
 
     slider_pm(
-        // TODO: might be a cleaner way to express this without using match
-        //ui_state.encoder_options == EncoderOptions::RawBandwidthLimited,
-        match ui_state.encoder_options {EncoderOptions::RawBandwidthLimited {..} => true, _ => false},
+        ui_state.limit_bandwidth,
         true,
         ui,
-        &mut ui_state.target_event_rate,
-        &mut ui_state.target_event_rate_slider,
-        1_000_000.0..=100_000_000.0, // TODO: range
-        vec![ // TODO: tune slider values
-            1_000_000.0, 2_500_000.0, 5_000_000.0, 7_500_000.0, 10_000_000.0
+        &mut ui_state.bandwidth_target_event_rate,
+        &mut ui_state.bandwidth_target_event_rate_slider,
+        1_000_000.0..=100_000_000.0,
+        vec![
+            1_000_000.0,
+            2_500_000.0,
+            5_000_000.0,
+            7_500_000.0,
+            10_000_000.0,
         ],
         50_000.0,
     );
@@ -806,21 +830,28 @@ fn side_panel_grid_contents(
     ui.label("Bandwidth limiting alpha:");
 
     slider_pm(
-        // TODO: might be a cleaner way to express this without using match
-        //ui_state.encoder_options == EncoderOptions::RawBandwidthLimited,
-        match ui_state.encoder_options {EncoderOptions::RawBandwidthLimited {..} => true, _ => false},
-        true,
+        ui_state.limit_bandwidth,
+        false,
         ui,
-        &mut ui_state.alpha,
+        &mut ui_state.bandwidth_alpha,
         &mut ui_state.alpha_slider,
-        0.8..=1.0,
-        vec![ // TODO: I think these values are okay, but maybe there are better ones
-            0.8, 0.9, 0.999, 0.99999, 1.0
-        ],
+        0.0..=1.0,
+        vec![0.5, 0.8, 0.9, 0.999, 0.99999, 1.0],
         0.001,
     );
     ui.end_row();
-  
+
+    /* Update the bandwidth options in the UI state. If there's a change, it will later get reflected
+    by updating the encoder options in the transcoder.*/
+    if ui_state.limit_bandwidth {
+        ui_state.encoder_options.event_drop = EventDrop::Manual {
+            target_event_rate: ui_state.bandwidth_target_event_rate,
+            alpha: ui_state.bandwidth_alpha,
+        };
+    } else {
+        ui_state.encoder_options.event_drop = EventDrop::None;
+    }
+
     ui.label("Processing:");
     ui.vertical(|ui| {
         ui.add_enabled(

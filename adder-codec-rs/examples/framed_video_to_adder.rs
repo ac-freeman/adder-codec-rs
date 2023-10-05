@@ -1,17 +1,16 @@
 extern crate core;
 
-use adder_codec_rs::transcoder::source::framed::Framed;
-use adder_codec_rs::transcoder::source::video::{Source, VideoBuilder};
-use adder_codec_core::codec::EncoderOptions;
+use adder_codec_core::codec::EncoderType;
 use adder_codec_core::SourceCamera::FramedU8;
 use adder_codec_core::TimeMode;
+use adder_codec_rs::transcoder::source::framed::Framed;
+use adder_codec_rs::transcoder::source::video::{Source, VideoBuilder};
 use rayon::current_num_threads;
 use std::error::Error;
 use std::fs::File;
 use std::io;
 use std::io::{BufWriter, Write};
 use std::time::Instant;
-
 
 fn main() -> Result<(), Box<dyn Error>> {
     let file = File::create("/home/andrew/Downloads/events.adder")?;
@@ -23,7 +22,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         0.5,
     )?
     .frame_start(1420)?
-    .write_out(FramedU8, TimeMode::DeltaT, EncoderOptions::Raw, writer)?
+    .write_out(FramedU8, TimeMode::DeltaT, EncoderType::Raw, writer)?
     .contrast_thresholds(10, 10)
     .show_display(true)
     .auto_time_parameters(255, 255 * 30, None)?;
