@@ -3,7 +3,7 @@ use std::error::Error;
 use adder_codec_core::DeltaT;
 use adder_codec_rs::transcoder::source::davis::Davis;
 use adder_codec_rs::transcoder::source::framed::Framed;
-use bevy::prelude::Image;
+use bevy::prelude::{dbg, Image};
 use std::fmt;
 use std::fs::File;
 use std::io::BufWriter;

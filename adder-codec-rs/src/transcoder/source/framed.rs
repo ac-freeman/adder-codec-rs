@@ -247,9 +247,6 @@ impl<W: Write + 'static> VideoBuilder<W> for Framed<W> {
         encoder_options: EncoderOptions,
         write: W,
     ) -> Result<Box<Self>, SourceError> {
-        dbg!(encoder_type);
-        dbg!(encoder_options);
-        dbg!(time_mode);
         self.video = self.video.write_out(
             Some(source_camera),
             Some(time_mode),

@@ -252,7 +252,7 @@ impl<W: Write + 'static> Encoder<W> {
                 if let Some(first_item_addr) = self.state.queue.peek() {
                     if first_item_addr.delta_t < dt.saturating_sub(self.meta().delta_t_max) {
                         if let Some(first_item) = self.state.queue.pop() {
-                            res = self.ingest_event(first_item);
+                            res = self.output.ingest_event(first_item);
                         }
                     }
                 }

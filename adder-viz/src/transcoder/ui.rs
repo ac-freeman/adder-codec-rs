@@ -377,14 +377,6 @@ impl TranscoderState {
                     }
                 },
                 Some(source) => {
-                    dbg!(source.get_ref_time() != self.ui_state.delta_t_ref as u32);
-                    dbg!(source.get_video_ref().get_time_mode() != self.ui_state.time_mode);
-                    dbg!(source.get_video_ref().encoder_type != self.ui_state.encoder_type);
-                    dbg!(
-                        source.get_video_ref().get_encoder_options()
-                            != self.ui_state.encoder_options
-                    );
-
                     if source.scale != self.ui_state.scale
                         || source.get_ref_time() != self.ui_state.delta_t_ref as u32
                         || ((source.get_video_ref().get_time_mode() != self.ui_state.time_mode
