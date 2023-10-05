@@ -2,6 +2,10 @@ mod player;
 mod transcoder;
 mod utils;
 
+use bevy_egui::egui::epaint::{
+    text::{LayoutJob, TextFormat},
+    Color32, FontFamily, FontId,
+};
 use std::ops::RangeInclusive;
 
 use crate::player::ui::PlayerState;
@@ -12,7 +16,9 @@ use bevy::window::{PresentMode, PrimaryWindow, WindowResolution};
 
 use bevy_egui::{egui, EguiContexts, EguiPlugin, EguiSettings};
 // use egui_dock::egui as dock_egui;
-use bevy_egui::egui::{emath, global_dark_light_mode_switch, Rounding, Ui, Widget, WidgetText};
+use bevy_egui::egui::{
+    emath, global_dark_light_mode_switch, Align, Rounding, Ui, Widget, WidgetText,
+};
 
 use crate::transcoder::adder::replace_adder_transcoder;
 use strum::IntoEnumIterator;
@@ -82,6 +88,8 @@ fn main() {
 pub struct Images {
     last_image_view: Handle<Image>,
     image_view: Handle<Image>,
+    last_input_view: Handle<Image>,
+    input_view: Handle<Image>,
 }
 
 fn configure_visuals(mut egui_ctx: EguiContexts) {
@@ -189,6 +197,7 @@ fn draw_ui(
         });
 
     images.remove(&handles.last_image_view);
+    images.remove(&handles.last_input_view);
 
     let (image, texture_id) = match images.get(&handles.image_view) {
         // texture_id = Some(egui_ctx.add_image(handles.image_view.clone()));
@@ -196,6 +205,15 @@ fn draw_ui(
         Some(image) => (
             Some(image),
             Some(egui_ctx.add_image(handles.image_view.clone())),
+        ),
+    };
+
+    let (input, input_texture_id) = match images.get(&handles.input_view) {
+        // texture_id = Some(egui_ctx.add_image(handles.image_view.clone()));
+        None => (None, None),
+        Some(image) => (
+            Some(image),
+            Some(egui_ctx.add_image(handles.input_view.clone())),
         ),
     };
 
@@ -215,35 +233,197 @@ fn draw_ui(
         Images in the central panel are common to both visualization tabs, so we can do this
          here as the last step of drawing its UI
         */
-        if let (Some(image), Some(texture_id)) = (image, texture_id) {
-            let avail_size = ui.available_size();
-            let size = match (
-                image.texture_descriptor.size.width as f32,
-                image.texture_descriptor.size.height as f32,
-            ) {
-                (a, b) if a / b > avail_size.x / avail_size.y => {
-                    /*
-                    The available space has a taller aspect ratio than the video
-                    Fill the available horizontal space.
-                     */
-                    bevy_egui::egui::Vec2 {
-                        x: avail_size.x,
-                        y: (avail_size.x / a) * b,
-                    }
+        let mut has_input = false;
+        let avail_size = ui.available_size();
+        ui.horizontal(|ui| {
+            ui.set_max_size(avail_size);
+
+            ui.vertical(|ui| {
+                if let (Some(input), Some(input_texture_id)) = (input, input_texture_id) {
+                    let mut avail_size = ui.available_size();
+                    avail_size.x = avail_size.x / 2.0 - ui.spacing().item_spacing.y / 2.0;
+
+                    ui.set_max_size(avail_size);
+
+                    // Right-align the text so it's easier to compare to the ADDER version
+                    ui.with_layout(egui::Layout::top_down(Align::Max), |ui| {
+                        let mut job = LayoutJob::default();
+                        job.append(
+                            "Input\n",
+                            0.0,
+                            TextFormat {
+                                font_id: FontId::new(24.0, FontFamily::Proportional),
+                                color: Color32::WHITE,
+                                ..Default::default()
+                            },
+                        );
+
+                        let str = format!(
+                            "{number:.prec$} MB/s",
+                            prec = 2,
+                            number = transcoder_state
+                                .ui_info_state
+                                .plot_points_raw_source_bitrate_y
+                                .points
+                                .iter()
+                                .last()
+                                .unwrap_or(&-999.0)
+                        );
+                        job.append(
+                            &str,
+                            0.0,
+                            TextFormat {
+                                font_id: FontId::new(14.0, FontFamily::Proportional),
+                                ..Default::default()
+                            },
+                        );
+                        ui.label(job);
+                    });
+                    has_input = true;
+
+                    let size = match (
+                        input.texture_descriptor.size.width as f32,
+                        input.texture_descriptor.size.height as f32,
+                    ) {
+                        (a, b) if a / b > avail_size.x / avail_size.y => {
+                            /*
+                            The available space has a taller aspect ratio than the video
+                            Fill the available horizontal space.
+                             */
+                            egui::Vec2 {
+                                x: avail_size.x,
+                                y: (avail_size.x / a) * b,
+                            }
+                        }
+                        (a, b) => {
+                            /*
+                            The available space has a shorter aspect ratio than the video
+                            Fill the available vertical space.
+                             */
+                            egui::Vec2 {
+                                x: (avail_size.y / b) * a,
+                                y: avail_size.y,
+                            }
+                        }
+                    };
+                    ui.image(input_texture_id, size);
                 }
-                (a, b) => {
-                    /*
-                    The available space has a shorter aspect ratio than the video
-                    Fill the available vertical space.
-                     */
-                    bevy_egui::egui::Vec2 {
-                        x: (avail_size.y / b) * a,
-                        y: avail_size.y,
-                    }
+            });
+
+            ui.vertical(|ui| {
+                if let (Some(image), Some(texture_id)) = (image, texture_id) {
+                    ui.with_layout(egui::Layout::top_down(Align::Min), |ui| {
+                        let mut job = LayoutJob::default();
+                        job.append(
+                            "ADΔER\n",
+                            0.0,
+                            TextFormat {
+                                font_id: FontId::new(24.0, FontFamily::Proportional),
+                                color: Color32::WHITE,
+                                ..Default::default()
+                            },
+                        );
+
+                        let (bitrate, percentage_str, color) = match main_ui_state.view {
+                            Tabs::Transcoder => {
+                                let bitrate = transcoder_state
+                                    .ui_info_state
+                                    .plot_points_raw_adder_bitrate_y
+                                    .points
+                                    .iter()
+                                    .last()
+                                    .unwrap_or(&-999.0);
+                                let percentage = transcoder_state
+                                    .ui_info_state
+                                    .plot_points_raw_adder_bitrate_y
+                                    .points
+                                    .iter()
+                                    .last()
+                                    .unwrap_or(&-999.0)
+                                    / transcoder_state
+                                        .ui_info_state
+                                        .plot_points_raw_source_bitrate_y
+                                        .points
+                                        .iter()
+                                        .last()
+                                        .unwrap_or(&-999.0)
+                                    * 100.0;
+
+                                let percentage_str =
+                                    format!("{number:.prec$}%", prec = 2, number = percentage);
+                                let color = if percentage < 100.0 {
+                                    Color32::GREEN
+                                } else {
+                                    Color32::RED
+                                };
+                                (bitrate, percentage_str, color)
+                            }
+                            Tabs::Player => {
+                                let bitrate = player_state
+                                    .ui_info_state
+                                    .plot_points_raw_adder_bitrate_y
+                                    .points
+                                    .iter()
+                                    .last()
+                                    .unwrap_or(&-999.0);
+                                (bitrate, "".to_string(), Color32::WHITE)
+                            }
+                        };
+
+                        let str = format!("{number:.prec$} MB/s | ", prec = 2, number = bitrate);
+                        job.append(
+                            &str,
+                            0.0,
+                            TextFormat {
+                                font_id: FontId::new(14.0, FontFamily::Proportional),
+                                ..Default::default()
+                            },
+                        );
+
+                        job.append(
+                            &percentage_str,
+                            0.0,
+                            TextFormat {
+                                font_id: FontId::new(14.0, FontFamily::Proportional),
+                                color,
+                                ..Default::default()
+                            },
+                        );
+
+                        ui.label(job);
+                    });
+
+                    let avail_size = ui.available_size();
+                    let size = match (
+                        image.texture_descriptor.size.width as f32,
+                        image.texture_descriptor.size.height as f32,
+                    ) {
+                        (a, b) if a / b > avail_size.x / avail_size.y => {
+                            /*
+                            The available space has a taller aspect ratio than the video
+                            Fill the available horizontal space.
+                             */
+                            egui::Vec2 {
+                                x: avail_size.x,
+                                y: (avail_size.x / a) * b,
+                            }
+                        }
+                        (a, b) => {
+                            /*
+                            The available space has a shorter aspect ratio than the video
+                            Fill the available vertical space.
+                             */
+                            egui::Vec2 {
+                                x: (avail_size.y / b) * a,
+                                y: avail_size.y,
+                            }
+                        }
+                    };
+
+                    ui.image(texture_id, size);
                 }
-            };
-            ui.image(texture_id, size);
-        }
+            });
+        });
 
         if let Some(msg) = main_ui_state.error_msg.as_ref() {
             ui.label(msg);

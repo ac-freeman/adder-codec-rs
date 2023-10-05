@@ -96,6 +96,9 @@ pub struct Davis<W: Write> {
 
     /// The EDI reconstruction mode, determining how intensities are integrated for the ADΔER model
     pub mode: TranscoderMode,
+
+    time_change: f64,
+    num_dvs_events: usize,
 }
 
 unsafe impl<W: Write> Sync for Davis<W> {}
@@ -165,6 +168,8 @@ impl<W: Write + 'static> Davis<W> {
 
             optimize_adder_controller: false,
             mode: TranscoderMode::Framed,
+            time_change: 0.0,
+            num_dvs_events: 0,
         };
 
         Ok(davis_source)
@@ -650,6 +655,12 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Davis<W> {
                     // self.control_latency(opt_timestamp);
 
                     self.input_frame_scaled = mat;
+
+                    self.time_change = (img_start_ts
+                        - self.integration.start_of_frame_timestamp.unwrap_or(0))
+                        as f64;
+                    self.num_dvs_events = events_before.len() + events_after.len();
+
                     self.integration.start_of_frame_timestamp = Some(img_start_ts);
                     self.integration.end_of_frame_timestamp = Some(img_end_ts);
                     if self.mode == TranscoderMode::RawDvs {
@@ -876,6 +887,35 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Davis<W> {
 
     fn get_video(self) -> Video<W> {
         self.video
+    }
+
+    fn get_input(&self) -> &Mat {
+        unimplemented!("Davis::get_input");
+    }
+
+    fn get_running_input_bitrate(&self) -> f64 {
+        match self.mode {
+            TranscoderMode::Framed => {
+                let fps = self.video.state.tps as f64
+                    / (self.video.state.ref_time_divisor * self.video.state.ref_time as f64);
+                self.video.state.plane.volume() as f64 * 8.0 * fps
+            }
+            TranscoderMode::RawDavis => {
+                // dvs events per second
+                let time_mult = 1E6 / self.time_change;
+                let events_per_sec = self.num_dvs_events as f64 * time_mult;
+                let event_bits_per_sec = events_per_sec * 9.0 * 8.0; // Best-case 9 bytes per raw DVS event
+
+                let frame_bits_per_sec = time_mult * self.video.state.plane.volume() as f64 * 8.0;
+                event_bits_per_sec + frame_bits_per_sec
+            }
+            TranscoderMode::RawDvs => {
+                let time_mult = 1E6 / self.time_change;
+                let events_per_sec = self.num_dvs_events as f64 * time_mult;
+                let event_bits_per_sec = events_per_sec * 9.0 * 8.0; // Best-case 9 bytes per raw DVS event
+                event_bits_per_sec
+            }
+        }
     }
 }
 

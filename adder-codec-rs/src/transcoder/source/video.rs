@@ -634,7 +634,7 @@ impl<W: Write + 'static> Video<W> {
         matrix: Mat,
         time_spanned: f32,
         view_interval: u32,
-    ) -> std::result::Result<Vec<Vec<Event>>, SourceError> {
+    ) -> Result<Vec<Vec<Event>>, SourceError> {
         let color = self.state.plane.c() != 1;
 
         let frame_arr: &[u8] = match matrix.data_bytes() {
@@ -956,6 +956,10 @@ impl<W: Write + 'static> Video<W> {
             px.c_increase_counter = 0;
         }
     }
+
+    pub fn get_event_size(&self) -> u8 {
+        self.encoder.meta().event_size
+    }
 }
 
 /// Integrate an intensity value for a pixel, over a given time span
@@ -1095,4 +1099,9 @@ pub trait Source<W: Write> {
     /// Get the [`Video`] object associated with this [`Source`], consuming the [`Source`] in the
     /// process.
     fn get_video(self) -> Video<W>;
+
+    fn get_input(&self) -> &Mat;
+
+    /// Get the last-calculated bitrate of the input (in bits per second)
+    fn get_running_input_bitrate(&self) -> f64;
 }

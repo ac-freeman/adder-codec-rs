@@ -123,6 +123,10 @@ impl<W: Write + 'static> Framed<W> {
     pub fn get_ref_time(&self) -> u32 {
         self.video.state.ref_time
     }
+
+    pub fn get_last_input_frame_scaled(&self) -> &Mat {
+        &self.input_frame_scaled
+    }
 }
 
 impl<W: Write + 'static> Source<W> for Framed<W> {
@@ -174,6 +178,17 @@ impl<W: Write + 'static> Source<W> for Framed<W> {
 
     fn get_video(self) -> Video<W> {
         todo!()
+    }
+
+    fn get_input(&self) -> &Mat {
+        self.get_last_input_frame_scaled()
+    }
+
+    fn get_running_input_bitrate(&self) -> f64 {
+        let video = self.get_video_ref();
+        video.get_tps() as f64 / video.get_ref_time() as f64
+            * video.state.plane.volume() as f64
+            * 8.0
     }
 }
 
