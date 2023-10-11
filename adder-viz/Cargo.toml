@@ -15,6 +15,9 @@ keywords = ["neuromorphic", "visualization", "video", "asynchronous", "event"]
 categories = ["multimedia::encoding", "multimedia::video", "science"]
 default-run = "adder-viz"
 
+[features]
+feature-logging = ["adder-codec-rs/feature-logging"]
+
 [dependencies]
 adder-codec-core = { version = "0.2.1", path = "../adder-codec-core" }
 adder-codec-rs = { version = "0.3.4", path = "../adder-codec-rs", features = [

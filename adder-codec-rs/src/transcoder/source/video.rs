@@ -1,3 +1,4 @@
+use chrono::prelude::*;
 use opencv::core::{KeyPoint, Mat, Scalar, Size, Vector, CV_32F, CV_32FC3, CV_8U, CV_8UC3};
 use std::collections::HashMap;
 use std::error::Error;
@@ -16,6 +17,7 @@ use adder_codec_core::{
 };
 use bumpalo::Bump;
 use std::sync::mpsc::{channel, Sender};
+use std::time::SystemTime;
 
 use adder_codec_core::D;
 use opencv::highgui;
@@ -184,6 +186,8 @@ pub struct VideoState {
     pub feature_c_radius: u16,
 
     features: HashMap<(PixelAddress, PixelAddress), ()>,
+
+    feature_log_handle: Option<std::fs::File>,
 }
 
 impl Default for VideoState {
@@ -207,6 +211,7 @@ impl Default for VideoState {
             show_features: ShowFeatureMode::Off,
             feature_c_radius: 0,
             features: Default::default(),
+            feature_log_handle: None,
         };
         state.update_crf(DEFAULT_CRF_QUALITY, false);
         state
@@ -339,6 +344,19 @@ impl<W: Write + 'static> Video<W> {
             pixel_tree_mode,
             ..Default::default()
         };
+
+        #[cfg(feature = "feature-logging")]
+        {
+            let date_time = Local::now();
+            let formatted = format!("features_{}.log", date_time.format("%d_%m_%Y_%H_%M_%S"));
+            let log_handle = std::fs::File::create(formatted).ok();
+            state.feature_log_handle = log_handle;
+
+            // Write the plane size to the log file
+            if let Some(handle) = &mut state.feature_log_handle {
+                writeln!(handle, "{}x{}x{}", plane.w(), plane.h(), plane.c()).unwrap();
+            }
+        }
 
         let mut data = Vec::new();
         for y in 0..plane.h() {
@@ -826,7 +844,8 @@ impl<W: Write + 'static> Video<W> {
                 draw_feature_coord(*x, *y, &mut self.instantaneous_frame)?;
             }
         }
-
+        #[cfg(feature = "feature-logging")]
+        {}
         if self.state.show_live {
             show_display("instance", &self.instantaneous_frame, 1, self)?;
         }
