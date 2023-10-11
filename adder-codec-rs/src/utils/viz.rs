@@ -69,6 +69,12 @@ pub async fn download_file(
     }
     Ok(())
 }
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub enum ShowFeatureMode {
+    Off,
+    Instant,
+    Hold,
+}
 
 /// Assuming the given event is a feature, draw it on the given `img` as a white cross
 pub fn draw_feature_event(e: &Event, img: &mut Mat) -> Result<(), opencv::Error> {

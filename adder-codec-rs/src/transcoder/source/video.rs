@@ -38,7 +38,7 @@ use rayon::ThreadPool;
 
 use crate::transcoder::source::{CRF, DEFAULT_CRF_QUALITY};
 use crate::utils::cv::is_feature;
-use crate::utils::viz::draw_feature_coord;
+use crate::utils::viz::{draw_feature_coord, draw_feature_event, ShowFeatureMode};
 use thiserror::Error;
 use tokio::task::JoinError;
 
@@ -177,8 +177,8 @@ pub struct VideoState {
     /// Whether or not to detect features
     pub feature_detection: bool,
 
-    /// Whether or not to draw the features on the display mat
-    show_features: bool,
+    /// Whether or not to draw the features on the display mat, and the mode to do it in
+    show_features: ShowFeatureMode,
 
     /// The radius for which to reset the c-threshold for neighboring pixels (if feature detection is enabled)
     pub feature_c_radius: u16,
@@ -204,7 +204,7 @@ impl Default for VideoState {
             show_display: false,
             show_live: false,
             feature_detection: false,
-            show_features: false,
+            show_features: ShowFeatureMode::Off,
             feature_c_radius: 0,
             features: Default::default(),
         };
@@ -296,7 +296,7 @@ pub trait VideoBuilder<W> {
     fn show_display(self, show_display: bool) -> Self;
 
     /// Set whether or not to detect features, and whether or not to display the features
-    fn detect_features(self, detect_features: bool, show_features: bool) -> Self;
+    fn detect_features(self, detect_features: bool, show_features: ShowFeatureMode) -> Self;
 }
 
 // impl VideoBuilder for Video {}
@@ -820,7 +820,7 @@ impl<W: Write + 'static> Video<W> {
             }
         }
 
-        if self.state.show_features {
+        if self.state.show_features == ShowFeatureMode::Hold {
             // Display the feature on the viz frame
             for ((x, y), ()) in &self.state.features {
                 draw_feature_coord(*x, *y, &mut self.instantaneous_frame)?;
@@ -868,7 +868,11 @@ impl<W: Write + 'static> Video<W> {
     }
 
     /// Set a new bool for `feature_detection`
-    pub fn update_detect_features(&mut self, detect_features: bool, show_features: bool) {
+    pub fn update_detect_features(
+        &mut self,
+        detect_features: bool,
+        show_features: ShowFeatureMode,
+    ) {
         // Validate new value
         self.state.feature_detection = detect_features;
         self.state.show_features = show_features;
@@ -901,6 +905,11 @@ impl<W: Write + 'static> Video<W> {
 
     pub(crate) fn feature_test(&mut self, e: &Event) -> Result<(), Box<dyn Error>> {
         if is_feature(e, self.state.plane, &self.running_intensities)? {
+            if self.state.show_features == ShowFeatureMode::Instant {
+                // Display the feature on the viz frame
+                draw_feature_event(e, &mut self.instantaneous_frame)?;
+            }
+
             self.state.features.insert((e.coord.x(), e.coord.y()), ());
 
             // Reset the threshold for that pixel and its neighbors
@@ -922,7 +931,11 @@ impl<W: Write + 'static> Video<W> {
     }
 
     /// Set whether or not to detect features, and whether or not to display the features
-    pub fn detect_features(mut self, detect_features: bool, show_features: bool) -> Self {
+    pub fn detect_features(
+        mut self,
+        detect_features: bool,
+        show_features: ShowFeatureMode,
+    ) -> Self {
         self.state.feature_detection = detect_features;
         self.state.show_features = show_features;
         self

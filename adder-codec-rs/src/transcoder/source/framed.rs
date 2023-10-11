@@ -5,6 +5,7 @@ use crate::transcoder::source::video::{Source, VideoBuilder};
 use adder_codec_core::Mode::FramePerfect;
 use adder_codec_core::{DeltaT, Event, PlaneSize, SourceCamera, TimeMode};
 
+use crate::utils::viz::ShowFeatureMode;
 use adder_codec_core::codec::{EncoderOptions, EncoderType};
 use opencv::core::{Mat, Size};
 use opencv::videoio::{VideoCapture, CAP_PROP_FPS, CAP_PROP_FRAME_COUNT, CAP_PROP_POS_FRAMES};
@@ -277,7 +278,7 @@ impl<W: Write + 'static> VideoBuilder<W> for Framed<W> {
         self
     }
 
-    fn detect_features(mut self, detect_features: bool, show_features: bool) -> Self {
+    fn detect_features(mut self, detect_features: bool, show_features: ShowFeatureMode) -> Self {
         self.video = self.video.detect_features(detect_features, show_features);
         self
     }
