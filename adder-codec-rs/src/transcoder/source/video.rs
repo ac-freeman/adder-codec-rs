@@ -185,7 +185,7 @@ pub struct VideoState {
     /// The radius for which to reset the c-threshold for neighboring pixels (if feature detection is enabled)
     pub feature_c_radius: u16,
 
-    features: HashMap<(PixelAddress, PixelAddress), ()>,
+    features: HashMap<Coord, ()>,
 
     feature_log_handle: Option<std::fs::File>,
 }
@@ -838,14 +838,27 @@ impl<W: Write + 'static> Video<W> {
             }
         }
 
-        if self.state.show_features == ShowFeatureMode::Hold {
-            // Display the feature on the viz frame
-            for ((x, y), ()) in &self.state.features {
-                draw_feature_coord(*x, *y, &mut self.instantaneous_frame)?;
+        #[cfg(feature = "feature-logging")]
+        {
+            if let Some(handle) = &mut self.state.feature_log_handle {
+                let frame_end_coord = Coord {
+                    x: u16::MAX,
+                    y: u16::MAX,
+                    c: Some(255),
+                };
+                bincode::serialize_into(&mut *handle, &frame_end_coord).unwrap();
+                // let json = serde_json::to_string(&frame_end_coord).unwrap();
+                // writeln!(handle, "{}", json).unwrap();
             }
         }
-        #[cfg(feature = "feature-logging")]
-        {}
+
+        if self.state.show_features == ShowFeatureMode::Hold {
+            // Display the feature on the viz frame
+            for (coord, ()) in &self.state.features {
+                draw_feature_coord(coord.x, coord.y, &mut self.instantaneous_frame)?;
+            }
+        }
+
         if self.state.show_live {
             show_display("instance", &self.instantaneous_frame, 1, self)?;
         }
@@ -924,12 +937,21 @@ impl<W: Write + 'static> Video<W> {
 
     pub(crate) fn feature_test(&mut self, e: &Event) -> Result<(), Box<dyn Error>> {
         if is_feature(e, self.state.plane, &self.running_intensities)? {
+            #[cfg(feature = "feature-logging")]
+            {
+                if let Some(handle) = &mut self.state.feature_log_handle {
+                    bincode::serialize_into(&mut *handle, &e.coord).unwrap();
+                    // let json = serde_json::to_string(&frame_end_coord).unwrap();
+                    // writeln!(handle, "{}", json).unwrap();
+                }
+            }
+
             if self.state.show_features == ShowFeatureMode::Instant {
                 // Display the feature on the viz frame
                 draw_feature_event(e, &mut self.instantaneous_frame)?;
             }
 
-            self.state.features.insert((e.coord.x(), e.coord.y()), ());
+            self.state.features.insert(e.coord, ());
 
             // Reset the threshold for that pixel and its neighbors
             let radius = self.state.feature_c_radius as i32;
@@ -944,7 +966,7 @@ impl<W: Write + 'static> Video<W> {
                 }
             }
         } else {
-            self.state.features.remove(&(e.coord.x(), e.coord.y()));
+            self.state.features.remove(&e.coord);
         }
         Ok(())
     }
