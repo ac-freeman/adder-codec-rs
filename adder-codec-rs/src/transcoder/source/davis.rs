@@ -29,6 +29,7 @@ use adder_codec_core::{Event, PlaneSize, SourceCamera, SourceType, TimeMode};
 
 use crate::framer::scale_intensity::FrameValue;
 use crate::transcoder::event_pixel_tree::Intensity32;
+use crate::utils::viz::ShowFeatureMode;
 use tokio::runtime::Runtime;
 
 /// The EDI reconstruction mode, determining how intensities are integrated for the ADΔER model
@@ -1000,7 +1001,7 @@ impl<W: Write + 'static> VideoBuilder<W> for Davis<W> {
         self
     }
 
-    fn detect_features(mut self, detect_features: bool, show_features: bool) -> Self {
+    fn detect_features(mut self, detect_features: bool, show_features: ShowFeatureMode) -> Self {
         self.video = self.video.detect_features(detect_features, show_features);
         self
     }

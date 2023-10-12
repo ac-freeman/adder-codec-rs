@@ -19,6 +19,7 @@ use adder_codec_core::PlaneSize;
 use adder_codec_core::TimeMode;
 use adder_codec_rs::transcoder::source::davis::TranscoderMode::RawDvs;
 use adder_codec_rs::transcoder::source::{CRF, DEFAULT_CRF_QUALITY};
+use adder_codec_rs::utils::viz::ShowFeatureMode;
 use bevy_egui::egui::plot::Corner::LeftTop;
 use bevy_egui::egui::plot::Legend;
 use egui::plot::{Line, Plot, PlotPoints};
@@ -55,7 +56,7 @@ pub struct ParamsUiState {
     pub(crate) time_mode: TimeMode,
     pub(crate) encoder_type: EncoderType,
     pub(crate) detect_features: bool,
-    pub(crate) show_features: bool,
+    pub(crate) show_features: ShowFeatureMode,
     pub(crate) auto_quality: bool,
     pub(crate) crf: u8,
     pub(crate) crf_slider: u8,
@@ -99,7 +100,7 @@ impl Default for ParamsUiState {
             time_mode: TimeMode::default(),
             encoder_type: EncoderType::default(),
             detect_features: false,
-            show_features: false,
+            show_features: ShowFeatureMode::Off,
             auto_quality: true,
             crf: DEFAULT_CRF_QUALITY,
             crf_slider: DEFAULT_CRF_QUALITY,
@@ -946,10 +947,25 @@ fn side_panel_grid_contents(
             egui::Checkbox::new(&mut ui_state.detect_features, "Detect features"),
         );
 
-        ui.add_enabled(
-            ui_state.detect_features,
-            egui::Checkbox::new(&mut ui_state.show_features, "Show features"),
-        );
+        ui.add_enabled_ui(ui_state.detect_features, |ui| {
+            ui.horizontal(|ui| {
+                ui.radio_value(
+                    &mut ui_state.show_features,
+                    ShowFeatureMode::Off,
+                    "Don't show",
+                );
+                ui.radio_value(
+                    &mut ui_state.show_features,
+                    ShowFeatureMode::Instant,
+                    "Show instant",
+                );
+                ui.radio_value(
+                    &mut ui_state.show_features,
+                    ShowFeatureMode::Hold,
+                    "Show & hold",
+                );
+            });
+        });
     });
     ui.end_row();
 }
