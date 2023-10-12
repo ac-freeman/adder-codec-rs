@@ -914,7 +914,7 @@ impl<W: Write + 'static> Video<W> {
             return Ok(()); // Early return
         }
         let mut new_features: Vec<Vec<Coord>> =
-            vec![Vec::with_capacity(100); self.state.features.len()];
+            vec![Vec::with_capacity(self.state.features[0].len()); self.state.features.len()];
 
         let start = Instant::now();
 
