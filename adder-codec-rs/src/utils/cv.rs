@@ -3,7 +3,7 @@ use ndarray::Array3;
 use std::error::Error;
 
 // TODO: Explore optimal threshold values
-const INTENSITY_THRESHOLD: i32 = 30;
+pub const INTENSITY_THRESHOLD: i32 = 30;
 
 #[rustfmt::skip]
 const CIRCLE3: [[i32; 2]; 16] = [

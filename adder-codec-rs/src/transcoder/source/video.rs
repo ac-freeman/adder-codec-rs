@@ -17,7 +17,7 @@ use adder_codec_core::{
 };
 use bumpalo::Bump;
 use std::sync::mpsc::{channel, Sender};
-use std::time::SystemTime;
+use std::time::{Duration, Instant, SystemTime};
 
 use adder_codec_core::D;
 use opencv::highgui;
@@ -813,25 +813,20 @@ impl<W: Write + 'static> Video<W> {
             )?;
         }
 
-        // let mut keypoints = Vector::<KeyPoint>::new();
-        // opencv::features2d::fast(&self.instantaneous_frame, &mut keypoints, 50, true)?;
-        // let mut keypoint_mat = Mat::default();
-        // opencv::features2d::draw_keypoints(
-        //     &self.instantaneous_frame,
-        //     &keypoints,
-        //     &mut keypoint_mat,
-        //     Scalar::new(0.0, 0.0, 255.0, 0.0),
-        //     opencv::features2d::DrawMatchesFlags::DEFAULT,
-        // )?;
-        // show_display_force("keypoints", &keypoint_mat, 1)?;
-
+        let mut total_duration_nanos = 0;
         for events in &big_buffer {
             for (e1, e2) in events.iter().circular_tuple_windows() {
                 self.encoder.ingest_event(*e1)?;
                 if self.state.feature_detection && !color {
                     if e2.delta_t != e1.delta_t {
-                        if let Err(e) = self.feature_test(e1) {
-                            return Err(SourceError::VisionError(e.to_string()));
+                        match self.feature_test(e1) {
+                            Ok(None) => {}
+                            Ok(Some(duration)) => {
+                                total_duration_nanos += duration;
+                            }
+                            Err(e) => {
+                                return Err(SourceError::VisionError(e.to_string()));
+                            }
                         }
                     }
                 }
@@ -849,7 +844,34 @@ impl<W: Write + 'static> Video<W> {
                 bincode::serialize_into(&mut *handle, &frame_end_coord).unwrap();
                 // let json = serde_json::to_string(&frame_end_coord).unwrap();
                 // writeln!(handle, "{}", json).unwrap();
+
+                writeln!(handle, "\nADDER FAST: {}", total_duration_nanos).unwrap();
             }
+        }
+
+        #[cfg(feature = "feature-logging")]
+        {
+            let start = Instant::now();
+            let mut keypoints = Vector::<KeyPoint>::new();
+            opencv::features2d::fast(
+                &self.instantaneous_frame,
+                &mut keypoints,
+                crate::utils::cv::INTENSITY_THRESHOLD,
+                true,
+            )?;
+            let duration = start.elapsed();
+            if let Some(handle) = &mut self.state.feature_log_handle {
+                writeln!(handle, "OpenCV FAST: {}", duration.as_nanos()).unwrap();
+            }
+            let mut keypoint_mat = Mat::default();
+            opencv::features2d::draw_keypoints(
+                &self.instantaneous_frame,
+                &keypoints,
+                &mut keypoint_mat,
+                Scalar::new(0.0, 0.0, 255.0, 0.0),
+                opencv::features2d::DrawMatchesFlags::DEFAULT,
+            )?;
+            show_display_force("keypoints", &keypoint_mat, 1)?;
         }
 
         if self.state.show_features == ShowFeatureMode::Hold {
@@ -935,8 +957,21 @@ impl<W: Write + 'static> Video<W> {
         // self.state.c_thresh_neg = c;
     }
 
-    pub(crate) fn feature_test(&mut self, e: &Event) -> Result<(), Box<dyn Error>> {
-        if is_feature(e, self.state.plane, &self.running_intensities)? {
+    pub(crate) fn feature_test(&mut self, e: &Event) -> Result<Option<u128>, Box<dyn Error>> {
+        let mut start: Instant;
+        #[cfg(feature = "feature-logging")]
+        {
+            start = Instant::now();
+        }
+
+        let status = is_feature(e, self.state.plane, &self.running_intensities)?;
+        let mut duration = None;
+        #[cfg(feature = "feature-logging")]
+        {
+            duration = Some(start.elapsed().as_nanos());
+        }
+
+        if status {
             #[cfg(feature = "feature-logging")]
             {
                 if let Some(handle) = &mut self.state.feature_log_handle {
@@ -968,7 +1003,7 @@ impl<W: Write + 'static> Video<W> {
         } else {
             self.state.features.remove(&e.coord);
         }
-        Ok(())
+        Ok(duration)
     }
 
     /// Set whether or not to detect features, and whether or not to display the features
