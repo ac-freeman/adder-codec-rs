@@ -563,10 +563,12 @@ impl<W: Write + 'static> Integration<W> {
             });
 
         for events in &big_buffer {
-            for (e1, e2) in events.iter().tuple_windows() {
+            for (e1, e2) in events.iter().circular_tuple_windows() {
                 video.encoder.ingest_event(*e1)?;
             }
         }
+
+        video.handle_features(&big_buffer)?;
 
         if video.state.show_live {
             show_display("instance", &video.instantaneous_frame, 1, video)?;

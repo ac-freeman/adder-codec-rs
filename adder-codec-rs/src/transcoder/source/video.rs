@@ -910,6 +910,9 @@ impl<W: Write + 'static> Video<W> {
         &mut self,
         big_buffer: &Vec<Vec<Event>>,
     ) -> Result<(), SourceError> {
+        if !self.state.feature_detection {
+            return Ok(()); // Early return
+        }
         let mut new_features: Vec<Vec<Coord>> =
             vec![Vec::with_capacity(100); self.state.features.len()];
 
@@ -921,8 +924,7 @@ impl<W: Write + 'static> Video<W> {
             .zip(new_features.par_iter_mut())
             .for_each(|((events, feature_set), new_features)| {
                 for (e1, e2) in events.iter().circular_tuple_windows() {
-                    if self.state.feature_detection && (e1.coord.c == None || e1.coord.c == Some(0))
-                    {
+                    if e1.coord.c == None || e1.coord.c == Some(0) {
                         if !cfg!(feature = "feature-logging-nonmaxsuppression")
                             || e2.delta_t != e1.delta_t
                         {
