@@ -5,6 +5,7 @@ use std::error::Error;
 // TODO: Explore optimal threshold values
 pub const INTENSITY_THRESHOLD: i32 = 30;
 
+/// Indices for the asynchronous FAST 9_16 algorithm
 #[rustfmt::skip]
 const CIRCLE3: [[i32; 2]; 16] = [
     [0, 3], [1, 3], [2, 2], [3, 1],

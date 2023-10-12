@@ -8,5 +8,6 @@ pub mod stream_migration;
 /// Computer vision utilities
 pub mod cv;
 
+pub mod logging;
 /// A module for visualizing streams
 pub mod viz;

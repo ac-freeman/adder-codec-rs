@@ -17,6 +17,7 @@ default-run = "adder-viz"
 
 [features]
 feature-logging = ["adder-codec-rs/feature-logging"]
+feature-logging-nonmaxsuppression = ["adder-codec-rs/feature-logging-nonmaxsuppression"]
 
 [dependencies]
 adder-codec-core = { version = "0.2.1", path = "../adder-codec-core" }

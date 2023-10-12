@@ -25,6 +25,7 @@ compression = ["opencv", "dep:fast-math", "adder-codec-core/compression"]
 raw-codec = []
 docs-only = ["opencv", "dep:fast-math", "adder-codec-core"]
 feature-logging = []
+feature-logging-nonmaxsuppression = ["feature-logging"]
 
 
 [dependencies]

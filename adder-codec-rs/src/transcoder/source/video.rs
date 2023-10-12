@@ -40,6 +40,7 @@ use rayon::ThreadPool;
 
 use crate::transcoder::source::{CRF, DEFAULT_CRF_QUALITY};
 use crate::utils::cv::is_feature;
+use crate::utils::logging::{LogFeature, LogFeatureSource};
 use crate::utils::viz::{draw_feature_coord, draw_feature_event, ShowFeatureMode};
 use thiserror::Error;
 use tokio::task::JoinError;
@@ -836,16 +837,20 @@ impl<W: Write + 'static> Video<W> {
         #[cfg(feature = "feature-logging")]
         {
             if let Some(handle) = &mut self.state.feature_log_handle {
-                let frame_end_coord = Coord {
-                    x: u16::MAX,
-                    y: u16::MAX,
-                    c: Some(255),
-                };
-                bincode::serialize_into(&mut *handle, &frame_end_coord).unwrap();
+                // let frame_end_coord = Coord {
+                //     x: u16::MAX,
+                //     y: u16::MAX,
+                //     c: Some(255),
+                // };
+                // bincode::serialize_into(&mut *handle, &frame_end_coord).unwrap();
                 // let json = serde_json::to_string(&frame_end_coord).unwrap();
                 // writeln!(handle, "{}", json).unwrap();
 
-                writeln!(handle, "\nADDER FAST: {}", total_duration_nanos).unwrap();
+                let out = format!("\nADDER FAST: {}", total_duration_nanos);
+                handle
+                    .write_all(&serde_pickle::to_vec(&out, Default::default()).unwrap())
+                    .unwrap();
+                // writeln!(handle, "\nADDER FAST: {}", total_duration_nanos).unwrap();
             }
         }
 
@@ -857,11 +862,30 @@ impl<W: Write + 'static> Video<W> {
                 &self.instantaneous_frame,
                 &mut keypoints,
                 crate::utils::cv::INTENSITY_THRESHOLD,
-                true,
+                cfg!(feature = "feature-logging-nonmaxsuppression"),
             )?;
+
             let duration = start.elapsed();
             if let Some(handle) = &mut self.state.feature_log_handle {
-                writeln!(handle, "OpenCV FAST: {}", duration.as_nanos()).unwrap();
+                for keypoint in &keypoints {
+                    let bytes = serde_pickle::to_vec(
+                        &LogFeature::from_keypoint(
+                            &keypoint,
+                            LogFeatureSource::OpenCV,
+                            cfg!(feature = "feature-logging-nonmaxsuppression"),
+                        ),
+                        Default::default(),
+                    )
+                    .unwrap();
+                    handle.write_all(&bytes).unwrap();
+                }
+
+                let out = format!("\nOpenCV FAST: {}", duration.as_nanos());
+                handle
+                    .write_all(&serde_pickle::to_vec(&out, Default::default()).unwrap())
+                    .unwrap();
+
+                // writeln!(handle, "OpenCV FAST: {}", duration.as_nanos()).unwrap();
             }
             let mut keypoint_mat = Mat::default();
             opencv::features2d::draw_keypoints(
@@ -975,9 +999,45 @@ impl<W: Write + 'static> Video<W> {
             #[cfg(feature = "feature-logging")]
             {
                 if let Some(handle) = &mut self.state.feature_log_handle {
-                    bincode::serialize_into(&mut *handle, &e.coord).unwrap();
-                    // let json = serde_json::to_string(&frame_end_coord).unwrap();
-                    // writeln!(handle, "{}", json).unwrap();
+                    // bincode::serialize_into(&mut *handle, &e.coord).unwrap();
+                    let bytes = serde_pickle::to_vec(
+                        &LogFeature::from_coord(
+                            e.coord,
+                            LogFeatureSource::ADDER,
+                            cfg!(feature = "feature-logging-nonmaxsuppression"),
+                        ),
+                        Default::default(),
+                    )
+                    .unwrap();
+
+                    //     if cfg!(feature = "feature-logging-nonmaxsuppression") {
+                    //     // serde_json::to_string(&LogFeature::from_coord(
+                    //     //     e.coord,
+                    //     //     LogFeatureSource::ADDER,
+                    //     //     true,
+                    //     // ))
+                    //     // .unwrap()
+                    //     serde_pickle::to_vec(
+                    //         &LogFeature::from_coord(e.coord, LogFeatureSource::ADDER, true),
+                    //         Default::default(),
+                    //     )
+                    //     .unwrap()
+                    // } else {
+                    //     // serde_json::to_string(&LogFeature::from_coord(
+                    //     //     e.coord,
+                    //     //     LogFeatureSource::ADDER,
+                    //     //     false,
+                    //     // ))
+                    //     // .unwrap()
+                    //     serde_pickle::to_vec(
+                    //         &LogFeature::from_coord(e.coord, LogFeatureSource::ADDER, false),
+                    //         Default::default(),
+                    //     )
+                    //     .unwrap()
+                    // };
+
+                    handle.write_all(&bytes).unwrap();
+                    // writeln!(handle, "{}", bytes).unwrap();
                 }
             }
 
