@@ -906,7 +906,10 @@ impl<W: Write + 'static> Video<W> {
         // self.state.c_thresh_neg = c;
     }
 
-    fn handle_features(&mut self, big_buffer: &Vec<Vec<Event>>) -> Result<(), SourceError> {
+    pub(crate) fn handle_features(
+        &mut self,
+        big_buffer: &Vec<Vec<Event>>,
+    ) -> Result<(), SourceError> {
         let mut new_features: Vec<Vec<Coord>> =
             vec![Vec::with_capacity(100); self.state.features.len()];
 
@@ -1044,32 +1047,6 @@ impl<W: Write + 'static> Video<W> {
         }
 
         Ok(())
-    }
-
-    pub(crate) fn feature_test(&mut self, e: &Event) -> Result<Option<u128>, Box<dyn Error>> {
-        todo!()
-        // if status {
-        //     if self.state.show_features == ShowFeatureMode::Instant {
-        //         // Display the feature on the viz frame
-        //         draw_feature_event(e, &mut self.instantaneous_frame)?;
-        //     }
-        //
-        //     // Reset the threshold for that pixel and its neighbors
-        //     let radius = self.state.feature_c_radius as i32;
-        //     for r in (e.coord.y() as i32 - radius).max(0)
-        //         ..(e.coord.y() as i32 + radius).min(self.state.plane.h() as i32)
-        //     {
-        //         for c in (e.coord.x() as i32 - radius).max(0)
-        //             ..(e.coord.x() as i32 + radius).min(self.state.plane.w() as i32)
-        //         {
-        //             self.event_pixel_trees[[r as usize, c as usize, e.coord.c_usize()]].c_thresh =
-        //                 self.state.c_thresh_baseline;
-        //         }
-        //     }
-        // } else {
-        //     self.state.features.remove(&e.coord);
-        // }
-        // Ok(duration)
     }
 
     /// Set whether or not to detect features, and whether or not to display the features

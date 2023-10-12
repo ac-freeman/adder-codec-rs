@@ -439,14 +439,13 @@ impl<W: Write + 'static> Integration<W> {
             });
 
         for events in &big_buffer {
-            for (e1, e2) in events.iter().tuple_windows() {
+            for (e1, e2) in events.iter().circular_tuple_windows() {
                 video.encoder.ingest_event(*e1)?;
-                if e2.delta_t != e1.delta_t {
-                    if let Err(e) = video.feature_test(e1) {
-                        return Err(CodecError::VisionError(e.to_string()));
-                    }
-                }
             }
+        }
+
+        if let Err(e) = video.handle_features(&big_buffer) {
+            return Err(CodecError::VisionError(e.to_string()));
         }
 
         if video.state.show_live {
