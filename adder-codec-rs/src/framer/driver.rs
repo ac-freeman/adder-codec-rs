@@ -435,7 +435,8 @@ impl<
 
             if let Some(last) = last_event {
                 if time != last.delta_t {
-                    if is_feature(event, self.state.plane, &self.running_intensities).unwrap() {
+                    if is_feature(event.coord, self.state.plane, &self.running_intensities).unwrap()
+                    {
                         let idx =
                             (time / self.state.tpf - self.state.frames_written as u32) as usize;
                         if idx >= self.features.len() {

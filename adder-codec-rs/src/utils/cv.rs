@@ -1,4 +1,4 @@
-use adder_codec_core::{Event, PlaneSize};
+use adder_codec_core::{Coord, Event, PlaneSize};
 use ndarray::Array3;
 use std::error::Error;
 
@@ -15,18 +15,24 @@ const CIRCLE3: [[i32; 2]; 16] = [
 ];
 
 /// Check if the given event is a feature
-pub fn is_feature(e: &Event, plane: PlaneSize, img: &Array3<i32>) -> Result<bool, Box<dyn Error>> {
-    if e.coord.is_border(plane.w_usize(), plane.h_usize(), 3) {
+pub fn is_feature(
+    coord: Coord,
+    plane: PlaneSize,
+    img: &Array3<i32>,
+) -> Result<bool, Box<dyn Error>> {
+    if coord.is_border(plane.w_usize(), plane.h_usize(), 3) {
         return Ok(false);
     }
 
     // let img = &self.running_intensities;
-    let candidate: i32 = img[(e.coord.y_usize(), e.coord.x_usize(), 0)];
+    let candidate: i32 = img[(coord.y_usize(), coord.x_usize(), 0)];
+    let y = coord.y as i32;
+    let x = coord.x as i32;
 
     let mut count = 0;
     if (img[(
-        (e.coord.y as i32 + CIRCLE3[4][1]) as usize,
-        (e.coord.x as i32 + CIRCLE3[4][0]) as usize,
+        (y + CIRCLE3[4][1]) as usize,
+        (x + CIRCLE3[4][0]) as usize,
         0,
     )] - candidate)
         .abs()
@@ -35,8 +41,8 @@ pub fn is_feature(e: &Event, plane: PlaneSize, img: &Array3<i32>) -> Result<bool
         count += 1;
     }
     if (img[(
-        (e.coord.y as i32 + CIRCLE3[12][1]) as usize,
-        (e.coord.x as i32 + CIRCLE3[12][0]) as usize,
+        (y + CIRCLE3[12][1]) as usize,
+        (x + CIRCLE3[12][0]) as usize,
         0,
     )] - candidate)
         .abs()
@@ -45,8 +51,8 @@ pub fn is_feature(e: &Event, plane: PlaneSize, img: &Array3<i32>) -> Result<bool
         count += 1;
     }
     if (img[(
-        (e.coord.y as i32 + CIRCLE3[1][1]) as usize,
-        (e.coord.x as i32 + CIRCLE3[1][0]) as usize,
+        (y + CIRCLE3[1][1]) as usize,
+        (x + CIRCLE3[1][0]) as usize,
         0,
     )] - candidate)
         .abs()
@@ -56,8 +62,8 @@ pub fn is_feature(e: &Event, plane: PlaneSize, img: &Array3<i32>) -> Result<bool
     }
 
     if (img[(
-        (e.coord.y as i32 + CIRCLE3[7][1]) as usize,
-        (e.coord.x as i32 + CIRCLE3[7][0]) as usize,
+        (y + CIRCLE3[7][1]) as usize,
+        (x + CIRCLE3[7][0]) as usize,
         0,
     )] - candidate)
         .abs()
@@ -75,8 +81,8 @@ pub fn is_feature(e: &Event, plane: PlaneSize, img: &Array3<i32>) -> Result<bool
     for i in 0..16 {
         // Are we looking at a bright or dark streak?
         let brighter = img[(
-            (e.coord.y as i32 + CIRCLE3[i][1]) as usize,
-            (e.coord.x as i32 + CIRCLE3[i][0]) as usize,
+            (y + CIRCLE3[i][1]) as usize,
+            (x + CIRCLE3[i][0]) as usize,
             0,
         )] > candidate;
 
@@ -85,16 +91,16 @@ pub fn is_feature(e: &Event, plane: PlaneSize, img: &Array3<i32>) -> Result<bool
         for j in 0..streak_size {
             if brighter {
                 if img[(
-                    (e.coord.y as i32 + CIRCLE3[(i + j) % 16][1]) as usize,
-                    (e.coord.x as i32 + CIRCLE3[(i + j) % 16][0]) as usize,
+                    (y + CIRCLE3[(i + j) % 16][1]) as usize,
+                    (x + CIRCLE3[(i + j) % 16][0]) as usize,
                     0,
                 )] <= candidate + INTENSITY_THRESHOLD
                 {
                     did_break = true;
                 }
             } else if img[(
-                (e.coord.y as i32 + CIRCLE3[(i + j) % 16][1]) as usize,
-                (e.coord.x as i32 + CIRCLE3[(i + j) % 16][0]) as usize,
+                (y + CIRCLE3[(i + j) % 16][1]) as usize,
+                (x + CIRCLE3[(i + j) % 16][0]) as usize,
                 0,
             )] >= candidate - INTENSITY_THRESHOLD
             {

@@ -1,6 +1,6 @@
 use chrono::prelude::*;
 use opencv::core::{KeyPoint, Mat, Scalar, Size, Vector, CV_32F, CV_32FC3, CV_8U, CV_8UC3};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::io::{sink, Write};
 use std::mem::swap;
@@ -32,10 +32,10 @@ use adder_codec_core::codec::compressed::stream::CompressedOutput;
 use adder_codec_core::Mode::Continuous;
 use davis_edi_rs::util::reconstructor::ReconstructionError;
 use itertools::Itertools;
-use ndarray::{Array, Array3, Axis, ShapeError};
-use rayon::iter::IntoParallelIterator;
+use ndarray::{Array, Array3, Axis, ShapeError, Zip};
 use rayon::iter::ParallelIterator;
 use rayon::iter::{IndexedParallelIterator, IntoParallelRefMutIterator};
+use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator};
 use rayon::ThreadPool;
 
 use crate::transcoder::source::{CRF, DEFAULT_CRF_QUALITY};
@@ -186,7 +186,7 @@ pub struct VideoState {
     /// The radius for which to reset the c-threshold for neighboring pixels (if feature detection is enabled)
     pub feature_c_radius: u16,
 
-    features: HashMap<Coord, ()>,
+    features: Vec<HashSet<Coord>>,
 
     feature_log_handle: Option<std::fs::File>,
 }
@@ -485,6 +485,11 @@ impl<W: Write + 'static> Video<W> {
     /// Set the number of rows to process at a time (in each thread)
     pub fn chunk_rows(mut self, chunk_rows: usize) -> Self {
         self.state.chunk_rows = chunk_rows;
+        let mut num_chunks = self.state.plane.h_usize() / chunk_rows;
+        if self.state.plane.h_usize() % chunk_rows != 0 {
+            num_chunks += 1;
+        }
+        self.state.features = vec![HashSet::new(); num_chunks];
         self
     }
 
@@ -744,6 +749,11 @@ impl<W: Write + 'static> Video<W> {
         // TODO: When there's full support for various bit-depth sources, modify this accordingly
         let practical_d_max =
             fast_math::log2_raw(255.0 * (self.state.delta_t_max / self.state.ref_time) as f32);
+
+        // Zip::indexed(&self.running_intensities)
+        //     .and(db)
+        //     .par_for_each(|idx, val| {});
+
         db.iter_mut()
             .zip(self.running_intensities.iter_mut())
             .enumerate()
@@ -752,8 +762,6 @@ impl<W: Write + 'static> Video<W> {
                 let x = (idx % self.state.plane.area_wc()) / self.state.plane.c_usize();
                 let c = idx % self.state.plane.c_usize();
 
-                // let sae_time_since = self.event_pixel_trees[[y, x, c]].running_t
-                //     - self.event_pixel_trees[[y, x, c]].last_fired_t;
                 let sae_time = self.event_pixel_trees[[y, x, c]].last_fired_t;
 
                 // Set the instantaneous frame value to the best queue'd event for the pixel
@@ -770,8 +778,8 @@ impl<W: Write + 'static> Video<W> {
                     None => *val,
                 };
 
-                // Only track the running state if we're in grayscale mode
-                if self.state.feature_detection && !color {
+                // Only track the running state of the first channel
+                if self.state.feature_detection && c == 0 {
                     *running = *val as i32;
                 }
 
@@ -814,99 +822,13 @@ impl<W: Write + 'static> Video<W> {
             )?;
         }
 
-        let mut total_duration_nanos = 0;
         for events in &big_buffer {
             for (e1, e2) in events.iter().circular_tuple_windows() {
                 self.encoder.ingest_event(*e1)?;
-                if self.state.feature_detection && !color {
-                    if e2.delta_t != e1.delta_t {
-                        match self.feature_test(e1) {
-                            Ok(None) => {}
-                            Ok(Some(duration)) => {
-                                total_duration_nanos += duration;
-                            }
-                            Err(e) => {
-                                return Err(SourceError::VisionError(e.to_string()));
-                            }
-                        }
-                    }
-                }
             }
         }
 
-        #[cfg(feature = "feature-logging")]
-        {
-            if let Some(handle) = &mut self.state.feature_log_handle {
-                for (coord, ()) in &self.state.features {
-                    let bytes = serde_pickle::to_vec(
-                        &LogFeature::from_coord(
-                            *coord,
-                            LogFeatureSource::ADDER,
-                            cfg!(feature = "feature-logging-nonmaxsuppression"),
-                        ),
-                        Default::default(),
-                    )
-                    .unwrap();
-                    handle.write_all(&bytes).unwrap();
-                }
-
-                let out = format!("\nADDER FAST: {}", total_duration_nanos);
-                handle
-                    .write_all(&serde_pickle::to_vec(&out, Default::default()).unwrap())
-                    .unwrap();
-            }
-        }
-
-        #[cfg(feature = "feature-logging")]
-        {
-            let start = Instant::now();
-            let mut keypoints = Vector::<KeyPoint>::new();
-            opencv::features2d::fast(
-                &self.instantaneous_frame,
-                &mut keypoints,
-                crate::utils::cv::INTENSITY_THRESHOLD,
-                cfg!(feature = "feature-logging-nonmaxsuppression"),
-            )?;
-
-            let duration = start.elapsed();
-            if let Some(handle) = &mut self.state.feature_log_handle {
-                for keypoint in &keypoints {
-                    let bytes = serde_pickle::to_vec(
-                        &LogFeature::from_keypoint(
-                            &keypoint,
-                            LogFeatureSource::OpenCV,
-                            cfg!(feature = "feature-logging-nonmaxsuppression"),
-                        ),
-                        Default::default(),
-                    )
-                    .unwrap();
-                    handle.write_all(&bytes).unwrap();
-                }
-
-                let out = format!("\nOpenCV FAST: {}", duration.as_nanos());
-                handle
-                    .write_all(&serde_pickle::to_vec(&out, Default::default()).unwrap())
-                    .unwrap();
-
-                // writeln!(handle, "OpenCV FAST: {}", duration.as_nanos()).unwrap();
-            }
-            let mut keypoint_mat = Mat::default();
-            opencv::features2d::draw_keypoints(
-                &self.instantaneous_frame,
-                &keypoints,
-                &mut keypoint_mat,
-                Scalar::new(0.0, 0.0, 255.0, 0.0),
-                opencv::features2d::DrawMatchesFlags::DEFAULT,
-            )?;
-            show_display_force("keypoints", &keypoint_mat, 1)?;
-        }
-
-        if self.state.show_features == ShowFeatureMode::Hold {
-            // Display the feature on the viz frame
-            for (coord, ()) in &self.state.features {
-                draw_feature_coord(coord.x, coord.y, &mut self.instantaneous_frame)?;
-            }
-        }
+        self.handle_features(&big_buffer)?;
 
         if self.state.show_live {
             show_display("instance", &self.instantaneous_frame, 1, self)?;
@@ -984,44 +906,162 @@ impl<W: Write + 'static> Video<W> {
         // self.state.c_thresh_neg = c;
     }
 
-    pub(crate) fn feature_test(&mut self, e: &Event) -> Result<Option<u128>, Box<dyn Error>> {
+    fn handle_features(&mut self, big_buffer: &Vec<Vec<Event>>) -> Result<(), SourceError> {
+        let mut new_features: Vec<Vec<Coord>> =
+            vec![Vec::with_capacity(100); self.state.features.len()];
+
         let mut start: Instant;
         #[cfg(feature = "feature-logging")]
         {
             start = Instant::now();
         }
 
-        let status = is_feature(e, self.state.plane, &self.running_intensities)?;
-        let mut duration = None;
+        big_buffer
+            .par_iter()
+            .zip(self.state.features.par_iter_mut())
+            .zip(new_features.par_iter_mut())
+            .for_each(|((events, feature_set), new_features)| {
+                for (e1, e2) in events.iter().circular_tuple_windows() {
+                    if self.state.feature_detection && (e1.coord.c == None || e1.coord.c == Some(0))
+                    {
+                        if e2.delta_t != e1.delta_t {
+                            if is_feature(e1.coord, self.state.plane, &self.running_intensities)
+                                .unwrap()
+                            {
+                                if feature_set.insert(e1.coord) {
+                                    new_features.push(e1.coord);
+                                };
+                            } else {
+                                feature_set.remove(&e1.coord);
+                            }
+                        }
+                    }
+                }
+            });
+
         #[cfg(feature = "feature-logging")]
         {
-            duration = Some(start.elapsed().as_nanos());
-        }
+            let total_duration_nanos = start.elapsed().as_nanos();
 
-        if status {
-            if self.state.show_features == ShowFeatureMode::Instant {
-                // Display the feature on the viz frame
-                draw_feature_event(e, &mut self.instantaneous_frame)?;
+            if let Some(handle) = &mut self.state.feature_log_handle {
+                for feature_set in &self.state.features {
+                    for (coord) in feature_set {
+                        let bytes = serde_pickle::to_vec(
+                            &LogFeature::from_coord(
+                                *coord,
+                                LogFeatureSource::ADDER,
+                                cfg!(feature = "feature-logging-nonmaxsuppression"),
+                            ),
+                            Default::default(),
+                        )
+                        .unwrap();
+                        handle.write_all(&bytes).unwrap();
+                    }
+                }
+
+                let out = format!("\nADDER FAST: {}", total_duration_nanos);
+                handle
+                    .write_all(&serde_pickle::to_vec(&out, Default::default()).unwrap())
+                    .unwrap();
             }
 
-            self.state.features.insert(e.coord, ());
+            let start = Instant::now();
+            let mut keypoints = Vector::<KeyPoint>::new();
+            opencv::features2d::fast(
+                &self.instantaneous_frame,
+                &mut keypoints,
+                crate::utils::cv::INTENSITY_THRESHOLD,
+                cfg!(feature = "feature-logging-nonmaxsuppression"),
+            )?;
 
-            // Reset the threshold for that pixel and its neighbors
-            let radius = self.state.feature_c_radius as i32;
-            for r in (e.coord.y() as i32 - radius).max(0)
-                ..(e.coord.y() as i32 + radius).min(self.state.plane.h() as i32)
-            {
-                for c in (e.coord.x() as i32 - radius).max(0)
-                    ..(e.coord.x() as i32 + radius).min(self.state.plane.w() as i32)
-                {
-                    self.event_pixel_trees[[r as usize, c as usize, e.coord.c_usize()]].c_thresh =
-                        self.state.c_thresh_baseline;
+            let duration = start.elapsed();
+            if let Some(handle) = &mut self.state.feature_log_handle {
+                for keypoint in &keypoints {
+                    let bytes = serde_pickle::to_vec(
+                        &LogFeature::from_keypoint(
+                            &keypoint,
+                            LogFeatureSource::OpenCV,
+                            cfg!(feature = "feature-logging-nonmaxsuppression"),
+                        ),
+                        Default::default(),
+                    )
+                    .unwrap();
+                    handle.write_all(&bytes).unwrap();
+                }
+
+                let out = format!("\nOpenCV FAST: {}", duration.as_nanos());
+                handle
+                    .write_all(&serde_pickle::to_vec(&out, Default::default()).unwrap())
+                    .unwrap();
+
+                // writeln!(handle, "OpenCV FAST: {}", duration.as_nanos()).unwrap();
+            }
+            let mut keypoint_mat = Mat::default();
+            opencv::features2d::draw_keypoints(
+                &self.instantaneous_frame,
+                &keypoints,
+                &mut keypoint_mat,
+                Scalar::new(0.0, 0.0, 255.0, 0.0),
+                opencv::features2d::DrawMatchesFlags::DEFAULT,
+            )?;
+            show_display_force("keypoints", &keypoint_mat, 1)?;
+        }
+
+        if self.state.show_features == ShowFeatureMode::Hold {
+            // Display the feature on the viz frame
+            for feature_set in &self.state.features {
+                for (coord) in feature_set {
+                    draw_feature_coord(coord.x, coord.y, &mut self.instantaneous_frame)?;
                 }
             }
-        } else {
-            self.state.features.remove(&e.coord);
         }
-        Ok(duration)
+
+        for feature_set in new_features {
+            for (coord) in feature_set {
+                if self.state.show_features == ShowFeatureMode::Instant {
+                    draw_feature_coord(coord.x, coord.y, &mut self.instantaneous_frame)?;
+                }
+                let radius = self.state.feature_c_radius as i32;
+                for r in (coord.y() as i32 - radius).max(0)
+                    ..(coord.y() as i32 + radius).min(self.state.plane.h() as i32)
+                {
+                    for c in (coord.x() as i32 - radius).max(0)
+                        ..(coord.x() as i32 + radius).min(self.state.plane.w() as i32)
+                    {
+                        self.event_pixel_trees[[r as usize, c as usize, coord.c_usize()]]
+                            .c_thresh = self.state.c_thresh_baseline;
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    pub(crate) fn feature_test(&mut self, e: &Event) -> Result<Option<u128>, Box<dyn Error>> {
+        todo!()
+        // if status {
+        //     if self.state.show_features == ShowFeatureMode::Instant {
+        //         // Display the feature on the viz frame
+        //         draw_feature_event(e, &mut self.instantaneous_frame)?;
+        //     }
+        //
+        //     // Reset the threshold for that pixel and its neighbors
+        //     let radius = self.state.feature_c_radius as i32;
+        //     for r in (e.coord.y() as i32 - radius).max(0)
+        //         ..(e.coord.y() as i32 + radius).min(self.state.plane.h() as i32)
+        //     {
+        //         for c in (e.coord.x() as i32 - radius).max(0)
+        //             ..(e.coord.x() as i32 + radius).min(self.state.plane.w() as i32)
+        //         {
+        //             self.event_pixel_trees[[r as usize, c as usize, e.coord.c_usize()]].c_thresh =
+        //                 self.state.c_thresh_baseline;
+        //         }
+        //     }
+        // } else {
+        //     self.state.features.remove(&e.coord);
+        // }
+        // Ok(duration)
     }
 
     /// Set whether or not to detect features, and whether or not to display the features
