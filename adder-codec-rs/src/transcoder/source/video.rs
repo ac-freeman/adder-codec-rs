@@ -1011,7 +1011,12 @@ impl<W: Write + 'static> Video<W> {
             // Display the feature on the viz frame
             for feature_set in &self.state.features {
                 for (coord) in feature_set {
-                    draw_feature_coord(coord.x, coord.y, &mut self.instantaneous_frame)?;
+                    draw_feature_coord(
+                        coord.x,
+                        coord.y,
+                        &mut self.instantaneous_frame,
+                        self.state.plane.c() != 1,
+                    )?;
                 }
             }
         }
@@ -1019,7 +1024,12 @@ impl<W: Write + 'static> Video<W> {
         for feature_set in new_features {
             for (coord) in feature_set {
                 if self.state.show_features == ShowFeatureMode::Instant {
-                    draw_feature_coord(coord.x, coord.y, &mut self.instantaneous_frame)?;
+                    draw_feature_coord(
+                        coord.x,
+                        coord.y,
+                        &mut self.instantaneous_frame,
+                        self.state.plane.c() != 1,
+                    )?;
                 }
                 let radius = self.state.feature_c_radius as i32;
                 for r in (coord.y() as i32 - radius).max(0)

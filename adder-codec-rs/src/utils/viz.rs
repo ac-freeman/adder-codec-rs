@@ -78,19 +78,29 @@ pub enum ShowFeatureMode {
 
 /// Assuming the given event is a feature, draw it on the given `img` as a white cross
 pub fn draw_feature_event(e: &Event, img: &mut Mat) -> Result<(), opencv::Error> {
-    draw_feature_coord(e.coord.x, e.coord.y, img)
+    draw_feature_coord(e.coord.x, e.coord.y, img, false)
 }
 
 pub fn draw_feature_coord(
     x: PixelAddress,
     y: PixelAddress,
     img: &mut Mat,
+    color: bool,
 ) -> Result<(), opencv::Error> {
-    let color: u8 = 255;
+    let draw_color: u8 = 255;
     let radius = 2;
-    for i in -radius..=radius {
-        *img.at_2d_mut(y as i32 + i, x as i32)? = color;
-        *img.at_2d_mut(y as i32, x as i32 + i)? = color;
+
+    if color {
+        for i in -radius..=radius {
+            *img.at_3d_mut(y as i32 + i, x as i32, 0)? = draw_color;
+            *img.at_3d_mut(y as i32, x as i32 + i, 0)? = draw_color;
+        }
+    } else {
+        for i in -radius..=radius {
+            *img.at_2d_mut(y as i32 + i, x as i32)? = draw_color;
+            *img.at_2d_mut(y as i32, x as i32 + i)? = draw_color;
+        }
     }
+
     Ok(())
 }
