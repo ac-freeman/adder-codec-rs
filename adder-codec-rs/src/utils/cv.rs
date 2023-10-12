@@ -75,7 +75,7 @@ pub fn is_feature(
             return Ok(false);
         }
 
-        let streak_size = 12;
+        let streak_size = 9;
 
         for i in 0..16 {
             // Are we looking at a bright or dark streak?
