@@ -910,11 +910,7 @@ impl<W: Write + 'static> Video<W> {
         let mut new_features: Vec<Vec<Coord>> =
             vec![Vec::with_capacity(100); self.state.features.len()];
 
-        let mut start: Instant;
-        #[cfg(feature = "feature-logging")]
-        {
-            start = Instant::now();
-        }
+        let start = Instant::now();
 
         big_buffer
             .par_iter()
@@ -924,7 +920,9 @@ impl<W: Write + 'static> Video<W> {
                 for (e1, e2) in events.iter().circular_tuple_windows() {
                     if self.state.feature_detection && (e1.coord.c == None || e1.coord.c == Some(0))
                     {
-                        if e2.delta_t != e1.delta_t {
+                        if !cfg!(feature = "feature-logging-nonmaxsuppression")
+                            || e2.delta_t != e1.delta_t
+                        {
                             if is_feature(e1.coord, self.state.plane, &self.running_intensities)
                                 .unwrap()
                             {
