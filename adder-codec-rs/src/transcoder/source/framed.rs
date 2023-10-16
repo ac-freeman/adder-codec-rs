@@ -48,20 +48,17 @@ impl<W: Write + 'static> Framed<W> {
         let source = Locator::Path(PathBuf::from(input_filename));
         let mut cap = Decoder::new(&source)?;
         let (width, height) = cap.size();
+        let width = ((width as f64) * scale) as u32;
+        let height = ((height as f64) * scale) as u32;
+
         cap = Decoder::new_with_options_and_resize(
             &source,
             &Options::default(),
-            Resize::Fit(
-                ((width as f64) * scale) as u32,
-                ((height as f64) * scale) as u32,
-            ),
+            Resize::Fit(width, height),
         )?;
-        let (width, height) = cap.size();
 
         // Calculate TPS based on ticks per frame and source FPS
         let source_fps = cap.frame_rate();
-
-        let (time, init_frame) = cap.decode()?;
 
         let plane = PlaneSize::new(width as u16, height as u16, if color_input { 3 } else { 1 })?;
 

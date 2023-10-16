@@ -710,6 +710,10 @@ impl<W: Write + 'static> Video<W> {
                 for (chunk_px_idx, px) in chunk.iter_mut().enumerate() {
                     *px_idx = chunk_px_idx + px_per_chunk * chunk_idx;
 
+                    if !color {
+                        *px_idx *= 3;
+                    }
+
                     *frame_val_intensity32 = (f64::from(frame_arr[*px_idx])
                         * self.state.ref_time_divisor)
                         as Intensity32;
