@@ -7,24 +7,26 @@ use adder_codec_core::{DeltaT, Event, PlaneSize, SourceCamera, TimeMode};
 
 use crate::utils::viz::ShowFeatureMode;
 use adder_codec_core::codec::{EncoderOptions, EncoderType};
+use ndarray::{Array, Axis};
 use opencv::core::{Mat, Size};
 use opencv::videoio::{VideoCapture, CAP_PROP_FPS, CAP_PROP_FRAME_COUNT, CAP_PROP_POS_FRAMES};
 use opencv::{imgproc, prelude::*, videoio, Result};
 use rayon::ThreadPool;
 use std::io::Write;
 use std::mem::swap;
+use std::path::PathBuf;
+use video_rs::{self, Decoder, Frame, Locator, Options, Resize};
 
 /// Attributes of a framed video -> ADΔER transcode
 pub struct Framed<W: Write + 'static> {
-    cap: VideoCapture,
-    pub(crate) input_frame_scaled: Mat,
-    pub(crate) input_frame: Mat,
+    cap: Decoder,
+    pub(crate) input_frame: Frame,
 
     /// Index of the first frame to be read from the input video
     pub frame_idx_start: u32,
 
     /// FPS of the input video. Set automatically by `Framed::new()`
-    pub source_fps: f64,
+    pub source_fps: f32,
 
     /// Scale of the input video. Input frames are resized to this scale before transcoding.
     pub scale: f64,
@@ -43,43 +45,31 @@ impl<W: Write + 'static> Framed<W> {
         color_input: bool,
         scale: f64,
     ) -> Result<Framed<W>, SourceError> {
-        let mut cap =
-            videoio::VideoCapture::from_file(input_filename.as_str(), videoio::CAP_FFMPEG)?;
+        let source = Locator::Path(PathBuf::from(input_filename));
+        let mut cap = Decoder::new(&source)?;
+        let (width, height) = cap.size();
+        cap = Decoder::new_with_options_and_resize(
+            &source,
+            &Options::default(),
+            Resize::Fit(
+                ((width as f64) * scale) as u32,
+                ((height as f64) * scale) as u32,
+            ),
+        )?;
+        let (width, height) = cap.size();
 
         // Calculate TPS based on ticks per frame and source FPS
-        let source_fps = cap.get(CAP_PROP_FPS)?.round();
-        // builder.tps = builder.ref_time * source_fps as u32;
-        // if builder.ref_time * cap.get(CAP_PROP_FPS)?.round() as u32 != builder.tps {
-        //     return Err(SourceError::BadParams.into());
-        // }
+        let source_fps = cap.frame_rate();
 
-        let opened = videoio::VideoCapture::is_opened(&cap)?;
-        if !opened {
-            return Err(SourceError::Open);
-        }
-        let mut init_frame = Mat::default();
-        cap.read(&mut init_frame)?;
-        cap.set(CAP_PROP_POS_FRAMES, 0.0)?;
+        let (time, init_frame) = cap.decode()?;
 
-        // Move start frame back
-        // cap.set(CAP_PROP_POS_FRAMES, f64::from(builder.frame_idx_start))?;
-
-        let mut init_frame_scaled = Mat::default();
-        resize_input(&mut init_frame, &mut init_frame_scaled, scale)?;
-        init_frame = init_frame_scaled;
-
-        let plane = PlaneSize::new(
-            init_frame.size()?.width as u16,
-            init_frame.size()?.height as u16,
-            if color_input { 3 } else { 1 },
-        )?;
+        let plane = PlaneSize::new(width as u16, height as u16, if color_input { 3 } else { 1 })?;
 
         let video = Video::new(plane, FramePerfect, None)?;
 
         Ok(Framed {
             cap,
-            input_frame_scaled: Mat::default(),
-            input_frame: Mat::default(),
+            input_frame: Frame::default((height as usize, width as usize, 3)), // Note that this will be limited to 8-bit precision (due to video-rs crate)
             frame_idx_start: 0,
             source_fps,
             scale,
@@ -90,12 +80,13 @@ impl<W: Write + 'static> Framed<W> {
 
     /// Set the start frame of the source
     pub fn frame_start(mut self, frame_idx_start: u32) -> Result<Self, SourceError> {
-        let video_frame_count = self.cap.get(CAP_PROP_FRAME_COUNT)?;
+        let video_frame_count = self.cap.frame_count();
         if frame_idx_start >= video_frame_count as u32 {
             return Err(SourceError::StartOutOfBounds(frame_idx_start));
         };
-        self.cap
-            .set(CAP_PROP_POS_FRAMES, f64::from(frame_idx_start))?;
+        let ts_millis = (frame_idx_start as f32 / self.source_fps * 1000.0) as i64;
+        self.cap.reader.seek(ts_millis)?;
+
         self.frame_idx_start = frame_idx_start;
         Ok(self)
     }
@@ -108,7 +99,7 @@ impl<W: Write + 'static> Framed<W> {
         time_mode: Option<TimeMode>,
     ) -> Result<Self, SourceError> {
         if delta_t_max % ref_time == 0 {
-            let tps = (ref_time as f64 * self.source_fps) as DeltaT;
+            let tps = (ref_time as f32 * self.source_fps) as DeltaT;
             self.video = self
                 .video
                 .time_parameters(tps, ref_time, delta_t_max, time_mode)?;
@@ -125,8 +116,8 @@ impl<W: Write + 'static> Framed<W> {
         self.video.state.ref_time
     }
 
-    pub fn get_last_input_frame_scaled(&self) -> &Mat {
-        &self.input_frame_scaled
+    pub fn get_last_input_frame(&self) -> &Frame {
+        &self.input_frame
     }
 }
 
@@ -138,30 +129,15 @@ impl<W: Write + 'static> Source<W> for Framed<W> {
         view_interval: u32,
         thread_pool: &ThreadPool,
     ) -> Result<Vec<Vec<Event>>, SourceError> {
-        match self.cap.read(&mut self.input_frame) {
-            Ok(_) => {
-                match resize_frame(
-                    &self.input_frame,
-                    &mut self.input_frame_scaled,
-                    self.color_input,
-                    self.scale,
-                ) {
-                    Ok(_) => {}
-                    Err(_) => return Err(SourceError::NoData),
-                }
-            }
-            Err(e) => return Err(SourceError::OpencvError(e)),
-        };
-
-        if self.input_frame_scaled.empty() {
-            return Err(BufferEmpty);
-        }
-
-        let tmp = self.input_frame_scaled.clone();
+        let (_, frame) = self.cap.decode()?;
+        self.input_frame = handle_color(frame, self.color_input)?;
 
         thread_pool.install(|| {
-            self.video
-                .integrate_matrix(tmp, self.video.state.ref_time as f32, view_interval)
+            self.video.integrate_matrix(
+                self.input_frame.clone(),
+                self.video.state.ref_time as f32,
+                view_interval,
+            )
         })
     }
 
@@ -182,7 +158,7 @@ impl<W: Write + 'static> Source<W> for Framed<W> {
     }
 
     fn get_input(&self) -> &Mat {
-        self.get_last_input_frame_scaled()
+        self.get_last_input_frame()
     }
 
     fn get_running_input_bitrate(&self) -> f64 {
@@ -284,47 +260,14 @@ impl<W: Write + 'static> VideoBuilder<W> for Framed<W> {
     }
 }
 
-/// Resize a grayscale [`Mat`]
-fn resize_input(
-    input_frame_gray: &mut Mat,
-    input_frame_scaled: &mut Mat,
-    resize_scale: f64,
-) -> Result<(), opencv::Error> {
-    if (resize_scale - 1.0).abs() < f64::EPSILON {
-        // For performance. We don't need to read input_frame_gray again anyway
-        swap(input_frame_gray, input_frame_scaled);
-    } else {
-        opencv::imgproc::resize(
-            input_frame_gray,
-            input_frame_scaled,
-            Size {
-                width: 0,
-                height: 0,
-            },
-            resize_scale,
-            resize_scale,
-            0,
-        )?;
+fn handle_color(mut input: Frame, color: bool) -> Result<Frame, SourceError> {
+    if !color {
+        input
+            .axis_iter_mut(Axis(0))
+            .axis_iter_mut(Axis(0))
+            .mapv_inplace(| v|
+// Map the three color channels to a single grayscale channel
+Array::from_elem ((3), (v[0] as f64 * 0.114 + v[1] as f64 * 0.587 + v[2] as f64 * 0.299) as u8));
     }
-    Ok(())
-}
-
-fn resize_frame(
-    input: &Mat,
-    output: &mut Mat,
-    color: bool,
-    scale: f64,
-) -> Result<(), opencv::Error> {
-    let mut holder = Mat::default();
-    if color {
-        holder = input.clone();
-    } else {
-        // Yields an 8-bit grayscale mat
-        imgproc::cvt_color(&input, &mut holder, imgproc::COLOR_BGR2GRAY, 1)?;
-        // don't do anything with the error. This happens when we reach the end of
-        // the video, so there's nothing to convert.
-    }
-
-    resize_input(&mut holder, output, scale)?;
-    Ok(())
+    Ok(input)
 }

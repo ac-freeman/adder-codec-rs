@@ -40,5 +40,5 @@ ndarray = "0.15.6"
 version = "0.84.5"
 package = 'opencv'
 default-features = false
-features = ['videoio', 'imgproc', 'highgui']
+features = ['videoio', 'imgproc', 'highgui', 'clang-runtime']
 optional = false

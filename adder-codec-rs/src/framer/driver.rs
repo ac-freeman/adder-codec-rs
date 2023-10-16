@@ -251,7 +251,6 @@ pub struct FrameSequence<T> {
 use ndarray::{Array, Array3};
 
 use crate::transcoder::source::video::FramedViewMode;
-use crate::utils::cv::is_feature;
 use rayon::prelude::IntoParallelIterator;
 use serde::Serialize;
 
@@ -423,28 +422,20 @@ impl<
             self.running_intensities
                 [[event.coord.y.into(), event.coord.x.into(), channel.into()]] =
                 <T as Into<f64>>::into(*last_frame_intensity_ref) as i32;
-            if self.running_intensities
-                [[event.coord.y.into(), event.coord.x.into(), channel.into()]]
-                > 255
-            {
-                dbg!(
-                    self.running_intensities
-                        [[event.coord.y.into(), event.coord.x.into(), channel.into()]]
-                );
-            }
 
             if let Some(last) = last_event {
                 if time != last.delta_t {
-                    if is_feature(event.coord, self.state.plane, &self.running_intensities).unwrap()
-                    {
-                        let idx =
-                            (time / self.state.tpf - self.state.frames_written as u32) as usize;
-                        if idx >= self.features.len() {
-                            self.features.resize(idx + 1, vec![]);
-                        }
-
-                        self.features[idx].push(event.coord);
-                    }
+                    todo!();
+                    // if is_feature(event.coord, self.state.plane, &self.running_intensities).unwrap()
+                    // {
+                    //     let idx =
+                    //         (time / self.state.tpf - self.state.frames_written as u32) as usize;
+                    //     if idx >= self.features.len() {
+                    //         self.features.resize(idx + 1, vec![]);
+                    //     }
+                    //
+                    //     self.features[idx].push(event.coord);
+                    // }
                 }
             }
         }

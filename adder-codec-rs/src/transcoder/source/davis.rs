@@ -417,7 +417,7 @@ impl<W: Write + 'static> Integration<W> {
         let practical_d_max =
             fast_math::log2_raw(255.0 * (video.state.delta_t_max / video.state.ref_time) as f32);
         db.iter_mut()
-            .zip(video.running_intensities.iter_mut())
+            .zip(video.state.running_intensities.iter_mut())
             .enumerate()
             .for_each(|(idx, (val, running))| {
                 let y = idx / video.state.plane.area_wc();
@@ -541,7 +541,7 @@ impl<W: Write + 'static> Integration<W> {
         let practical_d_max =
             fast_math::log2_raw(255.0 * (video.state.delta_t_max / video.state.ref_time) as f32);
         db.iter_mut()
-            .zip(video.running_intensities.iter_mut())
+            .zip(video.state.running_intensities.iter_mut())
             .enumerate()
             .for_each(|(idx, (val, running))| {
                 let y = idx / video.state.plane.area_wc();

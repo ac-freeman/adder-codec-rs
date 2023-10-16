@@ -59,12 +59,14 @@ thiserror = "1.0.34"
 tokio = { version = "1.20.1", features = ["full"] }
 toml = "0.5.8"
 bitstream-io = "1.6.0"
+video-rs = { path = "../../video-rs", version = "0.4", features = ["ndarray"] }
+ndarray-image = "0.3.0"
 
 [dependencies.opencv]
 version = "0.84.5"
 package = 'opencv'
 default-features = false
-features = ['videoio', 'imgproc', 'highgui']
+features = ['videoio', 'imgproc', 'highgui', 'clang-runtime']
 optional = true
 
 [target.'cfg(any(target_os = "linux"))'.dev-dependencies]
