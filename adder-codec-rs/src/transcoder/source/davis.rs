@@ -408,9 +408,9 @@ impl<W: Write + 'static> Integration<W> {
             )
             .collect();
 
-        let db = match video.instantaneous_frame.data_bytes_mut() {
-            Ok(db) => db,
-            Err(_e) => return Err(CodecError::MalformedEncoder), // TODO: Wrong type of error
+        let db: &mut [u8] = match video.instantaneous_frame.as_slice_mut() {
+            Some(db) => db,
+            None => return Err(CodecError::MalformedEncoder), // TODO: Wrong type of error
         };
 
         // TODO: split off into separate function
@@ -450,7 +450,7 @@ impl<W: Write + 'static> Integration<W> {
         }
 
         if video.state.show_live {
-            show_display("instance", &video.instantaneous_frame, 1, video).unwrap();
+            // show_display("instance", &video.instantaneous_frame, 1, video).unwrap();
         }
         Ok(())
     }
@@ -532,9 +532,13 @@ impl<W: Write + 'static> Integration<W> {
             })
             .collect();
 
-        let db = match video.instantaneous_frame.data_bytes_mut() {
-            Ok(db) => db,
-            Err(e) => return Err(SourceError::OpencvError(e)),
+        let db = match video.instantaneous_frame.as_slice_mut() {
+            Some(db) => db,
+            None => {
+                return Err(SourceError::VisionError(
+                    "No instantaneous frame".to_string(),
+                ))
+            }
         };
 
         // TODO: split off into separate function
@@ -572,7 +576,7 @@ impl<W: Write + 'static> Integration<W> {
         video.handle_features(&big_buffer)?;
 
         if video.state.show_live {
-            show_display("instance", &video.instantaneous_frame, 1, video)?;
+            // show_display("instance", &video.instantaneous_frame, 1, video)?;
         }
         Ok(())
     }

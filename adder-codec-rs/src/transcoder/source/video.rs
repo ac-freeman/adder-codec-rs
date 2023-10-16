@@ -329,7 +329,7 @@ pub struct Video<W: Write> {
 
     // pub instan: Mat,
     /// The current instantaneous display frame
-    pub instantaneous_frame: Mat,
+    pub instantaneous_frame: Frame,
 
     /// The current view mode of the instantaneous frame
     pub instantaneous_view_mode: FramedViewMode,
@@ -393,19 +393,8 @@ impl<W: Write + 'static> Video<W> {
 
         let event_pixel_trees: Array3<PixelArena> =
             Array3::from_shape_vec((plane.h_usize(), plane.w_usize(), plane.c_usize()), data)?;
-        let mut instantaneous_frame = Mat::default();
-        match plane.c() {
-            1 => unsafe {
-                instantaneous_frame.create_rows_cols(plane.h() as i32, plane.w() as i32, CV_8U)?;
-            },
-            _ => unsafe {
-                instantaneous_frame.create_rows_cols(
-                    plane.h() as i32,
-                    plane.w() as i32,
-                    CV_8UC3,
-                )?;
-            },
-        }
+        let mut instantaneous_frame =
+            Array3::zeros((plane.h_usize(), plane.w_usize(), plane.c_usize()));
 
         let mut sae_mat = Mat::default();
         match plane.c() {
@@ -733,10 +722,12 @@ impl<W: Write + 'static> Video<W> {
             })
             .collect();
 
-        let db = match self.instantaneous_frame.data_bytes_mut() {
-            Ok(v) => v,
-            Err(e) => {
-                return Err(SourceError::OpencvError(e));
+        let db = match self.instantaneous_frame.as_slice_mut() {
+            Some(v) => v,
+            None => {
+                return Err(SourceError::VisionError(
+                    "Could not convert frame to slice".to_string(),
+                ));
             }
         };
         let mut sae_mat = Mat::default();
@@ -814,27 +805,28 @@ impl<W: Write + 'static> Video<W> {
                 opencv::core::CV_8U,
                 &Mat::default(),
             )?;
-            self.instantaneous_frame = sae_mat_norm;
+            // self.instantaneous_frame = sae_mat_norm; // TODO: restore
         }
 
-        if self.instantaneous_view_mode == FramedViewMode::DeltaT {
-            opencv::core::normalize(
-                &self.instantaneous_frame.clone(),
-                &mut self.instantaneous_frame,
-                0.0,
-                255.0,
-                opencv::core::NORM_MINMAX,
-                opencv::core::CV_8U,
-                &Mat::default(),
-            )?;
-            opencv::core::subtract(
-                &Scalar::new(255.0, 255.0, 255.0, 0.0),
-                &self.instantaneous_frame.clone(),
-                &mut self.instantaneous_frame,
-                &Mat::default(),
-                opencv::core::CV_8U,
-            )?;
-        }
+        // TODO: restore
+        // if self.instantaneous_view_mode == FramedViewMode::DeltaT {
+        //     opencv::core::normalize(
+        //         &self.instantaneous_frame.clone(),
+        //         &mut self.instantaneous_frame,
+        //         0.0,
+        //         255.0,
+        //         opencv::core::NORM_MINMAX,
+        //         opencv::core::CV_8U,
+        //         &Mat::default(),
+        //     )?;
+        //     opencv::core::subtract(
+        //         &Scalar::new(255.0, 255.0, 255.0, 0.0),
+        //         &self.instantaneous_frame.clone(),
+        //         &mut self.instantaneous_frame,
+        //         &Mat::default(),
+        //         opencv::core::CV_8U,
+        //     )?;
+        // }
 
         for events in &big_buffer {
             for (e1, e2) in events.iter().circular_tuple_windows() {
@@ -845,7 +837,7 @@ impl<W: Write + 'static> Video<W> {
         self.handle_features(&big_buffer)?;
 
         if self.state.show_live {
-            show_display("instance", &self.instantaneous_frame, 1, self)?;
+            // show_display("instance", &self.instantaneous_frame, 1, self)?;
         }
 
         Ok(big_buffer)
