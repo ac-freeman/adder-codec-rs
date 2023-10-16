@@ -558,22 +558,37 @@ impl TranscoderState {
         };
 
         let mut image_mat = source.get_video_ref().instantaneous_frame.clone();
+        let color = image_mat.shape()[2] == 3;
 
-        // Swap the red and blue channels
-        let temp = image_mat.index_axis_mut(Axis(2), 0).to_owned();
-        let mut blue_channel = image_mat.index_axis_mut(Axis(2), 2).to_owned();
-        image_mat.index_axis_mut(Axis(2), 0).assign(&blue_channel);
-        // Swap the channels by copying
-        image_mat.index_axis_mut(Axis(2), 2).assign(&temp);
+        dbg!(image_mat.shape());
 
-        // add alpha channel
-        let mut image_bgra = ndarray::concatenate(
-            Axis(2),
-            &[
-                image_mat.clone().view(),
-                Array::from_elem((image_mat.shape()[0], image_mat.shape()[1], 1), 255).view(),
-            ],
-        )?;
+        let mut image_bgra = if color {
+            // Swap the red and blue channels
+            let temp = image_mat.index_axis_mut(Axis(2), 0).to_owned();
+            let mut blue_channel = image_mat.index_axis_mut(Axis(2), 2).to_owned();
+            image_mat.index_axis_mut(Axis(2), 0).assign(&blue_channel);
+            // Swap the channels by copying
+            image_mat.index_axis_mut(Axis(2), 2).assign(&temp);
+
+            // add alpha channel
+            ndarray::concatenate(
+                Axis(2),
+                &[
+                    image_mat.clone().view(),
+                    Array::from_elem((image_mat.shape()[0], image_mat.shape()[1], 1), 255).view(),
+                ],
+            )?
+        } else {
+            ndarray::concatenate(
+                Axis(2),
+                &[
+                    image_mat.clone().view(),
+                    image_mat.clone().view(),
+                    image_mat.clone().view(),
+                    Array::from_elem((image_mat.shape()[0], image_mat.shape()[1], 1), 255).view(),
+                ],
+            )?
+        };
         let image_bgra = image_bgra.as_standard_layout();
         dbg!(image_bgra.shape());
 
@@ -601,7 +616,7 @@ impl TranscoderState {
 
             // Swap the red and blue channels
             let temp = image_mat.index_axis_mut(Axis(2), 0).to_owned();
-            blue_channel = image_mat.index_axis_mut(Axis(2), 2).to_owned();
+            let blue_channel = image_mat.index_axis_mut(Axis(2), 2).to_owned();
             image_mat.index_axis_mut(Axis(2), 0).assign(&blue_channel);
             // Swap the channels by copying
             image_mat.index_axis_mut(Axis(2), 2).assign(&temp);
