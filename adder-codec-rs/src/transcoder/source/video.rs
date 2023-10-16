@@ -674,11 +674,13 @@ impl<W: Write + 'static> Video<W> {
     ) -> Result<Vec<Vec<Event>>, SourceError> {
         let color = self.state.plane.c() != 1;
 
-        let frame_arr: &[u8] = match matrix.data_bytes() {
-            Ok(v) => v,
-            Err(e) => {
-                return Err(SourceError::OpencvError(e));
+        let frame_arr = match matrix.as_slice() {
+            None => {
+                return Err(SourceError::VisionError(
+                    "Could not convert frame to slice".to_string(),
+                ))
             }
+            Some(a) => a,
         };
         if self.state.in_interval_count == 0 {
             self.set_initial_d(frame_arr);
@@ -1258,7 +1260,7 @@ pub trait Source<W: Write> {
     /// process.
     fn get_video(self) -> Video<W>;
 
-    fn get_input(&self) -> &Mat;
+    fn get_input(&self) -> &Frame;
 
     /// Get the last-calculated bitrate of the input (in bits per second)
     fn get_running_input_bitrate(&self) -> f64;

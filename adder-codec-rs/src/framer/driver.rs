@@ -35,7 +35,7 @@ pub enum FramerMode {
 pub struct FramerBuilder {
     plane: PlaneSize,
     tps: DeltaT,
-    output_fps: f64,
+    output_fps: f32,
     mode: FramerMode,
     view_mode: FramedViewMode,
     source: SourceType,
@@ -78,7 +78,7 @@ impl FramerBuilder {
         tps: DeltaT,
         ref_interval: DeltaT,
         delta_t_max: DeltaT,
-        output_fps: f64,
+        output_fps: f32,
     ) -> FramerBuilder {
         self.tps = tps;
         self.ref_interval = ref_interval;

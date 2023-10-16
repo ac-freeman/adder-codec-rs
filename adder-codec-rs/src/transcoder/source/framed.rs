@@ -157,7 +157,7 @@ impl<W: Write + 'static> Source<W> for Framed<W> {
         todo!()
     }
 
-    fn get_input(&self) -> &Mat {
+    fn get_input(&self) -> &Frame {
         self.get_last_input_frame()
     }
 
@@ -263,11 +263,21 @@ impl<W: Write + 'static> VideoBuilder<W> for Framed<W> {
 fn handle_color(mut input: Frame, color: bool) -> Result<Frame, SourceError> {
     if !color {
         input
-            .axis_iter_mut(Axis(0))
-            .axis_iter_mut(Axis(0))
-            .mapv_inplace(| v|
-// Map the three color channels to a single grayscale channel
-Array::from_elem ((3), (v[0] as f64 * 0.114 + v[1] as f64 * 0.587 + v[2] as f64 * 0.299) as u8));
+            .exact_chunks_mut((1, 1, 3))
+            .into_iter()
+            .for_each(|mut v| unsafe {
+                *v.uget_mut((0, 0, 0)) = (*v.uget((0, 0, 0)) as f64 * 0.114
+                    + *v.uget((0, 0, 1)) as f64 * 0.587
+                    + *v.uget((0, 0, 2)) as f64 * 0.299)
+                    as u8;
+                // v = Array::from_elem(
+                //     (3),
+                //     (v.uget(0) as f64 * 0.114 + v.uget(1) as f64 * 0.587 + v.uget(2) as f64 * 0.299)
+                //         as u8,
+                // );
+            });
+
+        // Map the three color channels to a single grayscale channel
     }
     Ok(input)
 }

@@ -31,6 +31,7 @@ use crate::framer::scale_intensity::FrameValue;
 use crate::transcoder::event_pixel_tree::Intensity32;
 use crate::utils::viz::ShowFeatureMode;
 use tokio::runtime::Runtime;
+use video_rs::Frame;
 
 /// The EDI reconstruction mode, determining how intensities are integrated for the ADΔER model
 #[derive(PartialEq, Eq, Clone, Copy)]
@@ -799,19 +800,11 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Davis<W> {
                 }
             };
 
-            ret = thread_pool.install(|| {
-                self.video
-                    .integrate_matrix(tmp, mat_integration_time, view_interval)
-            });
-
-            // for px in &self.video.event_pixel_trees {
-            //     let a = px.running_t as i64;
-            //     let b =
-            //         start_of_frame_timestamp - self.integration.temp_first_frame_start_timestamp;
-            //     assert!(a >= b);
-            //     let c = end_of_frame_timestamp - self.integration.temp_first_frame_start_timestamp;
-            //     assert_eq!(a, c);
-            // }
+            todo!("Fix this");
+            // ret = thread_pool.install(|| {
+            //     self.video
+            //         .integrate_matrix(tmp, mat_integration_time, view_interval)
+            // });
 
             #[allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
             for (idx, val) in self.integration.dvs_last_ln_val.iter_mut().enumerate() {
@@ -891,7 +884,7 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Davis<W> {
         self.video
     }
 
-    fn get_input(&self) -> &Mat {
+    fn get_input(&self) -> &Frame {
         unimplemented!("Davis::get_input");
     }
 

@@ -84,9 +84,9 @@ impl AdderPlayer {
                     let (stream, bitreader) = open_file_decoder(&input_path)?;
 
                     let meta = *stream.meta();
-                    let mut reconstructed_frame_rate = (meta.tps / meta.ref_interval) as f64;
+                    let mut reconstructed_frame_rate = (meta.tps / meta.ref_interval) as f32;
 
-                    reconstructed_frame_rate /= playback_speed as f64;
+                    reconstructed_frame_rate /= playback_speed as f32;
 
                     let framer_builder: FramerBuilder = FramerBuilder::new(meta.plane, 260)
                         .codec_version(meta.codec_version, meta.time_mode)
