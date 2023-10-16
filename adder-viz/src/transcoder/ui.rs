@@ -560,8 +560,6 @@ impl TranscoderState {
         let mut image_mat = source.get_video_ref().instantaneous_frame.clone();
         let color = image_mat.shape()[2] == 3;
 
-        dbg!(image_mat.shape());
-
         let mut image_bgra = if color {
             // Swap the red and blue channels
             let temp = image_mat.index_axis_mut(Axis(2), 0).to_owned();
@@ -590,7 +588,6 @@ impl TranscoderState {
             )?
         };
         let image_bgra = image_bgra.as_standard_layout();
-        dbg!(image_bgra.shape());
 
         let image_bevy = Image::new(
             Extent3d {
