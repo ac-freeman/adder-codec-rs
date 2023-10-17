@@ -11,8 +11,8 @@ use adder_codec_rs::transcoder::source::video::show_display_force;
 use adder_codec_rs::transcoder::source::video::FramedViewMode;
 use bevy::prelude::Image;
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
-use ndarray::Array;
 use ndarray::Array3;
+use ndarray::{Array, Axis};
 #[cfg(feature = "open-cv")]
 use opencv::core::{
     create_continuous, KeyPoint, Mat, MatTraitConstManual, MatTraitManual, Scalar, Vector, CV_8UC1,
@@ -25,6 +25,7 @@ use std::fmt;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::Path;
+use video_rs::Frame;
 
 pub type PlayerArtifact = (u64, Option<Image>);
 pub type PlayerStreamArtifact = (u64, StreamState, Option<Image>);
@@ -52,7 +53,7 @@ pub struct AdderPlayer {
     pub(crate) framer_builder: Option<FramerBuilder>,
     pub(crate) frame_sequence: Option<FrameSequence<u8>>, // TODO: remove this
     pub(crate) input_stream: Option<InputStream>,
-    pub(crate) display_mat: Mat,
+    pub(crate) display_frame: Frame,
     playback_speed: f32,
     reconstruction_method: ReconstructionMethod,
     current_frame: u32,
@@ -108,31 +109,6 @@ impl AdderPlayer {
 
                     let frame_sequence: FrameSequence<u8> = framer_builder.clone().finish();
 
-                    let mut display_mat = Mat::default();
-                    match meta.plane.c() {
-                        1 => {
-                            create_continuous(
-                                meta.plane.h() as i32,
-                                meta.plane.w() as i32,
-                                CV_8UC1,
-                                &mut display_mat,
-                            )?;
-                        }
-                        3 => {
-                            create_continuous(
-                                meta.plane.h() as i32,
-                                meta.plane.w() as i32,
-                                CV_8UC3,
-                                &mut display_mat,
-                            )?;
-                        }
-                        _ => {
-                            return Err(Box::new(AdderPlayerError(
-                                "Bad number of channels".into(),
-                            )));
-                        }
-                    }
-
                     Ok(AdderPlayer {
                         stream_state: StreamState {
                             current_t_ticks: 0,
@@ -156,7 +132,11 @@ impl AdderPlayer {
                             decoder: stream,
                             bitreader,
                         }),
-                        display_mat,
+                        display_frame: Array3::zeros((
+                            meta.plane.h_usize(),
+                            meta.plane.w_usize(),
+                            meta.plane.c_usize(),
+                        )),
                         playback_speed,
                         reconstruction_method: ReconstructionMethod::Accurate,
                         current_frame: 0,
@@ -257,7 +237,7 @@ impl AdderPlayer {
 
         let frame_length = meta.ref_interval as f64 * self.playback_speed as f64; //TODO: temp
 
-        let mut display_mat = &mut self.display_mat;
+        let mut display_mat = &mut self.display_frame;
 
         #[cfg(feature = "open-cv")]
         if self.view_mode == FramedViewMode::DeltaT {
@@ -285,15 +265,40 @@ impl AdderPlayer {
             {
                 self.current_frame += 1;
 
-                let mut image_mat_bgra = Mat::default();
-                imgproc::cvt_color(
-                    &self.display_mat,
-                    &mut image_mat_bgra,
-                    imgproc::COLOR_BGR2BGRA,
-                    4,
-                )?;
+                let mut image_mat = &mut self.display_frame;
+                let color = image_mat.shape()[2] == 3;
 
-                // TODO: refactor
+                let mut image_bgra = if color {
+                    // Swap the red and blue channels
+                    let temp = image_mat.index_axis_mut(Axis(2), 0).to_owned();
+                    let mut blue_channel = image_mat.index_axis_mut(Axis(2), 2).to_owned();
+                    image_mat.index_axis_mut(Axis(2), 0).assign(&blue_channel);
+                    // Swap the channels by copying
+                    image_mat.index_axis_mut(Axis(2), 2).assign(&temp);
+
+                    // add alpha channel
+                    ndarray::concatenate(
+                        Axis(2),
+                        &[
+                            image_mat.clone().view(),
+                            Array::from_elem((image_mat.shape()[0], image_mat.shape()[1], 1), 255)
+                                .view(),
+                        ],
+                    )?
+                } else {
+                    ndarray::concatenate(
+                        Axis(2),
+                        &[
+                            image_mat.clone().view(),
+                            image_mat.clone().view(),
+                            image_mat.clone().view(),
+                            Array::from_elem((image_mat.shape()[0], image_mat.shape()[1], 1), 255)
+                                .view(),
+                        ],
+                    )?
+                };
+                let image_bgra = image_bgra.as_standard_layout();
+
                 let image_bevy = Image::new(
                     Extent3d {
                         width: meta.plane.w().into(),
@@ -301,7 +306,7 @@ impl AdderPlayer {
                         depth_or_array_layers: 1,
                     },
                     TextureDimension::D2,
-                    Vec::from(image_mat_bgra.data_bytes()?),
+                    Vec::from(image_bgra.as_slice().unwrap()),
                     TextureFormat::Bgra8UnormSrgb,
                 );
                 break Some(image_bevy);
@@ -388,10 +393,13 @@ impl AdderPlayer {
                         }
                         * 255.0;
 
-                    let db = display_mat.data_bytes_mut()?;
-                    db[y as usize * meta.plane.area_wc()
-                        + x as usize * meta.plane.c_usize()
-                        + c as usize] = frame_intensity as u8;
+                    unsafe {
+                        *display_mat.uget_mut((
+                            event.coord.y as usize,
+                            event.coord.x as usize,
+                            event.coord.c.unwrap_or(0) as usize,
+                        )) = frame_intensity as u8;
+                    }
                 }
                 Err(_e) => {
                     match stream
@@ -439,11 +447,11 @@ impl AdderPlayer {
             Some(s) => s,
         };
 
-        let mut display_mat = &mut self.display_mat;
+        let mut display_mat = &mut self.display_frame;
 
         let image_bevy = if frame_sequence.is_frame_0_filled() {
             let mut idx = 0;
-            let db = display_mat.data_bytes_mut()?;
+            let db = display_mat.as_slice_mut().unwrap();
             for chunk_num in 0..frame_sequence.get_frame_chunks_num() {
                 match frame_sequence.pop_next_frame_for_chunk(chunk_num) {
                     Some(arr) => {
@@ -472,7 +480,7 @@ impl AdderPlayer {
 
             if let Some(features) = frame_sequence.pop_features() {
                 for feature in features {
-                    let db = display_mat.data_bytes_mut()?;
+                    let db = display_mat.as_slice_mut().unwrap();
 
                     let color: u8 = 255;
                     let radius = 2;
@@ -524,10 +532,40 @@ impl AdderPlayer {
             frame_sequence.state.frames_written += 1;
             self.stream_state.current_t_ticks += frame_sequence.state.tpf;
 
-            let mut image_mat_bgra = Mat::default();
-            imgproc::cvt_color(display_mat, &mut image_mat_bgra, imgproc::COLOR_BGR2BGRA, 4)?;
+            let mut image_mat = &mut self.display_frame;
+            let color = image_mat.shape()[2] == 3;
 
-            // TODO: refactor
+            let mut image_bgra = if color {
+                // Swap the red and blue channels
+                let temp = image_mat.index_axis_mut(Axis(2), 0).to_owned();
+                let mut blue_channel = image_mat.index_axis_mut(Axis(2), 2).to_owned();
+                image_mat.index_axis_mut(Axis(2), 0).assign(&blue_channel);
+                // Swap the channels by copying
+                image_mat.index_axis_mut(Axis(2), 2).assign(&temp);
+
+                // add alpha channel
+                ndarray::concatenate(
+                    Axis(2),
+                    &[
+                        image_mat.clone().view(),
+                        Array::from_elem((image_mat.shape()[0], image_mat.shape()[1], 1), 255)
+                            .view(),
+                    ],
+                )?
+            } else {
+                ndarray::concatenate(
+                    Axis(2),
+                    &[
+                        image_mat.clone().view(),
+                        image_mat.clone().view(),
+                        image_mat.clone().view(),
+                        Array::from_elem((image_mat.shape()[0], image_mat.shape()[1], 1), 255)
+                            .view(),
+                    ],
+                )?
+            };
+            let image_bgra = image_bgra.as_standard_layout();
+
             Some(Image::new(
                 Extent3d {
                     width: meta.plane.w().into(),
@@ -535,7 +573,7 @@ impl AdderPlayer {
                     depth_or_array_layers: 1,
                 },
                 TextureDimension::D2,
-                Vec::from(image_mat_bgra.data_bytes()?),
+                Vec::from(image_bgra.as_slice().unwrap()),
                 TextureFormat::Bgra8UnormSrgb,
             ))
         } else {

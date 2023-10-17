@@ -395,6 +395,11 @@ impl<
         let channel = event.coord.c.unwrap_or(0);
         let chunk_num = event.coord.y as usize / self.chunk_rows;
 
+        // Silently handle malformed event
+        if chunk_num >= self.frames.len() {
+            return false;
+        }
+
         let time = event.delta_t;
         event.coord.y -= (chunk_num * self.chunk_rows) as u16; // Modify the coordinate here, so it gets ingested at the right place
 
