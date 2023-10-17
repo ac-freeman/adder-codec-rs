@@ -1,3 +1,4 @@
+use crate::transcoder::source::video::FramedViewMode::SAE;
 use crate::transcoder::source::video::SourceError::BufferEmpty;
 use crate::transcoder::source::video::{
     integrate_for_px, show_display, Source, SourceError, Video, VideoBuilder,
@@ -27,7 +28,7 @@ use std::thread;
 use adder_codec_core::codec::{CodecError, EncoderOptions, EncoderType};
 use adder_codec_core::{Event, PlaneSize, SourceCamera, SourceType, TimeMode};
 
-use crate::framer::scale_intensity::FrameValue;
+use crate::framer::scale_intensity::{FrameValue, SaeTime};
 use crate::transcoder::event_pixel_tree::Intensity32;
 use crate::utils::viz::ShowFeatureMode;
 use tokio::runtime::Runtime;
@@ -432,7 +433,15 @@ impl<W: Write + 'static> Integration<W> {
                         practical_d_max,
                         video.state.delta_t_max,
                         video.instantaneous_view_mode,
-                        0.0, //TODO
+                        if video.instantaneous_view_mode == SAE {
+                            Some(SaeTime {
+                                running_t: video.event_pixel_trees[[y, x, c]].running_t as DeltaT,
+                                last_fired_t: video.event_pixel_trees[[y, x, c]].last_fired_t
+                                    as DeltaT,
+                            })
+                        } else {
+                            None
+                        },
                     ),
                     None => *val,
                 };
@@ -560,7 +569,15 @@ impl<W: Write + 'static> Integration<W> {
                         practical_d_max,
                         video.state.delta_t_max,
                         video.instantaneous_view_mode,
-                        0.0, //TODO
+                        if video.instantaneous_view_mode == SAE {
+                            Some(SaeTime {
+                                running_t: video.event_pixel_trees[[y, x, c]].running_t as DeltaT,
+                                last_fired_t: video.event_pixel_trees[[y, x, c]].last_fired_t
+                                    as DeltaT,
+                            })
+                        } else {
+                            None
+                        },
                     ),
                     None => *val,
                 };

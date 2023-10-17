@@ -26,7 +26,7 @@ use opencv::highgui;
 use opencv::imgproc::resize;
 use opencv::prelude::*;
 
-use crate::framer::scale_intensity::FrameValue;
+use crate::framer::scale_intensity::{FrameValue, SaeTime};
 use crate::transcoder::event_pixel_tree::{Intensity32, PixelArena};
 
 #[cfg(feature = "compression")]
@@ -40,6 +40,7 @@ use rayon::iter::{IndexedParallelIterator, IntoParallelRefMutIterator};
 use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator};
 use rayon::ThreadPool;
 
+use crate::transcoder::source::video::FramedViewMode::SAE;
 use crate::transcoder::source::{CRF, DEFAULT_CRF_QUALITY};
 use crate::utils::cv::is_feature;
 use crate::utils::logging::{LogFeature, LogFeatureSource};
@@ -399,16 +400,6 @@ impl<W: Write + 'static> Video<W> {
         let mut instantaneous_frame =
             Array3::zeros((plane.h_usize(), plane.w_usize(), plane.c_usize()));
 
-        let mut sae_mat = Mat::default();
-        match plane.c() {
-            1 => unsafe {
-                sae_mat.create_rows_cols(plane.h() as i32, plane.w() as i32, CV_32F)?;
-            },
-            _ => unsafe {
-                sae_mat.create_rows_cols(plane.h() as i32, plane.w() as i32, CV_32FC3)?;
-            },
-        }
-
         state.plane = plane;
         let instantaneous_view_mode = FramedViewMode::Intensity;
         let (event_sender, _) = channel();
@@ -733,26 +724,6 @@ impl<W: Write + 'static> Video<W> {
                 ));
             }
         };
-        let mut sae_mat = Mat::default();
-
-        if color {
-            unsafe {
-                sae_mat.create_rows_cols(
-                    self.state.plane.h() as i32,
-                    self.state.plane.w() as i32,
-                    CV_32FC3,
-                )?;
-            }
-        } else {
-            unsafe {
-                sae_mat.create_rows_cols(
-                    self.state.plane.h() as i32,
-                    self.state.plane.w() as i32,
-                    CV_32F,
-                )?;
-            }
-        }
-        sae_mat = sae_mat.clone();
 
         // TODO: When there's full support for various bit-depth sources, modify this accordingly
         let practical_d_max =
@@ -781,7 +752,15 @@ impl<W: Write + 'static> Video<W> {
                         practical_d_max,
                         self.state.delta_t_max,
                         self.instantaneous_view_mode,
-                        sae_time,
+                        if self.instantaneous_view_mode == SAE {
+                            Some(SaeTime {
+                                running_t: self.event_pixel_trees[[y, x, c]].running_t as DeltaT,
+                                last_fired_t: self.event_pixel_trees[[y, x, c]].last_fired_t
+                                    as DeltaT,
+                            })
+                        } else {
+                            None
+                        },
                     ),
                     None => *val,
                 };
@@ -790,46 +769,7 @@ impl<W: Write + 'static> Video<W> {
                 if self.state.feature_detection && c == 0 {
                     *running = *val;
                 }
-
-                if self.instantaneous_view_mode == FramedViewMode::SAE {
-                    // let tmp = sae_mat.at_2d::<f32>(y as i32, x as i32).unwrap();
-                    *sae_mat.at_2d_mut::<f32>(y as i32, x as i32).unwrap() = sae_time as f32;
-                }
             });
-
-        if self.instantaneous_view_mode == FramedViewMode::SAE {
-            let mut sae_mat_norm = Mat::default();
-            opencv::core::normalize(
-                &sae_mat,
-                &mut sae_mat_norm,
-                0.0,
-                255.0,
-                opencv::core::NORM_MINMAX,
-                opencv::core::CV_8U,
-                &Mat::default(),
-            )?;
-            // self.instantaneous_frame = sae_mat_norm; // TODO: restore
-        }
-
-        // TODO: restore
-        // if self.instantaneous_view_mode == FramedViewMode::DeltaT {
-        //     opencv::core::normalize(
-        //         &self.instantaneous_frame.clone(),
-        //         &mut self.instantaneous_frame,
-        //         0.0,
-        //         255.0,
-        //         opencv::core::NORM_MINMAX,
-        //         opencv::core::CV_8U,
-        //         &Mat::default(),
-        //     )?;
-        //     opencv::core::subtract(
-        //         &Scalar::new(255.0, 255.0, 255.0, 0.0),
-        //         &self.instantaneous_frame.clone(),
-        //         &mut self.instantaneous_frame,
-        //         &Mat::default(),
-        //         opencv::core::CV_8U,
-        //     )?;
-        // }
 
         for events in &big_buffer {
             for (e1, e2) in events.iter().circular_tuple_windows() {

@@ -1,4 +1,4 @@
-use crate::framer::scale_intensity::FrameValue;
+use crate::framer::scale_intensity::{FrameValue, SaeTime};
 use bincode::config::{BigEndian, FixintEncoding, WithOtherEndian, WithOtherIntEncoding};
 use bincode::{DefaultOptions, Options};
 use rayon::iter::ParallelIterator;
@@ -776,7 +776,10 @@ fn ingest_event_for_chunk<
                 practical_d_max,
                 state.source_dtm,
                 state.view_mode,
-                0.0, // TODO
+                Some(SaeTime {
+                    running_t: *running_ts_ref as DeltaT,
+                    last_fired_t: prev_running_ts as DeltaT,
+                }), // TODO
             );
         }
         *last_filled_frame_ref = (running_ts_ref.saturating_sub(1)) as i64 / i64::from(state.tpf);
