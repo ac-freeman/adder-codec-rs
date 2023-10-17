@@ -557,7 +557,7 @@ impl TranscoderState {
             }
         };
 
-        let mut image_mat = source.get_video_ref().instantaneous_frame.clone();
+        let mut image_mat = source.get_video_ref().display_frame.clone();
         let color = image_mat.shape()[2] == 3;
 
         let mut image_bgra = if color {

@@ -6,6 +6,7 @@ use std::io;
 use std::io::{BufWriter, Cursor, Write};
 use std::path::Path;
 use std::process::{Command, Output};
+use video_rs::Frame;
 
 /// Writes a given [`Mat`] to a file
 /// # Errors
@@ -77,28 +78,32 @@ pub enum ShowFeatureMode {
 }
 
 /// Assuming the given event is a feature, draw it on the given `img` as a white cross
-pub fn draw_feature_event(e: &Event, img: &mut Mat) -> Result<(), opencv::Error> {
+pub fn draw_feature_event(e: &Event, img: &mut Frame) -> Result<(), opencv::Error> {
     draw_feature_coord(e.coord.x, e.coord.y, img, false)
 }
 
 pub fn draw_feature_coord(
     x: PixelAddress,
     y: PixelAddress,
-    img: &mut Mat,
+    img: &mut Frame,
     color: bool,
 ) -> Result<(), opencv::Error> {
     let draw_color: u8 = 255;
     let radius = 2;
 
-    if color {
-        for i in -radius..=radius {
-            *img.at_3d_mut(y as i32 + i, x as i32, 0)? = draw_color;
-            *img.at_3d_mut(y as i32, x as i32 + i, 0)? = draw_color;
-        }
-    } else {
-        for i in -radius..=radius {
-            *img.at_2d_mut(y as i32 + i, x as i32)? = draw_color;
-            *img.at_2d_mut(y as i32, x as i32 + i)? = draw_color;
+    unsafe {
+        if color {
+            for i in -radius..=radius {
+                for c in 0..3 {
+                    *img.uget_mut(((y as i32 + i) as usize, (x as i32) as usize, c)) = draw_color;
+                    *img.uget_mut(((y as i32) as usize, (x as i32 + i) as usize, c)) = draw_color;
+                }
+            }
+        } else {
+            for i in -radius..=radius {
+                *img.uget_mut(((y as i32 + i) as usize, (x as i32) as usize, 0)) = draw_color;
+                *img.uget_mut(((y as i32) as usize, (x as i32 + i) as usize, 0)) = draw_color;
+            }
         }
     }
 

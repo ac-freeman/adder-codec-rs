@@ -39,6 +39,7 @@ use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator};
 use rayon::ThreadPool;
 
 use crate::transcoder::source::{CRF, DEFAULT_CRF_QUALITY};
+use crate::utils::cv::is_feature;
 use crate::utils::logging::{LogFeature, LogFeatureSource};
 use crate::utils::viz::{draw_feature_coord, draw_feature_event, ShowFeatureMode};
 use thiserror::Error;
@@ -329,7 +330,7 @@ pub struct Video<W: Write> {
 
     // pub instan: Mat,
     /// The current instantaneous display frame
-    pub instantaneous_frame: Frame,
+    pub display_frame: Frame,
 
     /// The current view mode of the instantaneous frame
     pub instantaneous_view_mode: FramedViewMode,
@@ -427,7 +428,7 @@ impl<W: Write + 'static> Video<W> {
                 Ok(Video {
                     state,
                     event_pixel_trees,
-                    instantaneous_frame,
+                    display_frame: instantaneous_frame,
                     instantaneous_view_mode,
                     event_sender,
                     encoder,
@@ -443,7 +444,7 @@ impl<W: Write + 'static> Video<W> {
                 Ok(Video {
                     state,
                     event_pixel_trees,
-                    instantaneous_frame,
+                    display_frame: instantaneous_frame,
                     instantaneous_view_mode,
                     event_sender,
                     encoder,
@@ -722,7 +723,7 @@ impl<W: Write + 'static> Video<W> {
             })
             .collect();
 
-        let db = match self.instantaneous_frame.as_slice_mut() {
+        let db = match self.display_frame.as_slice_mut() {
             Some(v) => v,
             None => {
                 return Err(SourceError::VisionError(
@@ -934,8 +935,12 @@ impl<W: Write + 'static> Video<W> {
                         if !cfg!(feature = "feature-logging-nonmaxsuppression")
                             || e2.delta_t != e1.delta_t
                         {
-                            if is_feature(e1.coord, self.state.plane, &self.running_intensities)
-                                .unwrap()
+                            if is_feature(
+                                e1.coord,
+                                self.state.plane,
+                                &self.state.running_intensities,
+                            )
+                            .unwrap()
                             {
                                 if feature_set.insert(e1.coord) {
                                     new_features.push(e1.coord);
@@ -976,12 +981,12 @@ impl<W: Write + 'static> Video<W> {
 
             let start = Instant::now();
             let mut keypoints = Vector::<KeyPoint>::new();
-            opencv::features2d::fast(
-                &self.instantaneous_frame,
-                &mut keypoints,
-                crate::utils::cv::INTENSITY_THRESHOLD,
-                cfg!(feature = "feature-logging-nonmaxsuppression"),
-            )?;
+            // opencv::features2d::fast(
+            //     &self.instantaneous_frame,
+            //     &mut keypoints,
+            //     crate::utils::cv::INTENSITY_THRESHOLD,
+            //     cfg!(feature = "feature-logging-nonmaxsuppression"),
+            // )?;
 
             let duration = start.elapsed();
             if let Some(handle) = &mut self.state.feature_log_handle {
@@ -1005,15 +1010,15 @@ impl<W: Write + 'static> Video<W> {
 
                 // writeln!(handle, "OpenCV FAST: {}", duration.as_nanos()).unwrap();
             }
-            let mut keypoint_mat = Mat::default();
-            opencv::features2d::draw_keypoints(
-                &self.instantaneous_frame,
-                &keypoints,
-                &mut keypoint_mat,
-                Scalar::new(0.0, 0.0, 255.0, 0.0),
-                opencv::features2d::DrawMatchesFlags::DEFAULT,
-            )?;
-            show_display_force("keypoints", &keypoint_mat, 1)?;
+            // let mut keypoint_mat = Mat::default();
+            // opencv::features2d::draw_keypoints(
+            //     &self.instantaneous_frame,
+            //     &keypoints,
+            //     &mut keypoint_mat,
+            //     Scalar::new(0.0, 0.0, 255.0, 0.0),
+            //     opencv::features2d::DrawMatchesFlags::DEFAULT,
+            // )?;
+            // show_display_force("keypoints", &keypoint_mat, 1)?;
         }
 
         if self.state.show_features == ShowFeatureMode::Hold {
@@ -1023,7 +1028,7 @@ impl<W: Write + 'static> Video<W> {
                     draw_feature_coord(
                         coord.x,
                         coord.y,
-                        &mut self.instantaneous_frame,
+                        &mut self.display_frame,
                         self.state.plane.c() != 1,
                     )?;
                 }
@@ -1036,7 +1041,7 @@ impl<W: Write + 'static> Video<W> {
                     draw_feature_coord(
                         coord.x,
                         coord.y,
-                        &mut self.instantaneous_frame,
+                        &mut self.display_frame,
                         self.state.plane.c() != 1,
                     )?;
                 }

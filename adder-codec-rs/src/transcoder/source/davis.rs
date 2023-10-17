@@ -408,7 +408,7 @@ impl<W: Write + 'static> Integration<W> {
             )
             .collect();
 
-        let db: &mut [u8] = match video.instantaneous_frame.as_slice_mut() {
+        let db: &mut [u8] = match video.display_frame.as_slice_mut() {
             Some(db) => db,
             None => return Err(CodecError::MalformedEncoder), // TODO: Wrong type of error
         };
@@ -532,7 +532,7 @@ impl<W: Write + 'static> Integration<W> {
             })
             .collect();
 
-        let db = match video.instantaneous_frame.as_slice_mut() {
+        let db = match video.display_frame.as_slice_mut() {
             Some(db) => db,
             None => {
                 return Err(SourceError::VisionError(
