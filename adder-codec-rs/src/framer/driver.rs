@@ -232,6 +232,11 @@ impl FrameSequenceState {
     }
 }
 
+pub struct FeatureInterval {
+    end_ts: BigT,
+    pub features: Vec<Coord>,
+}
+
 /// A sequence of frames, each of which is a 3D array of [`FrameValue`]s
 #[allow(dead_code)]
 pub struct FrameSequence<T> {
@@ -245,7 +250,7 @@ pub struct FrameSequence<T> {
     chunk_filled_tracker: Vec<bool>,
     pub(crate) mode: FramerMode,
     pub(crate) detect_features: bool,
-    pub(crate) features: VecDeque<Vec<Coord>>,
+    pub(crate) features: VecDeque<FeatureInterval>,
 
     pub(crate) running_intensities: Array3<u8>,
 
@@ -440,16 +445,51 @@ impl<
                     // todo!();
                     if is_feature(event.coord, self.state.plane, &self.running_intensities).unwrap()
                     {
-                        let idx =
-                            (time / self.state.tpf - self.state.frames_written as u32) as usize;
+                        let mut idx =
+                            (time / (self.state.tpf) - self.state.frames_written as u32) as usize;
+                        if time % self.state.tpf == 0 {
+                            idx -= 1;
+                        }
                         dbg!(time);
                         dbg!(self.state.frames_written);
                         dbg!(idx);
                         if idx >= self.features.len() {
-                            self.features.resize(idx + 1, vec![]);
+                            if self.features.len() == 0 {
+                                dbg!("creating first...");
+                                // Create the first
+                                self.features.push_back(FeatureInterval {
+                                    end_ts: self.state.tpf as BigT,
+                                    features: vec![],
+                                });
+                                self.features.push_back(FeatureInterval {
+                                    end_ts: self.state.tpf as BigT * 2,
+                                    features: vec![],
+                                });
+                            }
+
+                            let new_end_ts = if time % self.state.tpf == 0 {
+                                time
+                            } else {
+                                (time / self.state.tpf + 1) * self.state.tpf
+                            } as BigT;
+
+                            let mut running_end_ts =
+                                self.features.back().unwrap().end_ts + self.state.tpf as BigT;
+                            dbg!(new_end_ts);
+                            dbg!(running_end_ts);
+                            while running_end_ts <= new_end_ts {
+                                self.features.push_back(FeatureInterval {
+                                    end_ts: running_end_ts,
+                                    features: vec![],
+                                });
+                                running_end_ts += self.state.tpf as BigT;
+                            }
                         }
 
-                        self.features[idx].push(event.coord);
+                        dbg!(self.features.len());
+                        dbg!(self.features[idx].end_ts);
+                        assert!(self.features[idx].end_ts >= time as BigT);
+                        self.features[idx].features.push(event.coord);
                     }
                 }
             }
@@ -632,8 +672,27 @@ impl<T: Clone + Default + FrameValue<Output = T> + Serialize> FrameSequence<T> {
     }
 
     /// Get the features detected for the next frame, and pop that off the feature vec
-    pub fn pop_features(&mut self) -> Option<Vec<Coord>> {
-        self.features.push_back(vec![]);
+    pub fn pop_features(&mut self) -> Option<FeatureInterval> {
+        if self.features.len() == 0 {
+            // Create the first
+            self.features.push_back(FeatureInterval {
+                end_ts: self.state.tpf as BigT,
+                features: vec![],
+            });
+            // Create the first
+            self.features.push_back(FeatureInterval {
+                end_ts: self.state.tpf as BigT * 2,
+                features: vec![],
+            });
+        } else {
+            self.features.push_back(FeatureInterval {
+                end_ts: self.state.tpf as BigT + self.features.back().unwrap().end_ts,
+                features: vec![],
+            });
+        }
+
+        dbg!("Popping features");
+        dbg!(self.features.back().unwrap().end_ts);
         self.features.pop_front()
     }
 

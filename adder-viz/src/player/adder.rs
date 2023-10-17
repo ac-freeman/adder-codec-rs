@@ -478,8 +478,8 @@ impl AdderPlayer {
             //     idx += 1;
             // }
 
-            if let Some(features) = frame_sequence.pop_features() {
-                for feature in features {
+            if let Some(feature_interval) = frame_sequence.pop_features() {
+                for feature in feature_interval.features {
                     let db = display_mat.as_slice_mut().unwrap();
 
                     let color: u8 = 255;
