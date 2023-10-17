@@ -37,7 +37,7 @@ bitvec = "1.0.1"
 bumpalo = "3.11.0"
 chrono = "0.4.31"
 clap = { version = "4.0.17", features = ["derive"] }
-davis-edi-rs = {version = "0.2.3", optional = true }
+davis-edi-rs = { path = "../../davis-EDI-rs", version = "0.2.3", optional = true }
 duplicate = "0.4.1"
 fast-math = { version = "0.1", optional = true }
 fenwick = "2.0.1"
@@ -65,7 +65,7 @@ ndarray-image = "0.3.0"
 raw-parts = "2.0.0"
 
 [dependencies.opencv]
-version = "0.84.5"
+version = "0.83.0"
 package = 'opencv'
 default-features = false
 features = ['videoio', 'imgproc', 'highgui', 'clang-runtime']

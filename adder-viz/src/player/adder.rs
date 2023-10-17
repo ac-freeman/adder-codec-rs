@@ -451,23 +451,24 @@ impl AdderPlayer {
         let image_bevy = if frame_sequence.is_frame_0_filled() {
             let mut idx = 0;
             let db = display_mat.as_slice_mut().unwrap();
-            for chunk_num in 0..frame_sequence.get_frame_chunks_num() {
-                match frame_sequence.pop_next_frame_for_chunk(chunk_num) {
-                    Some(arr) => {
-                        for px in arr.iter() {
-                            match px {
-                                Some(event) => {
-                                    db[idx] = *event;
-                                    idx += 1;
-                                }
-                                None => {}
-                            };
+            let new_frame = frame_sequence.pop_next_frame().unwrap();
+            for chunk in new_frame {
+                // match frame_sequence.pop_next_frame_for_chunk(chunk_num) {
+                //     Some(arr) => {
+                for px in chunk.iter() {
+                    match px {
+                        Some(event) => {
+                            db[idx] = *event;
+                            idx += 1;
                         }
-                    }
-                    None => {
-                        println!("Couldn't pop chunk {chunk_num}!")
-                    }
+                        None => {}
+                    };
                 }
+                // }
+                // None => {
+                //     println!("Couldn't pop chunk {chunk_num}!")
+                // }
+                // }
             }
 
             // TODO: temporary, for testing what the running intensities look like

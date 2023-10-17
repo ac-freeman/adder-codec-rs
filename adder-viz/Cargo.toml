@@ -41,7 +41,7 @@ video-rs = { path = "../../video-rs", version = "0.4", features = ["ndarray"] }
 ndarray-image = "0.3.0"
 
 [dependencies.opencv]
-version = "0.84.5"
+version = "0.83.0"
 package = 'opencv'
 default-features = false
 features = ['videoio', 'imgproc', 'highgui', 'clang-runtime']
