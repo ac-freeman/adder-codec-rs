@@ -1,9 +1,11 @@
 use chrono::prelude::*;
 use opencv::core::{KeyPoint, Mat, Scalar, Size, Vector, CV_32F, CV_32FC3, CV_8U, CV_8UC3};
+use raw_parts::RawParts;
 use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::io::{sink, Write};
 use std::mem::swap;
+use std::os::raw::c_void;
 
 use adder_codec_core::codec::empty::stream::EmptyOutput;
 use adder_codec_core::codec::encoder::Encoder;
@@ -192,7 +194,7 @@ pub struct VideoState {
     pub feature_detection: bool,
 
     /// The current instantaneous frame, for determining features
-    pub running_intensities: Array3<i32>,
+    pub running_intensities: Array3<u8>,
 
     /// Whether or not to draw the features on the display mat, and the mode to do it in
     show_features: ShowFeatureMode,
@@ -786,7 +788,7 @@ impl<W: Write + 'static> Video<W> {
 
                 // Only track the running state of the first channel
                 if self.state.feature_detection && c == 0 {
-                    *running = *val as i32;
+                    *running = *val;
                 }
 
                 if self.instantaneous_view_mode == FramedViewMode::SAE {
@@ -979,14 +981,46 @@ impl<W: Write + 'static> Video<W> {
                     .unwrap();
             }
 
+            // Convert the running intensities to a Mat
+
+            let cv_type = match self.state.running_intensities.shape()[2] {
+                1 => opencv::core::CV_8UC1,
+                _ => opencv::core::CV_8UC3,
+            };
+
+            let mut cv_mat = unsafe {
+                let RawParts {
+                    ptr,
+                    length,
+                    capacity,
+                } = RawParts::from_vec(self.display_frame.clone().into_raw_vec()); // pixels will be move into_raw_parts，and return a manually drop pointer.
+                let mut cv_mat = opencv::core::Mat::new_rows_cols_with_data(
+                    self.state.plane.h() as i32,
+                    self.state.plane.w() as i32,
+                    cv_type,
+                    ptr as *mut c_void,
+                    opencv::core::Mat_AUTO_STEP,
+                )
+                .unwrap();
+                cv_mat.addref().unwrap(); // ???
+
+                cv_mat
+            };
+
+            let tmp = cv_mat.clone();
+            if cv_type == opencv::core::CV_8UC3 {
+                opencv::imgproc::cvt_color(&tmp, &mut cv_mat, opencv::imgproc::COLOR_BGR2GRAY, 0)?;
+            }
+
             let start = Instant::now();
             let mut keypoints = Vector::<KeyPoint>::new();
-            // opencv::features2d::fast(
-            //     &self.instantaneous_frame,
-            //     &mut keypoints,
-            //     crate::utils::cv::INTENSITY_THRESHOLD,
-            //     cfg!(feature = "feature-logging-nonmaxsuppression"),
-            // )?;
+
+            opencv::features2d::fast(
+                &cv_mat,
+                &mut keypoints,
+                crate::utils::cv::INTENSITY_THRESHOLD.into(),
+                cfg!(feature = "feature-logging-nonmaxsuppression"),
+            )?;
 
             let duration = start.elapsed();
             if let Some(handle) = &mut self.state.feature_log_handle {
@@ -1007,18 +1041,16 @@ impl<W: Write + 'static> Video<W> {
                 handle
                     .write_all(&serde_pickle::to_vec(&out, Default::default()).unwrap())
                     .unwrap();
-
-                // writeln!(handle, "OpenCV FAST: {}", duration.as_nanos()).unwrap();
             }
-            // let mut keypoint_mat = Mat::default();
-            // opencv::features2d::draw_keypoints(
-            //     &self.instantaneous_frame,
-            //     &keypoints,
-            //     &mut keypoint_mat,
-            //     Scalar::new(0.0, 0.0, 255.0, 0.0),
-            //     opencv::features2d::DrawMatchesFlags::DEFAULT,
-            // )?;
-            // show_display_force("keypoints", &keypoint_mat, 1)?;
+            let mut keypoint_mat = Mat::default();
+            opencv::features2d::draw_keypoints(
+                &cv_mat,
+                &keypoints,
+                &mut keypoint_mat,
+                Scalar::new(0.0, 0.0, 255.0, 0.0),
+                opencv::features2d::DrawMatchesFlags::DEFAULT,
+            )?;
+            show_display_force("keypoints", &keypoint_mat, 1)?;
         }
 
         if self.state.show_features == ShowFeatureMode::Hold {

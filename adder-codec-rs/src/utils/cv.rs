@@ -3,7 +3,7 @@ use ndarray::Array3;
 use std::error::Error;
 
 // TODO: Explore optimal threshold values
-pub const INTENSITY_THRESHOLD: i32 = 30;
+pub const INTENSITY_THRESHOLD: i16 = 30;
 
 /// Indices for the asynchronous FAST 9_16 algorithm
 #[rustfmt::skip]
@@ -18,13 +18,13 @@ const CIRCLE3: [[i32; 2]; 16] = [
 pub fn is_feature(
     coord: Coord,
     plane: PlaneSize,
-    img: &Array3<i32>,
+    img: &Array3<u8>,
 ) -> Result<bool, Box<dyn Error>> {
     if coord.is_border(plane.w_usize(), plane.h_usize(), 3) {
         return Ok(false);
     }
     unsafe {
-        let candidate: i32 = *img.uget((coord.y_usize(), coord.x_usize(), 0));
+        let candidate: i16 = *img.uget((coord.y_usize(), coord.x_usize(), 0)) as i16;
         let y = coord.y as i32;
         let x = coord.x as i32;
 
@@ -33,7 +33,8 @@ pub fn is_feature(
             (y + CIRCLE3[4][1]) as usize,
             (x + CIRCLE3[4][0]) as usize,
             0,
-        )) - candidate)
+        )) as i16
+            - candidate)
             .abs()
             > INTENSITY_THRESHOLD
         {
@@ -43,7 +44,8 @@ pub fn is_feature(
             (y + CIRCLE3[12][1]) as usize,
             (x + CIRCLE3[12][0]) as usize,
             0,
-        )) - candidate)
+        )) as i16
+            - candidate)
             .abs()
             > INTENSITY_THRESHOLD
         {
@@ -53,7 +55,8 @@ pub fn is_feature(
             (y + CIRCLE3[1][1]) as usize,
             (x + CIRCLE3[1][0]) as usize,
             0,
-        )) - candidate)
+        )) as i16
+            - candidate)
             .abs()
             > INTENSITY_THRESHOLD
         {
@@ -64,7 +67,8 @@ pub fn is_feature(
             (y + CIRCLE3[7][1]) as usize,
             (x + CIRCLE3[7][0]) as usize,
             0,
-        )) - candidate)
+        )) as i16
+            - candidate)
             .abs()
             > INTENSITY_THRESHOLD
         {
@@ -83,7 +87,8 @@ pub fn is_feature(
                 (y + CIRCLE3[i][1]) as usize,
                 (x + CIRCLE3[i][0]) as usize,
                 0,
-            )) > candidate;
+            )) as i16
+                > candidate;
 
             let mut did_break = false;
 
@@ -93,7 +98,8 @@ pub fn is_feature(
                         (y + CIRCLE3[(i + j) % 16][1]) as usize,
                         (x + CIRCLE3[(i + j) % 16][0]) as usize,
                         0,
-                    )) <= candidate + INTENSITY_THRESHOLD
+                    )) as i16
+                        <= candidate + INTENSITY_THRESHOLD
                     {
                         did_break = true;
                     }
@@ -101,7 +107,8 @@ pub fn is_feature(
                     (y + CIRCLE3[(i + j) % 16][1]) as usize,
                     (x + CIRCLE3[(i + j) % 16][0]) as usize,
                     0,
-                )) >= candidate - INTENSITY_THRESHOLD
+                )) as i16
+                    >= candidate - INTENSITY_THRESHOLD
                 {
                     did_break = true;
                 }

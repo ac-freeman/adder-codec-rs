@@ -436,7 +436,7 @@ impl<W: Write + 'static> Integration<W> {
                     ),
                     None => *val,
                 };
-                *running = *val as i32;
+                *running = *val;
             });
 
         for events in &big_buffer {
@@ -564,7 +564,7 @@ impl<W: Write + 'static> Integration<W> {
                     ),
                     None => *val,
                 };
-                *running = *val as i32;
+                *running = *val;
             });
 
         for events in &big_buffer {

@@ -241,7 +241,7 @@ pub struct FrameSequence<T> {
     pub(crate) detect_features: bool,
     pub(crate) features: VecDeque<Vec<Coord>>,
 
-    pub(crate) running_intensities: Array3<i32>,
+    pub(crate) running_intensities: Array3<u8>,
 
     /// Number of rows per chunk (per thread)
     pub chunk_rows: usize,
@@ -422,7 +422,7 @@ impl<
             event.coord.y += (chunk_num * self.chunk_rows) as u16;
             self.running_intensities
                 [[event.coord.y.into(), event.coord.x.into(), channel.into()]] =
-                <T as Into<f64>>::into(*last_frame_intensity_ref) as i32;
+                <T as Into<f64>>::into(*last_frame_intensity_ref) as u8;
 
             if let Some(last) = last_event {
                 if time != last.delta_t {
@@ -613,7 +613,7 @@ impl<T: Clone + Default + FrameValue<Output = T> + Serialize> FrameSequence<T> {
     }
 
     /// Get the instantaneous intensity for each pixel
-    pub fn get_running_intensities(&self) -> &Array3<i32> {
+    pub fn get_running_intensities(&self) -> &Array3<u8> {
         &self.running_intensities
     }
 
