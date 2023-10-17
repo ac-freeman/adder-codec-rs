@@ -196,7 +196,7 @@ impl AdderPlayer {
                         eprintln!("TODO Error");
                     }
                     Some(frame_sequence) => {
-                        frame_sequence.state.frames_written = 0;
+                        frame_sequence.state.reset();
                     }
                 };
             }
@@ -528,7 +528,6 @@ impl AdderPlayer {
             // )?;
             // show_display_force("keypoints", &keypoint_mat, 1)?;
 
-            frame_sequence.state.frames_written += 1;
             self.stream_state.current_t_ticks += frame_sequence.state.tpf;
 
             let mut image_mat = &mut self.display_frame;

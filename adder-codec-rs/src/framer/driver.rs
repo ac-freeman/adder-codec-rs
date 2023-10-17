@@ -212,7 +212,7 @@ impl From<FrameSequenceError> for Box<dyn std::error::Error> {
 /// The state of a [`FrameSequence`]
 pub struct FrameSequenceState {
     /// The number of frames written to the output so far
-    pub frames_written: i64,
+    frames_written: i64,
     plane: PlaneSize,
 
     /// Ticks per output frame
@@ -224,6 +224,12 @@ pub struct FrameSequenceState {
     source_dtm: DeltaT,
     view_mode: FramedViewMode,
     time_mode: TimeMode,
+}
+
+impl FrameSequenceState {
+    pub fn reset(&mut self) {
+        self.frames_written = 0;
+    }
 }
 
 /// A sequence of frames, each of which is a 3D array of [`FrameValue`]s
@@ -436,6 +442,9 @@ impl<
                     {
                         let idx =
                             (time / self.state.tpf - self.state.frames_written as u32) as usize;
+                        dbg!(time);
+                        dbg!(self.state.frames_written);
+                        dbg!(idx);
                         if idx >= self.features.len() {
                             self.features.resize(idx + 1, vec![]);
                         }
@@ -645,6 +654,7 @@ impl<T: Clone + Default + FrameValue<Output = T> + Serialize> FrameSequence<T> {
             }
         }
         self.state.frames_written += 1;
+        dbg!(self.state.frames_written);
         Some(ret)
     }
 
@@ -711,6 +721,7 @@ impl<T: Clone + Default + FrameValue<Output = T> + Serialize> FrameSequence<T> {
             }
         }
         self.state.frames_written += 1;
+        dbg!(self.state.frames_written);
         Ok(())
     }
 
