@@ -821,11 +821,21 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Davis<W> {
                 }
             };
 
-            todo!("Fix this");
-            // ret = thread_pool.install(|| {
-            //     self.video
-            //         .integrate_matrix(tmp, mat_integration_time, view_interval)
-            // });
+            let mut frame = unsafe {
+                video_rs::Frame::from_shape_vec_unchecked(
+                    (
+                        self.video.state.plane.h_usize(),
+                        self.video.state.plane.w_usize(),
+                        self.video.state.plane.c_usize(),
+                    ),
+                    tmp.data_bytes_mut().unwrap().to_vec(),
+                )
+            };
+
+            ret = thread_pool.install(|| {
+                self.video
+                    .integrate_matrix(frame, mat_integration_time, view_interval)
+            });
 
             #[allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
             for (idx, val) in self.integration.dvs_last_ln_val.iter_mut().enumerate() {

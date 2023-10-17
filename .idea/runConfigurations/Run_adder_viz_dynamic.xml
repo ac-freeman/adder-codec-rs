@@ -1,6 +1,6 @@
 <component name="ProjectRunConfigurationManager">
   <configuration default="false" name="Run adder-viz dynamic" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
-    <option name="command" value="run -p adder-viz --features &quot;bevy/dynamic_linking&quot;" />
+    <option name="command" value="run -p adder-viz --features &quot;open-cv&quot;" />
     <option name="workingDirectory" value="file://$PROJECT_DIR$" />
     <option name="emulateTerminal" value="false" />
     <option name="channel" value="DEFAULT" />

@@ -430,6 +430,7 @@ impl TranscoderState {
                             source
                         }
                     }
+                    #[cfg(not(feature = "open-cv"))]
                     return;
                 }
                 Some(source) => {
@@ -524,7 +525,7 @@ impl TranscoderState {
                         }
                         Some(source) => {
                             ui_info_state.davis_latency = source.get_latency();
-                            Ok(source)
+                            source
                         }
                     }
                     #[cfg(not(feature = "open-cv"))]

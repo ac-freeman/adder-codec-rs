@@ -27,7 +27,9 @@ use crate::framer::scale_intensity::{FrameValue, SaeTime};
 use crate::transcoder::event_pixel_tree::{Intensity32, PixelArena};
 use adder_codec_core::D;
 #[cfg(feature = "opencv")]
-use opencv::{davis_edi_rs::util::reconstructor::ReconstructionError, highgui, prelude::*};
+use davis_edi_rs::util::reconstructor::ReconstructionError;
+#[cfg(feature = "opencv")]
+use opencv::{highgui, imgproc::resize, prelude::*};
 
 #[cfg(feature = "compression")]
 use adder_codec_core::codec::compressed::stream::CompressedOutput;
@@ -658,6 +660,7 @@ impl<W: Write + 'static> Video<W> {
         view_interval: u32,
     ) -> Result<Vec<Vec<Event>>, SourceError> {
         let color = self.state.plane.c() != 1;
+        let color_input = matrix.shape()[2] == 3;
 
         let frame_arr = match matrix.as_slice() {
             None => {
@@ -695,7 +698,7 @@ impl<W: Write + 'static> Video<W> {
                 for (chunk_px_idx, px) in chunk.iter_mut().enumerate() {
                     *px_idx = chunk_px_idx + px_per_chunk * chunk_idx;
 
-                    if !color {
+                    if !color && color_input {
                         *px_idx *= 3;
                     }
 

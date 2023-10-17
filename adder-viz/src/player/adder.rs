@@ -239,25 +239,24 @@ impl AdderPlayer {
 
         let mut display_mat = &mut self.display_frame;
 
-        #[cfg(feature = "open-cv")]
-        if self.view_mode == FramedViewMode::DeltaT {
-            opencv::core::normalize(
-                &display_mat.clone(),
-                &mut display_mat,
-                0.0,
-                255.0,
-                opencv::core::NORM_MINMAX,
-                opencv::core::CV_8U,
-                &Mat::default(),
-            )?;
-            opencv::core::subtract(
-                &Scalar::new(255.0, 255.0, 255.0, 0.0),
-                &display_mat.clone(),
-                &mut display_mat,
-                &Mat::default(),
-                opencv::core::CV_8U,
-            )?;
-        }
+        // if self.view_mode == FramedViewMode::DeltaT {
+        //     opencv::core::normalize(
+        //         &display_mat.clone(),
+        //         &mut display_mat,
+        //         0.0,
+        //         255.0,
+        //         opencv::core::NORM_MINMAX,
+        //         opencv::core::CV_8U,
+        //         &Mat::default(),
+        //     )?;
+        //     opencv::core::subtract(
+        //         &Scalar::new(255.0, 255.0, 255.0, 0.0),
+        //         &display_mat.clone(),
+        //         &mut display_mat,
+        //         &Mat::default(),
+        //         opencv::core::CV_8U,
+        //     )?;
+        // }
 
         let image_bevy = loop {
             if self.stream_state.current_t_ticks as u128
@@ -496,26 +495,25 @@ impl AdderPlayer {
                 }
             }
 
-            #[cfg(feature = "open-cv")]
-            if self.view_mode == FramedViewMode::DeltaT {
-                opencv::core::normalize(
-                    &display_mat.clone(),
-                    &mut display_mat,
-                    0.0,
-                    255.0,
-                    opencv::core::NORM_MINMAX,
-                    opencv::core::CV_8U,
-                    &Mat::default(),
-                )?;
-                opencv::core::subtract(
-                    &Scalar::new(255.0, 255.0, 255.0, 0.0),
-                    &display_mat.clone(),
-                    &mut display_mat,
-                    &Mat::default(),
-                    opencv::core::CV_8U,
-                )?;
-            } else if self.view_mode == FramedViewMode::D {
-            }
+            // if self.view_mode == FramedViewMode::DeltaT {
+            //     opencv::core::normalize(
+            //         &display_mat.clone(),
+            //         &mut display_mat,
+            //         0.0,
+            //         255.0,
+            //         opencv::core::NORM_MINMAX,
+            //         opencv::core::CV_8U,
+            //         &Mat::default(),
+            //     )?;
+            //     opencv::core::subtract(
+            //         &Scalar::new(255.0, 255.0, 255.0, 0.0),
+            //         &display_mat.clone(),
+            //         &mut display_mat,
+            //         &Mat::default(),
+            //         opencv::core::CV_8U,
+            //     )?;
+            // } else if self.view_mode == FramedViewMode::D {
+            // }
 
             // let mut keypoints = Vector::<KeyPoint>::new();
             // opencv::features2d::fast(display_mat, &mut keypoints, 50, true)?;
