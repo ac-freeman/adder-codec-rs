@@ -450,9 +450,9 @@ impl<
                         if time % self.state.tpf == 0 {
                             idx -= 1;
                         }
-                        dbg!(time);
-                        dbg!(self.state.frames_written);
-                        dbg!(idx);
+                        // dbg!(time);
+                        // dbg!(self.state.frames_written);
+                        // dbg!(idx);
                         if idx >= self.features.len() {
                             if self.features.len() == 0 {
                                 dbg!("creating first...");
@@ -475,8 +475,8 @@ impl<
 
                             let mut running_end_ts =
                                 self.features.back().unwrap().end_ts + self.state.tpf as BigT;
-                            dbg!(new_end_ts);
-                            dbg!(running_end_ts);
+                            // dbg!(new_end_ts);
+                            // dbg!(running_end_ts);
                             while running_end_ts <= new_end_ts {
                                 self.features.push_back(FeatureInterval {
                                     end_ts: running_end_ts,
@@ -486,8 +486,8 @@ impl<
                             }
                         }
 
-                        dbg!(self.features.len());
-                        dbg!(self.features[idx].end_ts);
+                        // dbg!(self.features.len());
+                        // dbg!(self.features[idx].end_ts);
                         assert!(self.features[idx].end_ts >= time as BigT);
                         self.features[idx].features.push(event.coord);
                     }
@@ -692,7 +692,7 @@ impl<T: Clone + Default + FrameValue<Output = T> + Serialize> FrameSequence<T> {
         }
 
         dbg!("Popping features");
-        dbg!(self.features.back().unwrap().end_ts);
+        dbg!(self.features.front().unwrap().end_ts);
         self.features.pop_front()
     }
 
