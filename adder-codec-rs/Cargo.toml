@@ -20,11 +20,12 @@ default-run = "adder_simulproc"
 
 [features]
 default = ["transcoder"]
-transcoder = ["opencv", "dep:fast-math", "adder-codec-core"]
-compression = ["opencv", "dep:fast-math", "adder-codec-core/compression"]
+transcoder = ["dep:fast-math", "adder-codec-core"]
+compression = ["dep:fast-math", "adder-codec-core/compression"]
+open-cv = ["opencv", "davis-edi-rs"]
 raw-codec = []
 docs-only = ["opencv", "dep:fast-math", "adder-codec-core"]
-feature-logging = []
+feature-logging = ["open-cv"]
 feature-logging-nonmaxsuppression = ["feature-logging"]
 
 
@@ -36,7 +37,7 @@ bitvec = "1.0.1"
 bumpalo = "3.11.0"
 chrono = "0.4.31"
 clap = { version = "4.0.17", features = ["derive"] }
-davis-edi-rs = "0.2.3"
+davis-edi-rs = {version = "0.2.3", optional = true }
 duplicate = "0.4.1"
 fast-math = { version = "0.1", optional = true }
 fenwick = "2.0.1"

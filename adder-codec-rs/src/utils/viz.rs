@@ -1,4 +1,5 @@
 use adder_codec_core::{Event, PixelAddress};
+#[cfg(feature = "open-cv")]
 use opencv::core::{Mat, MatTrait, MatTraitConst, MatTraitConstManual};
 use std::error::Error;
 use std::fs::File;
@@ -8,6 +9,7 @@ use std::path::Path;
 use std::process::{Command, Output};
 use video_rs::Frame;
 
+#[cfg(feature = "open-cv")]
 /// Writes a given [`Mat`] to a file
 /// # Errors
 /// * [`io::Error`] if there is an error writing to the file
@@ -78,16 +80,11 @@ pub enum ShowFeatureMode {
 }
 
 /// Assuming the given event is a feature, draw it on the given `img` as a white cross
-pub fn draw_feature_event(e: &Event, img: &mut Frame) -> Result<(), opencv::Error> {
+pub fn draw_feature_event(e: &Event, img: &mut Frame) {
     draw_feature_coord(e.coord.x, e.coord.y, img, false)
 }
 
-pub fn draw_feature_coord(
-    x: PixelAddress,
-    y: PixelAddress,
-    img: &mut Frame,
-    color: bool,
-) -> Result<(), opencv::Error> {
+pub fn draw_feature_coord(x: PixelAddress, y: PixelAddress, img: &mut Frame, color: bool) {
     let draw_color: u8 = 255;
     let radius = 2;
 
@@ -106,6 +103,4 @@ pub fn draw_feature_coord(
             }
         }
     }
-
-    Ok(())
 }

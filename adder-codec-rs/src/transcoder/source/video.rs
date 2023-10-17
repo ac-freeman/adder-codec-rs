@@ -1,4 +1,6 @@
 use chrono::prelude::*;
+
+#[cfg(feature = "open-cv")]
 use opencv::core::{KeyPoint, Mat, Scalar, Size, Vector, CV_32F, CV_32FC3, CV_8U, CV_8UC3};
 use raw_parts::RawParts;
 use std::collections::{HashMap, HashSet};
@@ -21,18 +23,15 @@ use bumpalo::Bump;
 use std::sync::mpsc::{channel, Sender};
 use std::time::{Duration, Instant, SystemTime};
 
-use adder_codec_core::D;
-use opencv::highgui;
-use opencv::imgproc::resize;
-use opencv::prelude::*;
-
 use crate::framer::scale_intensity::{FrameValue, SaeTime};
 use crate::transcoder::event_pixel_tree::{Intensity32, PixelArena};
+use adder_codec_core::D;
+#[cfg(feature = "opencv")]
+use opencv::{davis_edi_rs::util::reconstructor::ReconstructionError, highgui, prelude::*};
 
 #[cfg(feature = "compression")]
 use adder_codec_core::codec::compressed::stream::CompressedOutput;
 use adder_codec_core::Mode::Continuous;
-use davis_edi_rs::util::reconstructor::ReconstructionError;
 use itertools::Itertools;
 use ndarray::{Array, Array3, Axis, ShapeError, Zip};
 use rayon::iter::ParallelIterator;
@@ -43,6 +42,7 @@ use rayon::ThreadPool;
 use crate::transcoder::source::video::FramedViewMode::SAE;
 use crate::transcoder::source::{CRF, DEFAULT_CRF_QUALITY};
 use crate::utils::cv::is_feature;
+#[cfg(feature = "feature-logging")]
 use crate::utils::logging::{LogFeature, LogFeatureSource};
 use crate::utils::viz::{draw_feature_coord, draw_feature_event, ShowFeatureMode};
 use thiserror::Error;
@@ -80,6 +80,7 @@ pub enum SourceError {
     #[error("Data not initialized")]
     UninitializedData,
 
+    #[cfg(feature = "open-cv")]
     /// OpenCV error
     #[error("OpenCV error")]
     OpencvError(opencv::Error),
@@ -92,6 +93,7 @@ pub enum SourceError {
     #[error("Codec core error")]
     CodecError(CodecError),
 
+    #[cfg(feature = "open-cv")]
     /// EDI error
     #[error("EDI error")]
     EdiError(ReconstructionError),
@@ -113,6 +115,7 @@ pub enum SourceError {
     VisionError(String),
 }
 
+#[cfg(feature = "open-cv")]
 impl From<opencv::Error> for SourceError {
     fn from(value: opencv::Error) -> Self {
         SourceError::OpencvError(value)
@@ -331,7 +334,6 @@ pub struct Video<W: Write> {
     pub state: VideoState,
     pub(crate) event_pixel_trees: Array3<PixelArena>,
 
-    // pub instan: Mat,
     /// The current instantaneous display frame
     pub display_frame: Frame,
 
@@ -923,7 +925,6 @@ impl<W: Write + 'static> Video<W> {
             }
 
             // Convert the running intensities to a Mat
-
             let cv_type = match self.state.running_intensities.shape()[2] {
                 1 => opencv::core::CV_8UC1,
                 _ => opencv::core::CV_8UC3,
@@ -1003,7 +1004,7 @@ impl<W: Write + 'static> Video<W> {
                         coord.y,
                         &mut self.display_frame,
                         self.state.plane.c() != 1,
-                    )?;
+                    );
                 }
             }
         }
@@ -1016,7 +1017,7 @@ impl<W: Write + 'static> Video<W> {
                         coord.y,
                         &mut self.display_frame,
                         self.state.plane.c() != 1,
-                    )?;
+                    );
                 }
                 let radius = self.state.feature_c_radius as i32;
                 for r in (coord.y() as i32 - radius).max(0)
@@ -1156,6 +1157,7 @@ pub fn integrate_for_px(
     grew_buffer
 }
 
+#[cfg(feature = "open-cv")]
 /// If `video.show_display`, shows the given [`Mat`] in an `OpenCV` window
 /// with the given name.
 ///
@@ -1174,6 +1176,7 @@ pub fn show_display<W: Write>(
     Ok(())
 }
 
+#[cfg(feature = "open-cv")]
 /// Shows the given [`Mat`] in an `OpenCV` window with the given name.
 /// This function is the same as [`show_display`], except that it does not check
 /// [`Video::show_display`].

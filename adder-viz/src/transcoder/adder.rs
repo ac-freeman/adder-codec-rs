@@ -1,6 +1,8 @@
 use std::error::Error;
 
 use adder_codec_core::DeltaT;
+
+#[cfg(feature = "open-cv")]
 use adder_codec_rs::transcoder::source::davis::Davis;
 use adder_codec_rs::transcoder::source::framed::Framed;
 use bevy::prelude::{dbg, Image};
@@ -9,8 +11,10 @@ use std::fs::File;
 use std::io::BufWriter;
 use std::path::{Path, PathBuf};
 
+#[cfg(feature = "open-cv")]
 use adder_codec_rs::transcoder::source::davis::TranscoderMode;
 
+#[cfg(feature = "open-cv")]
 use adder_codec_rs::davis_edi_rs::util::reconstructor::Reconstructor;
 
 use crate::transcoder::ui::{ParamsUiState, TranscoderState};
@@ -18,11 +22,13 @@ use adder_codec_core::SourceCamera::{DavisU8, FramedU8};
 use adder_codec_rs::transcoder::source::video::VideoBuilder;
 use adder_codec_rs::transcoder::source::DEFAULT_CRF_QUALITY;
 use bevy_egui::egui::{Color32, RichText};
+#[cfg(feature = "open-cv")]
 use opencv::Result;
 
 #[derive(Default)]
 pub struct AdderTranscoder {
     pub(crate) framed_source: Option<Framed<BufWriter<File>>>,
+    #[cfg(feature = "open-cv")]
     pub(crate) davis_source: Option<Davis<BufWriter<File>>>,
     pub(crate) live_image: Image,
 }
@@ -102,6 +108,7 @@ impl AdderTranscoder {
                         ui_state.delta_t_ref_max = 255.0;
                         Ok(AdderTranscoder {
                             framed_source: Some(framed),
+                            #[cfg(feature = "open-cv")]
                             davis_source: None,
                             live_image: Default::default(),
                         })
@@ -111,6 +118,7 @@ impl AdderTranscoder {
                         // }
                     }
 
+                    #[cfg(feature = "open-cv")]
                     Some(ext) if ext == "aedat4" || ext == "sock" => {
                         let events_only = match &ui_state.davis_mode_radio_state {
                             TranscoderMode::Framed => false,

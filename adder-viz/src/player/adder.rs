@@ -5,15 +5,20 @@ use adder_codec_core::*;
 use adder_codec_rs::framer::driver::FramerMode::INSTANTANEOUS;
 use adder_codec_rs::framer::driver::{FrameSequence, Framer, FramerBuilder};
 use adder_codec_rs::framer::scale_intensity::event_to_intensity;
-use adder_codec_rs::transcoder::source::video::{show_display_force, FramedViewMode};
+
+#[cfg(feature = "open-cv")]
+use adder_codec_rs::transcoder::source::video::show_display_force;
+use adder_codec_rs::transcoder::source::video::FramedViewMode;
 use bevy::prelude::Image;
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
 use ndarray::Array;
 use ndarray::Array3;
+#[cfg(feature = "open-cv")]
 use opencv::core::{
     create_continuous, KeyPoint, Mat, MatTraitConstManual, MatTraitManual, Scalar, Vector, CV_8UC1,
     CV_8UC3,
 };
+#[cfg(feature = "open-cv")]
 use opencv::imgproc;
 use std::error::Error;
 use std::fmt;
@@ -254,6 +259,7 @@ impl AdderPlayer {
 
         let mut display_mat = &mut self.display_mat;
 
+        #[cfg(feature = "open-cv")]
         if self.view_mode == FramedViewMode::DeltaT {
             opencv::core::normalize(
                 &display_mat.clone(),
@@ -482,6 +488,7 @@ impl AdderPlayer {
                 }
             }
 
+            #[cfg(feature = "open-cv")]
             if self.view_mode == FramedViewMode::DeltaT {
                 opencv::core::normalize(
                     &display_mat.clone(),

@@ -9,6 +9,8 @@ pub mod stream_migration;
 pub mod cv;
 
 pub mod cv_applications;
+
+#[cfg(feature = "feature-logging")]
 pub mod logging;
 /// A module for visualizing streams
 pub mod viz;

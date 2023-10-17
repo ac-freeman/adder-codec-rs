@@ -16,8 +16,10 @@ categories = ["multimedia::encoding", "multimedia::video", "science"]
 default-run = "adder-viz"
 
 [features]
-feature-logging = ["adder-codec-rs/feature-logging"]
-feature-logging-nonmaxsuppression = ["adder-codec-rs/feature-logging-nonmaxsuppression"]
+default = ["adder-codec-rs/transcoder"]
+feature-logging = ["open-cv", "adder-codec-rs/feature-logging"]
+feature-logging-nonmaxsuppression = ["open-cv", "adder-codec-rs/feature-logging-nonmaxsuppression"]
+open-cv = ["opencv"]
 
 [dependencies]
 adder-codec-core = { version = "0.2.1", path = "../adder-codec-core" }
@@ -43,4 +45,4 @@ version = "0.84.5"
 package = 'opencv'
 default-features = false
 features = ['videoio', 'imgproc', 'highgui', 'clang-runtime']
-optional = false
+optional = true

@@ -8,9 +8,7 @@ use adder_codec_core::{DeltaT, Event, PlaneSize, SourceCamera, TimeMode};
 use crate::utils::viz::ShowFeatureMode;
 use adder_codec_core::codec::{EncoderOptions, EncoderType};
 use ndarray::{Array, Axis};
-use opencv::core::{Mat, Size};
-use opencv::videoio::{VideoCapture, CAP_PROP_FPS, CAP_PROP_FRAME_COUNT, CAP_PROP_POS_FRAMES};
-use opencv::{imgproc, prelude::*, videoio, Result};
+
 use rayon::ThreadPool;
 use std::io::Write;
 use std::mem::swap;

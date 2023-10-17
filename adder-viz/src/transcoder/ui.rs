@@ -1,5 +1,6 @@
 use crate::transcoder::adder::{replace_adder_transcoder, AdderTranscoder};
 use crate::{slider_pm, Images};
+#[cfg(feature = "open-cv")]
 use adder_codec_rs::transcoder::source::davis::TranscoderMode;
 use adder_codec_rs::transcoder::source::video::{FramedViewMode, Source, SourceError};
 use bevy::ecs::system::Resource;
@@ -7,8 +8,6 @@ use bevy::prelude::{dbg, Assets, Commands, Image, Res, ResMut, Time};
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
 use bevy_egui::egui;
 use bevy_egui::egui::{RichText, Ui};
-use opencv::core::{Mat, MatTraitConstManual};
-use opencv::imgproc;
 use rayon::current_num_threads;
 use std::collections::VecDeque;
 use std::error::Error;
@@ -17,6 +16,7 @@ use crate::utils::PlotY;
 use adder_codec_core::codec::{EncoderOptions, EncoderType, EventDrop, EventOrder};
 use adder_codec_core::PlaneSize;
 use adder_codec_core::TimeMode;
+#[cfg(feature = "open-cv")]
 use adder_codec_rs::transcoder::source::davis::TranscoderMode::RawDvs;
 use adder_codec_rs::transcoder::source::{CRF, DEFAULT_CRF_QUALITY};
 use adder_codec_rs::utils::viz::ShowFeatureMode;
@@ -42,6 +42,7 @@ pub struct ParamsUiState {
     pub(crate) color: bool,
     show_original: bool,
     view_mode_radio_state: FramedViewMode,
+    #[cfg(feature = "open-cv")]
     pub(crate) davis_mode_radio_state: TranscoderMode,
     pub(crate) davis_output_fps: f64,
     davis_output_fps_slider: f64,
@@ -86,6 +87,7 @@ impl Default for ParamsUiState {
             color: true,
             show_original: true,
             view_mode_radio_state: FramedViewMode::Intensity,
+            #[cfg(feature = "open-cv")]
             davis_mode_radio_state: TranscoderMode::RawDavis,
             davis_output_fps: 500.0,
             davis_output_fps_slider: 500.0,
@@ -387,43 +389,49 @@ impl TranscoderState {
 
         let source: &mut dyn Source<BufWriter<File>> = {
             match &mut self.transcoder.framed_source {
-                None => match &mut self.transcoder.davis_source {
-                    None => {
-                        return;
-                    }
-                    Some(source) => {
-                        if source.mode != self.ui_state.davis_mode_radio_state
-                            || source.get_reconstructor().as_ref().unwrap().output_fps
-                                != self.ui_state.davis_output_fps
-                            || ((source.get_video_ref().get_time_mode() != self.ui_state.time_mode
-                                || source.get_video_ref().encoder_type
-                                    != self.ui_state.encoder_type
-                                || source.get_video_ref().get_encoder_options()
-                                    != self.ui_state.encoder_options)
-                                && self.ui_info_state.output_path.is_some())
-                        {
-                            if self.ui_state.davis_mode_radio_state == RawDvs {
-                                // self.ui_state.davis_output_fps = 1000000.0;
-                                // self.ui_state.davis_output_fps_slider = 1000000.0;
-                                self.ui_state.optimize_c = false;
-                            }
-                            replace_adder_transcoder(
-                                self,
-                                self.ui_info_state.input_path_0.clone(),
-                                self.ui_info_state.input_path_1.clone(),
-                                self.ui_info_state.output_path.clone(),
-                                0,
-                            );
+                None => {
+                    #[cfg(feature = "open-cv")]
+                    match &mut self.transcoder.davis_source {
+                        None => {
                             return;
                         }
-                        let tmp = source.get_reconstructor_mut().as_mut().unwrap();
-                        tmp.set_optimize_c(
-                            self.ui_state.optimize_c,
-                            self.ui_state.optimize_c_frequency,
-                        );
-                        source
+
+                        Some(source) => {
+                            if source.mode != self.ui_state.davis_mode_radio_state
+                                || source.get_reconstructor().as_ref().unwrap().output_fps
+                                    != self.ui_state.davis_output_fps
+                                || ((source.get_video_ref().get_time_mode()
+                                    != self.ui_state.time_mode
+                                    || source.get_video_ref().encoder_type
+                                        != self.ui_state.encoder_type
+                                    || source.get_video_ref().get_encoder_options()
+                                        != self.ui_state.encoder_options)
+                                    && self.ui_info_state.output_path.is_some())
+                            {
+                                if self.ui_state.davis_mode_radio_state == RawDvs {
+                                    // self.ui_state.davis_output_fps = 1000000.0;
+                                    // self.ui_state.davis_output_fps_slider = 1000000.0;
+                                    self.ui_state.optimize_c = false;
+                                }
+                                replace_adder_transcoder(
+                                    self,
+                                    self.ui_info_state.input_path_0.clone(),
+                                    self.ui_info_state.input_path_1.clone(),
+                                    self.ui_info_state.output_path.clone(),
+                                    0,
+                                );
+                                return;
+                            }
+                            let tmp = source.get_reconstructor_mut().as_mut().unwrap();
+                            tmp.set_optimize_c(
+                                self.ui_state.optimize_c,
+                                self.ui_state.optimize_c_frequency,
+                            );
+                            source
+                        }
                     }
-                },
+                    return;
+                }
                 Some(source) => {
                     if source.scale != self.ui_state.scale
                         || source.get_ref_time() != self.ui_state.delta_t_ref as u32
@@ -508,15 +516,20 @@ impl TranscoderState {
 
         let source: &mut dyn Source<BufWriter<File>> = {
             match &mut self.transcoder.framed_source {
-                None => match &mut self.transcoder.davis_source {
-                    None => {
-                        return Ok(());
+                None => {
+                    #[cfg(feature = "open-cv")]
+                    match &mut self.transcoder.davis_source {
+                        None => {
+                            return Ok(());
+                        }
+                        Some(source) => {
+                            ui_info_state.davis_latency = source.get_latency();
+                            Ok(source)
+                        }
                     }
-                    Some(source) => {
-                        ui_info_state.davis_latency = source.get_latency();
-                        source
-                    }
-                },
+                    #[cfg(not(feature = "open-cv"))]
+                    return Ok(());
+                }
                 Some(source) => {
                     is_framed = true;
                     source
@@ -656,7 +669,12 @@ fn side_panel_grid_contents(
     ui_state: &mut ParamsUiState,
 ) {
     let dtr_max = ui_state.delta_t_ref_max;
-    let enabled = transcoder.davis_source.is_none();
+
+    let mut enabled = true;
+    #[cfg(feature = "open-cv")]
+    {
+        enabled = transcoder.davis_source.is_none();
+    }
     ui.add_enabled(enabled, egui::Label::new("Δt_ref:"));
     slider_pm(
         enabled,
@@ -852,64 +870,67 @@ fn side_panel_grid_contents(
     });
     ui.end_row();
 
-    ui.label("DAVIS mode:");
-    ui.add_enabled_ui(!enabled, |ui| {
-        ui.horizontal(|ui| {
-            ui.radio_value(
-                &mut ui_state.davis_mode_radio_state,
-                TranscoderMode::Framed,
-                "Framed recon",
-            );
-            ui.radio_value(
-                &mut ui_state.davis_mode_radio_state,
-                TranscoderMode::RawDavis,
-                "Raw DAVIS",
-            );
-            ui.radio_value(
-                &mut ui_state.davis_mode_radio_state,
-                TranscoderMode::RawDvs,
-                "Raw DVS",
-            );
+    #[cfg(feature = "open-cv")]
+    {
+        ui.label("DAVIS mode:");
+        ui.add_enabled_ui(!enabled, |ui| {
+            ui.horizontal(|ui| {
+                ui.radio_value(
+                    &mut ui_state.davis_mode_radio_state,
+                    TranscoderMode::Framed,
+                    "Framed recon",
+                );
+                ui.radio_value(
+                    &mut ui_state.davis_mode_radio_state,
+                    TranscoderMode::RawDavis,
+                    "Raw DAVIS",
+                );
+                ui.radio_value(
+                    &mut ui_state.davis_mode_radio_state,
+                    TranscoderMode::RawDvs,
+                    "Raw DVS",
+                );
+            });
         });
-    });
-    ui.end_row();
+        ui.end_row();
 
-    ui.label("DAVIS deblurred FPS:");
+        ui.label("DAVIS deblurred FPS:");
 
-    slider_pm(
-        !enabled,
-        true,
-        ui,
-        &mut ui_state.davis_output_fps,
-        &mut ui_state.davis_output_fps_slider,
-        30.0..=1000000.0,
-        vec![
-            50.0, 100.0, 250.0, 500.0, 1_000.0, 2_500.0, 5_000.0, 7_500.0, 10_000.0, 1000000.0,
-        ],
-        50.0,
-    );
-    ui.end_row();
+        slider_pm(
+            !enabled,
+            true,
+            ui,
+            &mut ui_state.davis_output_fps,
+            &mut ui_state.davis_output_fps_slider,
+            30.0..=1000000.0,
+            vec![
+                50.0, 100.0, 250.0, 500.0, 1_000.0, 2_500.0, 5_000.0, 7_500.0, 10_000.0, 1000000.0,
+            ],
+            50.0,
+        );
+        ui.end_row();
 
-    let enable_optimize = !enabled && ui_state.davis_mode_radio_state != TranscoderMode::RawDvs;
-    ui.label("Optimize:");
-    ui.add_enabled(
-        enable_optimize,
-        egui::Checkbox::new(&mut ui_state.optimize_c, "Optimize θ?"),
-    );
-    ui.end_row();
+        let enable_optimize = !enabled && ui_state.davis_mode_radio_state != TranscoderMode::RawDvs;
+        ui.label("Optimize:");
+        ui.add_enabled(
+            enable_optimize,
+            egui::Checkbox::new(&mut ui_state.optimize_c, "Optimize θ?"),
+        );
+        ui.end_row();
 
-    ui.label("Optimize frequency:");
-    slider_pm(
-        enable_optimize,
-        true,
-        ui,
-        &mut ui_state.optimize_c_frequency,
-        &mut ui_state.optimize_c_frequency_slider,
-        1..=250,
-        vec![10, 25, 50, 100],
-        1,
-    );
-    ui.end_row();
+        ui.label("Optimize frequency:");
+        slider_pm(
+            enable_optimize,
+            true,
+            ui,
+            &mut ui_state.optimize_c_frequency,
+            &mut ui_state.optimize_c_frequency_slider,
+            1..=250,
+            vec![10, 25, 50, 100],
+            1,
+        );
+        ui.end_row();
+    }
 
     let enable_encoder_options = ui_state.encoder_type != EncoderType::Empty;
 
