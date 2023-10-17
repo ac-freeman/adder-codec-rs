@@ -925,35 +925,31 @@ impl<W: Write + 'static> Video<W> {
         let mut new_features: Vec<Vec<Coord>> =
             vec![Vec::with_capacity(self.state.features[0].len()); self.state.features.len()];
 
-        let mut visited_px = vec![HashSet::new(); self.state.features.len()];
-
         let start = Instant::now();
 
         big_buffer
             .par_iter()
             .zip(self.state.features.par_iter_mut())
             .zip(new_features.par_iter_mut())
-            .zip(visited_px.par_iter_mut())
-            .for_each(|(((events, feature_set), new_features), visited_px)| {
+            .for_each(|((events, feature_set), new_features)| {
                 for (e1, e2) in events.iter().circular_tuple_windows() {
                     if e1.coord.c == None || e1.coord.c == Some(0) {
-                        if !cfg!(feature = "feature-logging-nonmaxsuppression")
-                            || e2.delta_t != e1.delta_t
+                        if e1.coord != e2.coord
+                            && (!cfg!(feature = "feature-logging-nonmaxsuppression")
+                                || e2.delta_t != e1.delta_t)
                         {
-                            if visited_px.insert(e1.coord) {
-                                if is_feature(
-                                    e1.coord,
-                                    self.state.plane,
-                                    &self.state.running_intensities,
-                                )
-                                .unwrap()
-                                {
-                                    if feature_set.insert(e1.coord) {
-                                        new_features.push(e1.coord);
-                                    };
-                                } else {
-                                    feature_set.remove(&e1.coord);
-                                }
+                            if is_feature(
+                                e1.coord,
+                                self.state.plane,
+                                &self.state.running_intensities,
+                            )
+                            .unwrap()
+                            {
+                                if feature_set.insert(e1.coord) {
+                                    new_features.push(e1.coord);
+                                };
+                            } else {
+                                feature_set.remove(&e1.coord);
                             }
                         }
                     }
