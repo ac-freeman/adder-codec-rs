@@ -4,7 +4,7 @@ use crate::{slider_pm, Images};
 use adder_codec_rs::transcoder::source::davis::TranscoderMode;
 use adder_codec_rs::transcoder::source::video::{FramedViewMode, Source, SourceError};
 use bevy::ecs::system::Resource;
-use bevy::prelude::{dbg, Assets, Commands, Image, Res, ResMut, Time};
+use bevy::prelude::{Assets, Commands, Image, Res, ResMut, Time};
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
 use bevy_egui::egui;
 use bevy_egui::egui::{RichText, Ui};
@@ -19,7 +19,7 @@ use adder_codec_core::TimeMode;
 #[cfg(feature = "open-cv")]
 use adder_codec_rs::transcoder::source::davis::TranscoderMode::RawDvs;
 use adder_codec_rs::transcoder::source::{CRF, DEFAULT_CRF_QUALITY};
-use adder_codec_rs::utils::cv::calculate_quality_metrics;
+use adder_codec_rs::utils::cv::{calculate_quality_metrics, QualityMetrics};
 use adder_codec_rs::utils::viz::ShowFeatureMode;
 use bevy_egui::egui::plot::Corner::LeftTop;
 use bevy_egui::egui::plot::Legend;
@@ -71,6 +71,9 @@ pub struct ParamsUiState {
     adder_tresh_max_slider: u8,
     pub(crate) adder_tresh_baseline: u8,
     adder_tresh_baseline_slider: u8,
+    metric_mse: bool,
+    metric_psnr: bool,
+    metric_ssim: bool,
 }
 
 impl Default for ParamsUiState {
@@ -116,6 +119,9 @@ impl Default for ParamsUiState {
             adder_tresh_max_slider: 10,
             adder_tresh_baseline: 10,
             adder_tresh_baseline_slider: 10,
+            metric_mse: true,
+            metric_psnr: true,
+            metric_ssim: false,
         }
     }
 }
@@ -139,6 +145,7 @@ pub struct InfoUiState {
     pub(crate) plot_points_raw_source_bitrate_y: PlotY,
     pub(crate) plot_points_psnr_y: PlotY,
     pub(crate) plot_points_mse_y: PlotY,
+    pub(crate) plot_points_ssim_y: PlotY,
     plot_points_latency_y: PlotY,
     pub view_mode_radio_state: FramedViewMode, // TODO: Move to different struct
 }
@@ -186,6 +193,9 @@ impl Default for InfoUiState {
                 points: plot_points.clone(),
             },
             plot_points_mse_y: PlotY {
+                points: plot_points.clone(),
+            },
+            plot_points_ssim_y: PlotY {
                 points: plot_points.clone(),
             },
             plot_points_latency_y: PlotY {
@@ -368,6 +378,7 @@ impl TranscoderState {
             .get_plotline("PSNR dB");
 
         let line_mse = self.ui_info_state.plot_points_mse_y.get_plotline("MSE");
+        let line_ssim = self.ui_info_state.plot_points_ssim_y.get_plotline("SSIM");
 
         let line_latency = self
             .ui_info_state
@@ -387,7 +398,8 @@ impl TranscoderState {
                         .plot_points_psnr_y
                         .get_plotline("PSNR dB"),
                 );
-                plot_ui.line(self.ui_info_state.plot_points_mses _y.get_plotline("MSE"));
+                plot_ui.line(self.ui_info_state.plot_points_mse_y.get_plotline("MSE"));
+                plot_ui.line(self.ui_info_state.plot_points_ssim_y.get_plotline("SSIM"));
             });
         Plot::new("bitrate_plot")
             .height(100.0)
@@ -407,6 +419,7 @@ impl TranscoderState {
                 );
                 plot_ui.line(line_psnr);
                 plot_ui.line(line_mse);
+                plot_ui.line(line_ssim);
             });
     }
 
@@ -599,11 +612,26 @@ impl TranscoderState {
 
         let mut image_mat = source.get_video_ref().display_frame.clone();
 
-        let metrics = calculate_quality_metrics(source.get_input(), &mut image_mat);
-        dbg!(&metrics);
+        #[rustfmt::skip]
+        let metrics = calculate_quality_metrics(
+            source.get_input(),
+            &mut image_mat,
+            QualityMetrics {
+                mse: if self.ui_state.metric_mse {Some(0.0)} else {None},
+                psnr: if self.ui_state.metric_psnr {Some(0.0)} else {None},
+                ssim: if self.ui_state.metric_ssim {Some(0.0)} else {None},
+            },
+        );
         let metrics = metrics?;
-        self.ui_info_state.plot_points_psnr_y.update(metrics.psnr);
-        self.ui_info_state.plot_points_mse_y.update(metrics.mse);
+        self.ui_info_state
+            .plot_points_psnr_y
+            .update(metrics.psnr.unwrap_or(0.0));
+        self.ui_info_state
+            .plot_points_mse_y
+            .update(metrics.mse.unwrap_or(0.0));
+        self.ui_info_state
+            .plot_points_ssim_y
+            .update(metrics.ssim.unwrap_or(0.0));
 
         let color = image_mat.shape()[2] == 3;
 
@@ -1080,6 +1108,17 @@ fn side_panel_grid_contents(
                 );
             });
         });
+    });
+    ui.end_row();
+
+    ui.label("Metrics:");
+    ui.vertical(|ui| {
+        ui.add_enabled(true, egui::Checkbox::new(&mut ui_state.metric_mse, "MSE"));
+        ui.add_enabled(true, egui::Checkbox::new(&mut ui_state.metric_psnr, "PSNR"));
+        ui.add_enabled(
+            true,
+            egui::Checkbox::new(&mut ui_state.metric_ssim, "SSIM (Warning: slow!)"),
+        );
     });
     ui.end_row();
 }
