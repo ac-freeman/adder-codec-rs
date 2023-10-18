@@ -1016,7 +1016,7 @@ impl<W: Write + 'static> Video<W> {
                         ..(coord.x() as i32 + radius).min(self.state.plane.w() as i32)
                     {
                         self.event_pixel_trees[[r as usize, c as usize, coord.c_usize()]]
-                            .c_thresh = self.state.c_thresh_baseline;
+                            .c_thresh = 0;
                     }
                 }
             }
@@ -1039,6 +1039,7 @@ impl<W: Write + 'static> Video<W> {
     /// Update the CRF value and set the baseline c for all pixels
     pub(crate) fn update_crf(&mut self, crf: u8, update_time_params: bool) {
         self.state.update_crf(crf, update_time_params);
+        dbg!("Updating crf");
 
         for px in self.event_pixel_trees.iter_mut() {
             px.c_thresh = self.state.c_thresh_baseline;
@@ -1062,6 +1063,7 @@ impl<W: Write + 'static> Video<W> {
         c_increase_velocity: u8,
         feature_c_radius_denom: f32,
     ) {
+        dbg!("Updating manually");
         self.state.update_quality_manual(
             c_thresh_baseline,
             c_thresh_max,
@@ -1113,6 +1115,11 @@ pub fn integrate_for_px(
 
     *base_val = px.base_val;
 
+    if px.coord.x == 200 && px.coord.y == 200 && px.coord.c.unwrap_or(0) == 0 {
+        dbg!(px.c_thresh);
+        dbg!(px.c_increase_counter);
+        dbg!(state.c_thresh_max);
+    }
     if *frame_val < base_val.saturating_sub(px.c_thresh)
         || *frame_val > base_val.saturating_add(px.c_thresh)
     {

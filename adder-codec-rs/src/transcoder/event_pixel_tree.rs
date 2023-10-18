@@ -327,7 +327,7 @@ impl PixelArena {
             unsafe { self.arena[0].state.delta_t.to_int_unchecked::<DeltaT>() } >= dtm;
 
         if self.c_thresh < c_thresh_max {
-            if self.c_increase_counter == c_increase_velocity - 1 {
+            if self.c_increase_counter >= c_increase_velocity - 1 {
                 // Increment the threshold
                 self.c_thresh += 1;
                 self.c_increase_counter = 0;

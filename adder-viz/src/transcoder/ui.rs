@@ -506,7 +506,10 @@ impl TranscoderState {
             }
         };
 
-        if self.ui_state.auto_quality {
+        // TODO: Refactor all this garbage code
+        if self.ui_state.auto_quality
+            && self.ui_state.crf != source.get_video_ref().state.crf_quality
+        {
             source.crf(self.ui_state.crf);
 
             let video = source.get_video_ref();
@@ -521,7 +524,15 @@ impl TranscoderState {
             self.ui_state.adder_tresh_velocity_slider = self.ui_state.adder_tresh_velocity;
             self.ui_state.feature_radius = video.state.feature_c_radius as f32;
             self.ui_state.feature_radius_slider = self.ui_state.feature_radius;
-        } else {
+        } else if self.ui_state.adder_tresh_baseline
+            != source.get_video_ref().state.c_thresh_baseline
+            || self.ui_state.adder_tresh_max != source.get_video_ref().state.c_thresh_max as u8
+            || self.ui_state.delta_t_max_mult
+                != source.get_video_ref().state.delta_t_max / source.get_video_ref().state.ref_time
+            || self.ui_state.adder_tresh_velocity
+                != source.get_video_ref().state.c_increase_velocity
+            || self.ui_state.feature_radius as u16 != source.get_video_ref().state.feature_c_radius
+        {
             let video = source.get_video_mut();
             video.update_quality_manual(
                 self.ui_state.adder_tresh_baseline,
