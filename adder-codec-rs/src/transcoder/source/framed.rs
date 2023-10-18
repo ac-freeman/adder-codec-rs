@@ -258,6 +258,7 @@ impl<W: Write + 'static> VideoBuilder<W> for Framed<W> {
 
 fn handle_color(mut input: Frame, color: bool) -> Result<Frame, SourceError> {
     if !color {
+        // Map the three color channels to a single grayscale channel
         input
             .exact_chunks_mut((1, 1, 3))
             .into_iter()
@@ -273,7 +274,9 @@ fn handle_color(mut input: Frame, color: bool) -> Result<Frame, SourceError> {
                 // );
             });
 
-        // Map the three color channels to a single grayscale channel
+        // Remove the color channels
+        input.collapse_axis(Axis(2), 0);
+        dbg!(input.shape());
     }
     Ok(input)
 }

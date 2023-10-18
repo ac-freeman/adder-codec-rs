@@ -626,13 +626,6 @@ impl TranscoderState {
         if is_framed && self.ui_state.show_original {
             let mut image_mat = source.get_input().clone();
 
-            if image_mat.shape()[2] != source.get_video_ref().state.running_intensities.shape()[2] {
-                // Assume that the original is in color, and the recon is in grayscale
-                // remove 2nd and 3rd channels
-                image_mat.collapse_axis(Axis(2), 0);
-                dbg!(image_mat.shape());
-            }
-
             let psnr = calculate_psnr(
                 &mut image_mat,
                 &source.get_video_ref().state.running_intensities,

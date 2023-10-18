@@ -139,8 +139,9 @@ pub fn calculate_psnr(
             error_sum += (*a as f64 - *b as f64).powi(2);
         });
     let mse = error_sum / (original.len() as f64);
+    dbg!(mse);
 
-    Ok(10.0 * (255.0 * 255.0) / mse.log10())
+    Ok(20.0 * (255.0_f64).log10() - 10.0 * mse.log10())
 }
 
 // fn calculate_mse_for(original: &Array3<u8>, reconstructed: &Array3<u8>) -> _ {

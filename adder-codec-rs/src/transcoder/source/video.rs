@@ -659,19 +659,8 @@ impl<W: Write + 'static> Video<W> {
         time_spanned: f32,
         view_interval: u32,
     ) -> Result<Vec<Vec<Event>>, SourceError> {
-        let color = self.state.plane.c() != 1;
-        let color_input = matrix.shape()[2] == 3;
-
-        let frame_arr = match matrix.as_slice() {
-            None => {
-                return Err(SourceError::VisionError(
-                    "Could not convert frame to slice".to_string(),
-                ))
-            }
-            Some(a) => a,
-        };
         if self.state.in_interval_count == 0 {
-            self.set_initial_d(frame_arr);
+            self.set_initial_d(&matrix);
         }
 
         self.state.in_interval_count += 1;
@@ -686,25 +675,21 @@ impl<W: Write + 'static> Video<W> {
             .event_pixel_trees
             .axis_chunks_iter_mut(Axis(0), self.state.chunk_rows)
             .into_par_iter()
-            .enumerate()
-            .map(|(chunk_idx, mut chunk)| {
+            .zip(
+                matrix
+                    .axis_chunks_iter(Axis(0), self.state.chunk_rows)
+                    .into_par_iter(),
+            )
+            .map(|(mut px_chunk, matrix_chunk)| {
                 let mut buffer: Vec<Event> = Vec::with_capacity(px_per_chunk);
                 let bump = Bump::new();
                 let base_val = bump.alloc(0);
-                let px_idx = bump.alloc(0);
                 let frame_val = bump.alloc(0);
                 let frame_val_intensity32 = bump.alloc(0.0);
 
-                for (chunk_px_idx, px) in chunk.iter_mut().enumerate() {
-                    *px_idx = chunk_px_idx + px_per_chunk * chunk_idx;
-
-                    if !color && color_input {
-                        *px_idx *= 3;
-                    }
-
-                    *frame_val_intensity32 = (f64::from(frame_arr[*px_idx])
-                        * self.state.ref_time_divisor)
-                        as Intensity32;
+                for (px, input) in px_chunk.iter_mut().zip(matrix_chunk.iter()) {
+                    *frame_val_intensity32 =
+                        (f64::from(*input) * self.state.ref_time_divisor) as Intensity32;
                     *frame_val = *frame_val_intensity32 as u8;
 
                     integrate_for_px(
@@ -791,16 +776,22 @@ impl<W: Write + 'static> Video<W> {
         Ok(big_buffer)
     }
 
-    fn set_initial_d(&mut self, frame_arr: &[u8]) {
-        self.event_pixel_trees.par_map_inplace(|px| {
-            let idx = px.coord.y as usize * self.state.plane.area_wc()
-                + px.coord.x as usize * self.state.plane.c_usize()
-                + px.coord.c.unwrap_or(0) as usize;
-            let intensity = frame_arr[idx];
-            let d_start = f32::from(intensity).log2().floor() as D;
-            px.arena[0].set_d(d_start);
-            px.base_val = intensity;
-        });
+    fn set_initial_d(&mut self, frame: &Frame) {
+        self.event_pixel_trees
+            .axis_chunks_iter_mut(Axis(0), self.state.chunk_rows)
+            .into_par_iter()
+            .zip(
+                frame
+                    .axis_chunks_iter(Axis(0), self.state.chunk_rows)
+                    .into_par_iter(),
+            )
+            .for_each(|(mut px, frame_chunk)| {
+                for (px, frame_val) in px.iter_mut().zip(frame_chunk.iter()) {
+                    let d_start = f32::from(*frame_val).log2().floor() as D;
+                    px.arena[0].set_d(d_start);
+                    px.base_val = *frame_val;
+                }
+            });
     }
 
     /// Get `ref_time`
