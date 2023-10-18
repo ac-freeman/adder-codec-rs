@@ -1017,7 +1017,7 @@ impl<W: Write + 'static> Video<W> {
                     {
                         for c in 0..self.state.plane.c() {
                             self.event_pixel_trees[[row as usize, col as usize, c as usize]]
-                                .c_thresh = 0;
+                                .c_thresh = self.state.c_thresh_baseline;
                         }
                     }
                 }

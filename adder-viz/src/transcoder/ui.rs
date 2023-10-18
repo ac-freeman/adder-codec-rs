@@ -376,7 +376,7 @@ impl TranscoderState {
             .plot_points_psnr_y
             .get_plotline("PSNR dB");
 
-        let line_mse = self.ui_info_state.plot_points_mse_y.get_plotline("MSE");
+        let line_mse = self.ui_info_state.plot_points_mse_y.get_plotline("MSE/10");
         let line_ssim = self.ui_info_state.plot_points_ssim_y.get_plotline("SSIM");
 
         let line_latency = self
@@ -397,7 +397,7 @@ impl TranscoderState {
                         .plot_points_psnr_y
                         .get_plotline("PSNR dB"),
                 );
-                plot_ui.line(self.ui_info_state.plot_points_mse_y.get_plotline("MSE"));
+                plot_ui.line(self.ui_info_state.plot_points_mse_y.get_plotline("MSE/10"));
                 plot_ui.line(self.ui_info_state.plot_points_ssim_y.get_plotline("SSIM"));
             });
         Plot::new("bitrate_plot")
@@ -634,7 +634,7 @@ impl TranscoderState {
                 .update(metrics.psnr.unwrap_or(0.0));
             self.ui_info_state
                 .plot_points_mse_y
-                .update(metrics.mse.unwrap_or(0.0));
+                .update(metrics.mse.unwrap_or(0.0) / 10.0);
             self.ui_info_state
                 .plot_points_ssim_y
                 .update(metrics.ssim.unwrap_or(0.0));
