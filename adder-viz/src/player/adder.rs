@@ -276,10 +276,10 @@ impl AdderPlayer {
             {
                 self.current_frame += 1;
 
-                let mut image_bgra = if color {
+                let image_bgra = if color {
                     // Swap the red and blue channels
                     let temp = display_mat.index_axis_mut(Axis(2), 0).to_owned();
-                    let mut blue_channel = display_mat.index_axis_mut(Axis(2), 2).to_owned();
+                    let blue_channel = display_mat.index_axis_mut(Axis(2), 2).to_owned();
                     display_mat.index_axis_mut(Axis(2), 0).assign(&blue_channel);
                     // Swap the channels by copying
                     display_mat.index_axis_mut(Axis(2), 2).assign(&temp);
@@ -437,51 +437,49 @@ impl AdderPlayer {
                             ) {
                                 // Reset the pixels in the cross accordingly...
                                 let radius = 2;
-                                unsafe {
-                                    if color {
-                                        for i in -radius..=radius {
-                                            for c in 0..3 as usize {
-                                                *display_mat.uget_mut((
-                                                    (event.coord.y as i32 + i) as usize,
-                                                    (event.coord.x as i32) as usize,
-                                                    c,
-                                                )) = *self.running_intensities.uget((
-                                                    (event.coord.y as i32 + i) as usize,
-                                                    (event.coord.x as i32) as usize,
-                                                    c,
-                                                ));
-                                                *display_mat.uget_mut((
-                                                    (event.coord.y as i32) as usize,
-                                                    (event.coord.x as i32 + i) as usize,
-                                                    c,
-                                                )) = *self.running_intensities.uget((
-                                                    (event.coord.y as i32) as usize,
-                                                    (event.coord.x as i32 + i) as usize,
-                                                    c,
-                                                ));
-                                            }
-                                        }
-                                    } else {
-                                        for i in -radius..=radius {
+                                if color {
+                                    for i in -radius..=radius {
+                                        for c in 0..3 as usize {
                                             *display_mat.uget_mut((
                                                 (event.coord.y as i32 + i) as usize,
                                                 (event.coord.x as i32) as usize,
-                                                0,
+                                                c,
                                             )) = *self.running_intensities.uget((
                                                 (event.coord.y as i32 + i) as usize,
                                                 (event.coord.x as i32) as usize,
-                                                0,
+                                                c,
                                             ));
                                             *display_mat.uget_mut((
                                                 (event.coord.y as i32) as usize,
                                                 (event.coord.x as i32 + i) as usize,
-                                                0,
+                                                c,
                                             )) = *self.running_intensities.uget((
                                                 (event.coord.y as i32) as usize,
                                                 (event.coord.x as i32 + i) as usize,
-                                                0,
+                                                c,
                                             ));
                                         }
+                                    }
+                                } else {
+                                    for i in -radius..=radius {
+                                        *display_mat.uget_mut((
+                                            (event.coord.y as i32 + i) as usize,
+                                            (event.coord.x as i32) as usize,
+                                            0,
+                                        )) = *self.running_intensities.uget((
+                                            (event.coord.y as i32 + i) as usize,
+                                            (event.coord.x as i32) as usize,
+                                            0,
+                                        ));
+                                        *display_mat.uget_mut((
+                                            (event.coord.y as i32) as usize,
+                                            (event.coord.x as i32 + i) as usize,
+                                            0,
+                                        )) = *self.running_intensities.uget((
+                                            (event.coord.y as i32) as usize,
+                                            (event.coord.x as i32 + i) as usize,
+                                            0,
+                                        ));
                                     }
                                 }
                             }
@@ -537,7 +535,7 @@ impl AdderPlayer {
             Some(s) => s,
         };
 
-        let mut display_mat = &mut self.display_frame;
+        let display_mat = &mut self.display_frame;
 
         let image_bevy = if frame_sequence.is_frame_0_filled() {
             let mut idx = 0;
@@ -621,13 +619,13 @@ impl AdderPlayer {
 
             self.stream_state.current_t_ticks += frame_sequence.state.tpf;
 
-            let mut image_mat = &mut self.display_frame;
+            let image_mat = &mut self.display_frame;
             let color = image_mat.shape()[2] == 3;
 
-            let mut image_bgra = if color {
+            let image_bgra = if color {
                 // Swap the red and blue channels
                 let temp = image_mat.index_axis_mut(Axis(2), 0).to_owned();
-                let mut blue_channel = image_mat.index_axis_mut(Axis(2), 2).to_owned();
+                let blue_channel = image_mat.index_axis_mut(Axis(2), 2).to_owned();
                 image_mat.index_axis_mut(Axis(2), 0).assign(&blue_channel);
                 // Swap the channels by copying
                 image_mat.index_axis_mut(Axis(2), 2).assign(&temp);

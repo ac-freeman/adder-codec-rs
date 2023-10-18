@@ -1,6 +1,6 @@
 use adder_codec_core::{Event, PixelAddress};
 #[cfg(feature = "open-cv")]
-use opencv::core::{Mat, MatTrait, MatTraitConst, MatTraitConstManual};
+use opencv::core::{Mat, MatTraitConst, MatTraitConstManual};
 use std::error::Error;
 use std::fs::File;
 use std::io;

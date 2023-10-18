@@ -1,5 +1,4 @@
 use crate::transcoder::source::video::SourceError;
-use crate::transcoder::source::video::SourceError::BufferEmpty;
 use crate::transcoder::source::video::Video;
 use crate::transcoder::source::video::{Source, VideoBuilder};
 use adder_codec_core::Mode::FramePerfect;
@@ -7,11 +6,10 @@ use adder_codec_core::{DeltaT, Event, PlaneSize, SourceCamera, TimeMode};
 
 use crate::utils::viz::ShowFeatureMode;
 use adder_codec_core::codec::{EncoderOptions, EncoderType};
-use ndarray::{Array, Axis};
+use ndarray::Axis;
 
 use rayon::ThreadPool;
 use std::io::Write;
-use std::mem::swap;
 use std::path::PathBuf;
 use video_rs::{self, Decoder, Frame, Locator, Options, Resize};
 

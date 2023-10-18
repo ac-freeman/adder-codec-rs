@@ -1,7 +1,7 @@
 use crate::transcoder::source::video::FramedViewMode::SAE;
 use crate::transcoder::source::video::SourceError::BufferEmpty;
 use crate::transcoder::source::video::{
-    integrate_for_px, show_display, Source, SourceError, Video, VideoBuilder,
+    integrate_for_px, Source, SourceError, Video, VideoBuilder,
 };
 use adder_codec_core::DeltaT;
 use adder_codec_core::Mode::{Continuous, FramePerfect};
@@ -449,7 +449,7 @@ impl<W: Write + 'static> Integration<W> {
             });
 
         for events in &big_buffer {
-            for (e1, e2) in events.iter().circular_tuple_windows() {
+            for e1 in events.iter() {
                 video.encoder.ingest_event(*e1)?;
             }
         }
@@ -585,7 +585,7 @@ impl<W: Write + 'static> Integration<W> {
             });
 
         for events in &big_buffer {
-            for (e1, e2) in events.iter().circular_tuple_windows() {
+            for e1 in events.iter() {
                 video.encoder.ingest_event(*e1)?;
             }
         }

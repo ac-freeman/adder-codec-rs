@@ -1,10 +1,6 @@
-use chrono::prelude::*;
-
 #[cfg(feature = "open-cv")]
-use opencv::core::{KeyPoint, Mat, Scalar, Size, Vector, CV_32F, CV_32FC3, CV_8U, CV_8UC3};
-use raw_parts::RawParts;
-use std::collections::{HashMap, HashSet};
-use std::error::Error;
+use opencv::core::{Mat, Size};
+use std::collections::HashSet;
 use std::io::{sink, Write};
 use std::mem::swap;
 use std::os::raw::c_void;
@@ -16,12 +12,11 @@ use adder_codec_core::codec::{
     CodecError, CodecMetadata, EncoderOptions, EncoderType, LATEST_CODEC_VERSION,
 };
 use adder_codec_core::{
-    Coord, DeltaT, Event, Mode, PixelAddress, PlaneError, PlaneSize, SourceCamera, SourceType,
-    TimeMode,
+    Coord, DeltaT, Event, Mode, PlaneError, PlaneSize, SourceCamera, SourceType, TimeMode,
 };
 use bumpalo::Bump;
 use std::sync::mpsc::{channel, Sender};
-use std::time::{Duration, Instant, SystemTime};
+use std::time::Instant;
 
 use crate::framer::scale_intensity::{FrameValue, SaeTime};
 use crate::transcoder::event_pixel_tree::{Intensity32, PixelArena};

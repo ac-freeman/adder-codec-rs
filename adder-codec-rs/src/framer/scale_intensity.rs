@@ -1,4 +1,3 @@
-use crate::transcoder::event_pixel_tree::PixelArena;
 use crate::transcoder::source::video::FramedViewMode;
 use adder_codec_core::{DeltaT, Event, EventCoordless, Intensity, SourceType, D_SHIFT};
 

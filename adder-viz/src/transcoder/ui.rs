@@ -23,8 +23,8 @@ use adder_codec_rs::utils::cv::{calculate_quality_metrics, QualityMetrics};
 use adder_codec_rs::utils::viz::ShowFeatureMode;
 use bevy_egui::egui::plot::Corner::LeftTop;
 use bevy_egui::egui::plot::Legend;
-use egui::plot::{Line, Plot, PlotPoints};
-use ndarray::{concatenate, stack, Array, Axis};
+use egui::plot::Plot;
+use ndarray::{Array, Axis};
 use std::default::Default;
 use std::fs::File;
 use std::io::BufWriter;
@@ -552,8 +552,6 @@ impl TranscoderState {
         let ui_info_state = &mut self.ui_info_state;
         ui_info_state.events_per_sec = 0.;
 
-        let mut is_framed = false;
-
         let source: &mut dyn Source<BufWriter<File>> = {
             match &mut self.transcoder.framed_source {
                 None => {
@@ -570,10 +568,7 @@ impl TranscoderState {
                     #[cfg(not(feature = "open-cv"))]
                     return Ok(());
                 }
-                Some(source) => {
-                    is_framed = true;
-                    source
-                }
+                Some(source) => source,
             }
         };
 
@@ -637,10 +632,10 @@ impl TranscoderState {
 
         let color = image_mat.shape()[2] == 3;
 
-        let mut image_bgra = if color {
+        let image_bgra = if color {
             // Swap the red and blue channels
             let temp = image_mat.index_axis_mut(Axis(2), 0).to_owned();
-            let mut blue_channel = image_mat.index_axis_mut(Axis(2), 2).to_owned();
+            let blue_channel = image_mat.index_axis_mut(Axis(2), 2).to_owned();
             image_mat.index_axis_mut(Axis(2), 0).assign(&blue_channel);
             // Swap the channels by copying
             image_mat.index_axis_mut(Axis(2), 2).assign(&temp);
@@ -691,10 +686,10 @@ impl TranscoderState {
 
             let color = image_mat.shape()[2] == 3;
 
-            let mut image_bgra = if color {
+            let image_bgra = if color {
                 // Swap the red and blue channels
                 let temp = image_mat.index_axis_mut(Axis(2), 0).to_owned();
-                let mut blue_channel = image_mat.index_axis_mut(Axis(2), 2).to_owned();
+                let blue_channel = image_mat.index_axis_mut(Axis(2), 2).to_owned();
                 image_mat.index_axis_mut(Axis(2), 0).assign(&blue_channel);
                 // Swap the channels by copying
                 image_mat.index_axis_mut(Axis(2), 2).assign(&temp);

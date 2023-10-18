@@ -5,7 +5,7 @@ use adder_codec_core::DeltaT;
 #[cfg(feature = "open-cv")]
 use adder_codec_rs::transcoder::source::davis::Davis;
 use adder_codec_rs::transcoder::source::framed::Framed;
-use bevy::prelude::{dbg, Image};
+use bevy::prelude::Image;
 use std::fmt;
 use std::fs::File;
 use std::io::BufWriter;
