@@ -430,6 +430,60 @@ impl AdderPlayer {
                                     &mut display_mat,
                                     color,
                                 );
+                            } else if !event.coord.is_border(
+                                meta.plane.w_usize(),
+                                meta.plane.h_usize(),
+                                3,
+                            ) {
+                                // Reset the pixels in the cross accordingly...
+                                let radius = 2;
+                                unsafe {
+                                    if color {
+                                        for i in -radius..=radius {
+                                            for c in 0..3 as usize {
+                                                *display_mat.uget_mut((
+                                                    (event.coord.y as i32 + i) as usize,
+                                                    (event.coord.x as i32) as usize,
+                                                    c,
+                                                )) = *self.running_intensities.uget((
+                                                    (event.coord.y as i32 + i) as usize,
+                                                    (event.coord.x as i32) as usize,
+                                                    c,
+                                                ));
+                                                *display_mat.uget_mut((
+                                                    (event.coord.y as i32) as usize,
+                                                    (event.coord.x as i32 + i) as usize,
+                                                    c,
+                                                )) = *self.running_intensities.uget((
+                                                    (event.coord.y as i32) as usize,
+                                                    (event.coord.x as i32 + i) as usize,
+                                                    c,
+                                                ));
+                                            }
+                                        }
+                                    } else {
+                                        for i in -radius..=radius {
+                                            *display_mat.uget_mut((
+                                                (event.coord.y as i32 + i) as usize,
+                                                (event.coord.x as i32) as usize,
+                                                0,
+                                            )) = *self.running_intensities.uget((
+                                                (event.coord.y as i32 + i) as usize,
+                                                (event.coord.x as i32) as usize,
+                                                0,
+                                            ));
+                                            *display_mat.uget_mut((
+                                                (event.coord.y as i32) as usize,
+                                                (event.coord.x as i32 + i) as usize,
+                                                0,
+                                            )) = *self.running_intensities.uget((
+                                                (event.coord.y as i32) as usize,
+                                                (event.coord.x as i32 + i) as usize,
+                                                0,
+                                            ));
+                                        }
+                                    }
+                                }
                             }
                         }
                     }

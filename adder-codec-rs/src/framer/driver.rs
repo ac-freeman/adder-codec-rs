@@ -691,8 +691,8 @@ impl<T: Clone + Default + FrameValue<Output = T> + Serialize> FrameSequence<T> {
             });
         }
 
-        dbg!("Popping features");
-        dbg!(self.features.front().unwrap().end_ts);
+        // dbg!("Popping features");
+        // dbg!(self.features.front().unwrap().end_ts);
         self.features.pop_front()
     }
 
@@ -713,7 +713,7 @@ impl<T: Clone + Default + FrameValue<Output = T> + Serialize> FrameSequence<T> {
             }
         }
         self.state.frames_written += 1;
-        dbg!(self.state.frames_written);
+        // dbg!(self.state.frames_written);
         Some(ret)
     }
 
