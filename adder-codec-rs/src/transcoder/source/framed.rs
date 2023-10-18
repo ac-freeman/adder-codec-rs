@@ -57,6 +57,7 @@ impl<W: Write + 'static> Framed<W> {
 
         // Calculate TPS based on ticks per frame and source FPS
         let source_fps = cap.frame_rate();
+        let (width, height) = cap.size_out();
 
         let plane = PlaneSize::new(width as u16, height as u16, if color_input { 3 } else { 1 })?;
 
