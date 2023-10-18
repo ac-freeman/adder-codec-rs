@@ -9,6 +9,8 @@ use adder_codec_rs::framer::scale_intensity::event_to_intensity;
 #[cfg(feature = "open-cv")]
 use adder_codec_rs::transcoder::source::video::show_display_force;
 use adder_codec_rs::transcoder::source::video::FramedViewMode;
+use adder_codec_rs::utils::cv::is_feature;
+use adder_codec_rs::utils::viz::draw_feature_coord;
 use bevy::prelude::Image;
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
 use ndarray::Array3;
@@ -54,6 +56,7 @@ pub struct AdderPlayer {
     pub(crate) frame_sequence: Option<FrameSequence<u8>>, // TODO: remove this
     pub(crate) input_stream: Option<InputStream>,
     pub(crate) display_frame: Frame,
+    pub(crate) running_intensities: Array3<u8>,
     playback_speed: f32,
     reconstruction_method: ReconstructionMethod,
     current_frame: u32,
@@ -137,6 +140,11 @@ impl AdderPlayer {
                             meta.plane.w_usize(),
                             meta.plane.c_usize(),
                         )),
+                        running_intensities: Array3::zeros((
+                            meta.plane.h_usize(),
+                            meta.plane.w_usize(),
+                            1,
+                        )),
                         playback_speed,
                         reconstruction_method: ReconstructionMethod::Accurate,
                         current_frame: 0,
@@ -176,7 +184,7 @@ impl AdderPlayer {
         self
     }
 
-    pub fn consume_source(&mut self) -> PlayerStreamArtifact {
+    pub fn consume_source(&mut self, detect_features: bool) -> PlayerStreamArtifact {
         let stream = match &mut self.input_stream {
             None => {
                 return (0, self.stream_state.clone(), None);
@@ -203,7 +211,7 @@ impl AdderPlayer {
         }
 
         let res = match self.reconstruction_method {
-            ReconstructionMethod::Fast => self.consume_source_fast(),
+            ReconstructionMethod::Fast => self.consume_source_fast(detect_features),
             ReconstructionMethod::Accurate => self.consume_source_accurate(),
         };
 
@@ -220,7 +228,10 @@ impl AdderPlayer {
         }
     }
 
-    fn consume_source_fast(&mut self) -> Result<PlayerArtifact, Box<dyn Error>> {
+    fn consume_source_fast(
+        &mut self,
+        detect_features: bool,
+    ) -> Result<PlayerArtifact, Box<dyn Error>> {
         let mut event_count = 0;
 
         if self.current_frame == 0 {
@@ -236,8 +247,6 @@ impl AdderPlayer {
         let meta = *stream.decoder.meta();
 
         let frame_length = meta.ref_interval as f64 * self.playback_speed as f64; //TODO: temp
-
-        let mut display_mat = &mut self.display_frame;
 
         // if self.view_mode == FramedViewMode::DeltaT {
         //     opencv::core::normalize(
@@ -259,40 +268,46 @@ impl AdderPlayer {
         // }
 
         let image_bevy = loop {
+            let mut display_mat = &mut self.display_frame;
+            let color = display_mat.shape()[2] == 3;
+
             if self.stream_state.current_t_ticks as u128
                 > (self.current_frame as u128 * frame_length as u128)
             {
                 self.current_frame += 1;
 
-                let mut image_mat = &mut self.display_frame;
-                let color = image_mat.shape()[2] == 3;
-
                 let mut image_bgra = if color {
                     // Swap the red and blue channels
-                    let temp = image_mat.index_axis_mut(Axis(2), 0).to_owned();
-                    let mut blue_channel = image_mat.index_axis_mut(Axis(2), 2).to_owned();
-                    image_mat.index_axis_mut(Axis(2), 0).assign(&blue_channel);
+                    let temp = display_mat.index_axis_mut(Axis(2), 0).to_owned();
+                    let mut blue_channel = display_mat.index_axis_mut(Axis(2), 2).to_owned();
+                    display_mat.index_axis_mut(Axis(2), 0).assign(&blue_channel);
                     // Swap the channels by copying
-                    image_mat.index_axis_mut(Axis(2), 2).assign(&temp);
+                    display_mat.index_axis_mut(Axis(2), 2).assign(&temp);
 
                     // add alpha channel
                     ndarray::concatenate(
                         Axis(2),
                         &[
-                            image_mat.clone().view(),
-                            Array::from_elem((image_mat.shape()[0], image_mat.shape()[1], 1), 255)
-                                .view(),
+                            display_mat.clone().view(),
+                            Array::from_elem(
+                                (display_mat.shape()[0], display_mat.shape()[1], 1),
+                                255,
+                            )
+                            .view(),
                         ],
                     )?
                 } else {
                     ndarray::concatenate(
                         Axis(2),
                         &[
-                            image_mat.clone().view(),
-                            image_mat.clone().view(),
-                            image_mat.clone().view(),
-                            Array::from_elem((image_mat.shape()[0], image_mat.shape()[1], 1), 255)
-                                .view(),
+                            display_mat.clone().view(),
+                            display_mat.clone().view(),
+                            display_mat.clone().view(),
+                            Array::from_elem(
+                                (display_mat.shape()[0], display_mat.shape()[1], 1),
+                                255,
+                            )
+                            .view(),
                         ],
                     )?
                 };
@@ -325,6 +340,7 @@ impl AdderPlayer {
                         if event.delta_t > self.stream_state.current_t_ticks {
                             self.stream_state.current_t_ticks = event.delta_t;
                         }
+
                         let dt = event.delta_t
                             - self.stream_state.last_timestamps
                                 [[y as usize, x as usize, c as usize]];
@@ -398,6 +414,24 @@ impl AdderPlayer {
                             event.coord.x as usize,
                             event.coord.c.unwrap_or(0) as usize,
                         )) = frame_intensity as u8;
+
+                        if detect_features && event.coord.c.unwrap_or(0) == 0 {
+                            *self.running_intensities.uget_mut((
+                                event.coord.y as usize,
+                                event.coord.x as usize,
+                                0,
+                            )) = frame_intensity as u8;
+
+                            // Test if this is a feature
+                            if is_feature(event.coord, meta.plane, &self.running_intensities)? {
+                                draw_feature_coord(
+                                    event.coord.x,
+                                    event.coord.y,
+                                    &mut display_mat,
+                                    color,
+                                );
+                            }
+                        }
                     }
                 }
                 Err(_e) => {
@@ -412,10 +446,13 @@ impl AdderPlayer {
                     };
                     self.frame_sequence =
                         self.framer_builder.clone().map(|builder| builder.finish());
-                    // if !self.ui_state.looping {
-                    //     self.ui_state.playing = false;
-                    // }
+                    self.stream_state.last_timestamps = Array::zeros((
+                        meta.plane.h_usize(),
+                        meta.plane.w_usize(),
+                        meta.plane.c_usize(),
+                    ));
                     self.stream_state.current_t_ticks = 0;
+                    self.current_frame = 0;
 
                     break None;
                 }

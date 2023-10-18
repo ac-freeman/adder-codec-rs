@@ -415,9 +415,10 @@ impl PlayerState {
         self.ui_state.current_frame = 1;
 
         let (player_tx, player_rx) = bounded(60);
+        let detect_features = self.ui_state.detect_features;
 
         rayon::spawn(move || loop {
-            let res = player.consume_source();
+            let res = player.consume_source(detect_features);
             match player_tx.send(res) {
                 Ok(_) => {}
                 Err(_) => {
