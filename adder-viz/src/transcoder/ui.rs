@@ -612,26 +612,28 @@ impl TranscoderState {
 
         let mut image_mat = source.get_video_ref().display_frame.clone();
 
-        #[rustfmt::skip]
-        let metrics = calculate_quality_metrics(
-            source.get_input(),
-            &mut image_mat,
-            QualityMetrics {
-                mse: if self.ui_state.metric_mse {Some(0.0)} else {None},
-                psnr: if self.ui_state.metric_psnr {Some(0.0)} else {None},
-                ssim: if self.ui_state.metric_ssim {Some(0.0)} else {None},
-            },
-        );
-        let metrics = metrics?;
-        self.ui_info_state
-            .plot_points_psnr_y
-            .update(metrics.psnr.unwrap_or(0.0));
-        self.ui_info_state
-            .plot_points_mse_y
-            .update(metrics.mse.unwrap_or(0.0));
-        self.ui_info_state
-            .plot_points_ssim_y
-            .update(metrics.ssim.unwrap_or(0.0));
+        if let Some(input) = source.get_input() {
+            #[rustfmt::skip]
+            let metrics = calculate_quality_metrics(
+                input,
+                &mut image_mat,
+                QualityMetrics {
+                    mse: if self.ui_state.metric_mse {Some(0.0)} else {None},
+                    psnr: if self.ui_state.metric_psnr {Some(0.0)} else {None},
+                    ssim: if self.ui_state.metric_ssim {Some(0.0)} else {None},
+                },
+            );
+            let metrics = metrics?;
+            self.ui_info_state
+                .plot_points_psnr_y
+                .update(metrics.psnr.unwrap_or(0.0));
+            self.ui_info_state
+                .plot_points_mse_y
+                .update(metrics.mse.unwrap_or(0.0));
+            self.ui_info_state
+                .plot_points_ssim_y
+                .update(metrics.ssim.unwrap_or(0.0));
+        }
 
         let color = image_mat.shape()[2] == 3;
 
@@ -683,8 +685,9 @@ impl TranscoderState {
         handles.image_view = handle;
 
         // Repeat for the input view
-        if is_framed && self.ui_state.show_original {
-            let mut image_mat = source.get_input().clone();
+        if self.ui_state.show_original && source.get_input().is_some() {
+            let image_mat = source.get_input().unwrap();
+            let mut image_mat = image_mat.clone();
 
             let color = image_mat.shape()[2] == 3;
 
@@ -1113,10 +1116,16 @@ fn side_panel_grid_contents(
 
     ui.label("Metrics:");
     ui.vertical(|ui| {
-        ui.add_enabled(true, egui::Checkbox::new(&mut ui_state.metric_mse, "MSE"));
-        ui.add_enabled(true, egui::Checkbox::new(&mut ui_state.metric_psnr, "PSNR"));
         ui.add_enabled(
-            true,
+            enabled,
+            egui::Checkbox::new(&mut ui_state.metric_mse, "MSE"),
+        );
+        ui.add_enabled(
+            enabled,
+            egui::Checkbox::new(&mut ui_state.metric_psnr, "PSNR"),
+        );
+        ui.add_enabled(
+            enabled,
             egui::Checkbox::new(&mut ui_state.metric_ssim, "SSIM (Warning: slow!)"),
         );
     });

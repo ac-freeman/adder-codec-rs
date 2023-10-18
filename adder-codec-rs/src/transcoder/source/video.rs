@@ -1226,7 +1226,7 @@ pub trait Source<W: Write> {
     /// process.
     fn get_video(self) -> Video<W>;
 
-    fn get_input(&self) -> &Frame;
+    fn get_input(&self) -> Option<&Frame>;
 
     /// Get the last-calculated bitrate of the input (in bits per second)
     fn get_running_input_bitrate(&self) -> f64;

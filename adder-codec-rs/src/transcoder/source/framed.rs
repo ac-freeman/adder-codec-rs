@@ -153,8 +153,8 @@ impl<W: Write + 'static> Source<W> for Framed<W> {
         todo!()
     }
 
-    fn get_input(&self) -> &Frame {
-        self.get_last_input_frame()
+    fn get_input(&self) -> Option<&Frame> {
+        Some(self.get_last_input_frame())
     }
 
     fn get_running_input_bitrate(&self) -> f64 {

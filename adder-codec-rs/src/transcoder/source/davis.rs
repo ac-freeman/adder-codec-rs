@@ -915,8 +915,8 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Davis<W> {
         self.video
     }
 
-    fn get_input(&self) -> &Frame {
-        unimplemented!("Davis::get_input");
+    fn get_input(&self) -> Option<&Frame> {
+        None
     }
 
     fn get_running_input_bitrate(&self) -> f64 {
