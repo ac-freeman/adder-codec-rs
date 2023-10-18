@@ -1,11 +1,11 @@
 use crate::transcoder::adder::{replace_adder_transcoder, AdderTranscoder};
+use crate::utils::prep_bevy_image;
 use crate::{slider_pm, Images};
 #[cfg(feature = "open-cv")]
 use adder_codec_rs::transcoder::source::davis::TranscoderMode;
 use adder_codec_rs::transcoder::source::video::{FramedViewMode, Source, SourceError};
 use bevy::ecs::system::Resource;
 use bevy::prelude::{Assets, Commands, Image, Res, ResMut, Time};
-use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
 use bevy_egui::egui;
 use bevy_egui::egui::{RichText, Ui};
 use rayon::current_num_threads;
@@ -24,7 +24,6 @@ use adder_codec_rs::utils::viz::ShowFeatureMode;
 use bevy_egui::egui::plot::Corner::LeftTop;
 use bevy_egui::egui::plot::Legend;
 use egui::plot::Plot;
-use ndarray::{Array, Axis};
 use std::default::Default;
 use std::fs::File;
 use std::io::BufWriter;
@@ -632,45 +631,12 @@ impl TranscoderState {
 
         let color = image_mat.shape()[2] == 3;
 
-        let image_bgra = if color {
-            // Swap the red and blue channels
-            let temp = image_mat.index_axis_mut(Axis(2), 0).to_owned();
-            let blue_channel = image_mat.index_axis_mut(Axis(2), 2).to_owned();
-            image_mat.index_axis_mut(Axis(2), 0).assign(&blue_channel);
-            // Swap the channels by copying
-            image_mat.index_axis_mut(Axis(2), 2).assign(&temp);
-
-            // add alpha channel
-            ndarray::concatenate(
-                Axis(2),
-                &[
-                    image_mat.clone().view(),
-                    Array::from_elem((image_mat.shape()[0], image_mat.shape()[1], 1), 255).view(),
-                ],
-            )?
-        } else {
-            ndarray::concatenate(
-                Axis(2),
-                &[
-                    image_mat.clone().view(),
-                    image_mat.clone().view(),
-                    image_mat.clone().view(),
-                    Array::from_elem((image_mat.shape()[0], image_mat.shape()[1], 1), 255).view(),
-                ],
-            )?
-        };
-        let image_bgra = image_bgra.as_standard_layout();
-
-        let image_bevy = Image::new(
-            Extent3d {
-                width: source.get_video_ref().state.plane.w().into(),
-                height: source.get_video_ref().state.plane.h().into(),
-                depth_or_array_layers: 1,
-            },
-            TextureDimension::D2,
-            Vec::from(image_bgra.as_slice().unwrap()),
-            TextureFormat::Bgra8UnormSrgb,
-        );
+        let image_bevy = prep_bevy_image(
+            image_mat,
+            color,
+            source.get_video_ref().state.plane.w(),
+            source.get_video_ref().state.plane.h(),
+        )?;
 
         self.transcoder.live_image = image_bevy;
 
@@ -682,51 +648,14 @@ impl TranscoderState {
         // Repeat for the input view
         if self.ui_state.show_original && source.get_input().is_some() {
             let image_mat = source.get_input().unwrap();
-            let mut image_mat = image_mat.clone();
-
+            let image_mat = image_mat.clone();
             let color = image_mat.shape()[2] == 3;
-
-            let image_bgra = if color {
-                // Swap the red and blue channels
-                let temp = image_mat.index_axis_mut(Axis(2), 0).to_owned();
-                let blue_channel = image_mat.index_axis_mut(Axis(2), 2).to_owned();
-                image_mat.index_axis_mut(Axis(2), 0).assign(&blue_channel);
-                // Swap the channels by copying
-                image_mat.index_axis_mut(Axis(2), 2).assign(&temp);
-
-                // add alpha channel
-                ndarray::concatenate(
-                    Axis(2),
-                    &[
-                        image_mat.clone().view(),
-                        Array::from_elem((image_mat.shape()[0], image_mat.shape()[1], 1), 255)
-                            .view(),
-                    ],
-                )?
-            } else {
-                ndarray::concatenate(
-                    Axis(2),
-                    &[
-                        image_mat.clone().view(),
-                        image_mat.clone().view(),
-                        image_mat.clone().view(),
-                        Array::from_elem((image_mat.shape()[0], image_mat.shape()[1], 1), 255)
-                            .view(),
-                    ],
-                )?
-            };
-            let image_bgra = image_bgra.as_standard_layout();
-
-            let image_bevy = Image::new(
-                Extent3d {
-                    width: source.get_video_ref().state.plane.w().into(),
-                    height: source.get_video_ref().state.plane.h().into(),
-                    depth_or_array_layers: 1,
-                },
-                TextureDimension::D2,
-                Vec::from(image_bgra.as_slice().unwrap()),
-                TextureFormat::Bgra8UnormSrgb,
-            );
+            let image_bevy = prep_bevy_image(
+                image_mat,
+                color,
+                source.get_video_ref().state.plane.w(),
+                source.get_video_ref().state.plane.h(),
+            )?;
             let handle = images.add(image_bevy);
             handles.input_view = handle;
         }

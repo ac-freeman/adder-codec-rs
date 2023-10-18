@@ -3,6 +3,7 @@ use ndarray::{s, Array3, ArrayView, Axis, Dimension, Ix2, Ix3, RemoveAxis};
 use std::error::Error;
 
 // TODO: Explore optimal threshold values
+/// The threshold for feature detection
 pub const INTENSITY_THRESHOLD: i16 = 30;
 
 /// Indices for the asynchronous FAST 9_16 algorithm
@@ -123,10 +124,16 @@ pub fn is_feature(
     Ok(false)
 }
 
+/// Container for quality metric results
 #[derive(Debug)]
 pub struct QualityMetrics {
+    /// Peak signal-to-noise ratio
     pub psnr: Option<f64>,
+
+    /// Mean squared error
     pub mse: Option<f64>,
+
+    /// Structural similarity index measure
     pub ssim: Option<f64>,
 }
 
