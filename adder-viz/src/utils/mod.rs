@@ -19,7 +19,11 @@ impl PlotY {
     }
 
     pub(crate) fn update(&mut self, new_point: f64) {
-        self.points.push_back(new_point);
+        if new_point.is_finite() {
+            self.points.push_back(new_point);
+        } else {
+            self.points.push_back(0.0);
+        }
         self.points.pop_front();
     }
 }

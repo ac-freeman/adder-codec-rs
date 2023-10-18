@@ -123,10 +123,32 @@ pub fn is_feature(
     Ok(false)
 }
 
-pub fn calculate_psnr(
+#[derive(Debug)]
+pub struct QualityMetrics {
+    pub psnr: f64,
+    pub mse: f64,
+    pub ssim: f64,
+}
+pub fn calculate_quality_metrics(
     original: &Array3<u8>,
     reconstructed: &Array3<u8>,
-) -> Result<f64, Box<dyn Error>> {
+) -> Result<QualityMetrics, Box<dyn Error>> {
+    if original.shape() != reconstructed.shape() {
+        return Err("Shapes of original and reconstructed images must match".into());
+    }
+
+    let mut metrics = QualityMetrics {
+        psnr: 0.0,
+        mse: 0.0,
+        ssim: 0.0,
+    };
+
+    metrics.mse = calculate_mse(original, reconstructed)?;
+    metrics.psnr = calculate_psnr(metrics.mse)?;
+    Ok(metrics)
+}
+
+fn calculate_mse(original: &Array3<u8>, reconstructed: &Array3<u8>) -> Result<f64, Box<dyn Error>> {
     if original.shape() != reconstructed.shape() {
         return Err("Shapes of original and reconstructed images must match".into());
     }
@@ -138,11 +160,16 @@ pub fn calculate_psnr(
         .for_each(|(a, b)| {
             error_sum += (*a as f64 - *b as f64).powi(2);
         });
-    let mse = error_sum / (original.len() as f64);
+    Ok(error_sum / (original.len() as f64))
+}
 
+fn calculate_psnr(mse: f64) -> Result<f64, Box<dyn Error>> {
     Ok(20.0 * (255.0_f64).log10() - 10.0 * mse.log10())
 }
 
-// fn calculate_mse_for(original: &Array3<u8>, reconstructed: &Array3<u8>) -> _ {
-//     todo!()
+// fn calculate_ssim(
+//     original: &Array3<u8>,
+//     reconstructed: &Array3<u8>,
+// ) -> Result<f64, Box<dyn Error>> {
+//
 // }

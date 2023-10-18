@@ -19,7 +19,7 @@ use adder_codec_core::TimeMode;
 #[cfg(feature = "open-cv")]
 use adder_codec_rs::transcoder::source::davis::TranscoderMode::RawDvs;
 use adder_codec_rs::transcoder::source::{CRF, DEFAULT_CRF_QUALITY};
-use adder_codec_rs::utils::cv::calculate_psnr;
+use adder_codec_rs::utils::cv::calculate_quality_metrics;
 use adder_codec_rs::utils::viz::ShowFeatureMode;
 use bevy_egui::egui::plot::Corner::LeftTop;
 use bevy_egui::egui::plot::Legend;
@@ -137,6 +137,8 @@ pub struct InfoUiState {
     plot_points_eventrate_y: PlotY,
     pub(crate) plot_points_raw_adder_bitrate_y: PlotY,
     pub(crate) plot_points_raw_source_bitrate_y: PlotY,
+    pub(crate) plot_points_psnr_y: PlotY,
+    pub(crate) plot_points_mse_y: PlotY,
     plot_points_latency_y: PlotY,
     pub view_mode_radio_state: FramedViewMode, // TODO: Move to different struct
 }
@@ -178,6 +180,12 @@ impl Default for InfoUiState {
                 points: plot_points.clone(),
             },
             plot_points_raw_source_bitrate_y: PlotY {
+                points: plot_points.clone(),
+            },
+            plot_points_psnr_y: PlotY {
+                points: plot_points.clone(),
+            },
+            plot_points_mse_y: PlotY {
                 points: plot_points.clone(),
             },
             plot_points_latency_y: PlotY {
@@ -354,6 +362,13 @@ impl TranscoderState {
             .plot_points_eventrate_y
             .get_plotline("Events PPC per sec");
 
+        let line_psnr = self
+            .ui_info_state
+            .plot_points_psnr_y
+            .get_plotline("PSNR dB");
+
+        let line_mse = self.ui_info_state.plot_points_mse_y.get_plotline("MSE");
+
         let line_latency = self
             .ui_info_state
             .plot_points_latency_y
@@ -362,14 +377,22 @@ impl TranscoderState {
         Plot::new("my_plot")
             .height(100.0)
             .allow_drag(true)
+            .auto_bounds_y()
             .legend(Legend::default().position(LeftTop))
             .show(ui, |plot_ui| {
                 plot_ui.line(line_eventrate);
                 plot_ui.line(line_latency);
+                plot_ui.line(
+                    self.ui_info_state
+                        .plot_points_psnr_y
+                        .get_plotline("PSNR dB"),
+                );
+                plot_ui.line(self.ui_info_state.plot_points_mses _y.get_plotline("MSE"));
             });
         Plot::new("bitrate_plot")
             .height(100.0)
             .allow_drag(true)
+            .auto_bounds_y()
             .legend(Legend::default().position(LeftTop))
             .show(ui, |plot_ui| {
                 plot_ui.line(
@@ -382,6 +405,8 @@ impl TranscoderState {
                         .plot_points_raw_source_bitrate_y
                         .get_plotline("Raw source MB/s"),
                 );
+                plot_ui.line(line_psnr);
+                plot_ui.line(line_mse);
             });
     }
 
@@ -574,7 +599,11 @@ impl TranscoderState {
 
         let mut image_mat = source.get_video_ref().display_frame.clone();
 
-        let psnr = calculate_psnr(source.get_input(), &mut image_mat);
+        let metrics = calculate_quality_metrics(source.get_input(), &mut image_mat);
+        dbg!(&metrics);
+        let metrics = metrics?;
+        self.ui_info_state.plot_points_psnr_y.update(metrics.psnr);
+        self.ui_info_state.plot_points_mse_y.update(metrics.mse);
 
         let color = image_mat.shape()[2] == 3;
 
