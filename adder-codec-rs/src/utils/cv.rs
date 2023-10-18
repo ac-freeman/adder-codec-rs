@@ -124,7 +124,7 @@ pub fn is_feature(
 }
 
 pub fn calculate_psnr(
-    original: &mut Array3<u8>,
+    original: &Array3<u8>,
     reconstructed: &Array3<u8>,
 ) -> Result<f64, Box<dyn Error>> {
     if original.shape() != reconstructed.shape() {
@@ -139,7 +139,6 @@ pub fn calculate_psnr(
             error_sum += (*a as f64 - *b as f64).powi(2);
         });
     let mse = error_sum / (original.len() as f64);
-    dbg!(mse);
 
     Ok(20.0 * (255.0_f64).log10() - 10.0 * mse.log10())
 }

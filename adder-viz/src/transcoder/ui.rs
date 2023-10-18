@@ -573,6 +573,9 @@ impl TranscoderState {
         };
 
         let mut image_mat = source.get_video_ref().display_frame.clone();
+
+        let psnr = calculate_psnr(source.get_input(), &mut image_mat);
+
         let color = image_mat.shape()[2] == 3;
 
         let mut image_bgra = if color {
@@ -625,12 +628,6 @@ impl TranscoderState {
         // Repeat for the input view
         if is_framed && self.ui_state.show_original {
             let mut image_mat = source.get_input().clone();
-
-            let psnr = calculate_psnr(
-                &mut image_mat,
-                &source.get_video_ref().state.running_intensities,
-            );
-            dbg!(psnr);
 
             let color = image_mat.shape()[2] == 3;
 
