@@ -94,14 +94,6 @@ impl AdderTranscoder {
                                     ui_state.encoder_options,
                                     writer,
                                 )?;
-                                //     .output_events_filename(match output_path.to_str() {
-                                //     None => {
-                                //         return Err(Box::new(AdderTranscoderError(
-                                //             "Couldn't get output path string".into(),
-                                //         )))
-                                //     }
-                                //     Some(path) => path.parse()?,
-                                // });
                             }
                         };
 

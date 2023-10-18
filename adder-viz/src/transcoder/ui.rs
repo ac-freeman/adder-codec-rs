@@ -19,6 +19,7 @@ use adder_codec_core::TimeMode;
 #[cfg(feature = "open-cv")]
 use adder_codec_rs::transcoder::source::davis::TranscoderMode::RawDvs;
 use adder_codec_rs::transcoder::source::{CRF, DEFAULT_CRF_QUALITY};
+use adder_codec_rs::utils::cv::calculate_psnr;
 use adder_codec_rs::utils::viz::ShowFeatureMode;
 use bevy_egui::egui::plot::Corner::LeftTop;
 use bevy_egui::egui::plot::Legend;
@@ -625,20 +626,50 @@ impl TranscoderState {
         if is_framed && self.ui_state.show_original {
             let mut image_mat = source.get_input().clone();
 
-            // Swap the red and blue channels
-            let temp = image_mat.index_axis_mut(Axis(2), 0).to_owned();
-            let blue_channel = image_mat.index_axis_mut(Axis(2), 2).to_owned();
-            image_mat.index_axis_mut(Axis(2), 0).assign(&blue_channel);
-            // Swap the channels by copying
-            image_mat.index_axis_mut(Axis(2), 2).assign(&temp);
+            if image_mat.shape()[2] != source.get_video_ref().state.running_intensities.shape()[2] {
+                // Assume that the original is in color, and the recon is in grayscale
+                // remove 2nd and 3rd channels
+                image_mat.collapse_axis(Axis(2), 0);
+                dbg!(image_mat.shape());
+            }
 
-            let mut image_bgra = ndarray::concatenate(
-                Axis(2),
-                &[
-                    image_mat.clone().view(),
-                    Array::from_elem((image_mat.shape()[0], image_mat.shape()[1], 1), 255).view(),
-                ],
-            )?;
+            let psnr = calculate_psnr(
+                &mut image_mat,
+                &source.get_video_ref().state.running_intensities,
+            );
+            dbg!(psnr);
+
+            let color = image_mat.shape()[2] == 3;
+
+            let mut image_bgra = if color {
+                // Swap the red and blue channels
+                let temp = image_mat.index_axis_mut(Axis(2), 0).to_owned();
+                let mut blue_channel = image_mat.index_axis_mut(Axis(2), 2).to_owned();
+                image_mat.index_axis_mut(Axis(2), 0).assign(&blue_channel);
+                // Swap the channels by copying
+                image_mat.index_axis_mut(Axis(2), 2).assign(&temp);
+
+                // add alpha channel
+                ndarray::concatenate(
+                    Axis(2),
+                    &[
+                        image_mat.clone().view(),
+                        Array::from_elem((image_mat.shape()[0], image_mat.shape()[1], 1), 255)
+                            .view(),
+                    ],
+                )?
+            } else {
+                ndarray::concatenate(
+                    Axis(2),
+                    &[
+                        image_mat.clone().view(),
+                        image_mat.clone().view(),
+                        image_mat.clone().view(),
+                        Array::from_elem((image_mat.shape()[0], image_mat.shape()[1], 1), 255)
+                            .view(),
+                    ],
+                )?
+            };
             let image_bgra = image_bgra.as_standard_layout();
 
             let image_bevy = Image::new(

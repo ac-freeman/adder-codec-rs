@@ -1,5 +1,5 @@
 use adder_codec_core::{Coord, Event, PlaneSize};
-use ndarray::Array3;
+use ndarray::{s, Array3, Axis, Dimension, Ix3, RemoveAxis};
 use std::error::Error;
 
 // TODO: Explore optimal threshold values
@@ -122,3 +122,27 @@ pub fn is_feature(
 
     Ok(false)
 }
+
+pub fn calculate_psnr(
+    original: &mut Array3<u8>,
+    reconstructed: &Array3<u8>,
+) -> Result<f64, Box<dyn Error>> {
+    if original.shape() != reconstructed.shape() {
+        return Err("Shapes of original and reconstructed images must match".into());
+    }
+
+    let mut error_sum = 0.0;
+    original
+        .iter()
+        .zip(reconstructed.iter())
+        .for_each(|(a, b)| {
+            error_sum += (*a as f64 - *b as f64).powi(2);
+        });
+    let mse = error_sum / (original.len() as f64);
+
+    Ok(10.0 * (255.0 * 255.0) / mse.log10())
+}
+
+// fn calculate_mse_for(original: &Array3<u8>, reconstructed: &Array3<u8>) -> _ {
+//     todo!()
+// }
