@@ -267,16 +267,10 @@ fn handle_color(mut input: Frame, color: bool) -> Result<Frame, SourceError> {
                     + *v.uget((0, 0, 1)) as f64 * 0.587
                     + *v.uget((0, 0, 2)) as f64 * 0.299)
                     as u8;
-                // v = Array::from_elem(
-                //     (3),
-                //     (v.uget(0) as f64 * 0.114 + v.uget(1) as f64 * 0.587 + v.uget(2) as f64 * 0.299)
-                //         as u8,
-                // );
             });
 
         // Remove the color channels
         input.collapse_axis(Axis(2), 0);
-        dbg!(input.shape());
     }
     Ok(input)
 }
