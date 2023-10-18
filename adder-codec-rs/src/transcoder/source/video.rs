@@ -1009,14 +1009,16 @@ impl<W: Write + 'static> Video<W> {
                     );
                 }
                 let radius = self.state.feature_c_radius as i32;
-                for r in (coord.y() as i32 - radius).max(0)
+                for row in (coord.y() as i32 - radius).max(0)
                     ..(coord.y() as i32 + radius).min(self.state.plane.h() as i32)
                 {
-                    for c in (coord.x() as i32 - radius).max(0)
+                    for col in (coord.x() as i32 - radius).max(0)
                         ..(coord.x() as i32 + radius).min(self.state.plane.w() as i32)
                     {
-                        self.event_pixel_trees[[r as usize, c as usize, coord.c_usize()]]
-                            .c_thresh = 0;
+                        for c in 0..self.state.plane.c() {
+                            self.event_pixel_trees[[row as usize, col as usize, c as usize]]
+                                .c_thresh = 0;
+                        }
                     }
                 }
             }
