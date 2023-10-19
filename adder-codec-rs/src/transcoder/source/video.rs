@@ -15,6 +15,7 @@ use adder_codec_core::{
     Coord, DeltaT, Event, Mode, PlaneError, PlaneSize, SourceCamera, SourceType, TimeMode,
 };
 use bumpalo::Bump;
+use chrono::Local;
 use std::sync::mpsc::{channel, Sender};
 use std::time::Instant;
 
@@ -927,11 +928,13 @@ impl<W: Write + 'static> Video<W> {
             };
 
             let mut cv_mat = unsafe {
-                let RawParts {
+                let raw_parts::RawParts {
                     ptr,
                     length,
                     capacity,
-                } = RawParts::from_vec(self.display_frame_features.clone().into_raw_vec()); // pixels will be move into_raw_parts，and return a manually drop pointer.
+                } = raw_parts::RawParts::from_vec(
+                    self.display_frame_features.clone().into_raw_vec(),
+                ); // pixels will be move into_raw_parts，and return a manually drop pointer.
                 let mut cv_mat = opencv::core::Mat::new_rows_cols_with_data(
                     self.state.plane.h() as i32,
                     self.state.plane.w() as i32,
@@ -951,7 +954,7 @@ impl<W: Write + 'static> Video<W> {
             }
 
             let start = Instant::now();
-            let mut keypoints = Vector::<KeyPoint>::new();
+            let mut keypoints = opencv::core::Vector::<opencv::core::KeyPoint>::new();
 
             opencv::features2d::fast(
                 &cv_mat,
@@ -985,7 +988,7 @@ impl<W: Write + 'static> Video<W> {
                 &cv_mat,
                 &keypoints,
                 &mut keypoint_mat,
-                Scalar::new(0.0, 0.0, 255.0, 0.0),
+                opencv::core::Scalar::new(0.0, 0.0, 255.0, 0.0),
                 opencv::features2d::DrawMatchesFlags::DEFAULT,
             )?;
             show_display_force("keypoints", &keypoint_mat, 1)?;
