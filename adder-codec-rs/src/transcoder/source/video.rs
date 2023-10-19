@@ -179,7 +179,7 @@ pub struct VideoState {
     /// The reference time in ticks
     pub ref_time: u32,
     pub(crate) ref_time_divisor: f64,
-    pub(crate) tps: DeltaT,
+    pub tps: DeltaT,
 
     /// Constant Rate Factor (CRF) quality setting for the encoder. 0 is lossless, 9 is worst quality.
     /// Determines:
@@ -206,7 +206,7 @@ pub struct VideoState {
 
     features: Vec<HashSet<Coord>>,
 
-    pub(crate) feature_log_handle: Option<std::fs::File>,
+    pub feature_log_handle: Option<std::fs::File>,
 }
 
 impl Default for VideoState {

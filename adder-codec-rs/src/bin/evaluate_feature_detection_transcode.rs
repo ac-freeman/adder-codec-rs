@@ -10,11 +10,11 @@ extern crate core;
 use adder_codec_rs::transcoder::source::video::{Source, SourceError, VideoBuilder};
 
 use clap::Parser;
-use rayon::current_num_threads;
-
 use indicatif::ProgressBar;
+use rayon::current_num_threads;
 use std::error::Error;
 use std::fs::File;
+use std::io::Write;
 
 use adder_codec_core::TimeMode;
 use adder_codec_rs::transcoder::source::framed::Framed;
@@ -66,7 +66,7 @@ pub struct TranscodeFeatureEvalArgs {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    let mut args: TranscodeFeatureEvalArgs = TranscodeFeatureEvalArgs::parse();
+    let args: TranscodeFeatureEvalArgs = TranscodeFeatureEvalArgs::parse();
 
     let num_threads = match args.thread_count {
         0 => current_num_threads(),
@@ -82,7 +82,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         Some(ext) => match ext.to_ascii_lowercase().to_str() {
             None => Err("Invalid file type"),
             Some("mp4") => {
-                let mut framed: Framed<BufWriter<File>> = Framed::new(
+                let framed: Framed<BufWriter<File>> = Framed::new(
                     match path.to_str() {
                         None => return Err("Couldn't get input path string".into()),
                         Some(path) => path.to_string(),
@@ -103,6 +103,29 @@ async fn main() -> Result<(), Box<dyn Error>> {
             Some(_) => Err("Invalid file type"),
         },
     }?;
+
+    #[cfg(feature = "feature-logging")]
+    {
+        let state = &mut source.get_video_mut().state;
+        // Write the plane size to the log file
+        if let Some(handle) = &mut state.feature_log_handle {
+            writeln!(handle, "\tTicks per second: {}", state.tps)?;
+            writeln!(
+                handle,
+                "\tReference ticks per source interval: {}",
+                state.ref_time
+            )?;
+            writeln!(handle, "\tΔt_max: {}", state.delta_t_max)?;
+            writeln!(handle, "\tCRF: {}", state.crf_quality)?;
+            writeln!(handle, "\tc_thresh_baseline: {}", state.c_thresh_baseline)?;
+            writeln!(handle, "\tc_thresh_max: {}", state.c_thresh_max)?;
+            writeln!(
+                handle,
+                "\tc_increase_velocity: {}",
+                state.c_increase_velocity
+            )?;
+        }
+    }
 
     let pool = rayon::ThreadPoolBuilder::new()
         .num_threads(num_threads)
