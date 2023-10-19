@@ -1,5 +1,9 @@
 /*
 Created on 10/19/23 to evaluate feature detection speed & accuracy, and CRF quality.
+
+Example usage:
+cargo run --bin evaluate_feature_detection_transcode --release --features "open-cv feature-logging" -- --crf 6 --delta-t-max 255000 --frame-count-max 500 --input-filename "/home/andrew/Downloads/bunny/bunny.mp4" --scale 0.25 --detect-features
+
  */
 extern crate core;
 
@@ -12,14 +16,11 @@ use indicatif::ProgressBar;
 use std::error::Error;
 use std::fs::File;
 
-use adder_codec_core::codec::{EncoderOptions, EncoderType};
-use adder_codec_core::SourceCamera::FramedU8;
 use adder_codec_core::TimeMode;
 use adder_codec_rs::transcoder::source::framed::Framed;
 use adder_codec_rs::utils::viz::ShowFeatureMode::Off;
 use std::io::{BufWriter, Cursor};
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 /// Command line argument parser
 #[derive(Parser, Debug, Default, serde::Deserialize)]
