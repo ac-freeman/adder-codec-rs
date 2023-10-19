@@ -612,7 +612,7 @@ impl TranscoderState {
         };
 
         // Calculate quality metrics on the running intensity frame (not with features drawn on it)
-        let mut image_mat = source.get_video_ref().state.running_intensities.clone();
+        let mut image_mat = source.get_video_ref().display_frame.clone();
 
         if let Some(input) = source.get_input() {
             #[rustfmt::skip]
@@ -632,7 +632,7 @@ impl TranscoderState {
         }
 
         // Display frame
-        let mut image_mat = source.get_video_ref().display_frame.clone();
+        let mut image_mat = source.get_video_ref().display_frame_features.clone();
 
         let color = image_mat.shape()[2] == 3;
 

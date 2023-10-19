@@ -334,6 +334,9 @@ pub struct Video<W: Write> {
     /// The current instantaneous display frame
     pub display_frame: Frame,
 
+    /// The current instantaneous display frame with the features drawn on it
+    pub display_frame_features: Frame,
+
     /// The current view mode of the instantaneous frame
     pub instantaneous_view_mode: FramedViewMode,
 
@@ -421,6 +424,7 @@ impl<W: Write + 'static> Video<W> {
                     state,
                     event_pixel_trees,
                     display_frame: instantaneous_frame,
+                    display_frame_features: Default::default(),
                     instantaneous_view_mode,
                     event_sender,
                     encoder,
@@ -437,6 +441,7 @@ impl<W: Write + 'static> Video<W> {
                     state,
                     event_pixel_trees,
                     display_frame: instantaneous_frame,
+                    display_frame_features: Default::default(),
                     instantaneous_view_mode,
                     event_sender,
                     encoder,
@@ -762,6 +767,8 @@ impl<W: Write + 'static> Video<W> {
             }
         }
 
+        self.display_frame_features = self.display_frame.clone();
+
         self.handle_features(&big_buffer)?;
 
         if self.state.show_live {
@@ -924,7 +931,7 @@ impl<W: Write + 'static> Video<W> {
                     ptr,
                     length,
                     capacity,
-                } = RawParts::from_vec(self.display_frame.clone().into_raw_vec()); // pixels will be move into_raw_parts，and return a manually drop pointer.
+                } = RawParts::from_vec(self.display_frame_features.clone().into_raw_vec()); // pixels will be move into_raw_parts，and return a manually drop pointer.
                 let mut cv_mat = opencv::core::Mat::new_rows_cols_with_data(
                     self.state.plane.h() as i32,
                     self.state.plane.w() as i32,
@@ -991,7 +998,7 @@ impl<W: Write + 'static> Video<W> {
                     draw_feature_coord(
                         coord.x,
                         coord.y,
-                        &mut self.display_frame,
+                        &mut self.display_frame_features,
                         self.state.plane.c() != 1,
                     );
                 }
@@ -1004,7 +1011,7 @@ impl<W: Write + 'static> Video<W> {
                     draw_feature_coord(
                         coord.x,
                         coord.y,
-                        &mut self.display_frame,
+                        &mut self.display_frame_features,
                         self.state.plane.c() != 1,
                     );
                 }
