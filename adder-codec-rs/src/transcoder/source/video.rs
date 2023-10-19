@@ -1018,7 +1018,7 @@ impl<W: Write + 'static> Video<W> {
                 opencv::core::Scalar::new(0.0, 0.0, 255.0, 0.0),
                 opencv::features2d::DrawMatchesFlags::DEFAULT,
             )?;
-            show_display_force("keypoints", &keypoint_mat, 1)?;
+            // show_display_force("keypoints", &keypoint_mat, 1)?;
         }
 
         if self.state.show_features == ShowFeatureMode::Hold {

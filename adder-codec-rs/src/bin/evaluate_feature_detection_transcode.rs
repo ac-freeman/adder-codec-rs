@@ -16,6 +16,7 @@ use adder_codec_core::codec::{EncoderOptions, EncoderType};
 use adder_codec_core::SourceCamera::FramedU8;
 use adder_codec_core::TimeMode;
 use adder_codec_rs::transcoder::source::framed::Framed;
+use adder_codec_rs::utils::viz::ShowFeatureMode::Off;
 use std::io::{BufWriter, Cursor};
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -31,6 +32,10 @@ pub struct TranscodeFeatureEvalArgs {
     /// CRF quality. 0 = lossless, 9 = worst quality
     #[clap(short, long, default_value_t = 6)]
     pub crf: u8,
+
+    /// Run feature detection?
+    #[clap(long, action)]
+    pub detect_features: bool,
 
     /// Override what the CRF setting determines: Max number of ticks for any event
     #[clap(short, long, default_value_t = 15300)]
@@ -88,7 +93,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 .chunk_rows(64)
                 .crf(args.crf)
                 .auto_time_parameters(255, args.delta_t_max, Some(TimeMode::AbsoluteT))?
-                .show_display(false);
+                .show_display(false)
+                .detect_features(args.detect_features, Off);
 
                 Ok(framed)
             }
