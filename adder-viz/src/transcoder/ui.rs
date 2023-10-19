@@ -135,7 +135,7 @@ pub struct InfoUiState {
     plane: PlaneSize,
     pub source_name: RichText,
     pub output_name: OutputName,
-    pub davis_latency: u128,
+    pub davis_latency: Option<f64>,
     pub(crate) input_path_0: Option<PathBuf>,
     pub(crate) input_path_1: Option<PathBuf>,
     pub(crate) output_path: Option<PathBuf>,
@@ -163,7 +163,7 @@ impl Default for OutputName {
 
 impl Default for InfoUiState {
     fn default() -> Self {
-        let plot_points: VecDeque<f64> = (0..1000).map(|_| 0.0).collect();
+        let plot_points: VecDeque<Option<f64>> = (0..1000).map(|_| None).collect();
 
         InfoUiState {
             events_per_sec: 0.,
@@ -175,7 +175,7 @@ impl Default for InfoUiState {
             plane: Default::default(),
             source_name: RichText::new("No input file selected yet"),
             output_name: Default::default(),
-            davis_latency: 0,
+            davis_latency: None,
             input_path_0: None,
             input_path_1: None,
             output_path: None,
@@ -335,16 +335,13 @@ impl TranscoderState {
             self.ui_info_state.events_ppc_total
         ));
 
-        if self.ui_info_state.davis_latency > 0 {
-            ui.label(format!(
-                "DAVIS/DVS latency: {:} ms",
-                self.ui_info_state.davis_latency
-            ));
+        if let Some(latency) = self.ui_info_state.davis_latency {
+            ui.label(format!("DAVIS/DVS latency: {:} ms", latency));
         }
 
         self.ui_info_state
             .plot_points_eventrate_y
-            .update(self.ui_info_state.events_ppc_per_sec);
+            .update(Some(self.ui_info_state.events_ppc_per_sec));
 
         if self.ui_info_state.event_size == 0 {
             self.ui_info_state.event_size = if self.ui_info_state.plane.c() == 1 {
@@ -358,31 +355,24 @@ impl TranscoderState {
             * self.ui_info_state.plane.volume() as f64
             / 1024.0
             / 1024.0; // transcoded raw in megabytes per sec
-        self.ui_info_state
-            .plot_points_raw_adder_bitrate_y
-            .update(bitrate);
+        if self.ui_info_state.plane.volume() > 1 {
+            self.ui_info_state
+                .plot_points_raw_adder_bitrate_y
+                .update(Some(bitrate));
+        } else {
+            self.ui_info_state
+                .plot_points_raw_adder_bitrate_y
+                .update(None);
+        }
 
         self.ui_info_state
             .plot_points_latency_y
-            .update(self.ui_info_state.davis_latency as f64);
+            .update(self.ui_info_state.davis_latency);
 
-        let line_eventrate = self
-            .ui_info_state
-            .plot_points_eventrate_y
-            .get_plotline("Events PPC per sec");
-
-        let line_psnr = self
-            .ui_info_state
-            .plot_points_psnr_y
-            .get_plotline("PSNR dB");
-
-        let line_mse = self.ui_info_state.plot_points_mse_y.get_plotline("MSE/10");
-        let line_ssim = self.ui_info_state.plot_points_ssim_y.get_plotline("SSIM");
-
-        let line_latency = self
-            .ui_info_state
-            .plot_points_latency_y
-            .get_plotline("Latency");
+        // let line_eventrate = self
+        //     .ui_info_state
+        //     .plot_points_eventrate_y
+        //     .get_plotline("Events PPC per sec");
 
         Plot::new("my_plot")
             .height(100.0)
@@ -390,15 +380,17 @@ impl TranscoderState {
             .auto_bounds_y()
             .legend(Legend::default().position(LeftTop))
             .show(ui, |plot_ui| {
-                plot_ui.line(line_eventrate);
-                plot_ui.line(line_latency);
-                plot_ui.line(
-                    self.ui_info_state
-                        .plot_points_psnr_y
-                        .get_plotline("PSNR dB"),
-                );
-                plot_ui.line(self.ui_info_state.plot_points_mse_y.get_plotline("MSE/10"));
-                plot_ui.line(self.ui_info_state.plot_points_ssim_y.get_plotline("SSIM"));
+                let mut metrics = vec![
+                    (&self.ui_info_state.plot_points_psnr_y, "PSNR dB"),
+                    (&self.ui_info_state.plot_points_mse_y, "MSE"),
+                    (&self.ui_info_state.plot_points_ssim_y, "SSIM"),
+                ];
+
+                for (line, label) in metrics {
+                    if line.points.iter().last().unwrap().is_some() {
+                        plot_ui.line(line.get_plotline(label, false));
+                    }
+                }
             });
         Plot::new("bitrate_plot")
             .height(100.0)
@@ -406,19 +398,23 @@ impl TranscoderState {
             .auto_bounds_y()
             .legend(Legend::default().position(LeftTop))
             .show(ui, |plot_ui| {
-                plot_ui.line(
-                    self.ui_info_state
-                        .plot_points_raw_adder_bitrate_y
-                        .get_plotline("Raw ADΔER MB/s"),
-                );
-                plot_ui.line(
-                    self.ui_info_state
-                        .plot_points_raw_source_bitrate_y
-                        .get_plotline("Raw source MB/s"),
-                );
-                plot_ui.line(line_psnr);
-                plot_ui.line(line_mse);
-                plot_ui.line(line_ssim);
+                let mut metrics = vec![
+                    (
+                        &self.ui_info_state.plot_points_raw_adder_bitrate_y,
+                        "log10(Raw ADΔER MB/s)",
+                    ),
+                    (
+                        &self.ui_info_state.plot_points_raw_source_bitrate_y,
+                        "log10(Raw source MB/s)",
+                    ),
+                    (&self.ui_info_state.plot_points_latency_y, "Latency"),
+                ];
+
+                for (line, label) in metrics {
+                    if line.points.iter().last().unwrap().is_some() {
+                        plot_ui.line(line.get_plotline(label, true));
+                    }
+                }
             });
     }
 
@@ -571,7 +567,7 @@ impl TranscoderState {
                             return Ok(());
                         }
                         Some(source) => {
-                            ui_info_state.davis_latency = source.get_latency();
+                            ui_info_state.davis_latency = Some(source.get_latency() as f64);
                             source
                         }
                     }
@@ -629,15 +625,9 @@ impl TranscoderState {
                 },
             );
             let metrics = metrics?;
-            self.ui_info_state
-                .plot_points_psnr_y
-                .update(metrics.psnr.unwrap_or(0.0));
-            self.ui_info_state
-                .plot_points_mse_y
-                .update(metrics.mse.unwrap_or(0.0) / 10.0);
-            self.ui_info_state
-                .plot_points_ssim_y
-                .update(metrics.ssim.unwrap_or(0.0));
+            self.ui_info_state.plot_points_psnr_y.update(metrics.psnr);
+            self.ui_info_state.plot_points_mse_y.update(metrics.mse);
+            self.ui_info_state.plot_points_ssim_y.update(metrics.ssim);
         }
 
         let color = image_mat.shape()[2] == 3;
@@ -674,7 +664,7 @@ impl TranscoderState {
         let raw_source_bitrate = source.get_running_input_bitrate() / 8.0 / 1024.0 / 1024.0; // source in megabytes per sec
         self.ui_info_state
             .plot_points_raw_source_bitrate_y
-            .update(raw_source_bitrate);
+            .update(Some(raw_source_bitrate));
 
         Ok(())
     }

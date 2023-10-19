@@ -1041,7 +1041,6 @@ impl<W: Write + 'static> Video<W> {
     /// Update the CRF value and set the baseline c for all pixels
     pub(crate) fn update_crf(&mut self, crf: u8, update_time_params: bool) {
         self.state.update_crf(crf, update_time_params);
-        dbg!("Updating crf");
 
         for px in self.event_pixel_trees.iter_mut() {
             px.c_thresh = self.state.c_thresh_baseline;

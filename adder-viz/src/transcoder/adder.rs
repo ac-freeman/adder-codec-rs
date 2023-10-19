@@ -236,7 +236,7 @@ pub(crate) fn replace_adder_transcoder(
     ui_info_state.events_ppc_total = 0.0;
     ui_info_state.events_total = 0;
     ui_info_state.events_ppc_per_sec = 0.0;
-    ui_info_state.davis_latency = 0;
+    ui_info_state.davis_latency = None;
     if let Some(input_path) = input_path_buf_0 {
         match AdderTranscoder::new(
             &input_path,

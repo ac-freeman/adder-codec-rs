@@ -9,25 +9,35 @@ use video_rs::Frame;
 pub(crate) mod slider;
 
 pub(crate) struct PlotY {
-    pub points: VecDeque<f64>,
+    pub points: VecDeque<Option<f64>>,
 }
 
 impl PlotY {
-    pub(crate) fn get_plotline(&self, name: &str) -> Line {
+    pub(crate) fn get_plotline(&self, name: &str, log_base: bool) -> Line {
         let plot_points: PlotPoints = (0..1000)
             .map(|i| {
                 let x = i as f64;
-                [x, self.points[i]]
+                let y = self.points[i].unwrap_or(0.0);
+                if log_base && y > 0.0 {
+                    [x, y.log10()]
+                } else {
+                    [x, y]
+                }
             })
             .collect();
         Line::new(plot_points).name(name)
     }
 
-    pub(crate) fn update(&mut self, new_point: f64) {
-        if new_point.is_finite() {
-            self.points.push_back(new_point);
-        } else {
-            self.points.push_back(0.0);
+    pub(crate) fn update(&mut self, new_opt: Option<f64>) {
+        match new_opt {
+            Some(new) => {
+                if new.is_finite() {
+                    self.points.push_back(Some(new));
+                } else {
+                    self.points.push_back(Some(0.0));
+                }
+            }
+            None => self.points.push_back(None),
         }
         self.points.pop_front();
     }
