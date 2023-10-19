@@ -1117,11 +1117,6 @@ pub fn integrate_for_px(
 
     *base_val = px.base_val;
 
-    if px.coord.x == 200 && px.coord.y == 200 && px.coord.c.unwrap_or(0) == 0 {
-        dbg!(px.c_thresh);
-        dbg!(px.c_increase_counter);
-        dbg!(state.c_thresh_max);
-    }
     if *frame_val < base_val.saturating_sub(px.c_thresh)
         || *frame_val > base_val.saturating_add(px.c_thresh)
     {
