@@ -1,5 +1,6 @@
 use adder_codec_core::{Coord, Event, PlaneSize};
 use ndarray::{s, Array3, ArrayView, Axis, Dimension, Ix2, Ix3, RemoveAxis};
+use serde::{Deserialize, Serialize};
 use std::error::Error;
 
 // TODO: Explore optimal threshold values
@@ -125,7 +126,7 @@ pub fn is_feature(
 }
 
 /// Container for quality metric results
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct QualityMetrics {
     /// Peak signal-to-noise ratio
     pub psnr: Option<f64>,

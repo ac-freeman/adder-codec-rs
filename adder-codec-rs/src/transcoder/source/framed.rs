@@ -8,6 +8,7 @@ use crate::utils::viz::ShowFeatureMode;
 use adder_codec_core::codec::{EncoderOptions, EncoderType};
 use ndarray::Axis;
 
+use crate::utils::cv::{calculate_quality_metrics, QualityMetrics};
 use rayon::ThreadPool;
 use std::io::Write;
 use std::path::PathBuf;
@@ -126,13 +127,35 @@ impl<W: Write + 'static> Source<W> for Framed<W> {
         let (_, frame) = self.cap.decode()?;
         self.input_frame = handle_color(frame, self.color_input)?;
 
-        thread_pool.install(|| {
+        let res = thread_pool.install(|| {
             self.video.integrate_matrix(
                 self.input_frame.clone(),
                 self.video.state.ref_time as f32,
                 view_interval,
             )
-        })
+        });
+        #[cfg(feature = "feature-logging")]
+        {
+            if let Some(handle) = &mut self.video.state.feature_log_handle {
+                // Calculate the quality metrics
+                let mut image_mat = self.video.display_frame.clone();
+
+                #[rustfmt::skip]
+                    let metrics = calculate_quality_metrics(
+                    &self.input_frame,
+                    &mut image_mat,
+                    QualityMetrics {
+                        mse: Some(0.0),
+                        psnr: Some(0.0),
+                        ssim: Some(0.0),
+                    });
+
+                let metrics = metrics.unwrap();
+                let bytes = serde_pickle::to_vec(&metrics, Default::default()).unwrap();
+                handle.write_all(&bytes).unwrap();
+            }
+        }
+        res
     }
 
     fn crf(&mut self, crf: u8) {

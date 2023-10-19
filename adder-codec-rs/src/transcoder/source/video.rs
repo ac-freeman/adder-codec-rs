@@ -206,7 +206,7 @@ pub struct VideoState {
 
     features: Vec<HashSet<Coord>>,
 
-    feature_log_handle: Option<std::fs::File>,
+    pub(crate) feature_log_handle: Option<std::fs::File>,
 }
 
 impl Default for VideoState {
@@ -763,7 +763,7 @@ impl<W: Write + 'static> Video<W> {
             });
 
         for events in &big_buffer {
-            for (e1, e2) in events.iter().circular_tuple_windows() {
+            for e1 in events.iter() {
                 self.encoder.ingest_event(*e1)?;
             }
         }
@@ -771,6 +771,32 @@ impl<W: Write + 'static> Video<W> {
         self.display_frame_features = self.display_frame.clone();
 
         self.handle_features(&big_buffer)?;
+
+        #[cfg(feature = "feature-logging")]
+        {
+            if let Some(handle) = &mut self.state.feature_log_handle {
+                // Calculate current bitrate
+                let mut events_per_sec = 0.0;
+                for events_vec in &big_buffer {
+                    events_per_sec += events_vec.len() as f64;
+                }
+                events_per_sec *= (self.state.tps as f64 / self.state.ref_time as f64);
+
+                let bitrate =
+                    events_per_sec * if self.state.plane.c() == 1 { 9.0 } else { 11.0 } * 8.0;
+
+                handle
+                    .write_all(
+                        &serde_pickle::to_vec(&format!("\nbps: {}", bitrate), Default::default())
+                            .unwrap(),
+                    )
+                    .unwrap();
+
+                handle
+                    .write_all(&serde_pickle::to_vec(&format!("\n"), Default::default()).unwrap())
+                    .unwrap();
+            }
+        }
 
         if self.state.show_live {
             // show_display("instance", &self.instantaneous_frame, 1, self)?;
@@ -858,6 +884,7 @@ impl<W: Write + 'static> Video<W> {
         &mut self,
         big_buffer: &Vec<Vec<Event>>,
     ) -> Result<(), SourceError> {
+        // if !cfg!(feature = "feature-logging") && !self.state.feature_detection {
         if !self.state.feature_detection {
             return Ok(()); // Early return
         }
@@ -915,7 +942,7 @@ impl<W: Write + 'static> Video<W> {
                     }
                 }
 
-                let out = format!("\nADDER FAST: {}", total_duration_nanos);
+                let out = format!("\nADDER FAST: {}\n", total_duration_nanos);
                 handle
                     .write_all(&serde_pickle::to_vec(&out, Default::default()).unwrap())
                     .unwrap();
@@ -978,7 +1005,7 @@ impl<W: Write + 'static> Video<W> {
                     handle.write_all(&bytes).unwrap();
                 }
 
-                let out = format!("\nOpenCV FAST: {}", duration.as_nanos());
+                let out = format!("\nOpenCV FAST: {}\n", duration.as_nanos());
                 handle
                     .write_all(&serde_pickle::to_vec(&out, Default::default()).unwrap())
                     .unwrap();
