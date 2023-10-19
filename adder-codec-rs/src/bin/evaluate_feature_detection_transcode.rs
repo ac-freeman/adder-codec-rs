@@ -2,7 +2,7 @@
 Created on 10/19/23 to evaluate feature detection speed & accuracy, and CRF quality.
 
 Example usage:
-cargo run --bin evaluate_feature_detection_transcode --release --features "open-cv feature-logging" -- --crf 6 --delta-t-max 255000 --frame-count-max 500 --input-filename "/home/andrew/Downloads/bunny/bunny.mp4" --scale 0.25 --detect-features
+cargo run --bin evaluate_feature_detection_transcode --release --features "open-cv feature-logging" -- --crf 6 --delta-t-max 76500 --frame-count-max 500 --input-filename "/home/andrew/Downloads/bunny/bunny.mp4" --scale 0.25 --detect-features
 
  */
 extern crate core;
@@ -109,19 +109,23 @@ async fn main() -> Result<(), Box<dyn Error>> {
         let state = &mut source.get_video_mut().state;
         // Write the plane size to the log file
         if let Some(handle) = &mut state.feature_log_handle {
-            writeln!(handle, "\tTicks per second: {}", state.tps)?;
+            writeln!(handle, "META: Ticks per second: {}", state.tps)?;
             writeln!(
                 handle,
-                "\tReference ticks per source interval: {}",
+                "META: Reference ticks per source interval: {}",
                 state.ref_time
             )?;
-            writeln!(handle, "\tΔt_max: {}", state.delta_t_max)?;
-            writeln!(handle, "\tCRF: {}", state.crf_quality)?;
-            writeln!(handle, "\tc_thresh_baseline: {}", state.c_thresh_baseline)?;
-            writeln!(handle, "\tc_thresh_max: {}", state.c_thresh_max)?;
+            writeln!(handle, "META: Δt_max: {}", state.delta_t_max)?;
+            writeln!(handle, "META: CRF: {}", state.crf_quality)?;
             writeln!(
                 handle,
-                "\tc_increase_velocity: {}",
+                "META: c_thresh_baseline: {}",
+                state.c_thresh_baseline
+            )?;
+            writeln!(handle, "META: c_thresh_max: {}", state.c_thresh_max)?;
+            writeln!(
+                handle,
+                "META: c_increase_velocity: {}",
                 state.c_increase_velocity
             )?;
         }
