@@ -63,6 +63,7 @@ bitstream-io = "1.6.0"
 video-rs = { path = "../../video-rs", version = "0.4", features = ["ndarray"] }
 ndarray-image = "0.3.0"
 raw-parts = "2.0.0"
+indicatif = "0.17.7"
 
 [dependencies.opencv]
 version = "0.83.0"
