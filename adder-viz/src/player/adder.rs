@@ -268,7 +268,7 @@ impl AdderPlayer {
         // }
 
         let image_bevy = loop {
-            let mut display_mat = self.display_frame.clone();
+            let mut display_mat = &mut self.display_frame;
             let color = display_mat.shape()[2] == 3;
 
             if self.stream_state.current_t_ticks as u128
@@ -277,7 +277,7 @@ impl AdderPlayer {
                 self.current_frame += 1;
 
                 let image_bevy =
-                    prep_bevy_image(display_mat, color, meta.plane.w(), meta.plane.h())?;
+                    prep_bevy_image(display_mat.clone(), color, meta.plane.w(), meta.plane.h())?;
                 break Some(image_bevy);
             }
 
@@ -301,10 +301,14 @@ impl AdderPlayer {
                                 [[y as usize, x as usize, c as usize]];
                         self.stream_state.last_timestamps[[y as usize, x as usize, c as usize]] =
                             event.delta_t;
-                        if self.stream_state.last_timestamps[[y as usize, x as usize, c as usize]]
-                            % meta.ref_interval
-                            != 0
+                        if is_framed(meta.source_camera)
+                            && self.stream_state.last_timestamps
+                                [[y as usize, x as usize, c as usize]]
+                                % meta.ref_interval
+                                != 0
                         {
+                            // If it's a framed source, make the timestamp align to the reference interval
+
                             self.stream_state.last_timestamps
                                 [[y as usize, x as usize, c as usize]] = ((self
                                 .stream_state
@@ -315,6 +319,7 @@ impl AdderPlayer {
                         }
                         event.delta_t = dt;
                     } else {
+                        panic!("Relative time mode is deprecated.");
                         self.stream_state.last_timestamps[[y as usize, x as usize, c as usize]] +=
                             event.delta_t;
                         if self.stream_state.last_timestamps[[y as usize, x as usize, c as usize]]

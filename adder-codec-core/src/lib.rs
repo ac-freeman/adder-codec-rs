@@ -48,6 +48,18 @@ pub enum SourceCamera {
     Asint,
 }
 
+pub fn is_framed(source_camera: SourceCamera) -> bool {
+    match source_camera {
+        SourceCamera::FramedU8
+        | SourceCamera::FramedU16
+        | SourceCamera::FramedU32
+        | SourceCamera::FramedU64
+        | SourceCamera::FramedF32
+        | SourceCamera::FramedF64 => true,
+        _ => false,
+    }
+}
+
 #[cfg(feature = "compression")]
 use crate::codec::compressed::blocks::{DeltaTResidual, EventResidual};
 #[cfg(feature = "compression")]
