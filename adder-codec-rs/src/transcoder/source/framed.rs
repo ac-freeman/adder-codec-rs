@@ -9,6 +9,7 @@ use adder_codec_core::codec::{EncoderOptions, EncoderType};
 use ndarray::Axis;
 
 use crate::utils::cv::{calculate_quality_metrics, QualityMetrics};
+use chrono::Local;
 use rayon::ThreadPool;
 use std::io::Write;
 use std::path::PathBuf;
@@ -273,6 +274,26 @@ impl<W: Write + 'static> VideoBuilder<W> for Framed<W> {
 
     fn detect_features(mut self, detect_features: bool, show_features: ShowFeatureMode) -> Self {
         self.video = self.video.detect_features(detect_features, show_features);
+        self
+    }
+
+    fn log_path(mut self, name: String) -> Self {
+        let date_time = Local::now();
+        let formatted = format!("{}_{}.log", name, date_time.format("%d_%m_%Y_%H_%M_%S"));
+        let log_handle = std::fs::File::create(formatted).ok();
+        self.video.state.feature_log_handle = log_handle;
+
+        // Write the plane size to the log file
+        if let Some(handle) = &mut self.video.state.feature_log_handle {
+            writeln!(
+                handle,
+                "{}x{}x{}",
+                self.video.state.plane.w(),
+                self.video.state.plane.h(),
+                self.video.state.plane.c()
+            )
+            .unwrap();
+        }
         self
     }
 }

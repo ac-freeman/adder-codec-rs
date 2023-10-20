@@ -95,7 +95,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 .crf(args.crf)
                 .auto_time_parameters(255, args.delta_t_max, Some(TimeMode::AbsoluteT))?
                 .show_display(false)
-                .detect_features(args.detect_features, Off);
+                .detect_features(args.detect_features, Off)
+                .log_path(format!(
+                    "{}_{}_",
+                    args.crf,
+                    path.file_stem().unwrap().to_str().unwrap().to_string()
+                ));
 
                 Ok(framed)
             }

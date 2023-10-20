@@ -1030,6 +1030,10 @@ impl<W: Write + 'static> VideoBuilder<W> for Davis<W> {
         self.video = self.video.detect_features(detect_features, show_features);
         self
     }
+
+    fn log_path(self, name: String) -> Self {
+        todo!()
+    }
 }
 
 fn check_dvs_before(dvs_event_t: i64, timestamp_before: i64) -> bool {

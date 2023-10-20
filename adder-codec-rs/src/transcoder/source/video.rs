@@ -322,6 +322,9 @@ pub trait VideoBuilder<W> {
 
     /// Set whether or not to detect features, and whether or not to display the features
     fn detect_features(self, detect_features: bool, show_features: ShowFeatureMode) -> Self;
+
+    #[cfg(feature = "feature-logging")]
+    fn log_path(self, name: String) -> Self;
 }
 
 // impl VideoBuilder for Video {}
@@ -364,19 +367,6 @@ impl<W: Write + 'static> Video<W> {
             running_intensities: Array::zeros((plane.h_usize(), plane.w_usize(), plane.c_usize())),
             ..Default::default()
         };
-
-        #[cfg(feature = "feature-logging")]
-        {
-            let date_time = Local::now();
-            let formatted = format!("features_{}.log", date_time.format("%d_%m_%Y_%H_%M_%S"));
-            let log_handle = std::fs::File::create(formatted).ok();
-            state.feature_log_handle = log_handle;
-
-            // Write the plane size to the log file
-            if let Some(handle) = &mut state.feature_log_handle {
-                writeln!(handle, "{}x{}x{}", plane.w(), plane.h(), plane.c()).unwrap();
-            }
-        }
 
         let mut data = Vec::new();
         for y in 0..plane.h() {
