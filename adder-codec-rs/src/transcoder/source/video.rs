@@ -1091,7 +1091,6 @@ impl<W: Write + 'static> Video<W> {
         c_increase_velocity: u8,
         feature_c_radius_denom: f32,
     ) {
-        dbg!("Updating manually");
         self.state.update_quality_manual(
             c_thresh_baseline,
             c_thresh_max,

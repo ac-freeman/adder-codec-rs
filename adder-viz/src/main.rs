@@ -543,7 +543,6 @@ fn slider_pm<Num: emath::Numeric + Pm>(
                 *instant_value = *drag_value;
             }
             if slider.lost_focus() {
-                eprintln!("lost focus");
                 *instant_value = *drag_value;
             }
 
