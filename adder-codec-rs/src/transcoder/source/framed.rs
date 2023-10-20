@@ -1,5 +1,4 @@
 use crate::transcoder::source::video::SourceError;
-use crate::transcoder::source::video::SourceError::BufferEmpty;
 use crate::transcoder::source::video::Video;
 use crate::transcoder::source::video::{Source, VideoBuilder};
 use adder_codec_core::Mode::FramePerfect;
@@ -7,11 +6,12 @@ use adder_codec_core::{DeltaT, Event, PlaneSize, SourceCamera, TimeMode};
 
 use crate::utils::viz::ShowFeatureMode;
 use adder_codec_core::codec::{EncoderOptions, EncoderType};
-use ndarray::{Array, Axis};
+use ndarray::Axis;
 
+use crate::utils::cv::{calculate_quality_metrics, QualityMetrics};
+use chrono::Local;
 use rayon::ThreadPool;
 use std::io::Write;
-use std::mem::swap;
 use std::path::PathBuf;
 use video_rs::{self, Decoder, Frame, Locator, Options, Resize};
 
@@ -128,13 +128,35 @@ impl<W: Write + 'static> Source<W> for Framed<W> {
         let (_, frame) = self.cap.decode()?;
         self.input_frame = handle_color(frame, self.color_input)?;
 
-        thread_pool.install(|| {
+        let res = thread_pool.install(|| {
             self.video.integrate_matrix(
                 self.input_frame.clone(),
                 self.video.state.ref_time as f32,
                 view_interval,
             )
-        })
+        });
+        #[cfg(feature = "feature-logging")]
+        {
+            if let Some(handle) = &mut self.video.state.feature_log_handle {
+                // Calculate the quality metrics
+                let mut image_mat = self.video.display_frame.clone();
+
+                #[rustfmt::skip]
+                    let metrics = calculate_quality_metrics(
+                    &self.input_frame,
+                    &mut image_mat,
+                    QualityMetrics {
+                        mse: Some(0.0),
+                        psnr: Some(0.0),
+                        ssim: Some(0.0),
+                    });
+
+                let metrics = metrics.unwrap();
+                let bytes = serde_pickle::to_vec(&metrics, Default::default()).unwrap();
+                handle.write_all(&bytes).unwrap();
+            }
+        }
+        res
     }
 
     fn crf(&mut self, crf: u8) {
@@ -153,8 +175,8 @@ impl<W: Write + 'static> Source<W> for Framed<W> {
         todo!()
     }
 
-    fn get_input(&self) -> &Frame {
-        self.get_last_input_frame()
+    fn get_input(&self) -> Option<&Frame> {
+        Some(self.get_last_input_frame())
     }
 
     fn get_running_input_bitrate(&self) -> f64 {
@@ -254,10 +276,31 @@ impl<W: Write + 'static> VideoBuilder<W> for Framed<W> {
         self.video = self.video.detect_features(detect_features, show_features);
         self
     }
+
+    fn log_path(mut self, name: String) -> Self {
+        let date_time = Local::now();
+        let formatted = format!("{}_{}.log", name, date_time.format("%d_%m_%Y_%H_%M_%S"));
+        let log_handle = std::fs::File::create(formatted).ok();
+        self.video.state.feature_log_handle = log_handle;
+
+        // Write the plane size to the log file
+        if let Some(handle) = &mut self.video.state.feature_log_handle {
+            writeln!(
+                handle,
+                "{}x{}x{}",
+                self.video.state.plane.w(),
+                self.video.state.plane.h(),
+                self.video.state.plane.c()
+            )
+            .unwrap();
+        }
+        self
+    }
 }
 
 fn handle_color(mut input: Frame, color: bool) -> Result<Frame, SourceError> {
     if !color {
+        // Map the three color channels to a single grayscale channel
         input
             .exact_chunks_mut((1, 1, 3))
             .into_iter()
@@ -266,14 +309,10 @@ fn handle_color(mut input: Frame, color: bool) -> Result<Frame, SourceError> {
                     + *v.uget((0, 0, 1)) as f64 * 0.587
                     + *v.uget((0, 0, 2)) as f64 * 0.299)
                     as u8;
-                // v = Array::from_elem(
-                //     (3),
-                //     (v.uget(0) as f64 * 0.114 + v.uget(1) as f64 * 0.587 + v.uget(2) as f64 * 0.299)
-                //         as u8,
-                // );
             });
 
-        // Map the three color channels to a single grayscale channel
+        // Remove the color channels
+        input.collapse_axis(Axis(2), 0);
     }
     Ok(input)
 }

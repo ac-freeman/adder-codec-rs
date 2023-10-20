@@ -5,7 +5,7 @@ use adder_codec_core::DeltaT;
 #[cfg(feature = "open-cv")]
 use adder_codec_rs::transcoder::source::davis::Davis;
 use adder_codec_rs::transcoder::source::framed::Framed;
-use bevy::prelude::{dbg, Image};
+use bevy::prelude::Image;
 use std::fmt;
 use std::fs::File;
 use std::io::BufWriter;
@@ -94,14 +94,6 @@ impl AdderTranscoder {
                                     ui_state.encoder_options,
                                     writer,
                                 )?;
-                                //     .output_events_filename(match output_path.to_str() {
-                                //     None => {
-                                //         return Err(Box::new(AdderTranscoderError(
-                                //             "Couldn't get output path string".into(),
-                                //         )))
-                                //     }
-                                //     Some(path) => path.parse()?,
-                                // });
                             }
                         };
 
@@ -244,7 +236,7 @@ pub(crate) fn replace_adder_transcoder(
     ui_info_state.events_ppc_total = 0.0;
     ui_info_state.events_total = 0;
     ui_info_state.events_ppc_per_sec = 0.0;
-    ui_info_state.davis_latency = 0;
+    ui_info_state.davis_latency = None;
     if let Some(input_path) = input_path_buf_0 {
         match AdderTranscoder::new(
             &input_path,

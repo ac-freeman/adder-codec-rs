@@ -6,15 +6,15 @@ use adder_codec_rs::framer::driver::FramerMode::INSTANTANEOUS;
 use adder_codec_rs::framer::driver::{FrameSequence, Framer, FramerBuilder};
 use adder_codec_rs::framer::scale_intensity::event_to_intensity;
 
+use crate::utils::prep_bevy_image;
 #[cfg(feature = "open-cv")]
 use adder_codec_rs::transcoder::source::video::show_display_force;
 use adder_codec_rs::transcoder::source::video::FramedViewMode;
 use adder_codec_rs::utils::cv::is_feature;
 use adder_codec_rs::utils::viz::draw_feature_coord;
 use bevy::prelude::Image;
-use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
+use ndarray::Array;
 use ndarray::Array3;
-use ndarray::{Array, Axis};
 #[cfg(feature = "open-cv")]
 use opencv::core::{
     create_continuous, KeyPoint, Mat, MatTraitConstManual, MatTraitManual, Scalar, Vector, CV_8UC1,
@@ -268,7 +268,7 @@ impl AdderPlayer {
         // }
 
         let image_bevy = loop {
-            let mut display_mat = &mut self.display_frame;
+            let mut display_mat = self.display_frame.clone();
             let color = display_mat.shape()[2] == 3;
 
             if self.stream_state.current_t_ticks as u128
@@ -276,53 +276,8 @@ impl AdderPlayer {
             {
                 self.current_frame += 1;
 
-                let mut image_bgra = if color {
-                    // Swap the red and blue channels
-                    let temp = display_mat.index_axis_mut(Axis(2), 0).to_owned();
-                    let mut blue_channel = display_mat.index_axis_mut(Axis(2), 2).to_owned();
-                    display_mat.index_axis_mut(Axis(2), 0).assign(&blue_channel);
-                    // Swap the channels by copying
-                    display_mat.index_axis_mut(Axis(2), 2).assign(&temp);
-
-                    // add alpha channel
-                    ndarray::concatenate(
-                        Axis(2),
-                        &[
-                            display_mat.clone().view(),
-                            Array::from_elem(
-                                (display_mat.shape()[0], display_mat.shape()[1], 1),
-                                255,
-                            )
-                            .view(),
-                        ],
-                    )?
-                } else {
-                    ndarray::concatenate(
-                        Axis(2),
-                        &[
-                            display_mat.clone().view(),
-                            display_mat.clone().view(),
-                            display_mat.clone().view(),
-                            Array::from_elem(
-                                (display_mat.shape()[0], display_mat.shape()[1], 1),
-                                255,
-                            )
-                            .view(),
-                        ],
-                    )?
-                };
-                let image_bgra = image_bgra.as_standard_layout();
-
-                let image_bevy = Image::new(
-                    Extent3d {
-                        width: meta.plane.w().into(),
-                        height: meta.plane.h().into(),
-                        depth_or_array_layers: 1,
-                    },
-                    TextureDimension::D2,
-                    Vec::from(image_bgra.as_slice().unwrap()),
-                    TextureFormat::Bgra8UnormSrgb,
-                );
+                let image_bevy =
+                    prep_bevy_image(display_mat, color, meta.plane.w(), meta.plane.h())?;
                 break Some(image_bevy);
             }
 
@@ -437,51 +392,49 @@ impl AdderPlayer {
                             ) {
                                 // Reset the pixels in the cross accordingly...
                                 let radius = 2;
-                                unsafe {
-                                    if color {
-                                        for i in -radius..=radius {
-                                            for c in 0..3 as usize {
-                                                *display_mat.uget_mut((
-                                                    (event.coord.y as i32 + i) as usize,
-                                                    (event.coord.x as i32) as usize,
-                                                    c,
-                                                )) = *self.running_intensities.uget((
-                                                    (event.coord.y as i32 + i) as usize,
-                                                    (event.coord.x as i32) as usize,
-                                                    c,
-                                                ));
-                                                *display_mat.uget_mut((
-                                                    (event.coord.y as i32) as usize,
-                                                    (event.coord.x as i32 + i) as usize,
-                                                    c,
-                                                )) = *self.running_intensities.uget((
-                                                    (event.coord.y as i32) as usize,
-                                                    (event.coord.x as i32 + i) as usize,
-                                                    c,
-                                                ));
-                                            }
-                                        }
-                                    } else {
-                                        for i in -radius..=radius {
+                                if color {
+                                    for i in -radius..=radius {
+                                        for c in 0..3 as usize {
                                             *display_mat.uget_mut((
                                                 (event.coord.y as i32 + i) as usize,
                                                 (event.coord.x as i32) as usize,
-                                                0,
+                                                c,
                                             )) = *self.running_intensities.uget((
                                                 (event.coord.y as i32 + i) as usize,
                                                 (event.coord.x as i32) as usize,
-                                                0,
+                                                c,
                                             ));
                                             *display_mat.uget_mut((
                                                 (event.coord.y as i32) as usize,
                                                 (event.coord.x as i32 + i) as usize,
-                                                0,
+                                                c,
                                             )) = *self.running_intensities.uget((
                                                 (event.coord.y as i32) as usize,
                                                 (event.coord.x as i32 + i) as usize,
-                                                0,
+                                                c,
                                             ));
                                         }
+                                    }
+                                } else {
+                                    for i in -radius..=radius {
+                                        *display_mat.uget_mut((
+                                            (event.coord.y as i32 + i) as usize,
+                                            (event.coord.x as i32) as usize,
+                                            0,
+                                        )) = *self.running_intensities.uget((
+                                            (event.coord.y as i32 + i) as usize,
+                                            (event.coord.x as i32) as usize,
+                                            0,
+                                        ));
+                                        *display_mat.uget_mut((
+                                            (event.coord.y as i32) as usize,
+                                            (event.coord.x as i32 + i) as usize,
+                                            0,
+                                        )) = *self.running_intensities.uget((
+                                            (event.coord.y as i32) as usize,
+                                            (event.coord.x as i32 + i) as usize,
+                                            0,
+                                        ));
                                     }
                                 }
                             }
@@ -537,7 +490,7 @@ impl AdderPlayer {
             Some(s) => s,
         };
 
-        let mut display_mat = &mut self.display_frame;
+        let display_mat = &mut self.display_frame;
 
         let image_bevy = if frame_sequence.is_frame_0_filled() {
             let mut idx = 0;
@@ -621,50 +574,12 @@ impl AdderPlayer {
 
             self.stream_state.current_t_ticks += frame_sequence.state.tpf;
 
-            let mut image_mat = &mut self.display_frame;
+            let image_mat = self.display_frame.clone();
             let color = image_mat.shape()[2] == 3;
 
-            let mut image_bgra = if color {
-                // Swap the red and blue channels
-                let temp = image_mat.index_axis_mut(Axis(2), 0).to_owned();
-                let mut blue_channel = image_mat.index_axis_mut(Axis(2), 2).to_owned();
-                image_mat.index_axis_mut(Axis(2), 0).assign(&blue_channel);
-                // Swap the channels by copying
-                image_mat.index_axis_mut(Axis(2), 2).assign(&temp);
+            let image_bevy = prep_bevy_image(image_mat, color, meta.plane.w(), meta.plane.h())?;
 
-                // add alpha channel
-                ndarray::concatenate(
-                    Axis(2),
-                    &[
-                        image_mat.clone().view(),
-                        Array::from_elem((image_mat.shape()[0], image_mat.shape()[1], 1), 255)
-                            .view(),
-                    ],
-                )?
-            } else {
-                ndarray::concatenate(
-                    Axis(2),
-                    &[
-                        image_mat.clone().view(),
-                        image_mat.clone().view(),
-                        image_mat.clone().view(),
-                        Array::from_elem((image_mat.shape()[0], image_mat.shape()[1], 1), 255)
-                            .view(),
-                    ],
-                )?
-            };
-            let image_bgra = image_bgra.as_standard_layout();
-
-            Some(Image::new(
-                Extent3d {
-                    width: meta.plane.w().into(),
-                    height: meta.plane.h().into(),
-                    depth_or_array_layers: 1,
-                },
-                TextureDimension::D2,
-                Vec::from(image_bgra.as_slice().unwrap()),
-                TextureFormat::Bgra8UnormSrgb,
-            ))
+            Some(image_bevy)
         } else {
             None
         };

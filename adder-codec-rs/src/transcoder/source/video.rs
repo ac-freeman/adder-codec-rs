@@ -1,10 +1,6 @@
-use chrono::prelude::*;
-
 #[cfg(feature = "open-cv")]
-use opencv::core::{KeyPoint, Mat, Scalar, Size, Vector, CV_32F, CV_32FC3, CV_8U, CV_8UC3};
-use raw_parts::RawParts;
-use std::collections::{HashMap, HashSet};
-use std::error::Error;
+use opencv::core::{Mat, Size};
+use std::collections::HashSet;
 use std::io::{sink, Write};
 use std::mem::swap;
 use std::os::raw::c_void;
@@ -16,12 +12,12 @@ use adder_codec_core::codec::{
     CodecError, CodecMetadata, EncoderOptions, EncoderType, LATEST_CODEC_VERSION,
 };
 use adder_codec_core::{
-    Coord, DeltaT, Event, Mode, PixelAddress, PlaneError, PlaneSize, SourceCamera, SourceType,
-    TimeMode,
+    Coord, DeltaT, Event, Mode, PlaneError, PlaneSize, SourceCamera, SourceType, TimeMode,
 };
 use bumpalo::Bump;
+use chrono::Local;
 use std::sync::mpsc::{channel, Sender};
-use std::time::{Duration, Instant, SystemTime};
+use std::time::Instant;
 
 use crate::framer::scale_intensity::{FrameValue, SaeTime};
 use crate::transcoder::event_pixel_tree::{Intensity32, PixelArena};
@@ -183,7 +179,7 @@ pub struct VideoState {
     /// The reference time in ticks
     pub ref_time: u32,
     pub(crate) ref_time_divisor: f64,
-    pub(crate) tps: DeltaT,
+    pub tps: DeltaT,
 
     /// Constant Rate Factor (CRF) quality setting for the encoder. 0 is lossless, 9 is worst quality.
     /// Determines:
@@ -210,7 +206,7 @@ pub struct VideoState {
 
     features: Vec<HashSet<Coord>>,
 
-    feature_log_handle: Option<std::fs::File>,
+    pub feature_log_handle: Option<std::fs::File>,
 }
 
 impl Default for VideoState {
@@ -326,6 +322,9 @@ pub trait VideoBuilder<W> {
 
     /// Set whether or not to detect features, and whether or not to display the features
     fn detect_features(self, detect_features: bool, show_features: ShowFeatureMode) -> Self;
+
+    #[cfg(feature = "feature-logging")]
+    fn log_path(self, name: String) -> Self;
 }
 
 // impl VideoBuilder for Video {}
@@ -338,6 +337,9 @@ pub struct Video<W: Write> {
 
     /// The current instantaneous display frame
     pub display_frame: Frame,
+
+    /// The current instantaneous display frame with the features drawn on it
+    pub display_frame_features: Frame,
 
     /// The current view mode of the instantaneous frame
     pub instantaneous_view_mode: FramedViewMode,
@@ -365,19 +367,6 @@ impl<W: Write + 'static> Video<W> {
             running_intensities: Array::zeros((plane.h_usize(), plane.w_usize(), plane.c_usize())),
             ..Default::default()
         };
-
-        #[cfg(feature = "feature-logging")]
-        {
-            let date_time = Local::now();
-            let formatted = format!("features_{}.log", date_time.format("%d_%m_%Y_%H_%M_%S"));
-            let log_handle = std::fs::File::create(formatted).ok();
-            state.feature_log_handle = log_handle;
-
-            // Write the plane size to the log file
-            if let Some(handle) = &mut state.feature_log_handle {
-                writeln!(handle, "{}x{}x{}", plane.w(), plane.h(), plane.c()).unwrap();
-            }
-        }
 
         let mut data = Vec::new();
         for y in 0..plane.h() {
@@ -426,6 +415,7 @@ impl<W: Write + 'static> Video<W> {
                     state,
                     event_pixel_trees,
                     display_frame: instantaneous_frame,
+                    display_frame_features: Default::default(),
                     instantaneous_view_mode,
                     event_sender,
                     encoder,
@@ -442,6 +432,7 @@ impl<W: Write + 'static> Video<W> {
                     state,
                     event_pixel_trees,
                     display_frame: instantaneous_frame,
+                    display_frame_features: Default::default(),
                     instantaneous_view_mode,
                     event_sender,
                     encoder,
@@ -659,19 +650,8 @@ impl<W: Write + 'static> Video<W> {
         time_spanned: f32,
         view_interval: u32,
     ) -> Result<Vec<Vec<Event>>, SourceError> {
-        let color = self.state.plane.c() != 1;
-        let color_input = matrix.shape()[2] == 3;
-
-        let frame_arr = match matrix.as_slice() {
-            None => {
-                return Err(SourceError::VisionError(
-                    "Could not convert frame to slice".to_string(),
-                ))
-            }
-            Some(a) => a,
-        };
         if self.state.in_interval_count == 0 {
-            self.set_initial_d(frame_arr);
+            self.set_initial_d(&matrix);
         }
 
         self.state.in_interval_count += 1;
@@ -686,25 +666,21 @@ impl<W: Write + 'static> Video<W> {
             .event_pixel_trees
             .axis_chunks_iter_mut(Axis(0), self.state.chunk_rows)
             .into_par_iter()
-            .enumerate()
-            .map(|(chunk_idx, mut chunk)| {
+            .zip(
+                matrix
+                    .axis_chunks_iter(Axis(0), self.state.chunk_rows)
+                    .into_par_iter(),
+            )
+            .map(|(mut px_chunk, matrix_chunk)| {
                 let mut buffer: Vec<Event> = Vec::with_capacity(px_per_chunk);
                 let bump = Bump::new();
                 let base_val = bump.alloc(0);
-                let px_idx = bump.alloc(0);
                 let frame_val = bump.alloc(0);
                 let frame_val_intensity32 = bump.alloc(0.0);
 
-                for (chunk_px_idx, px) in chunk.iter_mut().enumerate() {
-                    *px_idx = chunk_px_idx + px_per_chunk * chunk_idx;
-
-                    if !color && color_input {
-                        *px_idx *= 3;
-                    }
-
-                    *frame_val_intensity32 = (f64::from(frame_arr[*px_idx])
-                        * self.state.ref_time_divisor)
-                        as Intensity32;
+                for (px, input) in px_chunk.iter_mut().zip(matrix_chunk.iter()) {
+                    *frame_val_intensity32 =
+                        (f64::from(*input) * self.state.ref_time_divisor) as Intensity32;
                     *frame_val = *frame_val_intensity32 as u8;
 
                     integrate_for_px(
@@ -777,12 +753,40 @@ impl<W: Write + 'static> Video<W> {
             });
 
         for events in &big_buffer {
-            for (e1, e2) in events.iter().circular_tuple_windows() {
+            for e1 in events.iter() {
                 self.encoder.ingest_event(*e1)?;
             }
         }
 
+        self.display_frame_features = self.display_frame.clone();
+
         self.handle_features(&big_buffer)?;
+
+        #[cfg(feature = "feature-logging")]
+        {
+            if let Some(handle) = &mut self.state.feature_log_handle {
+                // Calculate current bitrate
+                let mut events_per_sec = 0.0;
+                for events_vec in &big_buffer {
+                    events_per_sec += events_vec.len() as f64;
+                }
+                events_per_sec *= (self.state.tps as f64 / self.state.ref_time as f64);
+
+                let bitrate =
+                    events_per_sec * if self.state.plane.c() == 1 { 9.0 } else { 11.0 } * 8.0;
+
+                handle
+                    .write_all(
+                        &serde_pickle::to_vec(&format!("\nbps: {}", bitrate), Default::default())
+                            .unwrap(),
+                    )
+                    .unwrap();
+
+                handle
+                    .write_all(&serde_pickle::to_vec(&format!("\n"), Default::default()).unwrap())
+                    .unwrap();
+            }
+        }
 
         if self.state.show_live {
             // show_display("instance", &self.instantaneous_frame, 1, self)?;
@@ -791,16 +795,22 @@ impl<W: Write + 'static> Video<W> {
         Ok(big_buffer)
     }
 
-    fn set_initial_d(&mut self, frame_arr: &[u8]) {
-        self.event_pixel_trees.par_map_inplace(|px| {
-            let idx = px.coord.y as usize * self.state.plane.area_wc()
-                + px.coord.x as usize * self.state.plane.c_usize()
-                + px.coord.c.unwrap_or(0) as usize;
-            let intensity = frame_arr[idx];
-            let d_start = f32::from(intensity).log2().floor() as D;
-            px.arena[0].set_d(d_start);
-            px.base_val = intensity;
-        });
+    fn set_initial_d(&mut self, frame: &Frame) {
+        self.event_pixel_trees
+            .axis_chunks_iter_mut(Axis(0), self.state.chunk_rows)
+            .into_par_iter()
+            .zip(
+                frame
+                    .axis_chunks_iter(Axis(0), self.state.chunk_rows)
+                    .into_par_iter(),
+            )
+            .for_each(|(mut px, frame_chunk)| {
+                for (px, frame_val) in px.iter_mut().zip(frame_chunk.iter()) {
+                    let d_start = f32::from(*frame_val).log2().floor() as D;
+                    px.arena[0].set_d(d_start);
+                    px.base_val = *frame_val;
+                }
+            });
     }
 
     /// Get `ref_time`
@@ -864,6 +874,7 @@ impl<W: Write + 'static> Video<W> {
         &mut self,
         big_buffer: &Vec<Vec<Event>>,
     ) -> Result<(), SourceError> {
+        // if !cfg!(feature = "feature-logging") && !self.state.feature_detection {
         if !self.state.feature_detection {
             return Ok(()); // Early return
         }
@@ -921,7 +932,7 @@ impl<W: Write + 'static> Video<W> {
                     }
                 }
 
-                let out = format!("\nADDER FAST: {}", total_duration_nanos);
+                let out = format!("\nADDER FAST: {}\n", total_duration_nanos);
                 handle
                     .write_all(&serde_pickle::to_vec(&out, Default::default()).unwrap())
                     .unwrap();
@@ -934,11 +945,13 @@ impl<W: Write + 'static> Video<W> {
             };
 
             let mut cv_mat = unsafe {
-                let RawParts {
+                let raw_parts::RawParts {
                     ptr,
                     length,
                     capacity,
-                } = RawParts::from_vec(self.display_frame.clone().into_raw_vec()); // pixels will be move into_raw_parts，and return a manually drop pointer.
+                } = raw_parts::RawParts::from_vec(
+                    self.display_frame_features.clone().into_raw_vec(),
+                ); // pixels will be move into_raw_parts，and return a manually drop pointer.
                 let mut cv_mat = opencv::core::Mat::new_rows_cols_with_data(
                     self.state.plane.h() as i32,
                     self.state.plane.w() as i32,
@@ -958,7 +971,7 @@ impl<W: Write + 'static> Video<W> {
             }
 
             let start = Instant::now();
-            let mut keypoints = Vector::<KeyPoint>::new();
+            let mut keypoints = opencv::core::Vector::<opencv::core::KeyPoint>::new();
 
             opencv::features2d::fast(
                 &cv_mat,
@@ -982,7 +995,7 @@ impl<W: Write + 'static> Video<W> {
                     handle.write_all(&bytes).unwrap();
                 }
 
-                let out = format!("\nOpenCV FAST: {}", duration.as_nanos());
+                let out = format!("\nOpenCV FAST: {}\n", duration.as_nanos());
                 handle
                     .write_all(&serde_pickle::to_vec(&out, Default::default()).unwrap())
                     .unwrap();
@@ -992,10 +1005,10 @@ impl<W: Write + 'static> Video<W> {
                 &cv_mat,
                 &keypoints,
                 &mut keypoint_mat,
-                Scalar::new(0.0, 0.0, 255.0, 0.0),
+                opencv::core::Scalar::new(0.0, 0.0, 255.0, 0.0),
                 opencv::features2d::DrawMatchesFlags::DEFAULT,
             )?;
-            show_display_force("keypoints", &keypoint_mat, 1)?;
+            // show_display_force("keypoints", &keypoint_mat, 1)?;
         }
 
         if self.state.show_features == ShowFeatureMode::Hold {
@@ -1005,7 +1018,7 @@ impl<W: Write + 'static> Video<W> {
                     draw_feature_coord(
                         coord.x,
                         coord.y,
-                        &mut self.display_frame,
+                        &mut self.display_frame_features,
                         self.state.plane.c() != 1,
                     );
                 }
@@ -1018,19 +1031,21 @@ impl<W: Write + 'static> Video<W> {
                     draw_feature_coord(
                         coord.x,
                         coord.y,
-                        &mut self.display_frame,
+                        &mut self.display_frame_features,
                         self.state.plane.c() != 1,
                     );
                 }
                 let radius = self.state.feature_c_radius as i32;
-                for r in (coord.y() as i32 - radius).max(0)
+                for row in (coord.y() as i32 - radius).max(0)
                     ..(coord.y() as i32 + radius).min(self.state.plane.h() as i32)
                 {
-                    for c in (coord.x() as i32 - radius).max(0)
+                    for col in (coord.x() as i32 - radius).max(0)
                         ..(coord.x() as i32 + radius).min(self.state.plane.w() as i32)
                     {
-                        self.event_pixel_trees[[r as usize, c as usize, coord.c_usize()]]
-                            .c_thresh = self.state.c_thresh_baseline;
+                        for c in 0..self.state.plane.c() {
+                            self.event_pixel_trees[[row as usize, col as usize, c as usize]]
+                                .c_thresh = self.state.c_thresh_baseline;
+                        }
                     }
                 }
             }
@@ -1076,6 +1091,7 @@ impl<W: Write + 'static> Video<W> {
         c_increase_velocity: u8,
         feature_c_radius_denom: f32,
     ) {
+        dbg!("Updating manually");
         self.state.update_quality_manual(
             c_thresh_baseline,
             c_thresh_max,
@@ -1235,7 +1251,7 @@ pub trait Source<W: Write> {
     /// process.
     fn get_video(self) -> Video<W>;
 
-    fn get_input(&self) -> &Frame;
+    fn get_input(&self) -> Option<&Frame>;
 
     /// Get the last-calculated bitrate of the input (in bits per second)
     fn get_running_input_bitrate(&self) -> f64;

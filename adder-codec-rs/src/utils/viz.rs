@@ -1,6 +1,6 @@
 use adder_codec_core::{Event, PixelAddress};
 #[cfg(feature = "open-cv")]
-use opencv::core::{Mat, MatTrait, MatTraitConst, MatTraitConstManual};
+use opencv::core::{Mat, MatTraitConst, MatTraitConstManual};
 use std::error::Error;
 use std::fs::File;
 use std::io;
@@ -72,10 +72,17 @@ pub async fn download_file(
     }
     Ok(())
 }
+
+/// The display mode for visualizing detected features
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum ShowFeatureMode {
+    /// Don't show features at all
     Off,
+
+    /// Show the feature only at the instant in which the pixel **becomes** a feature
     Instant,
+
+    /// Show the feature until it's no longer a feature
     Hold,
 }
 
