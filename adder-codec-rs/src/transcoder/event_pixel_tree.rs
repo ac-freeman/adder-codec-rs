@@ -39,7 +39,7 @@ pub(crate) struct PixelState {
 #[repr(packed)]
 #[derive(Clone, Copy, Debug)]
 pub struct PixelNode {
-    /// Will have the smaller D value
+    /// Specifies if the next pixel in the arena vec exists
     alt: Option<()>,
 
     pub(crate) state: PixelState,
@@ -59,6 +59,7 @@ pub struct PixelArena {
     pub arena: SmallVec<[PixelNode; 6]>,
     pub(crate) c_thresh: u8,
     pub(crate) c_increase_counter: u8,
+    dtm_reached: bool,
 }
 
 impl PixelArena {
@@ -77,6 +78,7 @@ impl PixelArena {
             arena,
             c_thresh: 10,
             c_increase_counter: 1,
+            dtm_reached: false,
         }
     }
 
@@ -137,6 +139,7 @@ impl PixelArena {
         ref_time: DeltaT,
     ) -> Event {
         let mut event = self.pop_top_event_recursive(next_intensity, mode, ref_time);
+        self.dtm_reached = true;
         self.delta_t_to_absolute_t(&mut event, mode, ref_time)
     }
 
@@ -231,6 +234,7 @@ impl PixelArena {
         //     }
         // };
         self.need_to_pop_top = false;
+        self.dtm_reached = false;
     }
 
     pub fn set_d_for_continuous(
@@ -324,7 +328,7 @@ impl PixelArena {
             // SAFETY:
             // By design, the integration will not exceed 2^[`D_MAX`], so we can
             // safely cast it to integer [`D`] type.
-            unsafe { self.arena[0].state.delta_t.to_int_unchecked::<DeltaT>() } >= dtm;
+            (!self.dtm_reached && unsafe { self.arena[0].state.delta_t.to_int_unchecked::<DeltaT>() } >= dtm);
 
         if self.c_thresh < c_thresh_max {
             if self.c_increase_counter >= c_increase_velocity - 1 {

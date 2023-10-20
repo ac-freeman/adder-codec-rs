@@ -423,7 +423,7 @@ impl<
         let last_frame_intensity_ref = &mut self.last_frame_intensity_tracker[chunk_num]
             [[event.coord.y.into(), event.coord.x.into(), channel.into()]];
 
-        self.chunk_filled_tracker[chunk_num] = ingest_event_for_chunk(
+        let (filled, grew) = ingest_event_for_chunk(
             event,
             frame_chunk,
             running_ts_ref,
@@ -433,7 +433,22 @@ impl<
             &self.state,
         );
 
+        self.chunk_filled_tracker[chunk_num] = filled;
+
+        if grew {
+            handle_dtm(
+                frame_chunk,
+                &mut self.chunk_filled_tracker[chunk_num],
+                &mut self.last_filled_tracker[chunk_num],
+                &mut self.pixel_ts_tracker[chunk_num],
+                &mut self.last_frame_intensity_tracker[chunk_num],
+                &self.state,
+            );
+        }
+
         if self.detect_features {
+            let last_frame_intensity_ref = &mut self.last_frame_intensity_tracker[chunk_num]
+                [[event.coord.y.into(), event.coord.x.into(), channel.into()]];
             // Revert the y coordinate
             event.coord.y += (chunk_num * self.chunk_rows) as u16;
             self.running_intensities
@@ -539,7 +554,7 @@ impl<
                         let last_frame_intensity_ref = &mut last_frame_intensity_tracker
                             [[event.coord.y.into(), event.coord.x.into(), channel.into()]];
 
-                        *chunk_filled = ingest_event_for_chunk(
+                        let (filled, grew) = ingest_event_for_chunk(
                             event,
                             frame_chunk,
                             running_ts_ref,
@@ -548,11 +563,70 @@ impl<
                             last_frame_intensity_ref,
                             &self.state,
                         );
+                        *chunk_filled = filled;
+
+                        if grew {
+                            handle_dtm(
+                                frame_chunk,
+                                chunk_filled,
+                                chunk_last_filled_tracker,
+                                chunk_ts_tracker,
+                                last_frame_intensity_tracker,
+                                &self.state,
+                            );
+                        }
                     }
                 },
             );
 
         self.is_frame_0_filled()
+    }
+}
+
+fn handle_dtm<
+    T: Clone
+        + Default
+        + FrameValue<Output = T>
+        + Copy
+        + Serialize
+        + Send
+        + Sync
+        + num_traits::identities::Zero
+        + Into<f64>,
+>(
+    frame_chunk: &mut VecDeque<Frame<Option<T>>>,
+    chunk_filled: &mut bool,
+    chunk_last_filled_tracker: &mut Array3<i64>,
+    chunk_ts_tracker: &mut Array3<BigT>,
+    last_frame_intensity_tracker: &Array3<T>,
+    state: &FrameSequenceState,
+) {
+    if frame_chunk.len() > ((state.source_dtm / state.ref_interval) + 1) as usize {
+        /* Check the last timestamp for the other pixels in this chunk. If they were so long
+        ago that dtm time has passed, then we can repeat the last frame's intensity for
+        those pixels.
+        */
+        // Iterate the other pixels in the chunk
+        let frame_chunk = &mut frame_chunk[0];
+
+        for ((y, x, c), px) in frame_chunk.array.indexed_iter_mut() {
+            if px.is_none() {
+                // If the pixel is empty, set its intensity to the previous intensity we recorded for it
+                *px = Some(last_frame_intensity_tracker[[y, x, c]]);
+
+                // Update the fill tracker
+                frame_chunk.filled_count += 1;
+
+                // Update the last filled tracker
+                chunk_last_filled_tracker[[y, x, c]] += 1;
+
+                // Update the timestamp tracker
+                // chunk_ts_tracker[[y, x, c]] += state.ref_interval as BigT;
+            }
+        }
+
+        // Mark the chunk as filled (ready to write out)
+        *chunk_filled = true;
     }
 }
 
@@ -815,8 +889,9 @@ fn ingest_event_for_chunk<
     last_filled_frame_ref: &mut i64,
     last_frame_intensity_ref: &mut T,
     state: &FrameSequenceState,
-) -> bool {
+) -> (bool, bool) {
     let channel = event.coord.c.unwrap_or(0);
+    let mut grew = false;
 
     let prev_last_filled_frame = *last_filled_frame_ref;
     let prev_running_ts = *running_ts_ref;
@@ -872,6 +947,7 @@ fn ingest_event_for_chunk<
                     a as usize
                 ]));
                 *frame_idx_offset += a;
+                grew = true;
             }
             a if a < 0 => {
                 // We can get here if we've forcibly popped a frame before it's ready.
@@ -929,5 +1005,8 @@ fn ingest_event_for_chunk<
 
     debug_assert!(*last_filled_frame_ref >= 0);
     debug_assert!(frame_chunk[0].filled_count <= frame_chunk[0].array.len());
-    frame_chunk[0].filled_count == frame_chunk[0].array.len()
+    (
+        frame_chunk[0].filled_count == frame_chunk[0].array.len(),
+        grew,
+    )
 }

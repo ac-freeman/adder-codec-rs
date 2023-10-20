@@ -1031,6 +1031,7 @@ impl<W: Write + 'static> VideoBuilder<W> for Davis<W> {
         self
     }
 
+    #[cfg(feature = "feature-logging")]
     fn log_path(self, name: String) -> Self {
         todo!()
     }
