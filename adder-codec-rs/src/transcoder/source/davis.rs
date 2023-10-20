@@ -1,6 +1,7 @@
+use crate::transcoder::source::video::FramedViewMode::SAE;
 use crate::transcoder::source::video::SourceError::BufferEmpty;
 use crate::transcoder::source::video::{
-    integrate_for_px, show_display, Source, SourceError, Video, VideoBuilder,
+    integrate_for_px, Source, SourceError, Video, VideoBuilder,
 };
 use adder_codec_core::DeltaT;
 use adder_codec_core::Mode::{Continuous, FramePerfect};
@@ -27,10 +28,11 @@ use std::thread;
 use adder_codec_core::codec::{CodecError, EncoderOptions, EncoderType};
 use adder_codec_core::{Event, PlaneSize, SourceCamera, SourceType, TimeMode};
 
-use crate::framer::scale_intensity::FrameValue;
+use crate::framer::scale_intensity::{FrameValue, SaeTime};
 use crate::transcoder::event_pixel_tree::Intensity32;
 use crate::utils::viz::ShowFeatureMode;
 use tokio::runtime::Runtime;
+use video_rs::Frame;
 
 /// The EDI reconstruction mode, determining how intensities are integrated for the ADΔER model
 #[derive(PartialEq, Eq, Clone, Copy)]
@@ -407,9 +409,9 @@ impl<W: Write + 'static> Integration<W> {
             )
             .collect();
 
-        let db = match video.instantaneous_frame.data_bytes_mut() {
-            Ok(db) => db,
-            Err(_e) => return Err(CodecError::MalformedEncoder), // TODO: Wrong type of error
+        let db: &mut [u8] = match video.display_frame.as_slice_mut() {
+            Some(db) => db,
+            None => return Err(CodecError::MalformedEncoder), // TODO: Wrong type of error
         };
 
         // TODO: split off into separate function
@@ -417,7 +419,7 @@ impl<W: Write + 'static> Integration<W> {
         let practical_d_max =
             fast_math::log2_raw(255.0 * (video.state.delta_t_max / video.state.ref_time) as f32);
         db.iter_mut()
-            .zip(video.running_intensities.iter_mut())
+            .zip(video.state.running_intensities.iter_mut())
             .enumerate()
             .for_each(|(idx, (val, running))| {
                 let y = idx / video.state.plane.area_wc();
@@ -431,15 +433,23 @@ impl<W: Write + 'static> Integration<W> {
                         practical_d_max,
                         video.state.delta_t_max,
                         video.instantaneous_view_mode,
-                        0.0, //TODO
+                        if video.instantaneous_view_mode == SAE {
+                            Some(SaeTime {
+                                running_t: video.event_pixel_trees[[y, x, c]].running_t as DeltaT,
+                                last_fired_t: video.event_pixel_trees[[y, x, c]].last_fired_t
+                                    as DeltaT,
+                            })
+                        } else {
+                            None
+                        },
                     ),
                     None => *val,
                 };
-                *running = *val as i32;
+                *running = *val;
             });
 
         for events in &big_buffer {
-            for (e1, e2) in events.iter().circular_tuple_windows() {
+            for e1 in events.iter() {
                 video.encoder.ingest_event(*e1)?;
             }
         }
@@ -449,7 +459,7 @@ impl<W: Write + 'static> Integration<W> {
         }
 
         if video.state.show_live {
-            show_display("instance", &video.instantaneous_frame, 1, video).unwrap();
+            // show_display("instance", &video.instantaneous_frame, 1, video).unwrap();
         }
         Ok(())
     }
@@ -531,9 +541,13 @@ impl<W: Write + 'static> Integration<W> {
             })
             .collect();
 
-        let db = match video.instantaneous_frame.data_bytes_mut() {
-            Ok(db) => db,
-            Err(e) => return Err(SourceError::OpencvError(e)),
+        let db = match video.display_frame.as_slice_mut() {
+            Some(db) => db,
+            None => {
+                return Err(SourceError::VisionError(
+                    "No instantaneous frame".to_string(),
+                ))
+            }
         };
 
         // TODO: split off into separate function
@@ -541,7 +555,7 @@ impl<W: Write + 'static> Integration<W> {
         let practical_d_max =
             fast_math::log2_raw(255.0 * (video.state.delta_t_max / video.state.ref_time) as f32);
         db.iter_mut()
-            .zip(video.running_intensities.iter_mut())
+            .zip(video.state.running_intensities.iter_mut())
             .enumerate()
             .for_each(|(idx, (val, running))| {
                 let y = idx / video.state.plane.area_wc();
@@ -555,15 +569,23 @@ impl<W: Write + 'static> Integration<W> {
                         practical_d_max,
                         video.state.delta_t_max,
                         video.instantaneous_view_mode,
-                        0.0, //TODO
+                        if video.instantaneous_view_mode == SAE {
+                            Some(SaeTime {
+                                running_t: video.event_pixel_trees[[y, x, c]].running_t as DeltaT,
+                                last_fired_t: video.event_pixel_trees[[y, x, c]].last_fired_t
+                                    as DeltaT,
+                            })
+                        } else {
+                            None
+                        },
                     ),
                     None => *val,
                 };
-                *running = *val as i32;
+                *running = *val;
             });
 
         for events in &big_buffer {
-            for (e1, e2) in events.iter().circular_tuple_windows() {
+            for e1 in events.iter() {
                 video.encoder.ingest_event(*e1)?;
             }
         }
@@ -571,7 +593,7 @@ impl<W: Write + 'static> Integration<W> {
         video.handle_features(&big_buffer)?;
 
         if video.state.show_live {
-            show_display("instance", &video.instantaneous_frame, 1, video)?;
+            // show_display("instance", &video.instantaneous_frame, 1, video)?;
         }
         Ok(())
     }
@@ -799,19 +821,21 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Davis<W> {
                 }
             };
 
+            let mut frame = unsafe {
+                video_rs::Frame::from_shape_vec_unchecked(
+                    (
+                        self.video.state.plane.h_usize(),
+                        self.video.state.plane.w_usize(),
+                        self.video.state.plane.c_usize(),
+                    ),
+                    tmp.data_bytes_mut().unwrap().to_vec(),
+                )
+            };
+
             ret = thread_pool.install(|| {
                 self.video
-                    .integrate_matrix(tmp, mat_integration_time, view_interval)
+                    .integrate_matrix(frame, mat_integration_time, view_interval)
             });
-
-            // for px in &self.video.event_pixel_trees {
-            //     let a = px.running_t as i64;
-            //     let b =
-            //         start_of_frame_timestamp - self.integration.temp_first_frame_start_timestamp;
-            //     assert!(a >= b);
-            //     let c = end_of_frame_timestamp - self.integration.temp_first_frame_start_timestamp;
-            //     assert_eq!(a, c);
-            // }
 
             #[allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
             for (idx, val) in self.integration.dvs_last_ln_val.iter_mut().enumerate() {
@@ -891,8 +915,8 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Davis<W> {
         self.video
     }
 
-    fn get_input(&self) -> &Mat {
-        unimplemented!("Davis::get_input");
+    fn get_input(&self) -> Option<&Frame> {
+        None
     }
 
     fn get_running_input_bitrate(&self) -> f64 {
@@ -1005,6 +1029,10 @@ impl<W: Write + 'static> VideoBuilder<W> for Davis<W> {
     fn detect_features(mut self, detect_features: bool, show_features: ShowFeatureMode) -> Self {
         self.video = self.video.detect_features(detect_features, show_features);
         self
+    }
+
+    fn log_path(self, name: String) -> Self {
+        todo!()
     }
 }
 

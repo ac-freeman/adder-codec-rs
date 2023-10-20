@@ -1,3 +1,5 @@
+#![cfg(feature = "open-cv")]
+
 use adder_codec_rs::transcoder::source::davis::Davis;
 use adder_codec_rs::transcoder::source::video::{Source, VideoBuilder};
 use clap::Parser;

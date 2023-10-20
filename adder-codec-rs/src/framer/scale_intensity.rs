@@ -14,11 +14,16 @@ pub trait FrameValue {
         practical_d_max: f32,
         delta_t_max: DeltaT,
         view_mode: FramedViewMode,
-        sae_time_since: f64,
+        px: Option<SaeTime>,
     ) -> Self::Output;
 
     /// The maximum value of the type, as an f32
     fn max_f32() -> f32;
+}
+
+pub struct SaeTime {
+    pub(crate) running_t: DeltaT,
+    pub(crate) last_fired_t: DeltaT,
 }
 
 impl FrameValue for EventCoordless {
@@ -30,7 +35,7 @@ impl FrameValue for EventCoordless {
         _practical_d_max: f32,
         _delta_t_max: DeltaT,
         _view_mode: FramedViewMode,
-        _sae_time_since: f64,
+        _px: Option<SaeTime>,
     ) -> Self::Output {
         EventCoordless {
             d: event.d,
@@ -53,7 +58,7 @@ impl FrameValue for u8 {
         practical_d_max: f32,
         delta_t_max: DeltaT,
         view_mode: FramedViewMode,
-        sae_time_since: f64,
+        px: Option<SaeTime>,
     ) -> Self::Output {
         match view_mode {
             FramedViewMode::Intensity => {
@@ -86,9 +91,12 @@ impl FrameValue for u8 {
                 ((event.delta_t as f32 / delta_t_max as f32) * f32::from(u8::MAX)) as u8
             }
             FramedViewMode::SAE => {
-                // Convert deltaT to absolute time
-                ((delta_t_max / 255_u32) - (delta_t_max as f64 / sae_time_since) as u32) as u8
-                // We assume that the dt component is an absolute_t in this case
+                if let Some(px) = px {
+                    (((px.running_t - px.last_fired_t) as f32 / delta_t_max as f32) * 255.0) as u8
+                    // We assume that the dt component is an absolute_t in this case
+                } else {
+                    0
+                }
             }
         }
     }
@@ -108,7 +116,7 @@ impl FrameValue for u16 {
         practical_d_max: f32,
         delta_t_max: DeltaT,
         view_mode: FramedViewMode,
-        _sae_time_since: f64,
+        _px: Option<SaeTime>,
     ) -> Self::Output {
         match view_mode {
             FramedViewMode::Intensity => {
@@ -161,7 +169,7 @@ impl FrameValue for u32 {
         practical_d_max: f32,
         delta_t_max: DeltaT,
         view_mode: FramedViewMode,
-        _sae_time_since: f64,
+        _px: Option<SaeTime>,
     ) -> Self::Output {
         match view_mode {
             FramedViewMode::Intensity => {
@@ -212,7 +220,7 @@ impl FrameValue for u64 {
         practical_d_max: f32,
         delta_t_max: DeltaT,
         view_mode: FramedViewMode,
-        _sae_time_since: f64,
+        _px: Option<SaeTime>,
     ) -> Self::Output {
         match view_mode {
             FramedViewMode::Intensity => {

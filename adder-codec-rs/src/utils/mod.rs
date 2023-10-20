@@ -8,6 +8,7 @@ pub mod stream_migration;
 /// Computer vision utilities
 pub mod cv;
 
+#[cfg(feature = "feature-logging")]
 pub mod logging;
 /// A module for visualizing streams
 pub mod viz;

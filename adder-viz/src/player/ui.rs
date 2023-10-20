@@ -93,7 +93,7 @@ pub struct InfoUiState {
 
 impl Default for InfoUiState {
     fn default() -> Self {
-        let plot_points: VecDeque<f64> = (0..1000).map(|_| 0.0).collect();
+        let plot_points: VecDeque<Option<f64>> = (0..1000).map(|_| None).collect();
 
         InfoUiState {
             stream_state: Default::default(),
@@ -332,7 +332,7 @@ impl PlayerState {
             / 1024.0; // transcoded raw in megabytes per sec
         self.ui_info_state
             .plot_points_raw_adder_bitrate_y
-            .update(bitrate);
+            .update(Some(bitrate));
 
         // TODO: make fps accurate and meaningful here
         ui.label(format!(
@@ -415,9 +415,10 @@ impl PlayerState {
         self.ui_state.current_frame = 1;
 
         let (player_tx, player_rx) = bounded(60);
+        let detect_features = self.ui_state.detect_features;
 
         rayon::spawn(move || loop {
-            let res = player.consume_source();
+            let res = player.consume_source(detect_features);
             match player_tx.send(res) {
                 Ok(_) => {}
                 Err(_) => {

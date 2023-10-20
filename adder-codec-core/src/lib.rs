@@ -443,8 +443,7 @@ impl Coord {
     }
 
     /// Is this coordinate at the border of the image?
-    pub fn is_border(&self, width: usize, height: usize, max_scale: usize) -> bool {
-        let cs = max_scale * 4;
+    pub fn is_border(&self, width: usize, height: usize, cs: usize) -> bool {
         self.x_usize() < cs
             || self.x_usize() >= width - cs
             || self.y_usize() < cs

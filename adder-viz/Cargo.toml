@@ -16,8 +16,10 @@ categories = ["multimedia::encoding", "multimedia::video", "science"]
 default-run = "adder-viz"
 
 [features]
-feature-logging = ["adder-codec-rs/feature-logging"]
-feature-logging-nonmaxsuppression = ["adder-codec-rs/feature-logging-nonmaxsuppression"]
+default = ["adder-codec-rs/transcoder"]
+feature-logging = ["open-cv", "adder-codec-rs/feature-logging"]
+feature-logging-nonmaxsuppression = ["open-cv", "adder-codec-rs/feature-logging-nonmaxsuppression"]
+open-cv = ["opencv", "adder-codec-rs/open-cv", "adder-codec-rs/transcoder" ]
 
 [dependencies]
 adder-codec-core = { version = "0.2.1", path = "../adder-codec-core" }
@@ -35,10 +37,12 @@ strum = "0.24.1"
 strum_macros = "0.24.3"
 tokio = { version = "1.20.1", features = ["full"] }
 ndarray = "0.15.6"
+video-rs = { path = "../../video-rs", version = "0.4", features = ["ndarray"] }
+ndarray-image = "0.3.0"
 
 [dependencies.opencv]
-version = "0.84.5"
+version = "0.83.0"
 package = 'opencv'
 default-features = false
-features = ['videoio', 'imgproc', 'highgui']
-optional = false
+features = ['videoio', 'imgproc', 'highgui', 'clang-runtime']
+optional = true

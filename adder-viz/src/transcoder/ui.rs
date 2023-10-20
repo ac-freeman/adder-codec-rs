@@ -1,14 +1,13 @@
 use crate::transcoder::adder::{replace_adder_transcoder, AdderTranscoder};
+use crate::utils::prep_bevy_image;
 use crate::{slider_pm, Images};
+#[cfg(feature = "open-cv")]
 use adder_codec_rs::transcoder::source::davis::TranscoderMode;
 use adder_codec_rs::transcoder::source::video::{FramedViewMode, Source, SourceError};
 use bevy::ecs::system::Resource;
-use bevy::prelude::{dbg, Assets, Commands, Image, Res, ResMut, Time};
-use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
+use bevy::prelude::{Assets, Commands, Image, Res, ResMut, Time};
 use bevy_egui::egui;
 use bevy_egui::egui::{RichText, Ui};
-use opencv::core::{Mat, MatTraitConstManual};
-use opencv::imgproc;
 use rayon::current_num_threads;
 use std::collections::VecDeque;
 use std::error::Error;
@@ -17,12 +16,14 @@ use crate::utils::PlotY;
 use adder_codec_core::codec::{EncoderOptions, EncoderType, EventDrop, EventOrder};
 use adder_codec_core::PlaneSize;
 use adder_codec_core::TimeMode;
+#[cfg(feature = "open-cv")]
 use adder_codec_rs::transcoder::source::davis::TranscoderMode::RawDvs;
 use adder_codec_rs::transcoder::source::{CRF, DEFAULT_CRF_QUALITY};
+use adder_codec_rs::utils::cv::{calculate_quality_metrics, QualityMetrics};
 use adder_codec_rs::utils::viz::ShowFeatureMode;
 use bevy_egui::egui::plot::Corner::LeftTop;
 use bevy_egui::egui::plot::Legend;
-use egui::plot::{Line, Plot, PlotPoints};
+use egui::plot::Plot;
 use std::default::Default;
 use std::fs::File;
 use std::io::BufWriter;
@@ -41,6 +42,7 @@ pub struct ParamsUiState {
     pub(crate) color: bool,
     show_original: bool,
     view_mode_radio_state: FramedViewMode,
+    #[cfg(feature = "open-cv")]
     pub(crate) davis_mode_radio_state: TranscoderMode,
     pub(crate) davis_output_fps: f64,
     davis_output_fps_slider: f64,
@@ -68,6 +70,9 @@ pub struct ParamsUiState {
     adder_tresh_max_slider: u8,
     pub(crate) adder_tresh_baseline: u8,
     adder_tresh_baseline_slider: u8,
+    metric_mse: bool,
+    metric_psnr: bool,
+    metric_ssim: bool,
 }
 
 impl Default for ParamsUiState {
@@ -85,6 +90,7 @@ impl Default for ParamsUiState {
             color: true,
             show_original: true,
             view_mode_radio_state: FramedViewMode::Intensity,
+            #[cfg(feature = "open-cv")]
             davis_mode_radio_state: TranscoderMode::RawDavis,
             davis_output_fps: 500.0,
             davis_output_fps_slider: 500.0,
@@ -112,6 +118,9 @@ impl Default for ParamsUiState {
             adder_tresh_max_slider: 10,
             adder_tresh_baseline: 10,
             adder_tresh_baseline_slider: 10,
+            metric_mse: true,
+            metric_psnr: true,
+            metric_ssim: false,
         }
     }
 }
@@ -126,13 +135,16 @@ pub struct InfoUiState {
     plane: PlaneSize,
     pub source_name: RichText,
     pub output_name: OutputName,
-    pub davis_latency: u128,
+    pub davis_latency: Option<f64>,
     pub(crate) input_path_0: Option<PathBuf>,
     pub(crate) input_path_1: Option<PathBuf>,
     pub(crate) output_path: Option<PathBuf>,
     plot_points_eventrate_y: PlotY,
     pub(crate) plot_points_raw_adder_bitrate_y: PlotY,
     pub(crate) plot_points_raw_source_bitrate_y: PlotY,
+    pub(crate) plot_points_psnr_y: PlotY,
+    pub(crate) plot_points_mse_y: PlotY,
+    pub(crate) plot_points_ssim_y: PlotY,
     plot_points_latency_y: PlotY,
     pub view_mode_radio_state: FramedViewMode, // TODO: Move to different struct
 }
@@ -151,7 +163,7 @@ impl Default for OutputName {
 
 impl Default for InfoUiState {
     fn default() -> Self {
-        let plot_points: VecDeque<f64> = (0..1000).map(|_| 0.0).collect();
+        let plot_points: VecDeque<Option<f64>> = (0..1000).map(|_| None).collect();
 
         InfoUiState {
             events_per_sec: 0.,
@@ -163,7 +175,7 @@ impl Default for InfoUiState {
             plane: Default::default(),
             source_name: RichText::new("No input file selected yet"),
             output_name: Default::default(),
-            davis_latency: 0,
+            davis_latency: None,
             input_path_0: None,
             input_path_1: None,
             output_path: None,
@@ -174,6 +186,15 @@ impl Default for InfoUiState {
                 points: plot_points.clone(),
             },
             plot_points_raw_source_bitrate_y: PlotY {
+                points: plot_points.clone(),
+            },
+            plot_points_psnr_y: PlotY {
+                points: plot_points.clone(),
+            },
+            plot_points_mse_y: PlotY {
+                points: plot_points.clone(),
+            },
+            plot_points_ssim_y: PlotY {
                 points: plot_points.clone(),
             },
             plot_points_latency_y: PlotY {
@@ -314,16 +335,13 @@ impl TranscoderState {
             self.ui_info_state.events_ppc_total
         ));
 
-        if self.ui_info_state.davis_latency > 0 {
-            ui.label(format!(
-                "DAVIS/DVS latency: {:} ms",
-                self.ui_info_state.davis_latency
-            ));
+        if let Some(latency) = self.ui_info_state.davis_latency {
+            ui.label(format!("DAVIS/DVS latency: {:} ms", latency));
         }
 
         self.ui_info_state
             .plot_points_eventrate_y
-            .update(self.ui_info_state.events_ppc_per_sec);
+            .update(Some(self.ui_info_state.events_ppc_per_sec));
 
         if self.ui_info_state.event_size == 0 {
             self.ui_info_state.event_size = if self.ui_info_state.plane.c() == 1 {
@@ -337,47 +355,66 @@ impl TranscoderState {
             * self.ui_info_state.plane.volume() as f64
             / 1024.0
             / 1024.0; // transcoded raw in megabytes per sec
-        self.ui_info_state
-            .plot_points_raw_adder_bitrate_y
-            .update(bitrate);
+        if self.ui_info_state.plane.volume() > 1 {
+            self.ui_info_state
+                .plot_points_raw_adder_bitrate_y
+                .update(Some(bitrate));
+        } else {
+            self.ui_info_state
+                .plot_points_raw_adder_bitrate_y
+                .update(None);
+        }
 
         self.ui_info_state
             .plot_points_latency_y
-            .update(self.ui_info_state.davis_latency as f64);
+            .update(self.ui_info_state.davis_latency);
 
-        let line_eventrate = self
-            .ui_info_state
-            .plot_points_eventrate_y
-            .get_plotline("Events PPC per sec");
-
-        let line_latency = self
-            .ui_info_state
-            .plot_points_latency_y
-            .get_plotline("Latency");
+        // let line_eventrate = self
+        //     .ui_info_state
+        //     .plot_points_eventrate_y
+        //     .get_plotline("Events PPC per sec");
 
         Plot::new("my_plot")
             .height(100.0)
             .allow_drag(true)
+            .auto_bounds_y()
             .legend(Legend::default().position(LeftTop))
             .show(ui, |plot_ui| {
-                plot_ui.line(line_eventrate);
-                plot_ui.line(line_latency);
+                let mut metrics = vec![
+                    (&self.ui_info_state.plot_points_psnr_y, "PSNR dB"),
+                    (&self.ui_info_state.plot_points_mse_y, "MSE"),
+                    (&self.ui_info_state.plot_points_ssim_y, "SSIM"),
+                ];
+
+                for (line, label) in metrics {
+                    if line.points.iter().last().unwrap().is_some() {
+                        plot_ui.line(line.get_plotline(label, false));
+                    }
+                }
             });
         Plot::new("bitrate_plot")
             .height(100.0)
             .allow_drag(true)
+            .auto_bounds_y()
             .legend(Legend::default().position(LeftTop))
             .show(ui, |plot_ui| {
-                plot_ui.line(
-                    self.ui_info_state
-                        .plot_points_raw_adder_bitrate_y
-                        .get_plotline("Raw ADΔER MB/s"),
-                );
-                plot_ui.line(
-                    self.ui_info_state
-                        .plot_points_raw_source_bitrate_y
-                        .get_plotline("Raw source MB/s"),
-                );
+                let mut metrics = vec![
+                    (
+                        &self.ui_info_state.plot_points_raw_adder_bitrate_y,
+                        "log10(Raw ADΔER MB/s)",
+                    ),
+                    (
+                        &self.ui_info_state.plot_points_raw_source_bitrate_y,
+                        "log10(Raw source MB/s)",
+                    ),
+                    (&self.ui_info_state.plot_points_latency_y, "Latency"),
+                ];
+
+                for (line, label) in metrics {
+                    if line.points.iter().last().unwrap().is_some() {
+                        plot_ui.line(line.get_plotline(label, true));
+                    }
+                }
             });
     }
 
@@ -386,43 +423,50 @@ impl TranscoderState {
 
         let source: &mut dyn Source<BufWriter<File>> = {
             match &mut self.transcoder.framed_source {
-                None => match &mut self.transcoder.davis_source {
-                    None => {
-                        return;
-                    }
-                    Some(source) => {
-                        if source.mode != self.ui_state.davis_mode_radio_state
-                            || source.get_reconstructor().as_ref().unwrap().output_fps
-                                != self.ui_state.davis_output_fps
-                            || ((source.get_video_ref().get_time_mode() != self.ui_state.time_mode
-                                || source.get_video_ref().encoder_type
-                                    != self.ui_state.encoder_type
-                                || source.get_video_ref().get_encoder_options()
-                                    != self.ui_state.encoder_options)
-                                && self.ui_info_state.output_path.is_some())
-                        {
-                            if self.ui_state.davis_mode_radio_state == RawDvs {
-                                // self.ui_state.davis_output_fps = 1000000.0;
-                                // self.ui_state.davis_output_fps_slider = 1000000.0;
-                                self.ui_state.optimize_c = false;
-                            }
-                            replace_adder_transcoder(
-                                self,
-                                self.ui_info_state.input_path_0.clone(),
-                                self.ui_info_state.input_path_1.clone(),
-                                self.ui_info_state.output_path.clone(),
-                                0,
-                            );
+                None => {
+                    #[cfg(feature = "open-cv")]
+                    match &mut self.transcoder.davis_source {
+                        None => {
                             return;
                         }
-                        let tmp = source.get_reconstructor_mut().as_mut().unwrap();
-                        tmp.set_optimize_c(
-                            self.ui_state.optimize_c,
-                            self.ui_state.optimize_c_frequency,
-                        );
-                        source
+
+                        Some(source) => {
+                            if source.mode != self.ui_state.davis_mode_radio_state
+                                || source.get_reconstructor().as_ref().unwrap().output_fps
+                                    != self.ui_state.davis_output_fps
+                                || ((source.get_video_ref().get_time_mode()
+                                    != self.ui_state.time_mode
+                                    || source.get_video_ref().encoder_type
+                                        != self.ui_state.encoder_type
+                                    || source.get_video_ref().get_encoder_options()
+                                        != self.ui_state.encoder_options)
+                                    && self.ui_info_state.output_path.is_some())
+                            {
+                                if self.ui_state.davis_mode_radio_state == RawDvs {
+                                    // self.ui_state.davis_output_fps = 1000000.0;
+                                    // self.ui_state.davis_output_fps_slider = 1000000.0;
+                                    self.ui_state.optimize_c = false;
+                                }
+                                replace_adder_transcoder(
+                                    self,
+                                    self.ui_info_state.input_path_0.clone(),
+                                    self.ui_info_state.input_path_1.clone(),
+                                    self.ui_info_state.output_path.clone(),
+                                    0,
+                                );
+                                return;
+                            }
+                            let tmp = source.get_reconstructor_mut().as_mut().unwrap();
+                            tmp.set_optimize_c(
+                                self.ui_state.optimize_c,
+                                self.ui_state.optimize_c_frequency,
+                            );
+                            source
+                        }
                     }
-                },
+                    #[cfg(not(feature = "open-cv"))]
+                    return;
+                }
                 Some(source) => {
                     if source.scale != self.ui_state.scale
                         || source.get_ref_time() != self.ui_state.delta_t_ref as u32
@@ -458,7 +502,10 @@ impl TranscoderState {
             }
         };
 
-        if self.ui_state.auto_quality {
+        // TODO: Refactor all this garbage code
+        if self.ui_state.auto_quality
+            && self.ui_state.crf != source.get_video_ref().state.crf_quality
+        {
             source.crf(self.ui_state.crf);
 
             let video = source.get_video_ref();
@@ -473,7 +520,15 @@ impl TranscoderState {
             self.ui_state.adder_tresh_velocity_slider = self.ui_state.adder_tresh_velocity;
             self.ui_state.feature_radius = video.state.feature_c_radius as f32;
             self.ui_state.feature_radius_slider = self.ui_state.feature_radius;
-        } else {
+        } else if self.ui_state.adder_tresh_baseline
+            != source.get_video_ref().state.c_thresh_baseline
+            || self.ui_state.adder_tresh_max != source.get_video_ref().state.c_thresh_max as u8
+            || self.ui_state.delta_t_max_mult
+                != source.get_video_ref().state.delta_t_max / source.get_video_ref().state.ref_time
+            || self.ui_state.adder_tresh_velocity
+                != source.get_video_ref().state.c_increase_velocity
+            || self.ui_state.feature_radius as u16 != source.get_video_ref().state.feature_c_radius
+        {
             let video = source.get_video_mut();
             video.update_quality_manual(
                 self.ui_state.adder_tresh_baseline,
@@ -503,23 +558,23 @@ impl TranscoderState {
         let ui_info_state = &mut self.ui_info_state;
         ui_info_state.events_per_sec = 0.;
 
-        let mut is_framed = false;
-
         let source: &mut dyn Source<BufWriter<File>> = {
             match &mut self.transcoder.framed_source {
-                None => match &mut self.transcoder.davis_source {
-                    None => {
-                        return Ok(());
+                None => {
+                    #[cfg(feature = "open-cv")]
+                    match &mut self.transcoder.davis_source {
+                        None => {
+                            return Ok(());
+                        }
+                        Some(source) => {
+                            ui_info_state.davis_latency = Some(source.get_latency() as f64);
+                            source
+                        }
                     }
-                    Some(source) => {
-                        ui_info_state.davis_latency = source.get_latency();
-                        source
-                    }
-                },
-                Some(source) => {
-                    is_framed = true;
-                    source
+                    #[cfg(not(feature = "open-cv"))]
+                    return Ok(());
                 }
+                Some(source) => source,
             }
         };
 
@@ -556,22 +611,38 @@ impl TranscoderState {
             }
         };
 
-        let image_mat = &source.get_video_ref().instantaneous_frame;
+        // Calculate quality metrics on the running intensity frame (not with features drawn on it)
+        let mut image_mat = source.get_video_ref().display_frame.clone();
 
-        // add alpha channel
-        let mut image_mat_bgra = Mat::default();
-        imgproc::cvt_color(&image_mat, &mut image_mat_bgra, imgproc::COLOR_BGR2BGRA, 4)?;
+        if let Some(input) = source.get_input() {
+            #[rustfmt::skip]
+            let metrics = calculate_quality_metrics(
+                input,
+                &mut image_mat,
+                QualityMetrics {
+                    mse: if self.ui_state.metric_mse {Some(0.0)} else {None},
+                    psnr: if self.ui_state.metric_psnr {Some(0.0)} else {None},
+                    ssim: if self.ui_state.metric_ssim {Some(0.0)} else {None},
+                },
+            );
+            let metrics = metrics?;
+            self.ui_info_state.plot_points_psnr_y.update(metrics.psnr);
+            self.ui_info_state.plot_points_mse_y.update(metrics.mse);
+            self.ui_info_state.plot_points_ssim_y.update(metrics.ssim);
+        }
 
-        let image_bevy = Image::new(
-            Extent3d {
-                width: source.get_video_ref().state.plane.w().into(),
-                height: source.get_video_ref().state.plane.h().into(),
-                depth_or_array_layers: 1,
-            },
-            TextureDimension::D2,
-            Vec::from(image_mat_bgra.data_bytes()?),
-            TextureFormat::Bgra8UnormSrgb,
-        );
+        // Display frame
+        let mut image_mat = source.get_video_ref().display_frame_features.clone();
+
+        let color = image_mat.shape()[2] == 3;
+
+        let image_bevy = prep_bevy_image(
+            image_mat,
+            color,
+            source.get_video_ref().state.plane.w(),
+            source.get_video_ref().state.plane.h(),
+        )?;
+
         self.transcoder.live_image = image_bevy;
 
         handles.last_image_view = handles.image_view.clone();
@@ -580,21 +651,16 @@ impl TranscoderState {
         handles.image_view = handle;
 
         // Repeat for the input view
-        if is_framed && self.ui_state.show_original {
-            let image_mat = source.get_input();
-            let mut image_mat_bgra = Mat::default();
-            imgproc::cvt_color(image_mat, &mut image_mat_bgra, imgproc::COLOR_BGR2BGRA, 4)?;
-
-            let image_bevy = Image::new(
-                Extent3d {
-                    width: source.get_video_ref().state.plane.w().into(),
-                    height: source.get_video_ref().state.plane.h().into(),
-                    depth_or_array_layers: 1,
-                },
-                TextureDimension::D2,
-                Vec::from(image_mat_bgra.data_bytes()?),
-                TextureFormat::Bgra8UnormSrgb,
-            );
+        if self.ui_state.show_original && source.get_input().is_some() {
+            let image_mat = source.get_input().unwrap();
+            let image_mat = image_mat.clone();
+            let color = image_mat.shape()[2] == 3;
+            let image_bevy = prep_bevy_image(
+                image_mat,
+                color,
+                source.get_video_ref().state.plane.w(),
+                source.get_video_ref().state.plane.h(),
+            )?;
             let handle = images.add(image_bevy);
             handles.input_view = handle;
         }
@@ -602,7 +668,7 @@ impl TranscoderState {
         let raw_source_bitrate = source.get_running_input_bitrate() / 8.0 / 1024.0 / 1024.0; // source in megabytes per sec
         self.ui_info_state
             .plot_points_raw_source_bitrate_y
-            .update(raw_source_bitrate);
+            .update(Some(raw_source_bitrate));
 
         Ok(())
     }
@@ -614,7 +680,12 @@ fn side_panel_grid_contents(
     ui_state: &mut ParamsUiState,
 ) {
     let dtr_max = ui_state.delta_t_ref_max;
-    let enabled = transcoder.davis_source.is_none();
+
+    let mut enabled = true;
+    #[cfg(feature = "open-cv")]
+    {
+        enabled = transcoder.davis_source.is_none();
+    }
     ui.add_enabled(enabled, egui::Label::new("Δt_ref:"));
     slider_pm(
         enabled,
@@ -810,64 +881,67 @@ fn side_panel_grid_contents(
     });
     ui.end_row();
 
-    ui.label("DAVIS mode:");
-    ui.add_enabled_ui(!enabled, |ui| {
-        ui.horizontal(|ui| {
-            ui.radio_value(
-                &mut ui_state.davis_mode_radio_state,
-                TranscoderMode::Framed,
-                "Framed recon",
-            );
-            ui.radio_value(
-                &mut ui_state.davis_mode_radio_state,
-                TranscoderMode::RawDavis,
-                "Raw DAVIS",
-            );
-            ui.radio_value(
-                &mut ui_state.davis_mode_radio_state,
-                TranscoderMode::RawDvs,
-                "Raw DVS",
-            );
+    #[cfg(feature = "open-cv")]
+    {
+        ui.label("DAVIS mode:");
+        ui.add_enabled_ui(!enabled, |ui| {
+            ui.horizontal(|ui| {
+                ui.radio_value(
+                    &mut ui_state.davis_mode_radio_state,
+                    TranscoderMode::Framed,
+                    "Framed recon",
+                );
+                ui.radio_value(
+                    &mut ui_state.davis_mode_radio_state,
+                    TranscoderMode::RawDavis,
+                    "Raw DAVIS",
+                );
+                ui.radio_value(
+                    &mut ui_state.davis_mode_radio_state,
+                    TranscoderMode::RawDvs,
+                    "Raw DVS",
+                );
+            });
         });
-    });
-    ui.end_row();
+        ui.end_row();
 
-    ui.label("DAVIS deblurred FPS:");
+        ui.label("DAVIS deblurred FPS:");
 
-    slider_pm(
-        !enabled,
-        true,
-        ui,
-        &mut ui_state.davis_output_fps,
-        &mut ui_state.davis_output_fps_slider,
-        30.0..=1000000.0,
-        vec![
-            50.0, 100.0, 250.0, 500.0, 1_000.0, 2_500.0, 5_000.0, 7_500.0, 10_000.0, 1000000.0,
-        ],
-        50.0,
-    );
-    ui.end_row();
+        slider_pm(
+            !enabled,
+            true,
+            ui,
+            &mut ui_state.davis_output_fps,
+            &mut ui_state.davis_output_fps_slider,
+            30.0..=1000000.0,
+            vec![
+                50.0, 100.0, 250.0, 500.0, 1_000.0, 2_500.0, 5_000.0, 7_500.0, 10_000.0, 1000000.0,
+            ],
+            50.0,
+        );
+        ui.end_row();
 
-    let enable_optimize = !enabled && ui_state.davis_mode_radio_state != TranscoderMode::RawDvs;
-    ui.label("Optimize:");
-    ui.add_enabled(
-        enable_optimize,
-        egui::Checkbox::new(&mut ui_state.optimize_c, "Optimize θ?"),
-    );
-    ui.end_row();
+        let enable_optimize = !enabled && ui_state.davis_mode_radio_state != TranscoderMode::RawDvs;
+        ui.label("Optimize:");
+        ui.add_enabled(
+            enable_optimize,
+            egui::Checkbox::new(&mut ui_state.optimize_c, "Optimize θ?"),
+        );
+        ui.end_row();
 
-    ui.label("Optimize frequency:");
-    slider_pm(
-        enable_optimize,
-        true,
-        ui,
-        &mut ui_state.optimize_c_frequency,
-        &mut ui_state.optimize_c_frequency_slider,
-        1..=250,
-        vec![10, 25, 50, 100],
-        1,
-    );
-    ui.end_row();
+        ui.label("Optimize frequency:");
+        slider_pm(
+            enable_optimize,
+            true,
+            ui,
+            &mut ui_state.optimize_c_frequency,
+            &mut ui_state.optimize_c_frequency_slider,
+            1..=250,
+            vec![10, 25, 50, 100],
+            1,
+        );
+        ui.end_row();
+    }
 
     let enable_encoder_options = ui_state.encoder_type != EncoderType::Empty;
 
@@ -966,6 +1040,23 @@ fn side_panel_grid_contents(
                 );
             });
         });
+    });
+    ui.end_row();
+
+    ui.label("Metrics:");
+    ui.vertical(|ui| {
+        ui.add_enabled(
+            enabled,
+            egui::Checkbox::new(&mut ui_state.metric_mse, "MSE"),
+        );
+        ui.add_enabled(
+            enabled,
+            egui::Checkbox::new(&mut ui_state.metric_psnr, "PSNR"),
+        );
+        ui.add_enabled(
+            enabled,
+            egui::Checkbox::new(&mut ui_state.metric_ssim, "SSIM (Warning: slow!)"),
+        );
     });
     ui.end_row();
 }

@@ -1,4 +1,4 @@
-use crate::framer::scale_intensity::FrameValue;
+use crate::framer::scale_intensity::{FrameValue, SaeTime};
 use bincode::config::{BigEndian, FixintEncoding, WithOtherEndian, WithOtherIntEncoding};
 use bincode::{DefaultOptions, Options};
 use rayon::iter::ParallelIterator;
@@ -35,7 +35,7 @@ pub enum FramerMode {
 pub struct FramerBuilder {
     plane: PlaneSize,
     tps: DeltaT,
-    output_fps: f64,
+    output_fps: f32,
     mode: FramerMode,
     view_mode: FramedViewMode,
     source: SourceType,
@@ -78,7 +78,7 @@ impl FramerBuilder {
         tps: DeltaT,
         ref_interval: DeltaT,
         delta_t_max: DeltaT,
-        output_fps: f64,
+        output_fps: f32,
     ) -> FramerBuilder {
         self.tps = tps;
         self.ref_interval = ref_interval;
@@ -212,7 +212,7 @@ impl From<FrameSequenceError> for Box<dyn std::error::Error> {
 /// The state of a [`FrameSequence`]
 pub struct FrameSequenceState {
     /// The number of frames written to the output so far
-    pub frames_written: i64,
+    frames_written: i64,
     plane: PlaneSize,
 
     /// Ticks per output frame
@@ -224,6 +224,17 @@ pub struct FrameSequenceState {
     source_dtm: DeltaT,
     view_mode: FramedViewMode,
     time_mode: TimeMode,
+}
+
+impl FrameSequenceState {
+    pub fn reset(&mut self) {
+        self.frames_written = 0;
+    }
+}
+
+pub struct FeatureInterval {
+    end_ts: BigT,
+    pub features: Vec<Coord>,
 }
 
 /// A sequence of frames, each of which is a 3D array of [`FrameValue`]s
@@ -239,9 +250,9 @@ pub struct FrameSequence<T> {
     chunk_filled_tracker: Vec<bool>,
     pub(crate) mode: FramerMode,
     pub(crate) detect_features: bool,
-    pub(crate) features: VecDeque<Vec<Coord>>,
+    pub(crate) features: VecDeque<FeatureInterval>,
 
-    pub(crate) running_intensities: Array3<i32>,
+    pub(crate) running_intensities: Array3<u8>,
 
     /// Number of rows per chunk (per thread)
     pub chunk_rows: usize,
@@ -395,6 +406,11 @@ impl<
         let channel = event.coord.c.unwrap_or(0);
         let chunk_num = event.coord.y as usize / self.chunk_rows;
 
+        // Silently handle malformed event
+        if chunk_num >= self.frames.len() {
+            return false;
+        }
+
         let time = event.delta_t;
         event.coord.y -= (chunk_num * self.chunk_rows) as u16; // Modify the coordinate here, so it gets ingested at the right place
 
@@ -422,28 +438,58 @@ impl<
             event.coord.y += (chunk_num * self.chunk_rows) as u16;
             self.running_intensities
                 [[event.coord.y.into(), event.coord.x.into(), channel.into()]] =
-                <T as Into<f64>>::into(*last_frame_intensity_ref) as i32;
-            if self.running_intensities
-                [[event.coord.y.into(), event.coord.x.into(), channel.into()]]
-                > 255
-            {
-                dbg!(
-                    self.running_intensities
-                        [[event.coord.y.into(), event.coord.x.into(), channel.into()]]
-                );
-            }
+                <T as Into<f64>>::into(*last_frame_intensity_ref) as u8;
 
             if let Some(last) = last_event {
                 if time != last.delta_t {
+                    // todo!();
                     if is_feature(event.coord, self.state.plane, &self.running_intensities).unwrap()
                     {
-                        let idx =
-                            (time / self.state.tpf - self.state.frames_written as u32) as usize;
+                        let mut idx =
+                            (time / (self.state.tpf) - self.state.frames_written as u32) as usize;
+                        if time % self.state.tpf == 0 {
+                            idx -= 1;
+                        }
+                        // dbg!(time);
+                        // dbg!(self.state.frames_written);
+                        // dbg!(idx);
                         if idx >= self.features.len() {
-                            self.features.resize(idx + 1, vec![]);
+                            if self.features.len() == 0 {
+                                dbg!("creating first...");
+                                // Create the first
+                                self.features.push_back(FeatureInterval {
+                                    end_ts: self.state.tpf as BigT,
+                                    features: vec![],
+                                });
+                                self.features.push_back(FeatureInterval {
+                                    end_ts: self.state.tpf as BigT * 2,
+                                    features: vec![],
+                                });
+                            }
+
+                            let new_end_ts = if time % self.state.tpf == 0 {
+                                time
+                            } else {
+                                (time / self.state.tpf + 1) * self.state.tpf
+                            } as BigT;
+
+                            let mut running_end_ts =
+                                self.features.back().unwrap().end_ts + self.state.tpf as BigT;
+                            // dbg!(new_end_ts);
+                            // dbg!(running_end_ts);
+                            while running_end_ts <= new_end_ts {
+                                self.features.push_back(FeatureInterval {
+                                    end_ts: running_end_ts,
+                                    features: vec![],
+                                });
+                                running_end_ts += self.state.tpf as BigT;
+                            }
                         }
 
-                        self.features[idx].push(event.coord);
+                        // dbg!(self.features.len());
+                        // dbg!(self.features[idx].end_ts);
+                        assert!(self.features[idx].end_ts >= time as BigT);
+                        self.features[idx].features.push(event.coord);
                     }
                 }
             }
@@ -621,13 +667,32 @@ impl<T: Clone + Default + FrameValue<Output = T> + Serialize> FrameSequence<T> {
     }
 
     /// Get the instantaneous intensity for each pixel
-    pub fn get_running_intensities(&self) -> &Array3<i32> {
+    pub fn get_running_intensities(&self) -> &Array3<u8> {
         &self.running_intensities
     }
 
     /// Get the features detected for the next frame, and pop that off the feature vec
-    pub fn pop_features(&mut self) -> Option<Vec<Coord>> {
-        self.features.push_back(vec![]);
+    pub fn pop_features(&mut self) -> Option<FeatureInterval> {
+        if self.features.len() == 0 {
+            // Create the first
+            self.features.push_back(FeatureInterval {
+                end_ts: self.state.tpf as BigT,
+                features: vec![],
+            });
+            // Create the first
+            self.features.push_back(FeatureInterval {
+                end_ts: self.state.tpf as BigT * 2,
+                features: vec![],
+            });
+        } else {
+            self.features.push_back(FeatureInterval {
+                end_ts: self.state.tpf as BigT + self.features.back().unwrap().end_ts,
+                features: vec![],
+            });
+        }
+
+        // dbg!("Popping features");
+        // dbg!(self.features.front().unwrap().end_ts);
         self.features.pop_front()
     }
 
@@ -648,6 +713,7 @@ impl<T: Clone + Default + FrameValue<Output = T> + Serialize> FrameSequence<T> {
             }
         }
         self.state.frames_written += 1;
+        // dbg!(self.state.frames_written);
         Some(ret)
     }
 
@@ -714,6 +780,7 @@ impl<T: Clone + Default + FrameValue<Output = T> + Serialize> FrameSequence<T> {
             }
         }
         self.state.frames_written += 1;
+        dbg!(self.state.frames_written);
         Ok(())
     }
 
@@ -784,7 +851,10 @@ fn ingest_event_for_chunk<
                 practical_d_max,
                 state.source_dtm,
                 state.view_mode,
-                0.0, // TODO
+                Some(SaeTime {
+                    running_t: *running_ts_ref as DeltaT,
+                    last_fired_t: prev_running_ts as DeltaT,
+                }), // TODO
             );
         }
         *last_filled_frame_ref = (running_ts_ref.saturating_sub(1)) as i64 / i64::from(state.tpf);
