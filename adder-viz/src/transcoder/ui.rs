@@ -689,6 +689,7 @@ fn side_panel_grid_contents(
 ) {
     let dtr_max = ui_state.delta_t_ref_max;
 
+    #[allow(dead_code)]
     let mut enabled = true;
     #[cfg(feature = "open-cv")]
     {

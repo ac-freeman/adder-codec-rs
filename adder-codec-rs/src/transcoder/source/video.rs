@@ -411,8 +411,8 @@ impl<W: Write + 'static> Video<W> {
                 Ok(Video {
                     state,
                     event_pixel_trees,
-                    display_frame: instantaneous_frame,
-                    display_frame_features: Default::default(),
+                    display_frame: instantaneous_frame.clone(),
+                    display_frame_features: instantaneous_frame,
                     instantaneous_view_mode,
                     event_sender,
                     encoder,
@@ -428,8 +428,8 @@ impl<W: Write + 'static> Video<W> {
                 Ok(Video {
                     state,
                     event_pixel_trees,
-                    display_frame: instantaneous_frame,
-                    display_frame_features: Default::default(),
+                    display_frame: instantaneous_frame.clone(),
+                    display_frame_features: instantaneous_frame,
                     instantaneous_view_mode,
                     event_sender,
                     encoder,
