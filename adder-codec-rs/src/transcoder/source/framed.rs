@@ -277,6 +277,7 @@ impl<W: Write + 'static> VideoBuilder<W> for Framed<W> {
         self
     }
 
+    #[cfg(feature = "feature-logging")]
     fn log_path(mut self, name: String) -> Self {
         let date_time = Local::now();
         let formatted = format!("{}_{}.log", name, date_time.format("%d_%m_%Y_%H_%M_%S"));

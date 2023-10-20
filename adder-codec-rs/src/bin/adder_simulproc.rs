@@ -185,7 +185,7 @@ mod tests {
             .frame_start(args.frame_idx_start)?
             .show_display(args.show_display);
 
-        let source_fps = source.source_fps;
+        let source_fps = source.source_fps as f64;
         source = source.time_parameters(
             (args.ref_time as f64 * source_fps) as DeltaT,
             args.ref_time,
