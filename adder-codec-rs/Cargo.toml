@@ -77,13 +77,13 @@ criterion = "0.3.6"
 criterion-perf-events = "0.2.0"
 perfcnt = "0.8.0"
 
-[[target.'cfg(any(target_os = "linux"))'.bench]]
-name = "framed_to_adder_hd"
-harness = false
-
-[[target.'cfg(any(target_os = "linux"))'.bench]]
-name = "block"
-harness = false
+#[[target.'cfg(any(target_os = "linux"))'.bench]]
+#name = "framed_to_adder_hd"
+#harness = false
+#
+#[[target.'cfg(any(target_os = "linux"))'.bench]]
+#name = "block"
+#harness = false
 
 [package.metadata.docs.rs]
 no-default-features = true
