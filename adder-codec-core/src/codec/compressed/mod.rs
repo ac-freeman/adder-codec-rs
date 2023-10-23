@@ -39,7 +39,6 @@ mod tests {
         // It should still be just the header, because we haven't integrated enough events
         // to write out a frame (haven't reached DeltaT_max)
         assert!(writer.len() == meta.header_size);
-        dbg!(writer);
 
         let output = crate::codec::compressed::stream::CompressedOutput::new(meta, Vec::new());
         let mut encoder = Encoder::new_compressed(output, EncoderOptions::default());
@@ -52,8 +51,7 @@ mod tests {
         encoder.flush_writer().unwrap();
         let writer = encoder.close_writer().unwrap().unwrap();
 
-        dbg!(writer.len());
+        // Now we've exceeded the DeltaT_max, so we should have written out a frame
         assert!(writer.len() > meta.header_size);
-        dbg!(writer);
     }
 }
