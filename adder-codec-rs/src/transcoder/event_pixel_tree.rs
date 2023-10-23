@@ -690,6 +690,46 @@ mod tests {
     }
 
     #[test]
+    fn test_new_dtm() {
+        // Test the new definition for deltat_max (the max time for a constant pixel to fire its FIRST event)
+
+        let dtm = 2_000;
+        let mut tree = PixelArena::new(
+            245.0,
+            Coord {
+                x: 0,
+                y: 0,
+                c: None,
+            },
+        );
+        tree.integrate(245.0, 1_000.0, FramePerfect, dtm, 5_000, 0, 255);
+        assert!(!tree.need_to_pop_top);
+        tree.integrate(245.0, 1_000.0, FramePerfect, dtm, 5_000, 0, 255);
+        assert!(tree.need_to_pop_top);
+
+        // We've hit DTM, so pop the top event
+        let _ = tree.pop_top_event(245.0, FramePerfect, 5_000);
+        assert!(!tree.need_to_pop_top);
+
+        // We continue integrating the SAME intensity, so we shouldn't need to pop again until the
+        // intensity CHANGES
+        for _ in 0..47 {
+            tree.integrate(245.0, 1_000.0, FramePerfect, dtm, 5_000, 0, 255);
+        }
+        tree.integrate(245.0, 1_000.0, FramePerfect, dtm, 5_000, 0, 255);
+        assert!(!tree.need_to_pop_top);
+
+        let tmp = tree.arena[0].state.delta_t;
+        assert_eq!(tmp, 48000.0);
+
+        // New intensity is different, so forcibly pop off the best events
+        tree.pop_best_events(&mut Vec::new(), FramePerfect, 5_000);
+
+        tree.integrate(600.0, 3_000.0, FramePerfect, dtm, 5_000, 0, 255);
+        assert!(tree.need_to_pop_top);
+    }
+
+    #[test]
     fn test_big_integration() {
         let dtm = 1_000_000;
         let mut tree = PixelArena::new(
