@@ -14,7 +14,7 @@ categories = ["multimedia::encoding", "multimedia::video", "science"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [features]
-default = []
+default = ["compression"]
 compression = ["dep:arithmetic-coding"]
 
 [dependencies]
