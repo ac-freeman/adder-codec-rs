@@ -339,6 +339,7 @@ pub fn dt_resid_offset_i16_whole_range(
     delta_t_max: DeltaT,
 ) -> usize {
     let ret = (dt_resid as i64 + (delta_t_max as i64 * 2)) as usize;
+    debug_assert!(ret < u16::MAX as usize);
     ret
 }
 
