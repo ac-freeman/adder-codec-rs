@@ -39,7 +39,7 @@ pub(crate) struct PixelState {
 #[repr(packed)]
 #[derive(Clone, Copy, Debug)]
 pub struct PixelNode {
-    /// Will have the smaller D value
+    /// Specifies if the next pixel in the arena vec exists
     alt: Option<()>,
 
     pub(crate) state: PixelState,
@@ -59,6 +59,7 @@ pub struct PixelArena {
     pub arena: SmallVec<[PixelNode; 6]>,
     pub(crate) c_thresh: u8,
     pub(crate) c_increase_counter: u8,
+    dtm_reached: bool,
 }
 
 impl PixelArena {
@@ -77,6 +78,7 @@ impl PixelArena {
             arena,
             c_thresh: 10,
             c_increase_counter: 1,
+            dtm_reached: false,
         }
     }
 
@@ -137,6 +139,7 @@ impl PixelArena {
         ref_time: DeltaT,
     ) -> Event {
         let mut event = self.pop_top_event_recursive(next_intensity, mode, ref_time);
+        self.dtm_reached = true;
         self.delta_t_to_absolute_t(&mut event, mode, ref_time)
     }
 
@@ -231,6 +234,7 @@ impl PixelArena {
         //     }
         // };
         self.need_to_pop_top = false;
+        self.dtm_reached = false;
     }
 
     pub fn set_d_for_continuous(
@@ -324,7 +328,7 @@ impl PixelArena {
             // SAFETY:
             // By design, the integration will not exceed 2^[`D_MAX`], so we can
             // safely cast it to integer [`D`] type.
-            unsafe { self.arena[0].state.delta_t.to_int_unchecked::<DeltaT>() } >= dtm;
+            (!self.dtm_reached && unsafe { self.arena[0].state.delta_t.to_int_unchecked::<DeltaT>() } >= dtm);
 
         if self.c_thresh < c_thresh_max {
             if self.c_increase_counter >= c_increase_velocity - 1 {
@@ -683,6 +687,46 @@ mod tests {
         assert!(!tree.need_to_pop_top);
         let tmp = tree.arena[0].state.delta_t;
         assert_eq!(tmp, 70_000.0)
+    }
+
+    #[test]
+    fn test_new_dtm() {
+        // Test the new definition for deltat_max (the max time for a constant pixel to fire its FIRST event)
+
+        let dtm = 2_000;
+        let mut tree = PixelArena::new(
+            245.0,
+            Coord {
+                x: 0,
+                y: 0,
+                c: None,
+            },
+        );
+        tree.integrate(245.0, 1_000.0, FramePerfect, dtm, 5_000, 0, 255);
+        assert!(!tree.need_to_pop_top);
+        tree.integrate(245.0, 1_000.0, FramePerfect, dtm, 5_000, 0, 255);
+        assert!(tree.need_to_pop_top);
+
+        // We've hit DTM, so pop the top event
+        let _ = tree.pop_top_event(245.0, FramePerfect, 5_000);
+        assert!(!tree.need_to_pop_top);
+
+        // We continue integrating the SAME intensity, so we shouldn't need to pop again until the
+        // intensity CHANGES
+        for _ in 0..47 {
+            tree.integrate(245.0, 1_000.0, FramePerfect, dtm, 5_000, 0, 255);
+        }
+        tree.integrate(245.0, 1_000.0, FramePerfect, dtm, 5_000, 0, 255);
+        assert!(!tree.need_to_pop_top);
+
+        let tmp = tree.arena[0].state.delta_t;
+        assert_eq!(tmp, 48000.0);
+
+        // New intensity is different, so forcibly pop off the best events
+        tree.pop_best_events(&mut Vec::new(), FramePerfect, 5_000);
+
+        tree.integrate(600.0, 3_000.0, FramePerfect, dtm, 5_000, 0, 255);
+        assert!(tree.need_to_pop_top);
     }
 
     #[test]

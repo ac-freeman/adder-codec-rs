@@ -900,7 +900,7 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Davis<W> {
     }
 
     fn crf(&mut self, crf: u8) {
-        self.video.update_crf(crf, true);
+        self.video.update_crf(crf);
     }
 
     fn get_video_mut(&mut self) -> &mut Video<W> {
@@ -953,7 +953,7 @@ impl<W: Write + 'static> VideoBuilder<W> for Davis<W> {
     }
 
     fn crf(mut self, crf: u8) -> Self {
-        self.video.update_crf(crf, false);
+        self.video.update_crf(crf);
         self
     }
 
@@ -1031,6 +1031,7 @@ impl<W: Write + 'static> VideoBuilder<W> for Davis<W> {
         self
     }
 
+    #[cfg(feature = "feature-logging")]
     fn log_path(self, name: String) -> Self {
         todo!()
     }

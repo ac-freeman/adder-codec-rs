@@ -233,22 +233,19 @@ impl Default for VideoState {
             features: Default::default(),
             feature_log_handle: None,
         };
-        state.update_crf(DEFAULT_CRF_QUALITY, false);
+        state.update_crf(DEFAULT_CRF_QUALITY);
         state
     }
 }
 
 impl VideoState {
-    fn update_crf(&mut self, crf: u8, update_time_params: bool) {
+    fn update_crf(&mut self, crf: u8) {
         self.crf_quality = crf;
         self.c_thresh_baseline = CRF[crf as usize][0] as u8;
         self.c_thresh_max = CRF[crf as usize][1] as u8;
 
-        if update_time_params {
-            self.delta_t_max = CRF[crf as usize][2] as u32 * self.ref_time;
-        }
-        self.c_increase_velocity = CRF[crf as usize][3] as u8;
-        self.feature_c_radius = (CRF[crf as usize][4] * self.plane.min_resolution() as f32) as u16;
+        self.c_increase_velocity = CRF[crf as usize][2] as u8;
+        self.feature_c_radius = (CRF[crf as usize][3] * self.plane.min_resolution() as f32) as u16;
     }
 
     fn update_quality_manual(
@@ -414,8 +411,8 @@ impl<W: Write + 'static> Video<W> {
                 Ok(Video {
                     state,
                     event_pixel_trees,
-                    display_frame: instantaneous_frame,
-                    display_frame_features: Default::default(),
+                    display_frame: instantaneous_frame.clone(),
+                    display_frame_features: instantaneous_frame,
                     instantaneous_view_mode,
                     event_sender,
                     encoder,
@@ -431,8 +428,8 @@ impl<W: Write + 'static> Video<W> {
                 Ok(Video {
                     state,
                     event_pixel_trees,
-                    display_frame: instantaneous_frame,
-                    display_frame_features: Default::default(),
+                    display_frame: instantaneous_frame.clone(),
+                    display_frame_features: instantaneous_frame,
                     instantaneous_view_mode,
                     event_sender,
                     encoder,
@@ -1066,8 +1063,8 @@ impl<W: Write + 'static> Video<W> {
     }
 
     /// Update the CRF value and set the baseline c for all pixels
-    pub(crate) fn update_crf(&mut self, crf: u8, update_time_params: bool) {
-        self.state.update_crf(crf, update_time_params);
+    pub(crate) fn update_crf(&mut self, crf: u8) {
+        self.state.update_crf(crf);
 
         for px in self.event_pixel_trees.iter_mut() {
             px.c_thresh = self.state.c_thresh_baseline;
@@ -1091,7 +1088,6 @@ impl<W: Write + 'static> Video<W> {
         c_increase_velocity: u8,
         feature_c_radius_denom: f32,
     ) {
-        dbg!("Updating manually");
         self.state.update_quality_manual(
             c_thresh_baseline,
             c_thresh_max,

@@ -60,6 +60,7 @@ pub struct ParamsUiState {
     pub(crate) detect_features: bool,
     pub(crate) show_features: ShowFeatureMode,
     pub(crate) auto_quality: bool,
+    auto_quality_mirror: bool,
     pub(crate) crf: u8,
     pub(crate) crf_slider: u8,
     feature_radius: f32,
@@ -80,9 +81,9 @@ impl Default for ParamsUiState {
         ParamsUiState {
             delta_t_ref: 255.0,
             delta_t_ref_max: 255.0,
-            delta_t_max_mult: 120,
+            delta_t_max_mult: 2,
             delta_t_ref_slider: 255.0,
-            delta_t_max_mult_slider: 120,
+            delta_t_max_mult_slider: 2,
             scale: 0.5,
             scale_slider: 0.5,
             thread_count: rayon::current_num_threads() - 1,
@@ -107,17 +108,18 @@ impl Default for ParamsUiState {
             encoder_type: EncoderType::default(),
             detect_features: false,
             show_features: ShowFeatureMode::Off,
-            auto_quality: true,
+            auto_quality: false,
+            auto_quality_mirror: false,
             crf: DEFAULT_CRF_QUALITY,
             crf_slider: DEFAULT_CRF_QUALITY,
-            feature_radius: 0.0,
-            feature_radius_slider: 0.0,
-            adder_tresh_velocity: 1,
-            adder_tresh_velocity_slider: 1,
-            adder_tresh_max: 10,
-            adder_tresh_max_slider: 10,
-            adder_tresh_baseline: 10,
-            adder_tresh_baseline_slider: 10,
+            feature_radius: 5.0,
+            feature_radius_slider: 5.0,
+            adder_tresh_velocity: CRF[DEFAULT_CRF_QUALITY as usize][2] as u8,
+            adder_tresh_velocity_slider: CRF[DEFAULT_CRF_QUALITY as usize][2] as u8,
+            adder_tresh_max: CRF[DEFAULT_CRF_QUALITY as usize][1] as u8,
+            adder_tresh_max_slider: CRF[DEFAULT_CRF_QUALITY as usize][1] as u8,
+            adder_tresh_baseline: CRF[DEFAULT_CRF_QUALITY as usize][0] as u8,
+            adder_tresh_baseline_slider: CRF[DEFAULT_CRF_QUALITY as usize][0] as u8,
             metric_mse: true,
             metric_psnr: true,
             metric_ssim: false,
@@ -504,8 +506,10 @@ impl TranscoderState {
 
         // TODO: Refactor all this garbage code
         if self.ui_state.auto_quality
-            && self.ui_state.crf != source.get_video_ref().state.crf_quality
+            && (!self.ui_state.auto_quality_mirror
+                || self.ui_state.crf != source.get_video_ref().state.crf_quality)
         {
+            self.ui_state.auto_quality_mirror = true;
             source.crf(self.ui_state.crf);
 
             let video = source.get_video_ref();
@@ -537,6 +541,10 @@ impl TranscoderState {
                 self.ui_state.adder_tresh_velocity,
                 self.ui_state.feature_radius,
             )
+        }
+
+        if !self.ui_state.auto_quality {
+            self.ui_state.auto_quality_mirror = false;
         }
         let video = source.get_video_mut();
         self.ui_info_state.event_size = video.get_event_size();
@@ -681,6 +689,7 @@ fn side_panel_grid_contents(
 ) {
     let dtr_max = ui_state.delta_t_ref_max;
 
+    #[allow(dead_code)]
     let mut enabled = true;
     #[cfg(feature = "open-cv")]
     {
@@ -727,9 +736,9 @@ fn side_panel_grid_contents(
         ui,
         &mut ui_state.delta_t_max_mult,
         &mut ui_state.delta_t_max_mult_slider,
-        1..=1000,
+        1..=100,
         vec![],
-        10,
+        1,
     );
     ui.end_row();
 

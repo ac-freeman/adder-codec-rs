@@ -160,7 +160,7 @@ impl<W: Write + 'static> Source<W> for Framed<W> {
     }
 
     fn crf(&mut self, crf: u8) {
-        self.video.update_crf(crf, true);
+        self.video.update_crf(crf);
     }
 
     fn get_video_mut(&mut self) -> &mut Video<W> {
@@ -195,7 +195,7 @@ impl<W: Write + 'static> VideoBuilder<W> for Framed<W> {
     }
 
     fn crf(mut self, crf: u8) -> Self {
-        self.video.update_crf(crf, true);
+        self.video.update_crf(crf);
         self
     }
 
@@ -277,6 +277,7 @@ impl<W: Write + 'static> VideoBuilder<W> for Framed<W> {
         self
     }
 
+    #[cfg(feature = "feature-logging")]
     fn log_path(mut self, name: String) -> Self {
         let date_time = Local::now();
         let formatted = format!("{}_{}.log", name, date_time.format("%d_%m_%Y_%H_%M_%S"));
