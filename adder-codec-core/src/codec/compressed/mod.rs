@@ -31,23 +31,23 @@ mod tests {
             d: 5,
             delta_t: 100,
         };
-        encoder.ingest_event(test_event);
+        encoder.ingest_event(test_event).unwrap();
         encoder.flush_writer().unwrap();
         let writer = encoder.close_writer().unwrap().unwrap();
 
         dbg!(writer.len());
         // It should still be just the header, because we haven't integrated enough events
         // to write out a frame (haven't reached DeltaT_max)
-        assert!(writer.len() == meta.header_size);
+        assert_eq!(writer.len(), meta.header_size);
 
         let output = crate::codec::compressed::stream::CompressedOutput::new(meta, Vec::new());
         let mut encoder = Encoder::new_compressed(output, EncoderOptions::default());
         let meta = encoder.meta().clone();
-        encoder.ingest_event(test_event);
+        encoder.ingest_event(test_event).unwrap();
         test_event.delta_t += 100;
-        encoder.ingest_event(test_event);
+        encoder.ingest_event(test_event).unwrap();
         test_event.delta_t += 100;
-        encoder.ingest_event(test_event);
+        encoder.ingest_event(test_event).unwrap();
         encoder.flush_writer().unwrap();
         let writer = encoder.close_writer().unwrap().unwrap();
 
