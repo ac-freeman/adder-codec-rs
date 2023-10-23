@@ -20,6 +20,7 @@ default = ["adder-codec-rs/transcoder"]
 feature-logging = ["open-cv", "adder-codec-rs/feature-logging"]
 feature-logging-nonmaxsuppression = ["open-cv", "adder-codec-rs/feature-logging-nonmaxsuppression"]
 open-cv = ["opencv", "adder-codec-rs/open-cv", "adder-codec-rs/transcoder" ]
+compression = ["adder-codec-rs/compression"]
 
 [dependencies]
 adder-codec-core = { version = "0.2.1", path = "../adder-codec-core" }
