@@ -525,8 +525,8 @@ mod tests {
     use crate::codec::decoder::Decoder;
     use crate::codec::encoder::Encoder;
     use crate::codec::raw::stream::{RawInput, RawOutput};
-    use crate::codec::CompressedOutput;
     use crate::codec::{CodecError, ReadCompression, WriteCompression};
+    use crate::codec::{CompressedOutput, EncoderOptions};
     use crate::Mode::{Continuous, FramePerfect};
     use crate::{Coord, DeltaT, Event, EventCoordless, Mode};
     use bitstream_io::{BigEndian, BitReader};
@@ -1802,7 +1802,8 @@ mod tests {
 
         let dtm = compression.meta.delta_t_max;
         let ref_interval = compression.meta.ref_interval;
-        let mut encoder: Encoder<Vec<u8>> = Encoder::new_compressed(compression);
+        let mut encoder: Encoder<Vec<u8>> =
+            Encoder::new_compressed(compression, Default::default());
 
         let mut start_event_t = 0;
         let mut compress = false;
@@ -1857,8 +1858,10 @@ mod tests {
             // BufWriter::new(File::create("/home/andrew/Downloads/virat_gray_fullres_recon.adder").unwrap());
             // BufWriter::new(File::create("/home/andrew/Downloads/davis_recon.adder").unwrap());
             BufWriter::new(File::create("/home/andrew/Downloads/excerpt_recon.adder").unwrap());
-        let mut compressed_recon_raw_encoder =
-            Encoder::new_raw(RawOutput::new(reader.meta().clone(), bufwriter));
+        let mut compressed_recon_raw_encoder = Encoder::new_raw(
+            RawOutput::new(reader.meta().clone(), bufwriter),
+            EncoderOptions::default(),
+        );
 
         // todo: temporary
         let mut count = 0;

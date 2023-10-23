@@ -563,7 +563,7 @@ pub fn open_file_decoder(
     ),
     CodecError,
 > {
-    let bufreader = BufReader::new(File::open(file_path)?);
+    let mut bufreader = BufReader::new(File::open(file_path)?);
     let compression = RawInput::new();
     let mut bitreader = BitReader::endian(bufreader, BigEndian);
 

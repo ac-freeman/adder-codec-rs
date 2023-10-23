@@ -346,7 +346,8 @@ mod tests {
             },
             bufwriter,
         );
-        let encoder: Encoder<BufWriter<Vec<u8>>> = Encoder::new_compressed(compression);
+        let encoder: Encoder<BufWriter<Vec<u8>>> =
+            Encoder::new_compressed(compression, EncoderOptions::default());
 
         // let event = stock_event();
         //

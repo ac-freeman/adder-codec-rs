@@ -84,6 +84,7 @@ impl<W: Write + 'static> Encoder<W> {
                 .with_fixint_encoding()
                 .with_big_endian(),
             options,
+            state: Default::default(),
         };
         encoder.encode_header().unwrap();
         encoder
@@ -295,6 +296,7 @@ mod tests {
     use crate::codec::raw::stream::RawOutput;
     use crate::codec::{CodecMetadata, LATEST_CODEC_VERSION};
     use crate::{Coord, PlaneSize};
+    use bitstream_io::{BigEndian, BitWriter};
     use std::io::BufWriter;
 
     #[test]
@@ -432,6 +434,8 @@ mod tests {
             bincode: DefaultOptions::new()
                 .with_fixint_encoding()
                 .with_big_endian(),
+            options: Default::default(),
+            state: Default::default(),
         };
     }
 
@@ -459,6 +463,8 @@ mod tests {
             bincode: DefaultOptions::new()
                 .with_fixint_encoding()
                 .with_big_endian(),
+            options: Default::default(),
+            state: Default::default(),
         };
     }
 
@@ -481,6 +487,6 @@ mod tests {
             },
             bufwriter,
         );
-        let _encoder = Encoder::new_compressed(compression);
+        let _encoder = Encoder::new_compressed(compression, EncoderOptions::default());
     }
 }
