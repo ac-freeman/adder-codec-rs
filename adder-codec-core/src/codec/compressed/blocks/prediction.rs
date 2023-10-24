@@ -207,7 +207,7 @@ impl PredictionModel {
 
         events[0] = Some(start);
         self.t_memory[0] = start_t;
-        assert!(start_t != 0);
+        // assert!(start_t != 0);
 
         frame_perfect_alignment(self.time_modulation_mode, &mut self.t_memory[0], dt_ref);
         self.t_recon[0] = self.t_memory[0];
@@ -226,7 +226,7 @@ impl PredictionModel {
                 if self.event_memory[idx].delta_t > dtm {
                     let tmp = self.event_memory[idx].delta_t;
                     let tmp2 = self.t_memory[idx];
-                    // eprintln!("CHECK TODO");
+                    eprintln!("CHECK TODO");
                     self.event_memory[idx].delta_t = dtm;
                 }
                 self.t_memory[idx] = next.t();
