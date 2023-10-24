@@ -236,7 +236,6 @@ impl EventCube {
                         loop {
                             let mut prev_event = pixel[idx - 1]; // We can assume for now that this is perfectly decoded, but later we'll corrupt it according to any loss we incur
 
-                            dbg!(prev_event);
                             encoder.model.set_context(contexts.d_context);
 
                             if idx < pixel.len() {
@@ -267,17 +266,6 @@ impl EventCube {
                                 let mut t_residual =
                                     (event.1.t as i32 - t_prediction as i32) as TResidual;
 
-                                dbg!(d_residual, t_residual, last_delta_t);
-                                if t_residual == -947 {
-                                    dbg!(t_residual);
-                                }
-
-                                // let mut dtref_residual = t_residual / self.dt_ref as TResidual;
-                                // for byte in dtref_residual.to_be_bytes().iter() {
-                                //     encoder.encode(Some(&(*byte as usize)), stream).unwrap();
-                                // }
-                                // t_residual = t_residual % self.dt_ref as TResidual; // TODO: check this math
-
                                 encoder.model.set_context(contexts.t_context);
 
                                 for byte in t_residual.to_be_bytes().iter() {
@@ -289,7 +277,6 @@ impl EventCube {
                                 for byte in (DRESIDUAL_NO_EVENT).to_be_bytes().iter() {
                                     encoder.encode(Some(&(*byte as usize)), stream).unwrap();
                                 }
-                                dbg!("no event");
                                 break;
                             }
                             idx += 1;
@@ -330,7 +317,6 @@ impl EventCube {
                             let d_residual = DResidual::from_be_bytes(d_residual_buffer);
 
                             if d_residual == DRESIDUAL_NO_EVENT {
-                                dbg!("read no event");
                                 break; // We have all the events for this pixel now
                             }
 
@@ -347,28 +333,15 @@ impl EventCube {
                                 self.start_t,
                             );
 
-                            // let dtref_prediction = (t_prediction - self.start_t) / self.dt_ref;
-
-                            // decoder.model.set_context(contexts.dtref_context);
-                            // for byte in dtref_residual_buffer.iter_mut() {
-                            //     *byte = decoder.decode(stream).unwrap().unwrap() as u8;
-                            // }
-                            // let dtref_residual = TResidual::from_be_bytes(dtref_residual_buffer);
-
-                            // let dtref_idx =
-                            //     (dtref_prediction as i32 + dtref_residual as i32) as usize;
-
                             decoder.model.set_context(contexts.t_context);
                             for byte in t_residual_buffer.iter_mut() {
                                 *byte = decoder.decode(stream).unwrap().unwrap() as u8;
                             }
                             let t_residual = TResidual::from_be_bytes(t_residual_buffer);
 
-                            dbg!(d_residual, t_residual);
-
                             let t = (t_prediction as i32 + t_residual as i32) as AbsoluteT;
                             last_delta_t = t - prev_event.1.t;
-                            assert!(
+                            debug_assert!(
                                 t <= self.start_t + self.num_intervals as AbsoluteT * self.dt_ref
                             );
                             pixel.push((
@@ -812,6 +785,10 @@ mod compression_tests {
                             assert_eq!(
                                 cube.raw_event_lists[c][y][x].as_ref().unwrap()[0],
                                 cube2.raw_event_lists[c][y][x].as_ref().unwrap()[0]
+                            );
+                            assert_eq!(
+                                cube.raw_event_lists[c][y][x].as_ref().unwrap(),
+                                cube2.raw_event_lists[c][y][x].as_ref().unwrap()
                             );
                         }
                     } else {
