@@ -11,13 +11,13 @@ use crate::codec::compressed::adu::interblock::AduInterBlock;
 use crate::codec::compressed::adu::intrablock::AduIntraBlock;
 use crate::codec::compressed::adu::AduCompression;
 use crate::codec::compressed::blocks::block::{Block, Cube, Frame};
-use crate::codec::compressed::blocks::{BLOCK_SIZE, BLOCK_SIZE_AREA};
-use crate::codec::header::{Magic, MAGIC_COMPRESSED};
-use crate::codec_old::compressed::compression::{
+use crate::codec::compressed::blocks::prediction::{
     d_residual_default_weights, dt_residual_default_weights, Contexts,
 };
-use crate::codec_old::compressed::fenwick::context_switching::FenwickModel;
-use crate::codec_old::compressed::fenwick::Weights;
+use crate::codec::compressed::blocks::{BLOCK_SIZE, BLOCK_SIZE_AREA};
+use crate::codec::compressed::fenwick::context_switching::FenwickModel;
+use crate::codec::compressed::fenwick::Weights;
+use crate::codec::header::{Magic, MAGIC_COMPRESSED};
 use crate::Mode::{Continuous, FramePerfect};
 use crate::TimeMode::AbsoluteT;
 use crate::{Coord, DeltaT, Event, EventCoordless, SourceCamera};
@@ -256,8 +256,7 @@ impl<R: Read> CompressedInput<R> {
     where
         Self: Sized,
     {
-        let mut source_model =
-            FenwickModel::with_symbols(min(delta_t_max as usize * 2, u16::MAX as usize), 1 << 30);
+        let mut source_model = FenwickModel::with_symbols(u16::MAX as usize, 1 << 30);
 
         let contexts = Contexts::new(
             &mut source_model,

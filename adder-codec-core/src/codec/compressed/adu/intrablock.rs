@@ -1,15 +1,16 @@
 use crate::codec::compressed::adu::frame::Adu;
 use crate::codec::compressed::adu::{AduComponentCompression, AduCompression};
 use crate::codec::compressed::blocks::prediction::D_RESIDUALS_EMPTY;
-use crate::codec::compressed::blocks::{DResidual, BLOCK_SIZE_AREA, D_ENCODE_NO_EVENT};
-use crate::codec::compressed::stream::{CompressedInput, CompressedOutput};
-use crate::codec::{CodecError, ReadCompression, WriteCompression};
-use crate::codec_old::compressed::compression::{
+use crate::codec::compressed::blocks::prediction::{
     d_resid_offset, d_resid_offset_inverse, dt_resid_offset, dt_resid_offset_i16,
     dt_resid_offset_i16_inverse, dt_resid_offset_i16_inverse_whole_range,
-    dt_resid_offset_i16_whole_range, Contexts, DeltaTResidual, DeltaTResidualSmall,
+    dt_resid_offset_i16_whole_range, Contexts,
 };
-use crate::codec_old::compressed::fenwick::context_switching::FenwickModel;
+use crate::codec::compressed::blocks::DeltaTResidualSmall;
+use crate::codec::compressed::blocks::{DResidual, BLOCK_SIZE_AREA, D_ENCODE_NO_EVENT};
+use crate::codec::compressed::fenwick::context_switching::FenwickModel;
+use crate::codec::compressed::stream::{CompressedInput, CompressedOutput};
+use crate::codec::{CodecError, ReadCompression, WriteCompression};
 use crate::{AbsoluteT, DeltaT, D};
 use arithmetic_coding::{Decoder, Encoder};
 use bitstream_io::{BigEndian, BitReader, BitWrite, BitWriter};

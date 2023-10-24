@@ -1,8 +1,8 @@
 use crate::codec::compressed::adu::frame::Adu;
+use crate::codec::compressed::blocks::prediction::Contexts;
+use crate::codec::compressed::fenwick::context_switching::FenwickModel;
 use crate::codec::compressed::stream::{CompressedInput, CompressedOutput};
 use crate::codec::CodecError;
-use crate::codec_old::compressed::compression::Contexts;
-use crate::codec_old::compressed::fenwick::context_switching::FenwickModel;
 use crate::DeltaT;
 use arithmetic_coding::{Decoder, Encoder};
 use bitstream_io::{BigEndian, BitReader, BitWrite, BitWriter};

@@ -7,8 +7,6 @@
 /// Expose public API for encoding and decoding
 pub mod codec;
 
-#[cfg(feature = "compression")]
-mod codec_old;
 pub use bitstream_io;
 use bitstream_io::{BigEndian, BitReader};
 use std::cmp::Ordering;
@@ -16,7 +14,7 @@ use std::fs::File;
 use std::io::BufReader;
 use std::ops::Add;
 
-use thiserror::Error;
+use thiserror::Error;m
 
 /// Error type for the `PlaneSize` struct
 #[allow(missing_docs)]

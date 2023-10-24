@@ -6,11 +6,11 @@
 
 use crate::codec::compressed::adu::cube::AduCube;
 use crate::codec::compressed::adu::{AduComponentCompression, AduCompression};
+use crate::codec::compressed::blocks::prediction::Contexts;
 use crate::codec::compressed::blocks::{DResidual, BLOCK_SIZE_AREA};
+use crate::codec::compressed::fenwick::context_switching::FenwickModel;
 use crate::codec::compressed::stream::{CompressedInput, CompressedOutput};
 use crate::codec::{CodecError, CodecMetadata};
-use crate::codec_old::compressed::compression::Contexts;
-use crate::codec_old::compressed::fenwick::context_switching::FenwickModel;
 use crate::{AbsoluteT, DeltaT, D};
 use arithmetic_coding::{Decoder, Encoder};
 use bitstream_io::{BigEndian, BitRead, BitReader, BitWrite, BitWriter};
@@ -298,10 +298,10 @@ mod tests {
     use crate::codec::compressed::adu::interblock::AduInterBlock;
     use crate::codec::compressed::adu::intrablock::gen_random_intra_block;
     use crate::codec::compressed::adu::{add_eof, AduComponentCompression, AduCompression};
+    use crate::codec::compressed::fenwick::context_switching::FenwickModel;
     use crate::codec::compressed::stream::{CompressedInput, CompressedOutput};
     use crate::codec::decoder::Decoder;
     use crate::codec::{CodecMetadata, WriteCompression};
-    use crate::codec_old::compressed::fenwick::context_switching::FenwickModel;
     use arithmetic_coding::Encoder;
     use bitstream_io::{BigEndian, BitRead, BitReader, BitWrite, BitWriter};
     use rand::prelude::StdRng;

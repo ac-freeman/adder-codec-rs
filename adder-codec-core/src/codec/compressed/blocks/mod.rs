@@ -10,6 +10,7 @@ pub const D_ENCODE_NO_EVENT: DResidual = 256;
 pub type DResidual = i16;
 pub type Coefficient = f32;
 pub type DeltaTResidual = i64;
+pub type DeltaTResidualSmall = i16; // Unused?
 pub type TResidual = u32;
 
 pub struct EventResidual {
