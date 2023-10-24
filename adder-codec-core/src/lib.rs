@@ -189,7 +189,7 @@ pub const D_EMPTY: D = 255;
 pub const D_ZERO_INTEGRATION: D = 254;
 
 /// Special symbol signifying no [`Event`] exists
-// pub const D_NO_EVENT: D = 253;
+pub const D_NO_EVENT: D = 253;
 
 #[derive(Clone, Copy, PartialEq, Default, Debug)]
 pub enum Mode {
