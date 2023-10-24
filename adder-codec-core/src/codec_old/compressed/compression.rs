@@ -91,8 +91,8 @@ pub fn dt_residual_default_weights_whole_range(
     delta_t_max: DeltaT,
     delta_t_ref: DeltaT,
 ) -> Weights {
-    let min: usize = delta_t_max as usize * 2;
-    let mut counts: Vec<u64> = vec![1; delta_t_max as usize * 4 + 1];
+    let min: usize = delta_t_max as usize;
+    let mut counts: Vec<u64> = vec![1; delta_t_max as usize * 2 + 1];
 
     // Give high probability to range [-delta_t_ref, delta_t_ref]
     let slice =
@@ -122,10 +122,15 @@ impl Contexts {
         let d_context = source_model.push_context_with_weights(d_residual_default_weights());
 
         // Delta_t context. Need to account for range [-delta_t_max, delta_t_max]
-        let dt_context = source_model.push_context_with_weights(dt_residual_default_weights(
-            (2_i32.pow(15) - 1) as DeltaT,
-            meta.ref_interval,
-        ));
+        let dt_context =
+        //     source_model.push_context_with_weights(dt_residual_default_weights(
+        //     (2_i32.pow(15) - 1) as DeltaT,
+        //     meta.ref_interval,
+        // ));
+            source_model.push_context_with_weights(dt_residual_default_weights_whole_range(
+                (2_i32.pow(15) - 1) as DeltaT,
+                meta.ref_interval,
+            ));
 
         // Delta_t context with whole range. Need to account for range [-2 dtm, 2 dtm]
         let dt_context_whole_range =
@@ -340,6 +345,7 @@ pub fn dt_resid_offset_i16_whole_range(
     dt_resid: DeltaTResidualSmall,
     delta_t_max: DeltaT,
 ) -> usize {
+    // TODO: Handle the case that the residual is outside the available range...
     let ret = (dt_resid as i64 - (i16::MIN as i64)) as usize;
     debug_assert!(ret < u16::MAX as usize);
     ret
