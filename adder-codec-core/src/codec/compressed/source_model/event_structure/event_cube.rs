@@ -2,12 +2,14 @@ use crate::codec::compressed::fenwick::context_switching::FenwickModel;
 use crate::codec::compressed::source_model::cabac_contexts::Contexts;
 use crate::codec::compressed::source_model::event_structure::{BLOCK_SIZE, BLOCK_SIZE_AREA};
 use crate::codec::compressed::source_model::{ComponentCompression, HandleEvent};
+use crate::codec::compressed::{DResidual, TResidual};
 use crate::codec::CodecError;
 use crate::{AbsoluteT, DeltaT, Event, EventCoordless, PixelAddress, D_NO_EVENT};
 use arithmetic_coding::{Decoder, Encoder};
 use bitstream_io::{BigEndian, BitReader, BitWriter};
 use std::collections::HashMap;
 use std::io::Cursor;
+use std::mem::size_of;
 
 pub struct EventCube {
     /// The absolute y-coordinate of the top-left pixel in the cube
@@ -84,14 +86,14 @@ impl EventCube {
                         let mut d_residual = 0;
 
                         if let Some(init) = init_event {
-                            d_residual = event.d as i16 - init.d as i16;
+                            d_residual = event.d as DResidual - init.d as DResidual;
                             // Write the D residual (relative to the start_d for the first event)
                             for byte in d_residual.to_be_bytes().iter() {
                                 encoder.encode(Some(&(*byte as usize)), stream).unwrap();
                             }
                         } else {
                             // Write the first event's D directly
-                            for byte in (event.d as i16).to_be_bytes().iter() {
+                            for byte in (event.d as DResidual).to_be_bytes().iter() {
                                 encoder.encode(Some(&(*byte as usize)), stream).unwrap();
                             }
 
@@ -106,12 +108,12 @@ impl EventCube {
                             encoder.model.set_context(contexts.dtref_context);
 
                             // Don't do any special prediction here (yet). Just predict the same t as previously found.
-                            let mut t_residual = (event.t as i32 - init.t as i32) as i16;
-                            let mut dtref_residual = t_residual / self.dt_ref as i16;
+                            let mut t_residual = (event.t as i32 - init.t as i32) as TResidual;
+                            let mut dtref_residual = t_residual / self.dt_ref as TResidual;
                             for byte in dtref_residual.to_be_bytes().iter() {
                                 encoder.encode(Some(&(*byte as usize)), stream).unwrap();
                             }
-                            t_residual = t_residual % self.dt_ref as i16; // TODO: check this math
+                            t_residual = t_residual % self.dt_ref as TResidual; // TODO: check this math
 
                             encoder.model.set_context(contexts.t_context);
 
@@ -124,7 +126,7 @@ impl EventCube {
                         }
                     } else {
                         // Else there's no event for this pixel. Encode a NO_EVENT symbol.
-                        for byte in (D_NO_EVENT as i16).to_be_bytes().iter() {
+                        for byte in (D_NO_EVENT as DResidual).to_be_bytes().iter() {
                             encoder.encode(Some(&(*byte as usize)), stream).unwrap();
                         }
                     }
@@ -136,6 +138,7 @@ impl EventCube {
 
     fn decompress_intra(
         decoder: &mut Decoder<FenwickModel, BitReader<Cursor<Vec<u8>>, BigEndian>>,
+        contexts: &Contexts,
         block_idx_y: usize,
         block_idx_x: usize,
         num_channels: usize,
@@ -143,7 +146,7 @@ impl EventCube {
         dt_ref: DeltaT,
         num_intervals: usize,
     ) -> Self {
-        let mut Cube = Self::new(
+        let mut cube = Self::new(
             block_idx_y as PixelAddress * BLOCK_SIZE as u16,
             block_idx_x as PixelAddress * BLOCK_SIZE as u16,
             num_channels,
@@ -151,7 +154,20 @@ impl EventCube {
             dt_ref,
             num_intervals,
         );
-        todo!()
+
+        let mut d_residual_buffer = [0u8; size_of::<DResidual>()];
+
+        cube.raw_event_lists.iter().for_each(|channel| {
+            channel.iter().for_each(|row| {
+                row.iter().for_each(|pixel| {
+                    decoder.model.set_context(contexts.d_context);
+
+                    decoder.decode(&mut d_residual_buffer).unwrap();
+                });
+            });
+        });
+
+        cube
     }
 }
 
