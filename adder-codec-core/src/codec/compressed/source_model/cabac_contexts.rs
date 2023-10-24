@@ -12,6 +12,9 @@ pub struct Contexts {
 
     /// Timestamp residuals context
     pub(crate) t_context: usize,
+
+    /// EOF context
+    pub(crate) eof_context: usize,
 }
 
 impl Contexts {
@@ -20,11 +23,14 @@ impl Contexts {
         let dtref_context = source_model.push_context_with_weights(d_residual_default_weights());
         let t_context =
             source_model.push_context_with_weights(t_residual_default_weights(meta.ref_interval));
+        let eof_context =
+            source_model.push_context_with_weights(Weights::new_with_counts(1, &vec![1]));
 
         Contexts {
             d_context,
             dtref_context,
             t_context,
+            eof_context,
         }
     }
 }

@@ -6,8 +6,8 @@ use crate::codec::compressed::{DResidual, TResidual, DRESIDUAL_NO_EVENT};
 use crate::codec::CodecError;
 use crate::{AbsoluteT, DeltaT, Event, EventCoordless, PixelAddress, D, D_NO_EVENT};
 use arithmetic_coding::{Decoder, Encoder};
-use bitstream_io::{BigEndian, BitReader, BitWriter};
-use std::cmp::min;
+use bitstream_io::{BigEndian, BitReader, BitWrite, BitWriter};
+use std::cmp::{max, min};
 use std::collections::HashMap;
 use std::io::Cursor;
 use std::mem::size_of;
@@ -236,6 +236,7 @@ impl EventCube {
                         loop {
                             let mut prev_event = pixel[idx - 1]; // We can assume for now that this is perfectly decoded, but later we'll corrupt it according to any loss we incur
 
+                            dbg!(prev_event);
                             encoder.model.set_context(contexts.d_context);
 
                             if idx < pixel.len() {
@@ -265,6 +266,12 @@ impl EventCube {
                                 // encoder.model.set_context(contexts.dtref_context);
                                 let mut t_residual =
                                     (event.1.t as i32 - t_prediction as i32) as TResidual;
+
+                                dbg!(d_residual, t_residual, last_delta_t);
+                                if t_residual == -947 {
+                                    dbg!(t_residual);
+                                }
+
                                 // let mut dtref_residual = t_residual / self.dt_ref as TResidual;
                                 // for byte in dtref_residual.to_be_bytes().iter() {
                                 //     encoder.encode(Some(&(*byte as usize)), stream).unwrap();
@@ -277,10 +284,12 @@ impl EventCube {
                                     encoder.encode(Some(&(*byte as usize)), stream).unwrap();
                                 }
                             } else {
+                                encoder.model.set_context(contexts.d_context);
                                 // Else there's no other event for this pixel. Encode a NO_EVENT symbol.
                                 for byte in (DRESIDUAL_NO_EVENT).to_be_bytes().iter() {
                                     encoder.encode(Some(&(*byte as usize)), stream).unwrap();
                                 }
+                                dbg!("no event");
                                 break;
                             }
                             idx += 1;
@@ -312,6 +321,7 @@ impl EventCube {
                         let mut last_delta_t = 0;
                         loop {
                             let mut prev_event = pixel[idx - 1];
+                            dbg!(prev_event, last_delta_t);
                             decoder.model.set_context(contexts.d_context);
 
                             for byte in d_residual_buffer.iter_mut() {
@@ -320,6 +330,7 @@ impl EventCube {
                             let d_residual = DResidual::from_be_bytes(d_residual_buffer);
 
                             if d_residual == DRESIDUAL_NO_EVENT {
+                                dbg!("read no event");
                                 break; // We have all the events for this pixel now
                             }
 
@@ -352,7 +363,14 @@ impl EventCube {
                                 *byte = decoder.decode(stream).unwrap().unwrap() as u8;
                             }
                             let t_residual = TResidual::from_be_bytes(t_residual_buffer);
+
+                            dbg!(d_residual, t_residual);
+
                             let t = (t_prediction as i32 + t_residual as i32) as AbsoluteT;
+                            last_delta_t = t - prev_event.1.t;
+                            assert!(
+                                t <= self.start_t + self.num_intervals as AbsoluteT * self.dt_ref
+                            );
                             pixel.push((
                                 ((t - self.start_t) / self.dt_ref) as u8,
                                 EventCoordless { d, t },
@@ -388,11 +406,11 @@ fn generate_t_prediction(
         } else {
             last_delta_t << d_residual
         };
-        prev_event.1.t
-            + min(
-                delta_t_prediction,
-                ((num_intervals as u8 - dtref_idx) as u32 * dt_ref),
-            ) as AbsoluteT
+        max(
+            prev_event.1.t,
+            prev_event.1.t
+                + min(delta_t_prediction, ((num_intervals as u8) as u32 * dt_ref)) as AbsoluteT,
+        )
     }
 }
 
@@ -589,12 +607,14 @@ impl ComponentCompression for EventCube {
 #[cfg(test)]
 mod compression_tests {
     use crate::codec::compressed::fenwick::context_switching::FenwickModel;
-    use crate::codec::compressed::source_model::event_structure::event_cube::EventCube;
+    use crate::codec::compressed::source_model::event_structure::event_cube::{
+        eof_context, EventCube,
+    };
     use crate::codec::compressed::source_model::{ComponentCompression, HandleEvent};
     use crate::codec::CodecMetadata;
     use crate::{Coord, Event};
     use arithmetic_coding::Encoder;
-    use bitstream_io::{BigEndian, BitReader, BitWriter};
+    use bitstream_io::{BigEndian, BitReader, BitWrite, BitWriter};
     use rand::prelude::StdRng;
     use rand::{Rng, SeedableRng};
     use std::cmp::min;
@@ -760,6 +780,8 @@ mod compression_tests {
 
         cube.compress(&mut encoder, &contexts, &mut stream)?;
 
+        eof_context(&contexts, &mut encoder, &mut stream);
+
         let mut source_model = FenwickModel::with_symbols(u16::MAX as usize, 1 << 30);
         let contexts = crate::codec::compressed::source_model::cabac_contexts::Contexts::new(
             &mut source_model,
@@ -784,7 +806,6 @@ mod compression_tests {
         for c in 0..3 {
             for y in 0..16 {
                 for x in 0..16 {
-                    dbg!(c, y, x);
                     if let Some(ref pixel) = cube.raw_event_lists[c][y][x] {
                         if !pixel.is_empty() {
                             assert!(cube2.raw_event_lists[c][y][x].is_some());
@@ -802,4 +823,18 @@ mod compression_tests {
 
         Ok(())
     }
+}
+
+fn eof_context(
+    contexts: &Contexts,
+    encoder: &mut Encoder<FenwickModel, BitWriter<Vec<u8>, BigEndian>>,
+    stream: &mut BitWriter<Vec<u8>, BigEndian>,
+) {
+    // THIS IS CRUCIAL FOR TESTING
+    let eof_context = contexts.eof_context;
+    encoder.model.set_context(eof_context);
+    encoder.encode(None, stream).unwrap();
+    encoder.flush(stream).unwrap();
+    stream.byte_align().unwrap();
+    stream.flush().unwrap();
 }
