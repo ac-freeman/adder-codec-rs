@@ -86,6 +86,15 @@ impl HandleEvent for EventAdu {
         self.cube_to_write_count = 0;
         self.start_t += self.num_intervals as AbsoluteT * self.dt_ref;
     }
+
+    fn clear_decompression(&mut self) {
+        for cube in self.event_cubes.iter_mut() {
+            cube.clear_compression();
+        }
+        self.skip_adu = true;
+        self.cube_to_write_count = 0;
+        self.start_t += self.num_intervals as AbsoluteT * self.dt_ref;
+    }
 }
 
 #[cfg(test)]

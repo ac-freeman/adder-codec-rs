@@ -13,6 +13,7 @@ pub trait HandleEvent {
     fn digest_event(&mut self);
     /// Clear out the cube's events and increment the start time by the cube's duration
     fn clear_compression(&mut self);
+    fn clear_decompression(&mut self);
 }
 
 trait ComponentCompression {

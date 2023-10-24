@@ -17,10 +17,7 @@ pub struct Contexts {
 impl Contexts {
     pub fn new(source_model: &mut FenwickModel, meta: CodecMetadata) -> Contexts {
         let d_context = source_model.push_context_with_weights(d_residual_default_weights());
-        let dtref_context = source_model.push_context_with_weights(dtref_residual_default_weights(
-            meta.ref_interval,
-            meta.delta_t_max,
-        ));
+        let dtref_context = source_model.push_context_with_weights(d_residual_default_weights());
         let t_context =
             source_model.push_context_with_weights(t_residual_default_weights(meta.ref_interval));
 
@@ -50,22 +47,22 @@ pub fn t_residual_default_weights(dt_ref: DeltaT) -> Weights {
     Weights::new_with_counts(counts.len(), &counts)
 }
 
-pub fn dtref_residual_default_weights(dt_ref: DeltaT, dt_max: DeltaT) -> Weights {
-    // dtref residuals can fit within i16
-
-    // We have dt_max/dt_ref count of intervals per adu
-    let mut counts: Vec<u64> = vec![1; (dt_max / dt_ref) as usize * 2 + 1];
-
-    // Give higher probability to smaller residuals
-    for i in counts.len() / 3..counts.len() * 2 / 3 {
-        counts[i] = 5;
-    }
-
-    let len = counts.len();
-    counts[len / 2] = 10;
-
-    Weights::new_with_counts(counts.len(), &counts)
-}
+// pub fn dtref_residual_default_weights(dt_ref: DeltaT, dt_max: DeltaT) -> Weights {
+//     // dtref residuals can fit within i16
+//
+//     // We have dt_max/dt_ref count of intervals per adu
+//     let mut counts: Vec<u64> = vec![1; (dt_max / dt_ref) as usize * 2 + 1];
+//
+//     // Give higher probability to smaller residuals
+//     for i in counts.len() / 3..counts.len() * 2 / 3 {
+//         counts[i] = 5;
+//     }
+//
+//     let len = counts.len();
+//     counts[len / 2] = 10;
+//
+//     Weights::new_with_counts(counts.len(), &counts)
+// }
 
 pub fn d_residual_default_weights() -> Weights {
     // d residuals can fit within i16
