@@ -1,6 +1,5 @@
-pub mod adu;
-pub mod blocks;
 pub mod fenwick;
+mod source_model;
 /// Compressed codec
 pub mod stream;
 

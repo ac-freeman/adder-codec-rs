@@ -14,7 +14,7 @@ use std::fs::File;
 use std::io::BufReader;
 use std::ops::Add;
 
-use thiserror::Error;m
+use thiserror::Error;
 
 /// Error type for the `PlaneSize` struct
 #[allow(missing_docs)]
@@ -58,8 +58,8 @@ pub fn is_framed(source_camera: SourceCamera) -> bool {
     }
 }
 
-#[cfg(feature = "compression")]
-use crate::codec::compressed::blocks::{DeltaTResidual, EventResidual};
+// #[cfg(feature = "compression")]
+// use crate::codec::compressed::blocks::{DeltaTResidual, EventResidual};
 #[cfg(feature = "compression")]
 use crate::codec::compressed::stream::CompressedInput;
 use crate::codec::decoder::Decoder;

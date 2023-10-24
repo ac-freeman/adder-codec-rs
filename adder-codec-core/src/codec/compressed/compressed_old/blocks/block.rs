@@ -593,6 +593,29 @@ mod tests {
     }
 
     #[test]
+    fn test_new_dtm() {
+        let events = get_random_events(None, 10000, 640, 480, 3, 2550);
+        let mut frame = setup_frame(events, 640, 480, Continuous, 2550);
+
+        // Add an event that's beyond the frame's current bounds
+        let (res, usize) = frame
+            .add_event(
+                Event {
+                    coord: Coord {
+                        x: 0,
+                        y: 0,
+                        c: Some(0),
+                    },
+                    d: 0,
+                    delta_t: 4560,
+                },
+                2550,
+            )
+            .unwrap();
+        assert!(res);
+    }
+
+    #[test]
     fn test_setup_frame() {
         let events = get_random_events(None, 10000, 640, 480, 3, 25500);
         let frame = setup_frame(events, 640, 480, Continuous, 25500);

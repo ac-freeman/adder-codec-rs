@@ -10,8 +10,8 @@ use std::io;
 use std::io::{Sink, Write};
 use std::time::Instant;
 
-#[cfg(feature = "compression")]
-use crate::codec::compressed::adu::frame::Adu;
+// #[cfg(feature = "compression")]
+// use crate::codec::compressed::adu::frame::Adu;
 #[cfg(feature = "compression")]
 use crate::codec::compressed::stream::CompressedOutput;
 
@@ -261,11 +261,11 @@ impl<W: Write + 'static> Encoder<W> {
             }
         }
     }
-    /// Ingest an event
-    #[cfg(feature = "compression")]
-    pub fn ingest_event_debug(&mut self, event: Event) -> Result<Option<Adu>, CodecError> {
-        self.output.ingest_event_debug(event)
-    }
+    // /// Ingest an event
+    // #[cfg(feature = "compression")]
+    // pub fn ingest_event_debug(&mut self, event: Event) -> Result<Option<Adu>, CodecError> {
+    //     self.output.ingest_event_debug(event)
+    // }
 
     /// Ingest an array of events
     ///
@@ -423,10 +423,10 @@ mod tests {
                 event_size: 0,
                 source_camera: Default::default(),
             },
-            frame: Default::default(),
-            adu: Adu::new(),
+            // frame: Default::default(),
+            // adu: Adu::new(),
             arithmetic_coder: None,
-            contexts: None,
+            // contexts: None,
             stream: Some(BitWriter::endian(bufwriter, BigEndian)),
         };
         let _encoder = Encoder {

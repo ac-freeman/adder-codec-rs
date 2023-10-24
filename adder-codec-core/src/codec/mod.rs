@@ -137,8 +137,8 @@ pub trait WriteCompression<W: Write> {
     /// of the stream (Is it ready to write events? Is it accumulating/reorganizing events? etc.)
     fn ingest_event(&mut self, event: Event) -> Result<(), CodecError>;
 
-    #[cfg(feature = "compression")]
-    fn ingest_event_debug(&mut self, event: Event) -> Result<Option<Adu>, CodecError>;
+    // #[cfg(feature = "compression")]
+    // fn ingest_event_debug(&mut self, event: Event) -> Result<Option<Adu>, CodecError>;
 }
 
 /// A trait for reading ADΔER data from a stream.
@@ -172,11 +172,11 @@ pub trait ReadCompression<R: Read> {
     /// Read the next event from the stream. Returns `None` if the stream is exhausted.
     fn digest_event(&mut self, reader: &mut BitReader<R, BigEndian>) -> Result<Event, CodecError>;
 
-    #[cfg(feature = "compression")]
-    fn digest_event_debug(
-        &mut self,
-        reader: &mut BitReader<R, BigEndian>,
-    ) -> Result<(Option<Adu>, Event), CodecError>;
+    // #[cfg(feature = "compression")]
+    // fn digest_event_debug(
+    //     &mut self,
+    //     reader: &mut BitReader<R, BigEndian>,
+    // ) -> Result<(Option<Adu>, Event), CodecError>;
 
     /// Set the input stream position to the given byte offset.
     fn set_input_stream_position(
@@ -191,8 +191,8 @@ pub trait ReadCompression<R: Read> {
 }
 
 // unsafe impl<R: Read> Send for ReadCompression {}
-#[cfg(feature = "compression")]
-use crate::codec::compressed::adu::frame::Adu;
+// #[cfg(feature = "compression")]
+// use crate::codec::compressed::adu::frame::Adu;
 #[cfg(feature = "compression")]
 use crate::codec::compressed::stream::{CompressedInput, CompressedOutput};
 use crate::codec::empty::stream::EmptyOutput;
@@ -235,10 +235,9 @@ pub enum CodecError {
     #[error("Plane error")]
     PlaneError(#[from] crate::PlaneError),
 
-    #[cfg(feature = "compression")]
-    #[error("Blocking error")]
-    BlockError(#[from] crate::codec::compressed::blocks::block::BlockError),
-
+    // #[cfg(feature = "compression")]
+    // #[error("Blocking error")]
+    // BlockError(#[from] crate::codec::compressed::blocks::block::BlockError),
     #[cfg(feature = "compression")]
     #[error("Arithmetic coding error")]
     ArithmeticCodingError(#[from] arithmetic_coding::Error),

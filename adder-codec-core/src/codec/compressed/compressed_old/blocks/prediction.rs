@@ -461,6 +461,209 @@ fn update_values_from_prediction(
     *t_recon = recon_t;
 }
 
+use crate::codec::compressed::fenwick::{context_switching::FenwickModel, Weights};
+use crate::codec::CodecMetadata;
+
+pub const DELTA_T_RESIDUAL_NO_EVENT: DeltaTResidual = DeltaTResidual::MAX; // TODO: document and test
+                                                                           //
+                                                                           // static D_RESIDUAL_DEFAULT_WEIGHTS: Weights = d_residual_default_weights();
+
+pub fn d_residual_default_weights() -> Weights {
+    // todo: what about d_no_event... 256?
+    // The maximum positive d residual is d = 0 --> d = 255      [255]
+    // The maximum negative d residual is d = 255 --> d = 0      [-255]
+    // No d values in range (D_MAX, D_NO_EVENT) --> (173, 253)
+
+    // Span the range [-255, 256]
+    let mut counts: [u64; 512] = [1; 512];
+
+    // Give high probability to range [-20, 20]
+    let mut idx = 0;
+    loop {
+        match idx {
+            // [-10, 10]
+            245..=265 => {
+                counts[idx] = 20;
+            }
+
+            // [-20, 20]
+            235..=275 | 490..=510 | 0..=20 => {
+                counts[idx] = 10;
+            }
+
+            // give high probability to d_no_event
+            511 => {
+                counts[idx] = 20;
+            }
+            _ => {}
+        }
+
+        if idx == 511 {
+            break;
+        }
+
+        idx += 1;
+    }
+
+    Weights::new_with_counts(counts.len(), &Vec::from(counts))
+}
+
+pub fn dt_residual_default_weights(delta_t_max: DeltaT, delta_t_ref: DeltaT) -> Weights {
+    let min: usize = delta_t_max as usize;
+    let mut counts: Vec<u64> = vec![1; (delta_t_max * 2) as usize + 2]; // +1 for 0, +1 for EOF
+
+    // Give high probability to range [-delta_t_ref, delta_t_ref]
+    let slice =
+        &mut counts[(-(delta_t_ref as i64) + min as i64) as usize..(delta_t_ref as usize) + min];
+    for count in slice {
+        *count = 20;
+    }
+
+    let tmp = Weights::new_with_counts(counts.len(), &counts);
+    assert_eq!(tmp.range(None), 0..1);
+    tmp
+}
+
+pub fn dt_residual_default_weights_whole_range(
+    delta_t_max: DeltaT,
+    delta_t_ref: DeltaT,
+) -> Weights {
+    let min: usize = delta_t_max as usize;
+    let mut counts: Vec<u64> = vec![1; delta_t_max as usize * 2 + 1];
+
+    // Give high probability to range [-delta_t_ref, delta_t_ref]
+    let slice =
+        &mut counts[(-(delta_t_ref as i64) + min as i64) as usize..(delta_t_ref as usize) + min];
+    for count in slice {
+        *count = 20;
+    }
+
+    let tmp = Weights::new_with_counts(counts.len(), &counts);
+    assert_eq!(tmp.range(None), 0..1);
+    tmp
+}
+
+pub struct Contexts {
+    pub(crate) d_context: usize,
+    pub(crate) dt_context: usize,
+    pub(crate) dt_context_whole_range: usize,
+    pub(crate) u8_general_context: usize,
+    // pub(crate) u16_general_context: usize,
+    // pub(crate) u32_general_context: usize,
+    pub(crate) eof_context: usize,
+}
+
+impl Contexts {
+    pub fn new(source_model: &mut FenwickModel, meta: CodecMetadata) -> Contexts {
+        // D context. Only need to account for range [-255, 255]
+        let d_context = source_model.push_context_with_weights(d_residual_default_weights());
+
+        // Delta_t context. Need to account for range [-delta_t_max, delta_t_max]
+        let dt_context =
+            //     source_model.push_context_with_weights(dt_residual_default_weights(
+            //     (2_i32.pow(15) - 1) as DeltaT,
+            //     meta.ref_interval,
+            // ));
+            source_model.push_context_with_weights(dt_residual_default_weights_whole_range(
+                (2_i32.pow(15) - 1) as DeltaT,
+                meta.ref_interval,
+            ));
+
+        // Delta_t context with whole range. Need to account for range [-2 dtm, 2 dtm]
+        let dt_context_whole_range =
+            source_model.push_context_with_weights(dt_residual_default_weights_whole_range(
+                (2_i32.pow(15) - 1) as DeltaT,
+                meta.ref_interval,
+            ));
+
+        let u8_general_context = source_model.push_context_with_weights(Weights::new_with_counts(
+            (u8::MAX) as usize + 1,
+            &vec![1; (u8::MAX) as usize + 1],
+        ));
+
+        // let u16_general_context = source_model.push_context_with_weights(Weights::new_with_counts(
+        //     (u16::MAX) as usize + 1,
+        //     &vec![1; (u16::MAX) as usize + 1],
+        // ));
+
+        let eof_context =
+            source_model.push_context_with_weights(Weights::new_with_counts(1, &vec![1]));
+
+        Contexts {
+            d_context,
+            dt_context,
+            dt_context_whole_range,
+            u8_general_context,
+            // u16_general_context,
+            // u32_general_context,
+            eof_context,
+        }
+    }
+}
+
+/// Takes a d_resid value and shifts it to be an index for the probability table
+#[inline(always)]
+pub fn d_resid_offset(d_resid: DResidual) -> usize {
+    (d_resid + 255) as usize
+}
+
+/// Takes a decoded d_resid symbol and returns the actual d_resid value
+#[inline(always)]
+pub fn d_resid_offset_inverse(d_resid_symbol: usize) -> DResidual {
+    (d_resid_symbol as i64 - 255) as DResidual
+}
+
+#[inline(always)]
+pub fn dt_resid_offset(dt_resid: DeltaTResidual, delta_t_max: DeltaT) -> usize {
+    (dt_resid + delta_t_max as i64) as usize
+}
+
+/// Takes a dt_resid value and shifts it to be an index for the probability table
+#[inline(always)]
+pub fn dt_resid_offset_i16(dt_resid: DeltaTResidualSmall, delta_t_max: DeltaT) -> usize {
+    let ret = if delta_t_max < i16::MAX as DeltaT {
+        (dt_resid as i64 + delta_t_max as i64) as usize
+    } else {
+        (dt_resid as i64 - i16::MIN as i64) as usize
+    };
+    assert!(ret < 10000000);
+    ret
+}
+
+/// Takes a decoded dt_resid symbol and returns the actual dt_resid value
+#[inline(always)]
+pub fn dt_resid_offset_i16_inverse(
+    dt_resid_symbol: usize,
+    delta_t_max: DeltaT,
+) -> DeltaTResidualSmall {
+    if delta_t_max < i16::MAX as DeltaT {
+        (dt_resid_symbol as i64 - delta_t_max as i64) as DeltaTResidualSmall
+    } else {
+        (dt_resid_symbol as i64 + i16::MIN as i64) as DeltaTResidualSmall
+    }
+}
+
+/// Takes a dt_resid value and shifts it to be an index for the probability table
+#[inline(always)]
+pub fn dt_resid_offset_i16_whole_range(
+    dt_resid: DeltaTResidualSmall,
+    delta_t_max: DeltaT,
+) -> usize {
+    // TODO: Handle the case that the residual is outside the available range...
+    let ret = (dt_resid as i64 - (i16::MIN as i64)) as usize;
+    debug_assert!(ret < u16::MAX as usize);
+    ret
+}
+
+/// Takes a decoded dt_resid symbol and returns the actual dt_resid value
+#[inline(always)]
+pub fn dt_resid_offset_i16_inverse_whole_range(
+    dt_resid_symbol: usize,
+    delta_t_max: DeltaT,
+) -> DeltaTResidualSmall {
+    (dt_resid_symbol as i64 + (i16::MIN as i64)) as DeltaTResidualSmall
+}
+
 #[cfg(test)]
 mod tests {
     use crate::codec::compressed::blocks::block::BlockEvents;
@@ -920,207 +1123,4 @@ mod tests {
         }
         events
     }
-}
-
-use crate::codec::compressed::fenwick::{context_switching::FenwickModel, Weights};
-use crate::codec::CodecMetadata;
-
-pub const DELTA_T_RESIDUAL_NO_EVENT: DeltaTResidual = DeltaTResidual::MAX; // TODO: document and test
-                                                                           //
-                                                                           // static D_RESIDUAL_DEFAULT_WEIGHTS: Weights = d_residual_default_weights();
-
-pub fn d_residual_default_weights() -> Weights {
-    // todo: what about d_no_event... 256?
-    // The maximum positive d residual is d = 0 --> d = 255      [255]
-    // The maximum negative d residual is d = 255 --> d = 0      [-255]
-    // No d values in range (D_MAX, D_NO_EVENT) --> (173, 253)
-
-    // Span the range [-255, 256]
-    let mut counts: [u64; 512] = [1; 512];
-
-    // Give high probability to range [-20, 20]
-    let mut idx = 0;
-    loop {
-        match idx {
-            // [-10, 10]
-            245..=265 => {
-                counts[idx] = 20;
-            }
-
-            // [-20, 20]
-            235..=275 | 490..=510 | 0..=20 => {
-                counts[idx] = 10;
-            }
-
-            // give high probability to d_no_event
-            511 => {
-                counts[idx] = 20;
-            }
-            _ => {}
-        }
-
-        if idx == 511 {
-            break;
-        }
-
-        idx += 1;
-    }
-
-    Weights::new_with_counts(counts.len(), &Vec::from(counts))
-}
-
-pub fn dt_residual_default_weights(delta_t_max: DeltaT, delta_t_ref: DeltaT) -> Weights {
-    let min: usize = delta_t_max as usize;
-    let mut counts: Vec<u64> = vec![1; (delta_t_max * 2) as usize + 2]; // +1 for 0, +1 for EOF
-
-    // Give high probability to range [-delta_t_ref, delta_t_ref]
-    let slice =
-        &mut counts[(-(delta_t_ref as i64) + min as i64) as usize..(delta_t_ref as usize) + min];
-    for count in slice {
-        *count = 20;
-    }
-
-    let tmp = Weights::new_with_counts(counts.len(), &counts);
-    assert_eq!(tmp.range(None), 0..1);
-    tmp
-}
-
-pub fn dt_residual_default_weights_whole_range(
-    delta_t_max: DeltaT,
-    delta_t_ref: DeltaT,
-) -> Weights {
-    let min: usize = delta_t_max as usize;
-    let mut counts: Vec<u64> = vec![1; delta_t_max as usize * 2 + 1];
-
-    // Give high probability to range [-delta_t_ref, delta_t_ref]
-    let slice =
-        &mut counts[(-(delta_t_ref as i64) + min as i64) as usize..(delta_t_ref as usize) + min];
-    for count in slice {
-        *count = 20;
-    }
-
-    let tmp = Weights::new_with_counts(counts.len(), &counts);
-    assert_eq!(tmp.range(None), 0..1);
-    tmp
-}
-
-pub struct Contexts {
-    pub(crate) d_context: usize,
-    pub(crate) dt_context: usize,
-    pub(crate) dt_context_whole_range: usize,
-    pub(crate) u8_general_context: usize,
-    // pub(crate) u16_general_context: usize,
-    // pub(crate) u32_general_context: usize,
-    pub(crate) eof_context: usize,
-}
-
-impl Contexts {
-    pub fn new(source_model: &mut FenwickModel, meta: CodecMetadata) -> Contexts {
-        // D context. Only need to account for range [-255, 255]
-        let d_context = source_model.push_context_with_weights(d_residual_default_weights());
-
-        // Delta_t context. Need to account for range [-delta_t_max, delta_t_max]
-        let dt_context =
-            //     source_model.push_context_with_weights(dt_residual_default_weights(
-            //     (2_i32.pow(15) - 1) as DeltaT,
-            //     meta.ref_interval,
-            // ));
-            source_model.push_context_with_weights(dt_residual_default_weights_whole_range(
-                (2_i32.pow(15) - 1) as DeltaT,
-                meta.ref_interval,
-            ));
-
-        // Delta_t context with whole range. Need to account for range [-2 dtm, 2 dtm]
-        let dt_context_whole_range =
-            source_model.push_context_with_weights(dt_residual_default_weights_whole_range(
-                (2_i32.pow(15) - 1) as DeltaT,
-                meta.ref_interval,
-            ));
-
-        let u8_general_context = source_model.push_context_with_weights(Weights::new_with_counts(
-            (u8::MAX) as usize + 1,
-            &vec![1; (u8::MAX) as usize + 1],
-        ));
-
-        // let u16_general_context = source_model.push_context_with_weights(Weights::new_with_counts(
-        //     (u16::MAX) as usize + 1,
-        //     &vec![1; (u16::MAX) as usize + 1],
-        // ));
-
-        let eof_context =
-            source_model.push_context_with_weights(Weights::new_with_counts(1, &vec![1]));
-
-        Contexts {
-            d_context,
-            dt_context,
-            dt_context_whole_range,
-            u8_general_context,
-            // u16_general_context,
-            // u32_general_context,
-            eof_context,
-        }
-    }
-}
-
-/// Takes a d_resid value and shifts it to be an index for the probability table
-#[inline(always)]
-pub fn d_resid_offset(d_resid: DResidual) -> usize {
-    (d_resid + 255) as usize
-}
-
-/// Takes a decoded d_resid symbol and returns the actual d_resid value
-#[inline(always)]
-pub fn d_resid_offset_inverse(d_resid_symbol: usize) -> DResidual {
-    (d_resid_symbol as i64 - 255) as DResidual
-}
-
-#[inline(always)]
-pub fn dt_resid_offset(dt_resid: DeltaTResidual, delta_t_max: DeltaT) -> usize {
-    (dt_resid + delta_t_max as i64) as usize
-}
-
-/// Takes a dt_resid value and shifts it to be an index for the probability table
-#[inline(always)]
-pub fn dt_resid_offset_i16(dt_resid: DeltaTResidualSmall, delta_t_max: DeltaT) -> usize {
-    let ret = if delta_t_max < i16::MAX as DeltaT {
-        (dt_resid as i64 + delta_t_max as i64) as usize
-    } else {
-        (dt_resid as i64 - i16::MIN as i64) as usize
-    };
-    assert!(ret < 10000000);
-    ret
-}
-
-/// Takes a decoded dt_resid symbol and returns the actual dt_resid value
-#[inline(always)]
-pub fn dt_resid_offset_i16_inverse(
-    dt_resid_symbol: usize,
-    delta_t_max: DeltaT,
-) -> DeltaTResidualSmall {
-    if delta_t_max < i16::MAX as DeltaT {
-        (dt_resid_symbol as i64 - delta_t_max as i64) as DeltaTResidualSmall
-    } else {
-        (dt_resid_symbol as i64 + i16::MIN as i64) as DeltaTResidualSmall
-    }
-}
-
-/// Takes a dt_resid value and shifts it to be an index for the probability table
-#[inline(always)]
-pub fn dt_resid_offset_i16_whole_range(
-    dt_resid: DeltaTResidualSmall,
-    delta_t_max: DeltaT,
-) -> usize {
-    // TODO: Handle the case that the residual is outside the available range...
-    let ret = (dt_resid as i64 - (i16::MIN as i64)) as usize;
-    debug_assert!(ret < u16::MAX as usize);
-    ret
-}
-
-/// Takes a decoded dt_resid symbol and returns the actual dt_resid value
-#[inline(always)]
-pub fn dt_resid_offset_i16_inverse_whole_range(
-    dt_resid_symbol: usize,
-    delta_t_max: DeltaT,
-) -> DeltaTResidualSmall {
-    (dt_resid_symbol as i64 + (i16::MIN as i64)) as DeltaTResidualSmall
 }

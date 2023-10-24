@@ -1,5 +1,5 @@
-#[cfg(feature = "compression")]
-use crate::codec::compressed::adu::frame::Adu;
+// #[cfg(feature = "compression")]
+// use crate::codec::compressed::adu::frame::Adu;
 use crate::codec::header::{Magic, MAGIC_RAW};
 use crate::codec::{CodecError, CodecMetadata, ReadCompression, WriteCompression};
 use crate::{Coord, Event, EventSingle, EOF_PX_ADDRESS};
@@ -119,10 +119,10 @@ impl<W: Write> WriteCompression<W> for RawOutput<W> {
         Ok(())
     }
 
-    #[cfg(feature = "compression")]
-    fn ingest_event_debug(&mut self, event: Event) -> Result<Option<Adu>, CodecError> {
-        todo!()
-    }
+    // #[cfg(feature = "compression")]
+    // fn ingest_event_debug(&mut self, event: Event) -> Result<Option<Adu>, CodecError> {
+    //     todo!()
+    // }
 }
 
 impl<R: Read + Seek> Default for RawInput<R> {
@@ -200,13 +200,13 @@ impl<R: Read + Seek> ReadCompression<R> for RawInput<R> {
         Ok(event)
     }
 
-    #[cfg(feature = "compression")]
-    fn digest_event_debug(
-        &mut self,
-        reader: &mut BitReader<R, BigEndian>,
-    ) -> Result<(Option<Adu>, Event), CodecError> {
-        todo!()
-    }
+    // #[cfg(feature = "compression")]
+    // fn digest_event_debug(
+    //     &mut self,
+    //     reader: &mut BitReader<R, BigEndian>,
+    // ) -> Result<(Option<Adu>, Event), CodecError> {
+    //     todo!()
+    // }
 
     fn set_input_stream_position(
         &mut self,
