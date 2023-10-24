@@ -138,11 +138,11 @@ fn main() -> Result<(), Box<dyn Error>> {
                 let c = i32::from(event.coord.c.unwrap_or(0));
 
                 if time_mode == TimeMode::AbsoluteT {
-                    if event.delta_t > current_t {
-                        current_t = event.delta_t;
+                    if event.t > current_t {
+                        current_t = event.t;
                     }
-                    let dt = event.delta_t - last_timestamps[[y as usize, x as usize, c as usize]];
-                    last_timestamps[[y as usize, x as usize, c as usize]] = event.delta_t;
+                    let dt = event.t - last_timestamps[[y as usize, x as usize, c as usize]];
+                    last_timestamps[[y as usize, x as usize, c as usize]] = event.t;
                     if last_timestamps[[y as usize, x as usize, c as usize]]
                         % stream.meta().ref_interval
                         != 0
@@ -153,9 +153,9 @@ fn main() -> Result<(), Box<dyn Error>> {
                             + 1)
                             * stream.meta().ref_interval;
                     }
-                    event.delta_t = dt;
+                    event.t = dt;
                 } else {
-                    last_timestamps[[y as usize, x as usize, c as usize]] += event.delta_t;
+                    last_timestamps[[y as usize, x as usize, c as usize]] += event.t;
                     if last_timestamps[[y as usize, x as usize, c as usize]]
                         % stream.meta().ref_interval
                         != 0

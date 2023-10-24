@@ -292,15 +292,15 @@ impl AdderPlayer {
                     // }
 
                     if meta.time_mode == TimeMode::AbsoluteT {
-                        if event.delta_t > self.stream_state.current_t_ticks {
-                            self.stream_state.current_t_ticks = event.delta_t;
+                        if event.t > self.stream_state.current_t_ticks {
+                            self.stream_state.current_t_ticks = event.t;
                         }
 
-                        let dt = event.delta_t
+                        let dt = event.t
                             - self.stream_state.last_timestamps
                                 [[y as usize, x as usize, c as usize]];
                         self.stream_state.last_timestamps[[y as usize, x as usize, c as usize]] =
-                            event.delta_t;
+                            event.t;
                         if is_framed(meta.source_camera)
                             && self.stream_state.last_timestamps
                                 [[y as usize, x as usize, c as usize]]
@@ -317,11 +317,11 @@ impl AdderPlayer {
                                 + 1)
                                 * meta.ref_interval;
                         }
-                        event.delta_t = dt;
+                        event.t = dt;
                     } else {
                         panic!("Relative time mode is deprecated.");
                         self.stream_state.last_timestamps[[y as usize, x as usize, c as usize]] +=
-                            event.delta_t;
+                            event.t;
                         if self.stream_state.last_timestamps[[y as usize, x as usize, c as usize]]
                             % meta.ref_interval
                             != 0

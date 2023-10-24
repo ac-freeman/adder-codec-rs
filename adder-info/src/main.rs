@@ -97,7 +97,7 @@ fn adder_info(args: MyArgs, out: impl Write) -> Result<(), Box<dyn error::Error>
                     event.coord.x_usize(),
                     event.coord.c_usize(),
                 ]];
-                let new_t = event.delta_t;
+                let new_t = event.t;
                 if event.coord.x == 343 && event.coord.y == 7 {
                     println!("{} {}", new_t, last_t);
                 } else {
@@ -116,7 +116,7 @@ fn adder_info(args: MyArgs, out: impl Write) -> Result<(), Box<dyn error::Error>
                 }
                 a if a < min_intensity => {
                     if event.d == D_ZERO_INTEGRATION {
-                        min_intensity = 1.0 / event.delta_t as f64;
+                        min_intensity = 1.0 / event.t as f64;
                     } else {
                         min_intensity = a;
                     }

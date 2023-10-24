@@ -84,7 +84,7 @@ impl<W: Write> WriteCompression<W> for RawOutput<W> {
                 c: Some(0),
             },
             d: 0,
-            delta_t: 0,
+            t: 0,
         };
         self.bincode.serialize_into(self.stream(), &eof).unwrap();
         self.flush_writer().unwrap();

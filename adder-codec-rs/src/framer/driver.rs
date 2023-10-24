@@ -396,7 +396,7 @@ impl<
     ///             c: Some(1)
     ///         },
     ///         d: 5,
-    ///         delta_t: 1000
+    ///         t: 1000
     ///     };
     /// frame_sequence.ingest_event(&mut event, None);
     /// let elem = frame_sequence.px_at_current(5, 5, 1).unwrap();
@@ -411,7 +411,7 @@ impl<
             return false;
         }
 
-        let time = event.delta_t;
+        let time = event.t;
         event.coord.y -= (chunk_num * self.chunk_rows) as u16; // Modify the coordinate here, so it gets ingested at the right place
 
         let frame_chunk = &mut self.frames[chunk_num];
@@ -456,7 +456,7 @@ impl<
                 <T as Into<f64>>::into(*last_frame_intensity_ref) as u8;
 
             if let Some(last) = last_event {
-                if time != last.delta_t {
+                if time != last.t {
                     // todo!();
                     if is_feature(event.coord, self.state.plane, &self.running_intensities).unwrap()
                     {
@@ -897,9 +897,9 @@ fn ingest_event_for_chunk<
     let prev_running_ts = *running_ts_ref;
 
     if state.codec_version >= 2 && state.time_mode == TimeMode::AbsoluteT {
-        *running_ts_ref = event.delta_t as BigT;
+        *running_ts_ref = event.t as BigT;
     } else {
-        *running_ts_ref += u64::from(event.delta_t);
+        *running_ts_ref += u64::from(event.t);
     }
 
     if ((running_ts_ref.saturating_sub(1)) as i64 / i64::from(state.tpf)) > *last_filled_frame_ref {
@@ -915,7 +915,7 @@ fn ingest_event_for_chunk<
                 && state.view_mode != FramedViewMode::SAE
             {
                 // event.delta_t -= ((*last_filled_frame_ref + 1) * state.ref_interval as i64) as u32;
-                event.delta_t = event.delta_t.saturating_sub(prev_running_ts as u32);
+                event.t = event.t.saturating_sub(prev_running_ts as u32);
             }
 
             // TODO: Handle SAE view mode

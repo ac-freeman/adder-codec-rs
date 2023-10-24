@@ -245,13 +245,13 @@ impl<W: Write + 'static> Encoder<W> {
         match self.options.event_order {
             EventOrder::Unchanged => self.output.ingest_event(event),
             EventOrder::Interleaved => {
-                let dt = event.delta_t;
+                let dt = event.t;
                 // First, push the event to the queue
                 self.state.queue.push(event);
 
                 let mut res = Ok(());
                 if let Some(first_item_addr) = self.state.queue.peek() {
-                    if first_item_addr.delta_t < dt.saturating_sub(self.meta().delta_t_max) {
+                    if first_item_addr.t < dt.saturating_sub(self.meta().delta_t_max) {
                         if let Some(first_item) = self.state.queue.pop() {
                             res = self.output.ingest_event(first_item);
                         }
@@ -396,7 +396,7 @@ mod tests {
                 c: Some(0),
             },
             d: 0,
-            delta_t: 0,
+            t: 0,
         };
 
         encoder.ingest_event(event).unwrap();

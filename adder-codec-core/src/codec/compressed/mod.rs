@@ -33,7 +33,7 @@ mod tests {
                 c: None,
             },
             d: 5,
-            delta_t: 100,
+            t: 100,
         };
         encoder.ingest_event(test_event).unwrap();
         encoder.flush_writer().unwrap();
@@ -48,9 +48,9 @@ mod tests {
         let mut encoder = Encoder::new_compressed(output, EncoderOptions::default());
         let meta = encoder.meta().clone();
         encoder.ingest_event(test_event).unwrap();
-        test_event.delta_t += 100;
+        test_event.t += 100;
         encoder.ingest_event(test_event).unwrap();
-        test_event.delta_t += 100;
+        test_event.t += 100;
         encoder.ingest_event(test_event).unwrap();
         encoder.flush_writer().unwrap();
         let writer = encoder.close_writer().unwrap().unwrap();

@@ -476,6 +476,15 @@ pub struct CoordSingle {
 pub struct Event {
     pub coord: Coord,
     pub d: D,
+    pub t: AbsoluteT,
+}
+
+#[allow(missing_docs)]
+#[repr(packed)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Default, Hash, Serialize, Deserialize)]
+pub struct EventRelative {
+    pub coord: Coord,
+    pub d: D,
     pub delta_t: DeltaT,
 }
 
@@ -485,7 +494,7 @@ pub struct Event {
 pub struct EventSingle {
     pub coord: CoordSingle,
     pub d: D,
-    pub delta_t: DeltaT,
+    pub t: DeltaT,
 }
 
 impl From<&Event> for EventSingle {
@@ -496,7 +505,7 @@ impl From<&Event> for EventSingle {
                 y: event.coord.y,
             },
             d: event.d,
-            delta_t: event.delta_t,
+            t: event.t,
         }
     }
 }
@@ -510,15 +519,15 @@ impl From<EventSingle> for Event {
                 c: None,
             },
             d: event.d,
-            delta_t: event.delta_t,
+            t: event.t,
         }
     }
 }
 
 impl Ord for Event {
     fn cmp(&self, other: &Self) -> Ordering {
-        let b = other.delta_t;
-        let a = self.delta_t;
+        let b = other.t;
+        let a = self.t;
         b.cmp(&a)
     }
 }
@@ -548,7 +557,7 @@ const EOF_EVENT: Event = Event {
         c: Some(0),
     },
     d: 0,
-    delta_t: 0,
+    t: 0,
 };
 
 /// Helper function for opening a file as a raw or compressed input ADΔER stream
@@ -593,6 +602,14 @@ pub fn open_file_decoder(
 pub struct EventCoordless {
     pub d: D,
 
+    pub t: AbsoluteT,
+}
+
+#[allow(missing_docs)]
+#[derive(Debug, Copy, Clone, Default, serde::Serialize, serde::Deserialize, PartialEq)]
+pub struct EventCoordlessRelative {
+    pub d: D,
+
     pub delta_t: DeltaT,
 }
 
@@ -606,7 +623,7 @@ impl EventCoordless {
     /// Get the t or dt value
     #[inline(always)]
     pub fn t(&self) -> AbsoluteT {
-        self.delta_t as AbsoluteT
+        self.t as AbsoluteT
     }
 }
 
@@ -614,7 +631,7 @@ impl From<Event> for EventCoordless {
     fn from(event: Event) -> Self {
         Self {
             d: event.d,
-            delta_t: event.delta_t,
+            t: event.t,
         }
     }
 }
@@ -629,10 +646,10 @@ impl Add<EventCoordless> for EventCoordless {
 
 impl num_traits::Zero for EventCoordless {
     fn zero() -> Self {
-        EventCoordless { d: 0, delta_t: 0 }
+        EventCoordless { d: 0, t: 0 }
     }
 
     fn is_zero(&self) -> bool {
-        self.d.is_zero() && self.delta_t.is_zero()
+        self.d.is_zero() && self.t.is_zero()
     }
 }

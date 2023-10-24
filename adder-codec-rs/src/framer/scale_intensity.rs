@@ -39,7 +39,7 @@ impl FrameValue for EventCoordless {
     ) -> Self::Output {
         EventCoordless {
             d: event.d,
-            delta_t: event.delta_t,
+            t: event.t,
         }
     }
 
@@ -88,7 +88,7 @@ impl FrameValue for u8 {
                 ((f32::from(event.d) / practical_d_max) * f32::from(u8::MAX)) as u8
             }
             FramedViewMode::DeltaT => {
-                ((event.delta_t as f32 / delta_t_max as f32) * f32::from(u8::MAX)) as u8
+                ((event.t as f32 / delta_t_max as f32) * f32::from(u8::MAX)) as u8
             }
             FramedViewMode::SAE => {
                 if let Some(px) = px {
@@ -146,7 +146,7 @@ impl FrameValue for u16 {
                 ((f32::from(event.d) / practical_d_max) * f32::from(u16::MAX)) as u16
             }
             FramedViewMode::DeltaT => {
-                ((event.delta_t as f32 / delta_t_max as f32) * f32::from(u16::MAX)) as u16
+                ((event.t as f32 / delta_t_max as f32) * f32::from(u16::MAX)) as u16
             }
             FramedViewMode::SAE => {
                 todo!()
@@ -197,7 +197,7 @@ impl FrameValue for u32 {
             }
             FramedViewMode::D => ((f32::from(event.d) / practical_d_max) * u32::MAX as f32) as u32,
             FramedViewMode::DeltaT => {
-                ((event.delta_t as f32 / delta_t_max as f32) * u32::MAX as f32) as u32
+                ((event.t as f32 / delta_t_max as f32) * u32::MAX as f32) as u32
             }
             FramedViewMode::SAE => {
                 todo!()
@@ -246,7 +246,7 @@ impl FrameValue for u64 {
             }
             FramedViewMode::D => ((f32::from(event.d) / practical_d_max) * u64::MAX as f32) as u64,
             FramedViewMode::DeltaT => {
-                ((event.delta_t as f32 / delta_t_max as f32) * u64::MAX as f32) as u64
+                ((event.t as f32 / delta_t_max as f32) * u64::MAX as f32) as u64
             }
             FramedViewMode::SAE => {
                 todo!()
@@ -264,9 +264,9 @@ impl FrameValue for u64 {
 pub fn event_to_intensity(event: &Event) -> Intensity {
     match event.d as usize {
         a if a >= D_SHIFT.len() => f64::from(0),
-        _ => match event.delta_t {
+        _ => match event.t {
             0 => D_SHIFT[event.d as usize] as Intensity, // treat it as dt = 1
-            _ => D_SHIFT[event.d as usize] as Intensity / f64::from(event.delta_t),
+            _ => D_SHIFT[event.d as usize] as Intensity / f64::from(event.t),
         },
     }
 }
@@ -274,6 +274,6 @@ pub fn event_to_intensity(event: &Event) -> Intensity {
 fn _eventcoordless_to_intensity(event: EventCoordless) -> Intensity {
     match event.d as usize {
         a if a >= D_SHIFT.len() => f64::from(0),
-        _ => D_SHIFT[event.d as usize] as Intensity / f64::from(event.delta_t),
+        _ => D_SHIFT[event.d as usize] as Intensity / f64::from(event.t),
     }
 }

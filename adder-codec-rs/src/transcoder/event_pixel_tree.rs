@@ -23,7 +23,7 @@ impl From<Event64> for Event {
         Event {
             coord: event_64.coord,
             d: event_64.d,
-            delta_t: event_64.delta_t as DeltaT,
+            t: event_64.delta_t as DeltaT,
         }
     }
 }
@@ -128,7 +128,7 @@ impl PixelArena {
         Event {
             coord: self.coord,
             d: event.d,
-            delta_t: event.delta_t as DeltaT,
+            t: event.delta_t as DeltaT,
         }
     }
 
@@ -482,7 +482,7 @@ mod tests {
                 assert_eq!(event.d, 6);
 
                 // Refer to https://github.com/rust-lang/rust/issues/82523
-                let tmp = event.delta_t;
+                let tmp = event.t;
                 assert_eq!(tmp, 12);
             }
         }
@@ -606,10 +606,10 @@ mod tests {
         tree.pop_best_events(&mut events, Continuous, 20);
         assert_eq!(events.len(), 2);
         assert_eq!(events[0].d, 7);
-        let tmp = events[0].delta_t;
+        let tmp = events[0].t;
         assert_eq!(tmp, 25);
         assert_eq!(events[1].d, 6);
-        let tmp = events[1].delta_t;
+        let tmp = events[1].t;
         assert_eq!(tmp, 12);
         assert_eq!(tree.arena[0].state.d, 6);
         assert!(f32_slack(tree.arena[0].state.integration, 8.0));
@@ -628,7 +628,7 @@ mod tests {
         tree.pop_best_events(&mut events, Continuous, 34);
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].d, 8);
-        let tmp = events[0].delta_t;
+        let tmp = events[0].t;
         assert_eq!(tmp, 108);
         assert_eq!(tree.arena[0].state.d, 4);
         assert!(f32_slack(tree.arena[0].state.integration, 0.0));
@@ -662,7 +662,7 @@ mod tests {
         assert!(!tree.need_to_pop_top);
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].d, 126);
-        let tmp = events[0].delta_t;
+        let tmp = events[0].t;
         assert_eq!(tmp, 100_000);
         assert!(f32_slack(tree.arena[0].state.integration, 0.0));
     }
@@ -841,10 +841,10 @@ mod tests {
         tree.integrate(103.0, 30.0, Continuous, dtm, 30, 0, 255);
         let mut events = Vec::new();
         tree.pop_best_events(&mut events, Continuous, 30);
-        let dt = events[0].delta_t;
+        let dt = events[0].t;
         assert_eq!(events[0].d, 8);
         assert_eq!(dt, 74);
-        let dt = events[1].delta_t;
+        let dt = events[1].t;
         assert_eq!(events[1].d, 7);
         assert_eq!(dt, 110);
     }
@@ -874,7 +874,7 @@ mod tests {
         tree.pop_best_events(&mut events, Continuous, 30);
 
         let ev = tree.set_d_for_continuous(10.0, 30).unwrap();
-        let dt = ev.delta_t;
+        let dt = ev.t;
         assert_eq!(dt, 1);
         assert_eq!(ev.d, 255);
     }
@@ -904,7 +904,7 @@ mod tests {
         tree.pop_best_events(&mut events, Continuous, 30);
 
         let ev = tree.set_d_for_continuous(10.0, 30).unwrap();
-        let dt = ev.delta_t;
+        let dt = ev.t;
         assert_eq!(dt, 110);
         assert_eq!(ev.d, 255);
     }
