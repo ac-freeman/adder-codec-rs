@@ -2,15 +2,18 @@ use crate::codec::compressed::fenwick::context_switching::FenwickModel;
 use crate::codec::compressed::source_model::cabac_contexts::Contexts;
 use crate::codec::compressed::source_model::event_structure::{BLOCK_SIZE, BLOCK_SIZE_AREA};
 use crate::codec::compressed::source_model::{ComponentCompression, HandleEvent};
-use crate::codec::compressed::{DResidual, TResidual};
+use crate::codec::compressed::{DResidual, TResidual, DRESIDUAL_NO_EVENT};
 use crate::codec::CodecError;
-use crate::{AbsoluteT, DeltaT, Event, EventCoordless, PixelAddress, D_NO_EVENT};
+use crate::{AbsoluteT, DeltaT, Event, EventCoordless, PixelAddress, D, D_NO_EVENT};
 use arithmetic_coding::{Decoder, Encoder};
 use bitstream_io::{BigEndian, BitReader, BitWriter};
 use std::collections::HashMap;
 use std::io::Cursor;
 use std::mem::size_of;
 
+type Pixel = Option<Vec<(u8, EventCoordless)>>;
+
+#[derive(PartialEq, Debug)]
 pub struct EventCube {
     /// The absolute y-coordinate of the top-left pixel in the cube
     pub(crate) start_y: PixelAddress,
@@ -21,7 +24,7 @@ pub struct EventCube {
     num_channels: usize,
 
     /// Contains the sparse events in the cube. The index is the relative interval of dt_ref from the start
-    raw_event_lists: [[[Vec<(u8, EventCoordless)>; BLOCK_SIZE]; BLOCK_SIZE]; 3],
+    raw_event_lists: [[[Pixel; BLOCK_SIZE]; BLOCK_SIZE]; 3],
 
     /// The absolute time of the cube's beginning (not necessarily aligned to an event. We structure
     /// cubes to be in temporal lockstep at the beginning.)
@@ -47,12 +50,10 @@ impl EventCube {
         dt_ref: DeltaT,
         num_intervals: usize,
     ) -> Self {
-        let row: [Vec<(u8, EventCoordless)>; BLOCK_SIZE] =
-            vec![Vec::with_capacity(num_intervals); BLOCK_SIZE]
-                .try_into()
-                .unwrap();
-        let square: [[Vec<(u8, EventCoordless)>; BLOCK_SIZE]; BLOCK_SIZE] =
-            vec![row; BLOCK_SIZE].try_into().unwrap();
+        let row: [Pixel; BLOCK_SIZE] = vec![Some(Vec::with_capacity(num_intervals)); BLOCK_SIZE]
+            .try_into()
+            .unwrap();
+        let square: [[Pixel; BLOCK_SIZE]; BLOCK_SIZE] = vec![row; BLOCK_SIZE].try_into().unwrap();
         let lists = [square.clone(), square.clone(), square.clone()];
 
         Self {
@@ -79,13 +80,15 @@ impl EventCube {
         // Intra-code the first event (if present) for each pixel in row-major order
         self.raw_event_lists.iter().for_each(|channel| {
             channel.iter().for_each(|row| {
-                row.iter().for_each(|pixel| {
+                row.iter().for_each(|pixel_opt| {
                     encoder.model.set_context(contexts.d_context);
 
-                    if let Some((index, event)) = pixel.first() {
+                    if pixel_opt.is_some() && !pixel_opt.as_ref().unwrap().is_empty() {
+                        let event = pixel_opt.as_ref().unwrap().first().unwrap().1;
+
                         let mut d_residual = 0;
 
-                        if let Some(init) = init_event {
+                        if let Some(init) = &mut init_event {
                             d_residual = event.d as DResidual - init.d as DResidual;
                             // Write the D residual (relative to the start_d for the first event)
                             for byte in d_residual.to_be_bytes().iter() {
@@ -104,7 +107,7 @@ impl EventCube {
                             })
                         }
 
-                        if let Some(mut init) = init_event {
+                        if let Some(init) = &mut init_event {
                             encoder.model.set_context(contexts.dtref_context);
 
                             // Don't do any special prediction here (yet). Just predict the same t as previously found.
@@ -120,13 +123,13 @@ impl EventCube {
                             for byte in t_residual.to_be_bytes().iter() {
                                 encoder.encode(Some(&(*byte as usize)), stream).unwrap();
                             }
-                            init = *event;
+                            *init = event;
                         } else {
                             panic!("No init event");
                         }
                     } else {
                         // Else there's no event for this pixel. Encode a NO_EVENT symbol.
-                        for byte in (D_NO_EVENT as DResidual).to_be_bytes().iter() {
+                        for byte in (DRESIDUAL_NO_EVENT).to_be_bytes().iter() {
                             encoder.encode(Some(&(*byte as usize)), stream).unwrap();
                         }
                     }
@@ -139,6 +142,7 @@ impl EventCube {
     fn decompress_intra(
         decoder: &mut Decoder<FenwickModel, BitReader<Cursor<Vec<u8>>, BigEndian>>,
         contexts: &Contexts,
+        stream: &mut BitReader<Cursor<Vec<u8>>, BigEndian>,
         block_idx_y: usize,
         block_idx_x: usize,
         num_channels: usize,
@@ -156,13 +160,56 @@ impl EventCube {
         );
 
         let mut d_residual_buffer = [0u8; size_of::<DResidual>()];
+        let mut dtref_residual_buffer = [0u8; size_of::<TResidual>()];
+        let mut t_residual_buffer = [0u8; size_of::<TResidual>()];
+        let mut init_event: Option<EventCoordless> = None;
 
-        cube.raw_event_lists.iter().for_each(|channel| {
-            channel.iter().for_each(|row| {
-                row.iter().for_each(|pixel| {
+        cube.raw_event_lists.iter_mut().for_each(|channel| {
+            channel.iter_mut().for_each(|row| {
+                row.iter_mut().for_each(|pixel| {
                     decoder.model.set_context(contexts.d_context);
 
-                    decoder.decode(&mut d_residual_buffer).unwrap();
+                    for byte in d_residual_buffer.iter_mut() {
+                        *byte = decoder.decode(stream).unwrap().unwrap() as u8;
+                    }
+                    let d_residual = DResidual::from_be_bytes(d_residual_buffer);
+
+                    if d_residual == DRESIDUAL_NO_EVENT {
+                        *pixel = None; // So we can skip it for inter-coding
+                    } else {
+                        let d = if let Some(init) = &mut init_event {
+                            (init.d as DResidual + d_residual) as D
+                        } else {
+                            // There is no init event
+                            init_event = Some(EventCoordless { d: 0, t: start_t });
+                            d_residual as D
+                        };
+
+                        if let Some(init) = &mut init_event {
+                            decoder.model.set_context(contexts.dtref_context);
+                            for byte in dtref_residual_buffer.iter_mut() {
+                                *byte = decoder.decode(stream).unwrap().unwrap() as u8;
+                            }
+                            let dtref_residual = DResidual::from_be_bytes(dtref_residual_buffer);
+
+                            decoder.model.set_context(contexts.t_context);
+                            for byte in t_residual_buffer.iter_mut() {
+                                *byte = decoder.decode(stream).unwrap().unwrap() as u8;
+                            }
+                            let mut t_residual = DResidual::from_be_bytes(t_residual_buffer);
+
+                            t_residual += dtref_residual * dt_ref as DResidual;
+
+                            init.d = (init.d as DResidual + d_residual) as D;
+                            init.t = (init.t as TResidual + t_residual) as AbsoluteT;
+                            pixel.as_mut().unwrap().push((
+                                ((init.t - start_t) / dt_ref) as u8,
+                                EventCoordless { d, t: init.t },
+                            ));
+                        } else {
+                            panic!("No init event");
+                        }
+                    }
                 });
             });
         });
@@ -185,11 +232,18 @@ impl HandleEvent for EventCube {
             ((event.t - self.start_t) / self.dt_ref) as u8
         };
 
-        self.raw_event_lists[event.coord.c_usize()][event.coord.y_usize()][event.coord.x_usize()]
-            .push((
-                index, // The index: the relative interval of dt_ref from the start
-                EventCoordless::from(event),
-            ));
+        let item = (
+            index, // The index: the relative interval of dt_ref from the start
+            EventCoordless::from(event),
+        );
+        if let Some(ref mut list) = &mut self.raw_event_lists[event.coord.c_usize()]
+            [event.coord.y_usize()][event.coord.x_usize()]
+        {
+            list.push(item);
+        } else {
+            self.raw_event_lists[event.coord.c_usize()][event.coord.y_usize()]
+                [event.coord.x_usize()] = Some(vec![item]);
+        }
 
         self.raw_event_memory[event.coord.c_usize()][event.coord.y_usize()]
             [event.coord.x_usize()] = EventCoordless::from(event);
@@ -207,11 +261,13 @@ impl HandleEvent for EventCube {
     }
 
     /// Clear out the cube's events and increment the start time by the cube's duration
-    fn clear(&mut self) {
+    fn clear_compression(&mut self) {
         for c in 0..3 {
             for y in 0..BLOCK_SIZE {
                 for x in 0..BLOCK_SIZE {
-                    self.raw_event_lists[c][y][x].clear();
+                    if let Some(ref mut pixel) = &mut self.raw_event_lists[c][y][x] {
+                        pixel.clear();
+                    }
                 }
             }
         }
@@ -277,8 +333,8 @@ mod build_tests {
     #[test]
     fn test_fill_cube() -> Result<(), Box<dyn std::error::Error>> {
         let cube = fill_cube()?;
-        assert!(cube.raw_event_lists[0][0][0].is_empty());
-        assert_eq!(cube.raw_event_lists[0][1][13].len(), 1);
+        assert!(cube.raw_event_lists[0][0][0].as_ref().unwrap().is_empty());
+        assert_eq!(cube.raw_event_lists[0][1][13].as_ref().unwrap().len(), 1);
 
         Ok(())
     }
@@ -286,8 +342,8 @@ mod build_tests {
     #[test]
     fn fill_second_cube() -> Result<(), Box<dyn std::error::Error>> {
         let mut cube = fill_cube()?;
-        cube.clear();
-        assert_eq!(cube.raw_event_lists[0][1][13].len(), 0);
+        cube.clear_compression();
+        assert_eq!(cube.raw_event_lists[0][1][13].as_ref().unwrap().len(), 0);
         cube.ingest_event(Event {
             coord: Coord {
                 x: 29,
@@ -297,7 +353,7 @@ mod build_tests {
             t: 500,
             d: 7,
         });
-        assert_eq!(cube.raw_event_lists[0][1][13].len(), 1);
+        assert_eq!(cube.raw_event_lists[0][1][13].as_ref().unwrap().len(), 1);
         Ok(())
     }
 }
@@ -315,8 +371,26 @@ impl ComponentCompression for EventCube {
 
     fn decompress(
         decoder: &mut Decoder<FenwickModel, BitReader<Cursor<Vec<u8>>, BigEndian>>,
+        contexts: &Contexts,
+        stream: &mut BitReader<Cursor<Vec<u8>>, BigEndian>,
+        block_idx_y: usize,
+        block_idx_x: usize,
+        num_channels: usize,
+        start_t: AbsoluteT,
+        dt_ref: DeltaT,
+        num_intervals: usize,
     ) -> Self {
-        todo!()
+        EventCube::decompress_intra(
+            decoder,
+            contexts,
+            stream,
+            block_idx_y,
+            block_idx_x,
+            num_channels,
+            start_t,
+            dt_ref,
+            num_intervals,
+        )
     }
 }
 
@@ -328,11 +402,12 @@ mod compression_tests {
     use crate::codec::CodecMetadata;
     use crate::{Coord, Event};
     use arithmetic_coding::Encoder;
-    use bitstream_io::{BigEndian, BitWriter};
+    use bitstream_io::{BigEndian, BitReader, BitWriter};
     use std::error::Error;
+    use std::io::Cursor;
 
     #[test]
-    fn compress_intra() -> Result<(), Box<dyn Error>> {
+    fn compress_and_decompress_intra() -> Result<(), Box<dyn Error>> {
         let mut cube = EventCube::new(0, 0, 1, 255, 255, 2550);
         let mut counter = 0;
         for c in 0..3 {
@@ -366,9 +441,50 @@ mod compression_tests {
                 source_camera: Default::default(),
             },
         );
+
         let mut encoder = Encoder::new(source_model);
 
         cube.compress(&mut encoder, &contexts, &mut stream)?;
+
+        let mut source_model = FenwickModel::with_symbols(u16::MAX as usize, 1 << 30);
+        let contexts = crate::codec::compressed::source_model::cabac_contexts::Contexts::new(
+            &mut source_model,
+            CodecMetadata {
+                codec_version: 0,
+                header_size: 0,
+                time_mode: Default::default(),
+                plane: Default::default(),
+                tps: 0,
+                ref_interval: 255,
+                delta_t_max: 2550,
+                event_size: 0,
+                source_camera: Default::default(),
+            },
+        );
+        let mut decoder = arithmetic_coding::Decoder::new(source_model);
+        let mut stream = BitReader::endian(Cursor::new(stream.into_writer()), BigEndian);
+
+        let cube2 =
+            EventCube::decompress(&mut decoder, &contexts, &mut stream, 0, 0, 1, 255, 255, 10);
+
+        for c in 0..3 {
+            for y in 0..16 {
+                for x in 0..16 {
+                    dbg!(c, y, x);
+                    if let Some(ref pixel) = cube.raw_event_lists[c][y][x] {
+                        if !pixel.is_empty() {
+                            assert!(cube2.raw_event_lists[c][y][x].is_some());
+                            assert_eq!(
+                                cube.raw_event_lists[c][y][x].as_ref().unwrap()[0],
+                                cube2.raw_event_lists[c][y][x].as_ref().unwrap()[0]
+                            );
+                        }
+                    } else {
+                        assert!(cube2.raw_event_lists[c][y][x].is_none());
+                    }
+                }
+            }
+        }
 
         Ok(())
     }

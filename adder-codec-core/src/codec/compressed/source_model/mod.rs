@@ -2,7 +2,7 @@ use crate::codec::compressed::fenwick::context_switching::FenwickModel;
 use crate::codec::compressed::source_model::cabac_contexts::Contexts;
 use crate::codec::compressed::source_model::event_structure::BLOCK_SIZE;
 use crate::codec::CodecError;
-use crate::{AbsoluteT, Event};
+use crate::{AbsoluteT, DeltaT, Event};
 use arithmetic_coding::{Decoder, Encoder};
 use bitstream_io::{BigEndian, BitReader, BitWriter};
 use std::io::Cursor;
@@ -12,7 +12,7 @@ pub trait HandleEvent {
 
     fn digest_event(&mut self);
     /// Clear out the cube's events and increment the start time by the cube's duration
-    fn clear(&mut self);
+    fn clear_compression(&mut self);
 }
 
 trait ComponentCompression {
@@ -25,9 +25,14 @@ trait ComponentCompression {
     ) -> Result<(), CodecError>;
     fn decompress(
         decoder: &mut Decoder<FenwickModel, BitReader<Cursor<Vec<u8>>, BigEndian>>,
-        // contexts: &mut Contexts,
-        // stream: &mut BitReader<Cursor<Vec<u8>>, BigEndian>,
-        // dtm: DeltaT,
+        contexts: &Contexts,
+        stream: &mut BitReader<Cursor<Vec<u8>>, BigEndian>,
+        block_idx_y: usize,
+        block_idx_x: usize,
+        num_channels: usize,
+        start_t: AbsoluteT,
+        dt_ref: DeltaT,
+        num_intervals: usize,
     ) -> Self;
 }
 mod cabac_contexts;

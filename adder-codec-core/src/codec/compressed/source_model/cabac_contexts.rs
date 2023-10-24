@@ -70,7 +70,7 @@ pub fn dtref_residual_default_weights(dt_ref: DeltaT, dt_max: DeltaT) -> Weights
 pub fn d_residual_default_weights() -> Weights {
     // d residuals can fit within i16
 
-    // todo: what about d_no_event... 256?
+    // DResidual_NO_EVENT =  256
     // The maximum positive d residual is d = 0 --> d = 255      [255]
     // The maximum negative d residual is d = 255 --> d = 0      [-255]
     // No d values in range (D_MAX, D_NO_EVENT) --> (173, 253)

@@ -78,9 +78,9 @@ impl HandleEvent for EventAdu {
         todo!()
     }
 
-    fn clear(&mut self) {
+    fn clear_compression(&mut self) {
         for cube in self.event_cubes.iter_mut() {
-            cube.clear();
+            cube.clear_compression();
         }
         self.skip_adu = true;
         self.cube_to_write_count = 0;

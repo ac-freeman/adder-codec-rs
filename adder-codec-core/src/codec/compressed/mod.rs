@@ -8,6 +8,7 @@ pub const BLOCK_SIZE_BIG: usize = 64;
 pub const BLOCK_SIZE_BIG_AREA: usize = BLOCK_SIZE_BIG * BLOCK_SIZE_BIG;
 
 pub type DResidual = i16;
+pub const DRESIDUAL_NO_EVENT: DResidual = 256;
 pub type TResidual = i16;
 
 #[cfg(test)]
