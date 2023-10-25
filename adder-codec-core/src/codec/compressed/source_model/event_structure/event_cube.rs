@@ -473,6 +473,9 @@ impl HandleEvent for EventCube {
         }
 
         return if let Some(event) = self.decompressed_event_queue.pop_front() {
+            if self.decompressed_event_queue.is_empty() {
+                self.skip_cube = true;
+            }
             Ok(event)
         } else {
             return Err(CodecError::NoMoreEvents);

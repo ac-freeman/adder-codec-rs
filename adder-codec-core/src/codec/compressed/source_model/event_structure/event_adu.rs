@@ -33,7 +33,18 @@ pub struct EventAdu {
 
     cube_to_write_count: u16,
 
+    pub(crate) state: AduState,
+
     decompress_block_idx: (usize, usize), // decompressed_event_queue: VecDeque<Event>,
+}
+
+#[derive(Clone, Debug, Default, PartialEq)]
+pub enum AduState {
+    Compressed,
+    Decompressed,
+
+    #[default]
+    Empty,
 }
 
 impl EventAdu {
@@ -64,6 +75,7 @@ impl EventAdu {
             skip_adu: true,
             cube_to_write_count: 0,
             // decompressed_event_queue: VecDeque::with_capacity(plane.volume() * 4),
+            state: Default::default(),
             decompress_block_idx: (0, 0),
         }
     }
@@ -129,10 +141,11 @@ impl EventAdu {
                 );
             }
         }
+        self.state = AduState::Decompressed;
     }
 
     pub fn decoder_is_empty(&self) -> bool {
-        self.decompress_block_idx == (0, 0)
+        self.state == AduState::Empty
     }
 }
 
@@ -159,28 +172,27 @@ impl HandleEvent for EventAdu {
     }
 
     fn digest_event(&mut self) -> Result<Event, CodecError> {
-        match self.decompress_block_idx {
-            (y, x)
-                if y == self.event_cubes.shape()[0] - 1 && x == self.event_cubes.shape()[1] - 1 =>
-            {
-                Err(CodecError::Eof)
-            }
-            (a, b) => match self.event_cubes[[a, b]].digest_event() {
-                Err(CodecError::NoMoreEvents) => {
-                    if b == self.event_cubes.shape()[1] - 1 {
-                        self.decompress_block_idx = (a + 1, 0);
-                    } else {
-                        self.decompress_block_idx = (a, b + 1);
-                    }
+        let (a, b) = self.decompress_block_idx;
+        match self.event_cubes[[a, b]].digest_event() {
+            Err(CodecError::NoMoreEvents) => {
+                if a == self.event_cubes.shape()[0] - 1 && b == self.event_cubes.shape()[1] - 1 {
+                    dbg!("End of Adu");
+                    self.state = AduState::Empty;
+                    return Err(CodecError::NoMoreEvents);
+                } else if b == self.event_cubes.shape()[1] - 1 {
+                    self.decompress_block_idx = (a + 1, 0);
+                } else {
+                    self.decompress_block_idx = (a, b + 1);
+                }
+                dbg!("recurse");
 
-                    // Call it recursively on the new block idx
-                    self.digest_event()
-                }
-                Ok(event) => {
-                    return Ok(event);
-                }
-                Err(e) => return Err(e),
-            },
+                // Call it recursively on the new block idx
+                self.digest_event()
+            }
+            Ok(event) => {
+                return Ok(event);
+            }
+            Err(e) => return Err(e),
         }
     }
 
@@ -191,6 +203,7 @@ impl HandleEvent for EventAdu {
         self.skip_adu = true;
         self.cube_to_write_count = 0;
         self.start_t += self.num_intervals as AbsoluteT * self.dt_ref;
+        self.state = AduState::Empty;
     }
 
     fn clear_decompression(&mut self) {

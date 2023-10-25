@@ -220,45 +220,23 @@ impl<R: Read> ReadCompression<R> for CompressedInput<R> {
                 // Create a temporary u8 stream to read the arithmetic-coded data from
                 let mut adu_stream = BitReader::endian(Cursor::new(adu_bytes), BigEndian);
 
+                dbg!("decompressing");
                 // Decompress the Adu
                 adu.decompress(&mut adu_stream);
             }
             // Then return the next event from the queue
-            adu.digest_event()
+            match adu.digest_event() {
+                Ok(event) => Ok(event),
+                Err(CodecError::NoMoreEvents) => {
+                    // If there are no more events in the Adu, try decompressing the next Adu
+                    self.digest_event(reader)
+                }
+                Err(e) => Err(e),
+            }
         } else {
             unreachable!("Invalid state");
         }
     }
-
-    // #[allow(unused_variables)]
-    // fn digest_event_debug(
-    //     &mut self,
-    //     reader: &mut BitReader<R, BigEndian>,
-    // ) -> Result<(Option<Adu>, Event), CodecError> {
-    //     if self.decoded_event_queue.is_empty() {
-    //         match (
-    //             self.arithmetic_coder.as_mut(),
-    //             self.contexts.as_mut(),
-    //             reader,
-    //             self.meta.delta_t_max,
-    //             self.meta.ref_interval,
-    //         ) {
-    //             (Some(arithmetic_coder), Some(contexts), reader, dtm, ref_interval) => {
-    //                 let decoded_adu =
-    //                     Adu::decompress(arithmetic_coder, contexts, reader, dtm, ref_interval);
-    //                 self.adu_to_frame(&decoded_adu);
-    //                 return Ok((Some(decoded_adu), Event::default()));
-    //             }
-    //             _ => panic!("Invalid state"),
-    //         }
-    //     }
-
-    //     // Then return the next event from the queue
-    //     match self.decoded_event_queue.pop_front() {
-    //         Some(event) => Ok((None, event)),
-    //         None => Err(CodecError::Eof),
-    //     }
-    // }
 
     #[allow(unused_variables)]
     fn set_input_stream_position(
@@ -267,6 +245,165 @@ impl<R: Read> ReadCompression<R> for CompressedInput<R> {
         position: u64,
     ) -> Result<(), CodecError> {
         // todo!()
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::codec::compressed::stream::CompressedInput;
+    use crate::codec::{ReadCompression, WriteCompression};
+    use crate::PlaneSize;
+    use bitstream_io::{BigEndian, BitReader};
+    use std::cmp::min;
+    use std::error::Error;
+
+    /// Test the creation a CompressedOutput and writing a bunch of events to it but NOT getting
+    /// to the time where we compress the Adu
+    #[test]
+    fn test_compress_empty() -> Result<(), Box<dyn Error>> {
+        use crate::codec::compressed::stream::CompressedOutput;
+        use crate::codec::raw::stream::RawOutput;
+        use crate::codec::WriteCompression;
+        use crate::Coord;
+        use crate::{Event, EventCoordless, SourceCamera, TimeMode};
+        use std::io::Cursor;
+
+        let plane = PlaneSize::new(16, 30, 1)?;
+        let start_t = 0;
+        let dt_ref = 255;
+        let num_intervals = 10;
+
+        let mut compressed_output = CompressedOutput::new(
+            crate::codec::CodecMetadata {
+                codec_version: 0,
+                header_size: 0,
+                time_mode: TimeMode::AbsoluteT,
+                plane: PlaneSize {
+                    width: 16,
+                    height: 32,
+                    channels: 1,
+                },
+                tps: 7650,
+                ref_interval: dt_ref,
+                delta_t_max: dt_ref * num_intervals as u32,
+                event_size: 0,
+                source_camera: SourceCamera::FramedU8,
+            },
+            Cursor::new(Vec::new()),
+        );
+
+        let mut counter = 0;
+        for y in 0..30 {
+            for x in 0..16 {
+                compressed_output.ingest_event(Event {
+                    coord: Coord { x, y, c: None },
+                    t: min(280 + counter, start_t + dt_ref * num_intervals as u32),
+                    d: 7,
+                });
+                if 280 + counter > start_t + dt_ref * num_intervals as u32 {
+                    break;
+                } else {
+                    counter += 1;
+                }
+            }
+        }
+
+        let output = compressed_output.into_writer().unwrap().into_inner();
+        assert!(output.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn test_compress_decompress_barely_full() -> Result<(), Box<dyn Error>> {
+        use crate::codec::compressed::stream::CompressedOutput;
+        use crate::codec::raw::stream::RawOutput;
+        use crate::codec::WriteCompression;
+        use crate::Coord;
+        use crate::{Event, EventCoordless, SourceCamera, TimeMode};
+        use std::io::Cursor;
+
+        let plane = PlaneSize::new(16, 30, 1)?;
+        let start_t = 0;
+        let dt_ref = 255;
+        let num_intervals = 10;
+
+        // A random candidate pixel to check that its events match
+        let mut candidate_px_idx = (7, 12);
+        let mut input_px_events = Vec::new();
+        let mut output_px_events = Vec::new();
+
+        let mut compressed_output = CompressedOutput::new(
+            crate::codec::CodecMetadata {
+                codec_version: 0,
+                header_size: 0,
+                time_mode: TimeMode::AbsoluteT,
+                plane: PlaneSize {
+                    width: 16,
+                    height: 32,
+                    channels: 1,
+                },
+                tps: 7650,
+                ref_interval: dt_ref,
+                delta_t_max: dt_ref * num_intervals as u32,
+                event_size: 0,
+                source_camera: SourceCamera::FramedU8,
+            },
+            Cursor::new(Vec::new()),
+        );
+
+        let mut counter = 0;
+        for y in 0..30 {
+            for x in 0..16 {
+                let event = Event {
+                    coord: Coord { x, y, c: None },
+                    t: min(280 + counter, start_t + dt_ref * num_intervals as u32),
+                    d: 7,
+                };
+                if y == candidate_px_idx.0 && x == candidate_px_idx.1 {
+                    dbg!(event.clone());
+                    input_px_events.push(event);
+                }
+                compressed_output.ingest_event(event);
+                if 280 + counter > start_t + dt_ref * num_intervals as u32 {
+                    break;
+                } else {
+                    counter += 1;
+                }
+            }
+        }
+
+        // Ingest one more event which is in the next Adu time span
+        compressed_output.ingest_event(Event {
+            coord: Coord {
+                x: 0,
+                y: 0,
+                c: None,
+            },
+            t: start_t + dt_ref * num_intervals as u32 + 1,
+            d: 7,
+        });
+        counter += 1;
+
+        let output = compressed_output.into_writer().unwrap().into_inner();
+        assert!(!output.is_empty());
+        dbg!(counter);
+        // Check that the size is less than the raw events
+        assert!((output.len() as u32) < counter * 9);
+
+        let mut compressed_input = CompressedInput::new(dt_ref * num_intervals as u32, dt_ref);
+        compressed_input.meta.plane = plane;
+        let mut stream = BitReader::endian(Cursor::new(output), BigEndian);
+        for i in 0..counter - 1 {
+            dbg!(i);
+            let event = compressed_input.digest_event(&mut stream)?;
+            if event.coord.y == candidate_px_idx.0 && event.coord.x == candidate_px_idx.1 {
+                dbg!(event.clone(), i);
+                output_px_events.push(event);
+            }
+        }
+
+        assert_eq!(input_px_events, output_px_events);
         Ok(())
     }
 }
