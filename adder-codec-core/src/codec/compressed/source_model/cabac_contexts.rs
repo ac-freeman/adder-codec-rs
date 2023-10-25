@@ -43,7 +43,7 @@ pub fn t_residual_default_weights(dt_ref: DeltaT) -> Weights {
     // After we've indexed into the correct interval, our timestamp residual can span [-dt_ref, dt_ref]
 
     // We have dt_max/dt_ref count of intervals per adu
-    let mut counts: Vec<u64> = vec![1; u16::MAX as usize];
+    let mut counts: Vec<u64> = vec![1; 2_i32.pow(18) as usize];
 
     // Give higher probability to smaller residuals
     for i in counts.len() / 3..counts.len() * 2 / 3 {
@@ -76,12 +76,13 @@ pub fn d_residual_default_weights() -> Weights {
     // d residuals can fit within i16
 
     // DResidual_NO_EVENT =  256
+    // DResidual_SKIP_CUBE =  257
     // The maximum positive d residual is d = 0 --> d = 255      [255]
     // The maximum negative d residual is d = 255 --> d = 0      [-255]
     // No d values in range (D_MAX, D_NO_EVENT) --> (173, 253)
 
-    // Span the range [-255, 256]
-    let mut counts: [u64; 512] = [1; 512];
+    // Span the range [-255, 257]
+    let mut counts: [u64; 513] = [1; 513];
 
     // Give high probability to range [-20, 20]
     let mut idx = 0;
@@ -101,10 +102,15 @@ pub fn d_residual_default_weights() -> Weights {
             511 => {
                 counts[idx] = 20;
             }
+
+            // give high probability to skip cube
+            512 => {
+                counts[idx] = 10;
+            }
             _ => {}
         }
 
-        if idx == 511 {
+        if idx == counts.len() - 1 {
             break;
         }
 

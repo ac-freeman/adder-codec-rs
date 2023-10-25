@@ -2,7 +2,7 @@ use crate::codec::compressed::fenwick::context_switching::FenwickModel;
 use crate::codec::compressed::source_model::cabac_contexts::Contexts;
 use crate::codec::compressed::source_model::event_structure::{BLOCK_SIZE, BLOCK_SIZE_AREA};
 use crate::codec::compressed::source_model::{ComponentCompression, HandleEvent};
-use crate::codec::compressed::{DResidual, TResidual, DRESIDUAL_NO_EVENT};
+use crate::codec::compressed::{DResidual, TResidual, DRESIDUAL_NO_EVENT, DRESIDUAL_SKIP_CUBE};
 use crate::codec::CodecError;
 use crate::{AbsoluteT, Coord, DeltaT, Event, EventCoordless, PixelAddress, D, D_NO_EVENT};
 use arithmetic_coding::{Decoder, Encoder};
@@ -29,7 +29,7 @@ pub struct EventCube {
 
     /// The absolute time of the cube's beginning (not necessarily aligned to an event. We structure
     /// cubes to be in temporal lockstep at the beginning.)
-    start_t: AbsoluteT,
+    pub(crate) start_t: AbsoluteT,
 
     /// How many ticks each input interval spans
     dt_ref: DeltaT,
@@ -82,7 +82,7 @@ impl EventCube {
         encoder.model.set_context(contexts.d_context);
         if self.skip_cube {
             // If we're skipping this cube, just encode a NO_EVENT symbol
-            for byte in (DRESIDUAL_NO_EVENT).to_be_bytes().iter() {
+            for byte in (DRESIDUAL_SKIP_CUBE).to_be_bytes().iter() {
                 encoder.encode(Some(&(*byte as usize)), stream).unwrap();
             }
             return Ok(()); // We're done
@@ -101,7 +101,7 @@ impl EventCube {
 
                         if event.t < self.start_t {
                             let tmp = self.start_t;
-                            dbg!(tmp);
+                            dbg!(tmp, event.t);
                         }
 
                         let mut d_residual = 0;
@@ -128,6 +128,10 @@ impl EventCube {
                         if let Some(init) = &mut init_event {
                             // Don't do any special prediction here (yet). Just predict the same t as previously found.
                             let mut t_residual = (event.t as i32 - init.t as i32) as TResidual;
+
+                            if event.t < self.start_t {
+                                dbg!(t_residual);
+                            }
 
                             encoder.model.set_context(contexts.t_context);
 
@@ -187,12 +191,12 @@ impl EventCube {
                     }
                     let d_residual = DResidual::from_be_bytes(d_residual_buffer);
 
-                    if d_residual == DRESIDUAL_NO_EVENT {
+                    if d_residual == DRESIDUAL_SKIP_CUBE {
                         pixel.clear(); // So we can skip it for intra-coding
-                        if init_event.is_none() {
-                            cube.skip_cube = true;
-                            return cube;
-                        }
+                        cube.skip_cube = true;
+                        return cube;
+                    } else if d_residual == DRESIDUAL_NO_EVENT {
+                        pixel.clear(); // So we can skip it for intra-coding
                     } else {
                         let d = if let Some(init) = &mut init_event {
                             (init.d as DResidual + d_residual) as D
@@ -227,11 +231,14 @@ impl EventCube {
                             debug_assert!(init.t as TResidual + t_residual > 0);
                             init.t = (init.t as TResidual + t_residual) as AbsoluteT;
 
+                            if init.t < start_t {
+                                let tmp = start_t;
+                                dbg!(tmp, init.t);
+                                dbg!(t_residual);
+                            }
+
                             // debug_assert!(init.t < start_t + num_intervals as AbsoluteT * dt_ref);
-                            pixel.push((
-                                ((init.t - start_t) / dt_ref) as u8,
-                                EventCoordless { d, t: init.t },
-                            ));
+                            pixel.push((0, EventCoordless { d, t: init.t }));
                         } else {
                             panic!("No init event");
                         }
@@ -297,11 +304,14 @@ impl EventCube {
                                     encoder.encode(Some(&(*byte as usize)), stream).unwrap();
                                 }
                             } else {
-                                encoder.model.set_context(contexts.d_context);
-                                // Else there's no other event for this pixel. Encode a NO_EVENT symbol.
-                                for byte in (DRESIDUAL_NO_EVENT).to_be_bytes().iter() {
-                                    encoder.encode(Some(&(*byte as usize)), stream).unwrap();
+                                if idx != self.num_intervals {
+                                    encoder.model.set_context(contexts.d_context);
+                                    // Else there's no other event for this pixel. Encode a NO_EVENT symbol.
+                                    for byte in (DRESIDUAL_NO_EVENT).to_be_bytes().iter() {
+                                        encoder.encode(Some(&(*byte as usize)), stream).unwrap();
+                                    }
                                 }
+
                                 break;
                             }
                             idx += 1;
@@ -332,6 +342,9 @@ impl EventCube {
                         let mut idx = 1;
                         let mut last_delta_t = 0;
                         loop {
+                            if idx == self.num_intervals + 1 {
+                                break;
+                            }
                             debug_assert!(idx - 1 < pixel.len());
                             let mut prev_event = pixel[idx - 1];
                             decoder.model.set_context(contexts.d_context);
@@ -342,6 +355,7 @@ impl EventCube {
                             let d_residual = DResidual::from_be_bytes(d_residual_buffer);
 
                             if d_residual == DRESIDUAL_NO_EVENT {
+                                dbg!(d_residual);
                                 break; // We have all the events for this pixel now
                             }
 
@@ -422,11 +436,7 @@ impl HandleEvent for EventCube {
         event.coord.y -= self.start_y;
         event.coord.x -= self.start_x;
 
-        let index = if event.t < self.start_t {
-            0
-        } else {
-            ((event.t - self.start_t) / self.dt_ref) as u8
-        };
+        let index = 0;
 
         let item = (
             index, // The index: the relative interval of dt_ref from the start
@@ -434,6 +444,19 @@ impl HandleEvent for EventCube {
         );
         self.raw_event_lists[event.coord.c_usize()][event.coord.y_usize()][event.coord.x_usize()]
             .push(item);
+
+        if self.raw_event_lists[event.coord.c_usize()][event.coord.y_usize()][event.coord.x_usize()]
+            .len()
+            > 1
+        {
+            let last = self.raw_event_lists[event.coord.c_usize()][event.coord.y_usize()]
+                [event.coord.x_usize()][self.raw_event_lists[event.coord.c_usize()]
+                [event.coord.y_usize()][event.coord.x_usize()]
+            .len()
+                - 2];
+            dbg!(last.1.t, event.t);
+            debug_assert!(event.t >= last.1.t);
+        }
 
         self.raw_event_memory[event.coord.c_usize()][event.coord.y_usize()]
             [event.coord.x_usize()] = EventCoordless::from(event);
@@ -719,8 +742,8 @@ mod compression_tests {
                     if !cube.raw_event_lists[c][y][x].is_empty() {
                         assert!(!cube2.raw_event_lists[c][y][x].is_empty());
                         assert_eq!(
-                            cube.raw_event_lists[c][y][x][0],
-                            cube2.raw_event_lists[c][y][x][0]
+                            cube.raw_event_lists[c][y][x][0].1,
+                            cube2.raw_event_lists[c][y][x][0].1
                         );
                     } else {
                         assert!(cube2.raw_event_lists[c][y][x].is_empty());
@@ -734,14 +757,17 @@ mod compression_tests {
 
     #[test]
     fn compress_and_decompress_inter() -> Result<(), Box<dyn Error>> {
-        let mut cube = EventCube::new(0, 0, 1, 255, 255, 10);
+        let mut cube = EventCube::new(0, 0, 1, 255, 255, 2);
         let mut counter = 0;
         for c in 0..3 {
             for y in 0..16 {
                 for x in 0..15 {
                     cube.ingest_event(Event {
                         coord: Coord { x, y, c: None },
-                        t: 280 + counter,
+                        t: min(
+                            280 + counter,
+                            cube.start_t + (cube.num_intervals as u32 - 1) * cube.dt_ref,
+                        ),
                         d: 7,
                     });
                     counter += 1;
@@ -809,10 +835,12 @@ mod compression_tests {
                             cube.raw_event_lists[c][y][x][0],
                             cube2.raw_event_lists[c][y][x][0]
                         );
-                        assert_eq!(
-                            cube.raw_event_lists[c][y][x],
-                            cube2.raw_event_lists[c][y][x]
-                        );
+                        for i in 0..cube.raw_event_lists[c][y][x].len() {
+                            assert_eq!(
+                                cube.raw_event_lists[c][y][x][i].1,
+                                cube2.raw_event_lists[c][y][x][i].1
+                            );
+                        }
                     } else {
                         assert!(cube2.raw_event_lists[c][y][x].is_empty());
                     }

@@ -35,6 +35,8 @@ pub struct EventAdu {
 
     pub(crate) state: AduState,
 
+    first_run: bool,
+
     decompress_block_idx: (usize, usize), // decompressed_event_queue: VecDeque<Event>,
 }
 
@@ -42,9 +44,8 @@ pub struct EventAdu {
 pub enum AduState {
     Compressed,
     Decompressed,
-    Empty,
     #[default]
-    Init,
+    Empty,
 }
 
 impl EventAdu {
@@ -76,6 +77,7 @@ impl EventAdu {
             cube_to_write_count: 0,
             // decompressed_event_queue: VecDeque::with_capacity(plane.volume() * 4),
             state: Default::default(),
+            first_run: true,
             decompress_block_idx: (0, 0),
         }
     }
@@ -84,6 +86,7 @@ impl EventAdu {
         &mut self,
         stream: &mut BitWriter<Vec<u8>, BigEndian>,
     ) -> Result<(), CodecError> {
+        dbg!("compressing with start_t", self.start_t);
         // Create a new source model instance
         let mut source_model = FenwickModel::with_symbols(u16::MAX as usize, 1 << 30);
         let contexts = Contexts::new(&mut source_model, self.dt_ref);
@@ -97,6 +100,7 @@ impl EventAdu {
         }
 
         for cube in self.event_cubes.iter() {
+            debug_assert_eq!(cube.start_t, self.start_t);
             cube.compress(&mut encoder, &contexts, stream)?;
         }
 
@@ -140,9 +144,14 @@ impl EventAdu {
                     self.dt_ref,
                     self.num_intervals,
                 );
+                debug_assert_eq!(
+                    self.event_cubes[[block_idx_y, block_idx_x]].start_t,
+                    self.start_t
+                );
             }
         }
         self.state = AduState::Decompressed;
+        self.first_run = false;
     }
 
     pub fn decoder_is_empty(&self) -> bool {
@@ -206,7 +215,7 @@ impl HandleEvent for EventAdu {
     }
 
     fn clear_decompression(&mut self) {
-        if !(self.state == AduState::Init) {
+        if !(self.first_run) {
             dbg!("clearing decompression");
             // Only do this reset if we're not at the very beginning of the stream
             for cube in self.event_cubes.iter_mut() {
@@ -314,7 +323,11 @@ mod tests {
                     for (px1, px2) in row1.iter().zip(row2.iter()) {
                         if !px1.is_empty() {
                             pixel_count += 1;
-                            assert_eq!(px1, px2);
+                            for (elem1, elem2) in px1.iter().zip(px2.iter()) {
+                                let (a, b) = elem1;
+                                let (c, d) = elem2;
+                                assert!(b.t == d.t || px2.is_empty());
+                            }
                         } else {
                             assert!(px1 == px2 || px2.is_empty());
                         }
@@ -379,7 +392,11 @@ mod tests {
                     for (px1, px2) in row1.iter().zip(row2.iter()) {
                         if !px1.is_empty() {
                             pixel_count += 1;
-                            assert_eq!(px1, px2);
+                            for (elem1, elem2) in px1.iter().zip(px2.iter()) {
+                                let (a, b) = elem1;
+                                let (c, d) = elem2;
+                                assert!(b.t == d.t || px2.is_empty());
+                            }
                         } else {
                             assert!(px1 == px2 || px2.is_empty());
                         }

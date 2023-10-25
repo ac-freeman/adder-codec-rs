@@ -419,7 +419,7 @@ mod tests {
         let plane = PlaneSize::new(16, 30, 1)?;
         let start_t = 0;
         let dt_ref = 255;
-        let num_intervals = 10;
+        let num_intervals = 5;
 
         // A random candidate pixel to check that its events match
         let mut candidate_px_idx = (7, 12);
@@ -455,6 +455,7 @@ mod tests {
                         d: 7,
                     };
                     if y == candidate_px_idx.0 && x == candidate_px_idx.1 {
+                        dbg!(event.clone());
                         input_px_events.push(event);
                     }
                     compressed_output.ingest_event(event)?;
@@ -487,6 +488,123 @@ mod tests {
 
         assert!(input_px_events.len() >= output_px_events.len());
         for i in 0..output_px_events.len() {
+            dbg!(output_px_events[i].clone());
+            assert_eq!(input_px_events[i], output_px_events[i]);
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_compress_decompress_several_single() -> Result<(), Box<dyn Error>> {
+        use crate::codec::compressed::stream::CompressedOutput;
+        use crate::codec::raw::stream::RawOutput;
+        use crate::codec::WriteCompression;
+        use crate::Coord;
+        use crate::{Event, EventCoordless, SourceCamera, TimeMode};
+        use std::io::Cursor;
+
+        let plane = PlaneSize::new(32, 16, 1)?;
+        let start_t = 0;
+        let dt_ref = 255;
+        let num_intervals = 5;
+
+        // A random candidate pixel to check that its events match
+        let mut candidate_px_idx = (7, 12);
+        let mut input_px_events = Vec::new();
+        let mut output_px_events = Vec::new();
+
+        let mut compressed_output = CompressedOutput::new(
+            crate::codec::CodecMetadata {
+                codec_version: 0,
+                header_size: 0,
+                time_mode: TimeMode::AbsoluteT,
+                plane,
+                tps: 7650,
+                ref_interval: dt_ref,
+                delta_t_max: dt_ref * num_intervals as u32,
+                event_size: 0,
+                source_camera: SourceCamera::FramedU8,
+            },
+            Cursor::new(Vec::new()),
+        );
+
+        let mut counter = 0;
+        for i in 0..60 {
+            let event = Event {
+                coord: Coord {
+                    x: 12,
+                    y: 7,
+                    c: None,
+                },
+                t: 280 + i * 100 + counter,
+                d: 7,
+            };
+
+            // dbg!(event.clone());
+            input_px_events.push(event);
+
+            compressed_output.ingest_event(event)?;
+
+            counter += 1;
+        }
+
+        // MUCH LATER, integrate an event that with a timestamp far in the past:
+        let late_event = Event {
+            coord: Coord {
+                x: 19,
+                y: 14,
+                c: None,
+            },
+            t: 280,
+            d: 7,
+        };
+        compressed_output.ingest_event(late_event)?;
+
+        for i in 60..70 {
+            let event = Event {
+                coord: Coord {
+                    x: 12,
+                    y: 7,
+                    c: None,
+                },
+                t: 280 + i * 100 + counter,
+                d: 7,
+            };
+
+            // dbg!(event.clone());
+            input_px_events.push(event);
+
+            compressed_output.ingest_event(event)?;
+
+            counter += 1;
+        }
+
+        let output = compressed_output.into_writer().unwrap().into_inner();
+        assert!(!output.is_empty());
+        // Check that the size is less than the raw events
+
+        let mut compressed_input = CompressedInput::new(dt_ref * num_intervals as u32, dt_ref);
+        compressed_input.meta.plane = plane;
+        let mut stream = BitReader::endian(Cursor::new(output), BigEndian);
+        for i in 0..counter + 1 {
+            match compressed_input.digest_event(&mut stream) {
+                Ok(event) => {
+                    if event.coord.y == candidate_px_idx.0 && event.coord.x == candidate_px_idx.1 {
+                        output_px_events.push(event);
+                    }
+                    if event.coord.y == 14 && event.coord.x == 19 {
+                        dbg!(event);
+                    }
+                }
+                Err(CodecError::IoError(e)) if e.kind() == io::ErrorKind::UnexpectedEof => break,
+
+                Err(e) => return Err(Box::new(e)),
+            }
+        }
+
+        assert!(input_px_events.len() >= output_px_events.len());
+        for i in 0..output_px_events.len() {
+            dbg!(input_px_events[i].clone(), output_px_events[i].clone());
             assert_eq!(input_px_events[i], output_px_events[i]);
         }
         Ok(())
@@ -589,7 +707,7 @@ mod tests {
         let mut compressed_input = CompressedInput::new(dt_ref * num_intervals as u32, dt_ref);
         compressed_input.meta.plane = plane;
         let mut stream = BitReader::endian(Cursor::new(output), BigEndian);
-        for i in 0..counter - 1 {
+        loop {
             match compressed_input.digest_event(&mut stream) {
                 Ok(event) => {
                     if event.coord.y == candidate_px_idx.0 && event.coord.x == candidate_px_idx.1 {
