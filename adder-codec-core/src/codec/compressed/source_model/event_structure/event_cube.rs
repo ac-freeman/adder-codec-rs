@@ -99,6 +99,11 @@ impl EventCube {
                     if !pixel.is_empty() {
                         let event = pixel.first().unwrap().1;
 
+                        if event.t < self.start_t {
+                            let tmp = self.start_t;
+                            dbg!(tmp);
+                        }
+
                         let mut d_residual = 0;
 
                         if let Some(init) = &mut init_event {
@@ -210,11 +215,19 @@ impl EventCube {
                                 *byte = decoder.decode(stream).unwrap().unwrap() as u8;
                             }
                             let mut t_residual = TResidual::from_be_bytes(t_residual_buffer);
+                            if t_residual == -7852 {
+                                let tmp = start_t;
+                                dbg!(t_residual);
+                            }
 
                             // t_residual += dtref_residual * dt_ref as DResidual;
 
                             init.d = (init.d as DResidual + d_residual) as D;
+
+                            debug_assert!(init.t as TResidual + t_residual > 0);
                             init.t = (init.t as TResidual + t_residual) as AbsoluteT;
+
+                            // debug_assert!(init.t < start_t + num_intervals as AbsoluteT * dt_ref);
                             pixel.push((
                                 ((init.t - start_t) / dt_ref) as u8,
                                 EventCoordless { d, t: init.t },

@@ -3,7 +3,9 @@ use crate::utils::prep_bevy_image;
 use crate::{slider_pm, Images};
 #[cfg(feature = "open-cv")]
 use adder_codec_rs::transcoder::source::davis::TranscoderMode;
-use adder_codec_rs::transcoder::source::video::{FramedViewMode, Source, SourceError};
+use adder_codec_rs::transcoder::source::video::{
+    FramedViewMode, Source, SourceError, VideoBuilder,
+};
 use bevy::ecs::system::Resource;
 use bevy::prelude::{Assets, Commands, Image, Res, ResMut, Time};
 use bevy_egui::egui;
@@ -26,7 +28,7 @@ use bevy_egui::egui::plot::Legend;
 use egui::plot::Plot;
 use std::default::Default;
 use std::fs::File;
-use std::io::BufWriter;
+use std::io::{BufWriter, Write};
 use std::path::PathBuf;
 
 pub struct ParamsUiState {
@@ -229,6 +231,16 @@ impl TranscoderState {
                 self.ui_state = Default::default();
             }
             if ui.add(egui::Button::new("Reset video")).clicked() {
+                if let Some(framed_source) = &mut self.transcoder.framed_source {
+                    match framed_source.get_video_mut().end_write_stream() {
+                        Ok(Some(mut writer)) => {
+                            writer.flush();
+                        }
+                        Ok(None) => {}
+                        Err(_) => {}
+                    }
+                }
+
                 self.transcoder = AdderTranscoder::default();
                 self.ui_info_state = InfoUiState::default();
                 commands.insert_resource(Images::default());

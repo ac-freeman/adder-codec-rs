@@ -42,9 +42,9 @@ pub struct EventAdu {
 pub enum AduState {
     Compressed,
     Decompressed,
-
-    #[default]
     Empty,
+    #[default]
+    Init,
 }
 
 impl EventAdu {
@@ -126,6 +126,7 @@ impl EventAdu {
             *byte = decoder.decode(stream).unwrap().unwrap() as u8;
         }
 
+        dbg!("decompressing with start_t", self.start_t);
         for block_idx_y in 0..self.event_cubes.nrows() {
             for block_idx_x in 0..self.event_cubes.ncols() {
                 self.event_cubes[[block_idx_y, block_idx_x]] = EventCube::decompress(
@@ -205,7 +206,8 @@ impl HandleEvent for EventAdu {
     }
 
     fn clear_decompression(&mut self) {
-        if !(self.skip_adu && self.start_t == 0) {
+        if !(self.state == AduState::Init) {
+            dbg!("clearing decompression");
             // Only do this reset if we're not at the very beginning of the stream
             for cube in self.event_cubes.iter_mut() {
                 cube.clear_compression();

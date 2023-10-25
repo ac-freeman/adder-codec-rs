@@ -43,7 +43,7 @@ pub fn t_residual_default_weights(dt_ref: DeltaT) -> Weights {
     // After we've indexed into the correct interval, our timestamp residual can span [-dt_ref, dt_ref]
 
     // We have dt_max/dt_ref count of intervals per adu
-    let mut counts: Vec<u64> = vec![1; dt_ref as usize * 2 + 1];
+    let mut counts: Vec<u64> = vec![1; u16::MAX as usize];
 
     // Give higher probability to smaller residuals
     for i in counts.len() / 3..counts.len() * 2 / 3 {

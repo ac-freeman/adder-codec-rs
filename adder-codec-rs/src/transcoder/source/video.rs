@@ -632,12 +632,11 @@ impl<W: Write + 'static> Video<W> {
     /// Close and flush the stream writer.
     /// # Errors
     /// Returns an error if the stream writer cannot be closed cleanly.
-    pub fn end_write_stream(&mut self) -> Result<(), SourceError> {
+    pub fn end_write_stream(&mut self) -> Result<Option<W>, SourceError> {
         let mut tmp: Encoder<W> =
             Encoder::new_empty(EmptyOutput::new(CodecMetadata::default(), sink()));
         swap(&mut self.encoder, &mut tmp);
-        tmp.close_writer()?;
-        Ok(())
+        Ok(tmp.close_writer()?)
     }
 
     #[allow(clippy::needless_pass_by_value)]
