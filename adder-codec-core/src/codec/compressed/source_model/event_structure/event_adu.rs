@@ -377,7 +377,8 @@ mod tests {
             },
         );
         let mut decoder = arithmetic_coding::Decoder::new(source_model);
-        let mut stream = BitReader::endian(Cursor::new(stream.into_writer()), BigEndian);
+        let encoded_data = stream.into_writer();
+        let mut stream = BitReader::endian(Cursor::new(encoded_data.clone()), BigEndian);
 
         let adu2 = EventAdu::decompress(
             &mut decoder,
@@ -410,6 +411,10 @@ mod tests {
                 }
             }
         }
+
+        dbg!(encoded_data.len());
+        dbg!(pixel_count * 9);
+        assert!(encoded_data.len() < pixel_count * 9);
 
         Ok(())
     }
