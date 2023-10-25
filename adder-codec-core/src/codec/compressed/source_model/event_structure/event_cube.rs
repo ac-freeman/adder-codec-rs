@@ -4,17 +4,17 @@ use crate::codec::compressed::source_model::event_structure::{BLOCK_SIZE, BLOCK_
 use crate::codec::compressed::source_model::{ComponentCompression, HandleEvent};
 use crate::codec::compressed::{DResidual, TResidual, DRESIDUAL_NO_EVENT};
 use crate::codec::CodecError;
-use crate::{AbsoluteT, DeltaT, Event, EventCoordless, PixelAddress, D, D_NO_EVENT};
+use crate::{AbsoluteT, Coord, DeltaT, Event, EventCoordless, PixelAddress, D, D_NO_EVENT};
 use arithmetic_coding::{Decoder, Encoder};
 use bitstream_io::{BigEndian, BitReader, BitWrite, BitWriter};
 use std::cmp::{max, min};
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::io::Cursor;
 use std::mem::size_of;
 
 type Pixel = Option<Vec<(u8, EventCoordless)>>;
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone, Default)]
 pub struct EventCube {
     /// The absolute y-coordinate of the top-left pixel in the cube
     pub(crate) start_y: PixelAddress,
@@ -40,6 +40,8 @@ pub struct EventCube {
     raw_event_memory: [[[EventCoordless; BLOCK_SIZE]; BLOCK_SIZE]; 3],
 
     skip_cube: bool,
+
+    decompressed_event_queue: VecDeque<Event>,
 }
 
 impl EventCube {
@@ -67,6 +69,7 @@ impl EventCube {
             num_intervals,
             raw_event_memory: [[[EventCoordless::default(); BLOCK_SIZE]; BLOCK_SIZE]; 3],
             skip_cube: true,
+            decompressed_event_queue: Default::default(),
         }
     }
 
@@ -182,6 +185,7 @@ impl EventCube {
                     if d_residual == DRESIDUAL_NO_EVENT {
                         *pixel = None; // So we can skip it for intra-coding
                         if init_event.is_none() {
+                            cube.skip_cube = true;
                             return cube;
                         }
                     } else {
@@ -190,6 +194,7 @@ impl EventCube {
                         } else {
                             // There is no init event
                             init_event = Some(EventCoordless { d: 0, t: start_t });
+                            cube.skip_cube = false;
                             d_residual as D
                         };
 
@@ -433,8 +438,46 @@ impl HandleEvent for EventCube {
         };
     }
 
-    fn digest_event(&mut self) {
-        todo!()
+    fn digest_event(&mut self) -> Result<Event, CodecError> {
+        if self.skip_cube {
+            return Err(CodecError::NoMoreEvents);
+            // return Err(CodecError::new(
+            //     "Tried to digest an event from a cube that's been skipped",
+            // ));
+        } else if self.decompressed_event_queue.is_empty() {
+            // Then we need to convert all the cube events back into actual events and queue them up
+            for c in 0..self.num_channels {
+                for y in 0..BLOCK_SIZE {
+                    for x in 0..BLOCK_SIZE {
+                        if let Some(ref mut pixel) = &mut self.raw_event_lists[c][y][x] {
+                            for (idx, event) in pixel.iter().enumerate() {
+                                let mut event = Event {
+                                    coord: Coord {
+                                        x: x as PixelAddress + self.start_x,
+                                        y: y as PixelAddress + self.start_y,
+                                        c: if self.num_channels == 1 {
+                                            None
+                                        } else {
+                                            Some(c as u8)
+                                        },
+                                    },
+                                    d: event.1.d,
+                                    t: event.1.t,
+                                };
+                                self.decompressed_event_queue.push_back(event);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        return if let Some(event) = self.decompressed_event_queue.pop_front() {
+            Ok(event)
+        } else {
+            return Err(CodecError::NoMoreEvents);
+            // Err(CodecError::new("No events left in the queue"))
+        };
     }
 
     /// Clear out the cube's events and increment the start time by the cube's duration
@@ -624,17 +667,7 @@ mod compression_tests {
         let mut source_model = FenwickModel::with_symbols(u16::MAX as usize, 1 << 30);
         let contexts = crate::codec::compressed::source_model::cabac_contexts::Contexts::new(
             &mut source_model,
-            CodecMetadata {
-                codec_version: 0,
-                header_size: 0,
-                time_mode: Default::default(),
-                plane: Default::default(),
-                tps: 0,
-                ref_interval: 255,
-                delta_t_max: 2550,
-                event_size: 0,
-                source_camera: Default::default(),
-            },
+            255,
         );
 
         let mut encoder = Encoder::new(source_model);
@@ -644,17 +677,7 @@ mod compression_tests {
         let mut source_model = FenwickModel::with_symbols(u16::MAX as usize, 1 << 30);
         let contexts = crate::codec::compressed::source_model::cabac_contexts::Contexts::new(
             &mut source_model,
-            CodecMetadata {
-                codec_version: 0,
-                header_size: 0,
-                time_mode: Default::default(),
-                plane: Default::default(),
-                tps: 0,
-                ref_interval: 255,
-                delta_t_max: 2550,
-                event_size: 0,
-                source_camera: Default::default(),
-            },
+            255,
         );
         let mut decoder = arithmetic_coding::Decoder::new(source_model);
         let mut stream = BitReader::endian(Cursor::new(stream.into_writer()), BigEndian);
@@ -743,17 +766,7 @@ mod compression_tests {
         let mut source_model = FenwickModel::with_symbols(u16::MAX as usize, 1 << 30);
         let contexts = crate::codec::compressed::source_model::cabac_contexts::Contexts::new(
             &mut source_model,
-            CodecMetadata {
-                codec_version: 0,
-                header_size: 0,
-                time_mode: Default::default(),
-                plane: Default::default(),
-                tps: 0,
-                ref_interval: 255,
-                delta_t_max: 2550,
-                event_size: 0,
-                source_camera: Default::default(),
-            },
+            255,
         );
 
         let mut encoder = Encoder::new(source_model);
@@ -765,17 +778,7 @@ mod compression_tests {
         let mut source_model = FenwickModel::with_symbols(u16::MAX as usize, 1 << 30);
         let contexts = crate::codec::compressed::source_model::cabac_contexts::Contexts::new(
             &mut source_model,
-            CodecMetadata {
-                codec_version: 0,
-                header_size: 0,
-                time_mode: Default::default(),
-                plane: Default::default(),
-                tps: 0,
-                ref_interval: 255,
-                delta_t_max: 2550,
-                event_size: 0,
-                source_camera: Default::default(),
-            },
+            255,
         );
         let mut decoder = arithmetic_coding::Decoder::new(source_model);
         let mut stream = BitReader::endian(Cursor::new(stream.into_writer()), BigEndian);

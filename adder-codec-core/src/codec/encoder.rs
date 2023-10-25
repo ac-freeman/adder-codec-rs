@@ -425,8 +425,8 @@ mod tests {
             },
             // frame: Default::default(),
             // adu: Adu::new(),
-            arithmetic_coder: None,
             // contexts: None,
+            adu: Default::default(),
             stream: Some(BitWriter::endian(bufwriter, BigEndian)),
         };
         let _encoder = Encoder {

@@ -10,7 +10,7 @@ use std::io::Cursor;
 pub trait HandleEvent {
     fn ingest_event(&mut self, event: Event) -> bool;
 
-    fn digest_event(&mut self);
+    fn digest_event(&mut self) -> Result<Event, CodecError>;
     /// Clear out the cube's events and increment the start time by the cube's duration
     fn clear_compression(&mut self);
     fn clear_decompression(&mut self);

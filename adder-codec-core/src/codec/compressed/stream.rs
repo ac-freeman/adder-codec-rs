@@ -127,7 +127,7 @@ impl<W: Write> WriteCompression<W> for CompressedOutput<W> {
                 stream.write_bytes(&(written_data.len() as u32).to_be_bytes())?;
 
                 // Write the temporary stream to the actual stream
-                stream.write_bytes(&temp_stream.into_writer())?;
+                stream.write_bytes(&written_data)?;
             }
         }
 
@@ -223,15 +223,10 @@ impl<R: Read> ReadCompression<R> for CompressedInput<R> {
                 // Decompress the Adu
                 adu.decompress(&mut adu_stream);
             }
-            self.adu.digest_event(reader)?;
+            // Then return the next event from the queue
+            adu.digest_event()
         } else {
             unreachable!("Invalid state");
-        }
-
-        // Then return the next event from the queue
-        match self.decoded_event_queue.pop_front() {
-            Some(event) => Ok(event),
-            None => Err(CodecError::Eof),
         }
     }
 

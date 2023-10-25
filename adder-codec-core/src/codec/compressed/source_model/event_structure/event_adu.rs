@@ -12,6 +12,7 @@ use std::collections::VecDeque;
 use std::io::Cursor;
 use std::mem::size_of;
 
+#[derive(Clone, Debug, Default)]
 pub struct EventAdu {
     plane: PlaneSize,
 
@@ -32,7 +33,7 @@ pub struct EventAdu {
 
     cube_to_write_count: u16,
 
-    decompressed_event_queue: VecDeque<Event>,
+    decompress_block_idx: (usize, usize), // decompressed_event_queue: VecDeque<Event>,
 }
 
 impl EventAdu {
@@ -62,7 +63,8 @@ impl EventAdu {
             num_intervals,
             skip_adu: true,
             cube_to_write_count: 0,
-            decompressed_event_queue: VecDeque::with_capacity(plane.volume() * 4),
+            // decompressed_event_queue: VecDeque::with_capacity(plane.volume() * 4),
+            decompress_block_idx: (0, 0),
         }
     }
 
@@ -130,7 +132,7 @@ impl EventAdu {
     }
 
     pub fn decoder_is_empty(&self) -> bool {
-        self.decompressed_event_queue.is_empty()
+        self.decompress_block_idx == (0, 0)
     }
 }
 
@@ -157,8 +159,29 @@ impl HandleEvent for EventAdu {
     }
 
     fn digest_event(&mut self) -> Result<Event, CodecError> {
-        // TODO: Need to get the events into a queue
-        self.decompressed_event_queue
+        match self.decompress_block_idx {
+            (y, x)
+                if y == self.event_cubes.shape()[0] - 1 && x == self.event_cubes.shape()[1] - 1 =>
+            {
+                Err(CodecError::Eof)
+            }
+            (a, b) => match self.event_cubes[[a, b]].digest_event() {
+                Err(CodecError::NoMoreEvents) => {
+                    if b == self.event_cubes.shape()[1] - 1 {
+                        self.decompress_block_idx = (a + 1, 0);
+                    } else {
+                        self.decompress_block_idx = (a, b + 1);
+                    }
+
+                    // Call it recursively on the new block idx
+                    self.digest_event()
+                }
+                Ok(event) => {
+                    return Ok(event);
+                }
+                Err(e) => return Err(e),
+            },
+        }
     }
 
     fn clear_compression(&mut self) {
@@ -171,13 +194,16 @@ impl HandleEvent for EventAdu {
     }
 
     fn clear_decompression(&mut self) {
-        for cube in self.event_cubes.iter_mut() {
-            cube.clear_compression();
+        if !(self.skip_adu && self.start_t == 0) {
+            // Only do this reset if we're not at the very beginning of the stream
+            for cube in self.event_cubes.iter_mut() {
+                cube.clear_compression();
+            }
+            self.skip_adu = true;
+            self.cube_to_write_count = 0;
+            self.start_t += self.num_intervals as AbsoluteT * self.dt_ref;
+            self.decompress_block_idx = (0, 0);
         }
-        self.skip_adu = true;
-        self.cube_to_write_count = 0;
-        self.start_t += self.num_intervals as AbsoluteT * self.dt_ref;
-        self.decompressed_event_queue.clear();
     }
 }
 
@@ -255,58 +281,16 @@ mod tests {
         let bufwriter = Vec::new();
         let mut stream = BitWriter::endian(bufwriter, BigEndian);
 
-        let mut source_model = FenwickModel::with_symbols(u16::MAX as usize, 1 << 30);
-        let contexts = crate::codec::compressed::source_model::cabac_contexts::Contexts::new(
-            &mut source_model,
-            CodecMetadata {
-                codec_version: 0,
-                header_size: 0,
-                time_mode: Default::default(),
-                plane: Default::default(),
-                tps: 0,
-                ref_interval: 255,
-                delta_t_max: 2550,
-                event_size: 0,
-                source_camera: Default::default(),
-            },
-        );
+        let adu1 = adu.clone();
+        adu.compress(&mut stream)?;
 
-        let mut encoder = Encoder::new(source_model);
-
-        adu.compress(&mut encoder, &contexts, &mut stream)?;
-        eof_context(&contexts, &mut encoder, &mut stream);
-
-        let mut source_model = FenwickModel::with_symbols(u16::MAX as usize, 1 << 30);
-        let contexts = crate::codec::compressed::source_model::cabac_contexts::Contexts::new(
-            &mut source_model,
-            CodecMetadata {
-                codec_version: 0,
-                header_size: 0,
-                time_mode: Default::default(),
-                plane: Default::default(),
-                tps: 0,
-                ref_interval: 255,
-                delta_t_max: 2550,
-                event_size: 0,
-                source_camera: Default::default(),
-            },
-        );
-        let mut decoder = arithmetic_coding::Decoder::new(source_model);
         let mut stream = BitReader::endian(Cursor::new(stream.into_writer()), BigEndian);
-
-        let adu2 = EventAdu::decompress(
-            &mut decoder,
-            &contexts,
-            &mut stream,
-            plane,
-            start_t,
-            dt_ref,
-            num_intervals,
-        );
+        let mut adu2 = EventAdu::new(plane, start_t, dt_ref, num_intervals);
+        adu2.decompress(&mut stream);
 
         assert_eq!(adu.event_cubes.shape(), adu2.event_cubes.shape());
         let mut pixel_count = 0;
-        for (cube1, cube2) in adu.event_cubes.iter().zip(adu2.event_cubes.iter()) {
+        for (cube1, cube2) in adu1.event_cubes.iter().zip(adu2.event_cubes.iter()) {
             for (block1, block2) in cube1
                 .raw_event_lists
                 .iter()
@@ -361,41 +345,17 @@ mod tests {
         let bufwriter = Vec::new();
         let mut stream = BitWriter::endian(bufwriter, BigEndian);
 
-        adu.compress(&mut encoder, &contexts, &mut stream)?;
-        eof_context(&contexts, &mut encoder, &mut stream);
+        let adu1 = adu.clone();
+        adu.compress(&mut stream)?;
 
-        let mut source_model = FenwickModel::with_symbols(u16::MAX as usize, 1 << 30);
-        let contexts = crate::codec::compressed::source_model::cabac_contexts::Contexts::new(
-            &mut source_model,
-            CodecMetadata {
-                codec_version: 0,
-                header_size: 0,
-                time_mode: Default::default(),
-                plane: Default::default(),
-                tps: 0,
-                ref_interval: 255,
-                delta_t_max: 2550,
-                event_size: 0,
-                source_camera: Default::default(),
-            },
-        );
-        let mut decoder = arithmetic_coding::Decoder::new(source_model);
         let encoded_data = stream.into_writer();
         let mut stream = BitReader::endian(Cursor::new(encoded_data.clone()), BigEndian);
-
-        let adu2 = EventAdu::decompress(
-            &mut decoder,
-            &contexts,
-            &mut stream,
-            plane,
-            start_t,
-            dt_ref,
-            num_intervals,
-        );
+        let mut adu2 = EventAdu::new(plane, start_t, dt_ref, num_intervals);
+        adu2.decompress(&mut stream);
 
         assert_eq!(adu.event_cubes.shape(), adu2.event_cubes.shape());
         let mut pixel_count = 0;
-        for (cube1, cube2) in adu.event_cubes.iter().zip(adu2.event_cubes.iter()) {
+        for (cube1, cube2) in adu1.event_cubes.iter().zip(adu2.event_cubes.iter()) {
             for (block1, block2) in cube1
                 .raw_event_lists
                 .iter()

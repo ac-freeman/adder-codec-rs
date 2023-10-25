@@ -245,6 +245,9 @@ pub enum CodecError {
     /// Vision application error
     #[error("Vision application error")]
     VisionError(String),
+
+    #[error("No more events to read")]
+    NoMoreEvents,
 }
 
 /*
