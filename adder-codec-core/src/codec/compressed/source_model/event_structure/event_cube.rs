@@ -25,7 +25,7 @@ pub struct EventCube {
     num_channels: usize,
 
     /// Contains the sparse events in the cube. The index is the relative interval of dt_ref from the start
-    raw_event_lists: [[[Pixel; BLOCK_SIZE]; BLOCK_SIZE]; 3],
+    pub(crate) raw_event_lists: [[[Pixel; BLOCK_SIZE]; BLOCK_SIZE]; 3],
 
     /// The absolute time of the cube's beginning (not necessarily aligned to an event. We structure
     /// cubes to be in temporal lockstep at the beginning.)
@@ -76,6 +76,15 @@ impl EventCube {
         contexts: &Contexts,
         stream: &mut BitWriter<Vec<u8>, BigEndian>,
     ) -> Result<(), CodecError> {
+        encoder.model.set_context(contexts.d_context);
+        if self.skip_cube {
+            // If we're skipping this cube, just encode a NO_EVENT symbol
+            for byte in (DRESIDUAL_NO_EVENT).to_be_bytes().iter() {
+                encoder.encode(Some(&(*byte as usize)), stream).unwrap();
+            }
+            return Ok(()); // We're done
+        }
+
         let mut init_event: Option<EventCoordless> = None;
 
         // Intra-code the first event (if present) for each pixel in row-major order
@@ -109,15 +118,8 @@ impl EventCube {
                         }
 
                         if let Some(init) = &mut init_event {
-                            encoder.model.set_context(contexts.dtref_context);
-
                             // Don't do any special prediction here (yet). Just predict the same t as previously found.
                             let mut t_residual = (event.t as i32 - init.t as i32) as TResidual;
-                            // let mut dtref_residual = t_residual / self.dt_ref as TResidual;
-                            // for byte in dtref_residual.to_be_bytes().iter() {
-                            //     encoder.encode(Some(&(*byte as usize)), stream).unwrap();
-                            // }
-                            // t_residual = t_residual % self.dt_ref as TResidual; // TODO: check this math
 
                             encoder.model.set_context(contexts.t_context);
 
@@ -166,8 +168,10 @@ impl EventCube {
         let mut init_event: Option<EventCoordless> = None;
 
         for c in 0..cube.num_channels {
-            cube.raw_event_lists[c].iter_mut().for_each(|row| {
-                row.iter_mut().for_each(|pixel| {
+            for y in 0..BLOCK_SIZE {
+                for x in 0..BLOCK_SIZE {
+                    let mut pixel = &mut cube.raw_event_lists[c][y][x];
+
                     decoder.model.set_context(contexts.d_context);
 
                     for byte in d_residual_buffer.iter_mut() {
@@ -176,7 +180,10 @@ impl EventCube {
                     let d_residual = DResidual::from_be_bytes(d_residual_buffer);
 
                     if d_residual == DRESIDUAL_NO_EVENT {
-                        *pixel = None; // So we can skip it for inter-coding
+                        *pixel = None; // So we can skip it for intra-coding
+                        if init_event.is_none() {
+                            return cube;
+                        }
                     } else {
                         let d = if let Some(init) = &mut init_event {
                             (init.d as DResidual + d_residual) as D
@@ -211,8 +218,8 @@ impl EventCube {
                             panic!("No init event");
                         }
                     }
-                });
-            });
+                }
+            }
         }
 
         cube
@@ -391,6 +398,8 @@ impl HandleEvent for EventCube {
     /// Take in a raw event and place it at the appropriate location.
     ///
     /// Assume that the event does fit within the cube's time frame. This is checked at the caller.
+    ///
+    /// Returns true if this is the first event the cube has ingested
     fn ingest_event(&mut self, mut event: Event) -> bool {
         event.coord.y -= self.start_y;
         event.coord.x -= self.start_x;
@@ -580,9 +589,8 @@ impl ComponentCompression for EventCube {
 #[cfg(test)]
 mod compression_tests {
     use crate::codec::compressed::fenwick::context_switching::FenwickModel;
-    use crate::codec::compressed::source_model::event_structure::event_cube::{
-        eof_context, EventCube,
-    };
+    use crate::codec::compressed::source_model::cabac_contexts::eof_context;
+    use crate::codec::compressed::source_model::event_structure::event_cube::EventCube;
     use crate::codec::compressed::source_model::{ComponentCompression, HandleEvent};
     use crate::codec::CodecMetadata;
     use crate::{Coord, Event};
@@ -800,18 +808,4 @@ mod compression_tests {
 
         Ok(())
     }
-}
-
-fn eof_context(
-    contexts: &Contexts,
-    encoder: &mut Encoder<FenwickModel, BitWriter<Vec<u8>, BigEndian>>,
-    stream: &mut BitWriter<Vec<u8>, BigEndian>,
-) {
-    // THIS IS CRUCIAL FOR TESTING
-    let eof_context = contexts.eof_context;
-    encoder.model.set_context(eof_context);
-    encoder.encode(None, stream).unwrap();
-    encoder.flush(stream).unwrap();
-    stream.byte_align().unwrap();
-    stream.flush().unwrap();
 }

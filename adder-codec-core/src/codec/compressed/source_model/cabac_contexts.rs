@@ -2,6 +2,8 @@ use crate::codec::compressed::fenwick::context_switching::FenwickModel;
 use crate::codec::compressed::fenwick::Weights;
 use crate::codec::CodecMetadata;
 use crate::DeltaT;
+use arithmetic_coding::Encoder;
+use bitstream_io::{BigEndian, BitWrite, BitWriter};
 
 pub struct Contexts {
     /// Decimation factor residuals context
@@ -110,4 +112,18 @@ pub fn d_residual_default_weights() -> Weights {
     }
 
     Weights::new_with_counts(counts.len(), &Vec::from(counts))
+}
+
+pub fn eof_context(
+    contexts: &Contexts,
+    encoder: &mut Encoder<FenwickModel, BitWriter<Vec<u8>, BigEndian>>,
+    stream: &mut BitWriter<Vec<u8>, BigEndian>,
+) {
+    // THIS IS CRUCIAL FOR TESTING
+    let eof_context = contexts.eof_context;
+    encoder.model.set_context(eof_context);
+    encoder.encode(None, stream).unwrap();
+    encoder.flush(stream).unwrap();
+    stream.byte_align().unwrap();
+    stream.flush().unwrap();
 }
