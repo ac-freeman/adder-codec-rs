@@ -20,11 +20,11 @@ pub struct Contexts {
 }
 
 impl Contexts {
-    pub fn new(source_model: &mut FenwickModel, meta: CodecMetadata) -> Contexts {
+    pub fn new(source_model: &mut FenwickModel, ref_interval: DeltaT) -> Contexts {
         let d_context = source_model.push_context_with_weights(d_residual_default_weights());
         let dtref_context = source_model.push_context_with_weights(d_residual_default_weights());
         let t_context =
-            source_model.push_context_with_weights(t_residual_default_weights(meta.ref_interval));
+            source_model.push_context_with_weights(t_residual_default_weights(ref_interval));
         let eof_context =
             source_model.push_context_with_weights(Weights::new_with_counts(1, &vec![1]));
 

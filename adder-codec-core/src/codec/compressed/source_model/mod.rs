@@ -36,8 +36,8 @@ trait ComponentCompression {
         num_intervals: usize,
     ) -> Self;
 }
-mod cabac_contexts;
-mod event_structure;
+pub mod cabac_contexts;
+pub mod event_structure;
 
 // fn predict_t_from_d_residual(reference_t: AbsoluteT, d_residual: i16, dt_ref: DeltaT) -> AbsoluteT {
 //     reference_t + d_residual as DeltaT * dt_ref

@@ -1,13 +1,14 @@
 use crate::codec::compressed::fenwick::context_switching::FenwickModel;
-use crate::codec::compressed::source_model::cabac_contexts::Contexts;
+use crate::codec::compressed::source_model::cabac_contexts::{eof_context, Contexts};
 use crate::codec::compressed::source_model::event_structure::event_cube::EventCube;
 use crate::codec::compressed::source_model::event_structure::BLOCK_SIZE;
 use crate::codec::compressed::source_model::{ComponentCompression, HandleEvent};
-use crate::codec::CodecError;
+use crate::codec::{CodecError, CodecMetadata};
 use crate::{AbsoluteT, DeltaT, Event, PixelAddress, PlaneSize};
 use arithmetic_coding::{Decoder, Encoder};
 use bitstream_io::{BigEndian, BitReader, BitWriter};
 use ndarray::Array2;
+use std::collections::VecDeque;
 use std::io::Cursor;
 use std::mem::size_of;
 
@@ -19,21 +20,28 @@ pub struct EventAdu {
 
     /// The absolute time of the Adu's beginning (not necessarily aligned to an event. We structure
     /// cubes to be in temporal lockstep at the beginning.)
-    start_t: AbsoluteT,
+    pub(crate) start_t: AbsoluteT,
 
     /// How many ticks each input interval spans
-    dt_ref: DeltaT,
+    pub(crate) dt_ref: DeltaT,
 
     /// How many dt_ref intervals the whole adu spans
-    num_intervals: usize,
+    pub(crate) num_intervals: usize,
 
     skip_adu: bool,
 
     cube_to_write_count: u16,
+
+    decompressed_event_queue: VecDeque<Event>,
 }
 
 impl EventAdu {
-    fn new(plane: PlaneSize, start_t: AbsoluteT, dt_ref: DeltaT, num_intervals: usize) -> Self {
+    pub(crate) fn new(
+        plane: PlaneSize,
+        start_t: AbsoluteT,
+        dt_ref: DeltaT,
+        num_intervals: usize,
+    ) -> Self {
         let blocks_y = (plane.h_usize() + BLOCK_SIZE - 1) / BLOCK_SIZE;
         let blocks_x = (plane.w_usize() + BLOCK_SIZE - 1) / BLOCK_SIZE;
 
@@ -54,15 +62,20 @@ impl EventAdu {
             num_intervals,
             skip_adu: true,
             cube_to_write_count: 0,
+            decompressed_event_queue: VecDeque::with_capacity(plane.volume() * 4),
         }
     }
 
-    fn compress(
-        &self,
-        encoder: &mut Encoder<FenwickModel, BitWriter<Vec<u8>, BigEndian>>,
-        contexts: &Contexts,
+    pub fn compress(
+        &mut self,
         stream: &mut BitWriter<Vec<u8>, BigEndian>,
     ) -> Result<(), CodecError> {
+        // Create a new source model instance
+        let mut source_model = FenwickModel::with_symbols(u16::MAX as usize, 1 << 30);
+        let contexts = Contexts::new(&mut source_model, self.dt_ref);
+
+        let mut encoder = Encoder::new(source_model);
+
         // Write out the starting timestamp of the Adu
         encoder.model.set_context(contexts.t_context);
         for byte in self.start_t.to_be_bytes().iter() {
@@ -70,22 +83,26 @@ impl EventAdu {
         }
 
         for cube in self.event_cubes.iter() {
-            cube.compress(encoder, contexts, stream)?;
+            cube.compress(&mut encoder, &contexts, stream)?;
         }
+
+        // Flush the encoder
+        eof_context(&contexts, &mut encoder, stream);
+
+        self.clear_compression();
 
         Ok(())
     }
 
-    fn decompress(
-        decoder: &mut Decoder<FenwickModel, BitReader<Cursor<Vec<u8>>, BigEndian>>,
-        contexts: &Contexts,
-        stream: &mut BitReader<Cursor<Vec<u8>>, BigEndian>,
-        plane: PlaneSize,
-        start_t: AbsoluteT,
-        dt_ref: DeltaT,
-        num_intervals: usize,
-    ) -> Self {
-        let mut adu = Self::new(plane, start_t, dt_ref, num_intervals);
+    pub fn decompress(&mut self, stream: &mut BitReader<Cursor<Vec<u8>>, BigEndian>) {
+        self.clear_decompression();
+
+        // let mut adu = Self::new(plane, start_t, dt_ref, num_intervals);
+
+        // Create a new source model instance
+        let mut source_model = FenwickModel::with_symbols(u16::MAX as usize, 1 << 30);
+        let contexts = Contexts::new(&mut source_model, self.dt_ref);
+        let mut decoder = Decoder::new(source_model);
 
         // Read the starting timestamp of the Adu
         decoder.model.set_context(contexts.t_context);
@@ -95,23 +112,25 @@ impl EventAdu {
             *byte = decoder.decode(stream).unwrap().unwrap() as u8;
         }
 
-        for block_idx_y in 0..adu.event_cubes.nrows() {
-            for block_idx_x in 0..adu.event_cubes.ncols() {
-                adu.event_cubes[[block_idx_y, block_idx_x]] = EventCube::decompress(
-                    decoder,
-                    contexts,
+        for block_idx_y in 0..self.event_cubes.nrows() {
+            for block_idx_x in 0..self.event_cubes.ncols() {
+                self.event_cubes[[block_idx_y, block_idx_x]] = EventCube::decompress(
+                    &mut decoder,
+                    &contexts,
                     stream,
                     block_idx_y,
                     block_idx_x,
-                    adu.plane.c_usize(),
-                    adu.start_t,
-                    dt_ref,
-                    num_intervals,
+                    self.plane.c_usize(),
+                    self.start_t,
+                    self.dt_ref,
+                    self.num_intervals,
                 );
             }
         }
+    }
 
-        adu
+    pub fn decoder_is_empty(&self) -> bool {
+        self.decompressed_event_queue.is_empty()
     }
 }
 
@@ -137,8 +156,9 @@ impl HandleEvent for EventAdu {
         };
     }
 
-    fn digest_event(&mut self) {
-        todo!()
+    fn digest_event(&mut self) -> Result<Event, CodecError> {
+        // TODO: Need to get the events into a queue
+        self.decompressed_event_queue
     }
 
     fn clear_compression(&mut self) {
@@ -157,6 +177,7 @@ impl HandleEvent for EventAdu {
         self.skip_adu = true;
         self.cube_to_write_count = 0;
         self.start_t += self.num_intervals as AbsoluteT * self.dt_ref;
+        self.decompressed_event_queue.clear();
     }
 }
 
@@ -339,24 +360,6 @@ mod tests {
 
         let bufwriter = Vec::new();
         let mut stream = BitWriter::endian(bufwriter, BigEndian);
-
-        let mut source_model = FenwickModel::with_symbols(u16::MAX as usize, 1 << 30);
-        let contexts = crate::codec::compressed::source_model::cabac_contexts::Contexts::new(
-            &mut source_model,
-            CodecMetadata {
-                codec_version: 0,
-                header_size: 0,
-                time_mode: Default::default(),
-                plane: Default::default(),
-                tps: 0,
-                ref_interval: 255,
-                delta_t_max: 2550,
-                event_size: 0,
-                source_camera: Default::default(),
-            },
-        );
-
-        let mut encoder = Encoder::new(source_model);
 
         adu.compress(&mut encoder, &contexts, &mut stream)?;
         eof_context(&contexts, &mut encoder, &mut stream);
