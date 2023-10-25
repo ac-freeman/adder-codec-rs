@@ -205,7 +205,7 @@ mod tests {
     }
 
     #[test]
-    fn compress_tiny_adu() -> Result<(), Box<dyn std::error::Error>> {
+    fn compress_tiny_adu_intra() -> Result<(), Box<dyn std::error::Error>> {
         let plane = PlaneSize::new(16, 30, 1)?;
         let start_t = 0;
         let dt_ref = 255;
@@ -227,6 +227,112 @@ mod tests {
                     break;
                 } else {
                     counter += 1;
+                }
+            }
+        }
+
+        let bufwriter = Vec::new();
+        let mut stream = BitWriter::endian(bufwriter, BigEndian);
+
+        let mut source_model = FenwickModel::with_symbols(u16::MAX as usize, 1 << 30);
+        let contexts = crate::codec::compressed::source_model::cabac_contexts::Contexts::new(
+            &mut source_model,
+            CodecMetadata {
+                codec_version: 0,
+                header_size: 0,
+                time_mode: Default::default(),
+                plane: Default::default(),
+                tps: 0,
+                ref_interval: 255,
+                delta_t_max: 2550,
+                event_size: 0,
+                source_camera: Default::default(),
+            },
+        );
+
+        let mut encoder = Encoder::new(source_model);
+
+        adu.compress(&mut encoder, &contexts, &mut stream)?;
+        eof_context(&contexts, &mut encoder, &mut stream);
+
+        let mut source_model = FenwickModel::with_symbols(u16::MAX as usize, 1 << 30);
+        let contexts = crate::codec::compressed::source_model::cabac_contexts::Contexts::new(
+            &mut source_model,
+            CodecMetadata {
+                codec_version: 0,
+                header_size: 0,
+                time_mode: Default::default(),
+                plane: Default::default(),
+                tps: 0,
+                ref_interval: 255,
+                delta_t_max: 2550,
+                event_size: 0,
+                source_camera: Default::default(),
+            },
+        );
+        let mut decoder = arithmetic_coding::Decoder::new(source_model);
+        let mut stream = BitReader::endian(Cursor::new(stream.into_writer()), BigEndian);
+
+        let adu2 = EventAdu::decompress(
+            &mut decoder,
+            &contexts,
+            &mut stream,
+            plane,
+            start_t,
+            dt_ref,
+            num_intervals,
+        );
+
+        assert_eq!(adu.event_cubes.shape(), adu2.event_cubes.shape());
+        let mut pixel_count = 0;
+        for (cube1, cube2) in adu.event_cubes.iter().zip(adu2.event_cubes.iter()) {
+            for (block1, block2) in cube1
+                .raw_event_lists
+                .iter()
+                .zip(cube2.raw_event_lists.iter())
+            {
+                assert_eq!(block1.len(), block2.len());
+                for (row1, row2) in block1.iter().zip(block2.iter()) {
+                    for (px1, px2) in row1.iter().zip(row2.iter()) {
+                        if px1.is_some() && px1.clone().unwrap().len() > 0 {
+                            pixel_count += 1;
+                            assert_eq!(px1, px2);
+                        } else {
+                            assert!(px1 == px2 || px2.is_none());
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn compress_tiny_adu_inter() -> Result<(), Box<dyn std::error::Error>> {
+        let plane = PlaneSize::new(16, 30, 1)?;
+        let start_t = 0;
+        let dt_ref = 255;
+        let num_intervals = 10;
+
+        let mut adu = EventAdu::new(plane, start_t, dt_ref, num_intervals);
+
+        assert_eq!(adu.event_cubes.shape(), &[2, 1]);
+
+        let mut counter = 0;
+        for y in 0..30 {
+            for x in 0..16 {
+                for _ in 0..3 {
+                    adu.ingest_event(Event {
+                        coord: Coord { x, y, c: None },
+                        t: min(280 + counter, start_t + dt_ref * num_intervals as u32),
+                        d: 7,
+                    });
+                    if 28 + counter > start_t + dt_ref * num_intervals as u32 {
+                        break;
+                    } else {
+                        counter += 1;
+                    }
                 }
             }
         }

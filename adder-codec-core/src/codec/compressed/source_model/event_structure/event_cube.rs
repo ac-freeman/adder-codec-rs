@@ -315,7 +315,6 @@ impl EventCube {
                         let mut last_delta_t = 0;
                         loop {
                             let mut prev_event = pixel[idx - 1];
-                            dbg!(prev_event, last_delta_t);
                             decoder.model.set_context(contexts.d_context);
 
                             for byte in d_residual_buffer.iter_mut() {
