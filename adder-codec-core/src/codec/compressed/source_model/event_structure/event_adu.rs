@@ -176,7 +176,6 @@ impl HandleEvent for EventAdu {
         match self.event_cubes[[a, b]].digest_event() {
             Err(CodecError::NoMoreEvents) => {
                 if a == self.event_cubes.shape()[0] - 1 && b == self.event_cubes.shape()[1] - 1 {
-                    dbg!("End of Adu");
                     self.state = AduState::Empty;
                     return Err(CodecError::NoMoreEvents);
                 } else if b == self.event_cubes.shape()[1] - 1 {
@@ -184,7 +183,6 @@ impl HandleEvent for EventAdu {
                 } else {
                     self.decompress_block_idx = (a, b + 1);
                 }
-                dbg!("recurse");
 
                 // Call it recursively on the new block idx
                 self.digest_event()
@@ -312,11 +310,11 @@ mod tests {
                 assert_eq!(block1.len(), block2.len());
                 for (row1, row2) in block1.iter().zip(block2.iter()) {
                     for (px1, px2) in row1.iter().zip(row2.iter()) {
-                        if px1.is_some() && px1.clone().unwrap().len() > 0 {
+                        if !px1.is_empty() {
                             pixel_count += 1;
                             assert_eq!(px1, px2);
                         } else {
-                            assert!(px1 == px2 || px2.is_none());
+                            assert!(px1 == px2 || px2.is_empty());
                         }
                     }
                 }
@@ -377,11 +375,11 @@ mod tests {
                 assert_eq!(block1.len(), block2.len());
                 for (row1, row2) in block1.iter().zip(block2.iter()) {
                     for (px1, px2) in row1.iter().zip(row2.iter()) {
-                        if px1.is_some() && px1.clone().unwrap().len() > 0 {
+                        if !px1.is_empty() {
                             pixel_count += 1;
                             assert_eq!(px1, px2);
                         } else {
-                            assert!(px1 == px2 || px2.is_none());
+                            assert!(px1 == px2 || px2.is_empty());
                         }
                     }
                 }

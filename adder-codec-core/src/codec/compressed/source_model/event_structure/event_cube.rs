@@ -12,7 +12,7 @@ use std::collections::{HashMap, VecDeque};
 use std::io::Cursor;
 use std::mem::size_of;
 
-type Pixel = Option<Vec<(u8, EventCoordless)>>;
+type Pixel = Vec<(u8, EventCoordless)>;
 
 #[derive(PartialEq, Debug, Clone, Default)]
 pub struct EventCube {
@@ -53,7 +53,7 @@ impl EventCube {
         dt_ref: DeltaT,
         num_intervals: usize,
     ) -> Self {
-        let row: [Pixel; BLOCK_SIZE] = vec![Some(Vec::with_capacity(num_intervals)); BLOCK_SIZE]
+        let row: [Pixel; BLOCK_SIZE] = vec![Vec::with_capacity(num_intervals); BLOCK_SIZE]
             .try_into()
             .unwrap();
         let square: [[Pixel; BLOCK_SIZE]; BLOCK_SIZE] = vec![row; BLOCK_SIZE].try_into().unwrap();
@@ -93,11 +93,11 @@ impl EventCube {
         // Intra-code the first event (if present) for each pixel in row-major order
         for c in 0..self.num_channels {
             self.raw_event_lists[c].iter().for_each(|row| {
-                row.iter().for_each(|pixel_opt| {
+                row.iter().for_each(|pixel| {
                     encoder.model.set_context(contexts.d_context);
 
-                    if pixel_opt.is_some() && !pixel_opt.as_ref().unwrap().is_empty() {
-                        let event = pixel_opt.as_ref().unwrap().first().unwrap().1;
+                    if !pixel.is_empty() {
+                        let event = pixel.first().unwrap().1;
 
                         let mut d_residual = 0;
 
@@ -183,7 +183,7 @@ impl EventCube {
                     let d_residual = DResidual::from_be_bytes(d_residual_buffer);
 
                     if d_residual == DRESIDUAL_NO_EVENT {
-                        *pixel = None; // So we can skip it for intra-coding
+                        pixel.clear(); // So we can skip it for intra-coding
                         if init_event.is_none() {
                             cube.skip_cube = true;
                             return cube;
@@ -215,7 +215,7 @@ impl EventCube {
 
                             init.d = (init.d as DResidual + d_residual) as D;
                             init.t = (init.t as TResidual + t_residual) as AbsoluteT;
-                            pixel.as_mut().unwrap().push((
+                            pixel.push((
                                 ((init.t - start_t) / dt_ref) as u8,
                                 EventCoordless { d, t: init.t },
                             ));
@@ -240,8 +240,8 @@ impl EventCube {
         for c in 0..self.num_channels {
             self.raw_event_lists[c].iter().for_each(|row| {
                 row.iter().for_each(|pixel_opt| {
-                    if pixel_opt.is_some() && !pixel_opt.as_ref().unwrap().is_empty() {
-                        let pixel = pixel_opt.as_ref().unwrap();
+                    if !pixel_opt.is_empty() {
+                        let pixel = pixel_opt;
 
                         let mut idx = 1;
                         let mut last_delta_t: DeltaT = 0;
@@ -313,12 +313,13 @@ impl EventCube {
 
         for c in 0..self.num_channels {
             self.raw_event_lists[c].iter_mut().for_each(|row| {
-                row.iter_mut().for_each(|mut pixel_opt| {
-                    if let Some(pixel) = &mut pixel_opt {
+                row.iter_mut().for_each(|mut pixel| {
+                    if !pixel.is_empty() {
                         // Then look for the next events for this pixel
                         let mut idx = 1;
                         let mut last_delta_t = 0;
                         loop {
+                            debug_assert!(idx - 1 < pixel.len());
                             let mut prev_event = pixel[idx - 1];
                             decoder.model.set_context(contexts.d_context);
 
@@ -418,14 +419,8 @@ impl HandleEvent for EventCube {
             index, // The index: the relative interval of dt_ref from the start
             EventCoordless::from(event),
         );
-        if let Some(ref mut list) = &mut self.raw_event_lists[event.coord.c_usize()]
-            [event.coord.y_usize()][event.coord.x_usize()]
-        {
-            list.push(item);
-        } else {
-            self.raw_event_lists[event.coord.c_usize()][event.coord.y_usize()]
-                [event.coord.x_usize()] = Some(vec![item]);
-        }
+        self.raw_event_lists[event.coord.c_usize()][event.coord.y_usize()][event.coord.x_usize()]
+            .push(item);
 
         self.raw_event_memory[event.coord.c_usize()][event.coord.y_usize()]
             [event.coord.x_usize()] = EventCoordless::from(event);
@@ -449,8 +444,8 @@ impl HandleEvent for EventCube {
             for c in 0..self.num_channels {
                 for y in 0..BLOCK_SIZE {
                     for x in 0..BLOCK_SIZE {
-                        if let Some(ref mut pixel) = &mut self.raw_event_lists[c][y][x] {
-                            for (idx, event) in pixel.iter().enumerate() {
+                        if !self.raw_event_lists[c][y][x].is_empty() {
+                            for (idx, event) in self.raw_event_lists[c][y][x].iter().enumerate() {
                                 let mut event = Event {
                                     coord: Coord {
                                         x: x as PixelAddress + self.start_x,
@@ -488,9 +483,7 @@ impl HandleEvent for EventCube {
         for c in 0..3 {
             for y in 0..BLOCK_SIZE {
                 for x in 0..BLOCK_SIZE {
-                    if let Some(ref mut pixel) = &mut self.raw_event_lists[c][y][x] {
-                        pixel.clear();
-                    }
+                    self.raw_event_lists[c][y][x].clear();
                 }
             }
         }
@@ -501,7 +494,7 @@ impl HandleEvent for EventCube {
         for c in 0..3 {
             for y in 0..BLOCK_SIZE {
                 for x in 0..BLOCK_SIZE {
-                    self.raw_event_lists[c][y][x] = None;
+                    self.raw_event_lists[c][y][x].clear();
                 }
             }
         }
@@ -567,8 +560,8 @@ mod build_tests {
     #[test]
     fn test_fill_cube() -> Result<(), Box<dyn std::error::Error>> {
         let cube = fill_cube()?;
-        assert!(cube.raw_event_lists[0][0][0].as_ref().unwrap().is_empty());
-        assert_eq!(cube.raw_event_lists[0][1][13].as_ref().unwrap().len(), 1);
+        assert!(cube.raw_event_lists[0][0][0].is_empty());
+        assert_eq!(cube.raw_event_lists[0][1][13].len(), 1);
 
         Ok(())
     }
@@ -577,7 +570,7 @@ mod build_tests {
     fn fill_second_cube() -> Result<(), Box<dyn std::error::Error>> {
         let mut cube = fill_cube()?;
         cube.clear_compression();
-        assert_eq!(cube.raw_event_lists[0][1][13].as_ref().unwrap().len(), 0);
+        assert_eq!(cube.raw_event_lists[0][1][13].len(), 0);
         cube.ingest_event(Event {
             coord: Coord {
                 x: 29,
@@ -587,7 +580,7 @@ mod build_tests {
             t: 500,
             d: 7,
         });
-        assert_eq!(cube.raw_event_lists[0][1][13].as_ref().unwrap().len(), 1);
+        assert_eq!(cube.raw_event_lists[0][1][13].len(), 1);
         Ok(())
     }
 }
@@ -600,7 +593,9 @@ impl ComponentCompression for EventCube {
         stream: &mut BitWriter<Vec<u8>, BigEndian>,
     ) -> Result<(), CodecError> {
         self.compress_intra(encoder, contexts, stream)?;
-        self.compress_inter(encoder, contexts, stream)?;
+        if !self.skip_cube {
+            self.compress_inter(encoder, contexts, stream)?;
+        }
         Ok(())
     }
 
@@ -626,7 +621,9 @@ impl ComponentCompression for EventCube {
             dt_ref,
             num_intervals,
         );
-        cube.decompress_inter(decoder, contexts, stream);
+        if !cube.skip_cube {
+            cube.decompress_inter(decoder, contexts, stream);
+        }
         cube
     }
 }
@@ -676,6 +673,7 @@ mod compression_tests {
         let mut encoder = Encoder::new(source_model);
 
         cube.compress_intra(&mut encoder, &contexts, &mut stream)?;
+        eof_context(&contexts, &mut encoder, &mut stream);
 
         let mut source_model = FenwickModel::with_symbols(u16::MAX as usize, 1 << 30);
         let contexts = crate::codec::compressed::source_model::cabac_contexts::Contexts::new(
@@ -701,16 +699,18 @@ mod compression_tests {
             for y in 0..16 {
                 for x in 0..16 {
                     dbg!(c, y, x);
-                    if let Some(ref pixel) = cube.raw_event_lists[c][y][x] {
-                        if !pixel.is_empty() {
-                            assert!(cube2.raw_event_lists[c][y][x].is_some());
-                            assert_eq!(
-                                cube.raw_event_lists[c][y][x].as_ref().unwrap()[0],
-                                cube2.raw_event_lists[c][y][x].as_ref().unwrap()[0]
-                            );
-                        }
+                    dbg!(
+                        &cube.raw_event_lists[c][y][x],
+                        &cube2.raw_event_lists[c][y][x]
+                    );
+                    if !cube.raw_event_lists[c][y][x].is_empty() {
+                        assert!(!cube2.raw_event_lists[c][y][x].is_empty());
+                        assert_eq!(
+                            cube.raw_event_lists[c][y][x][0],
+                            cube2.raw_event_lists[c][y][x][0]
+                        );
                     } else {
-                        assert!(cube2.raw_event_lists[c][y][x].is_none());
+                        assert!(cube2.raw_event_lists[c][y][x].is_empty());
                     }
                 }
             }
@@ -752,8 +752,6 @@ mod compression_tests {
                     counter += 1;
                     assert!(
                         cube.raw_event_lists[0][y as usize][x as usize]
-                            .as_ref()
-                            .unwrap()
                             .last()
                             .unwrap()
                             .0
@@ -792,20 +790,71 @@ mod compression_tests {
         for c in 0..3 {
             for y in 0..16 {
                 for x in 0..16 {
-                    if let Some(ref pixel) = cube.raw_event_lists[c][y][x] {
-                        if !pixel.is_empty() {
-                            assert!(cube2.raw_event_lists[c][y][x].is_some());
-                            assert_eq!(
-                                cube.raw_event_lists[c][y][x].as_ref().unwrap()[0],
-                                cube2.raw_event_lists[c][y][x].as_ref().unwrap()[0]
-                            );
-                            assert_eq!(
-                                cube.raw_event_lists[c][y][x].as_ref().unwrap(),
-                                cube2.raw_event_lists[c][y][x].as_ref().unwrap()
-                            );
-                        }
+                    if !cube.raw_event_lists[c][y][x].is_empty() {
+                        assert!(!cube2.raw_event_lists[c][y][x].is_empty());
+                        assert_eq!(
+                            cube.raw_event_lists[c][y][x][0],
+                            cube2.raw_event_lists[c][y][x][0]
+                        );
+                        assert_eq!(
+                            cube.raw_event_lists[c][y][x],
+                            cube2.raw_event_lists[c][y][x]
+                        );
                     } else {
-                        assert!(cube2.raw_event_lists[c][y][x].is_none());
+                        assert!(cube2.raw_event_lists[c][y][x].is_empty());
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn compress_and_decompress_empty() -> Result<(), Box<dyn Error>> {
+        let mut cube = EventCube::new(0, 0, 1, 255, 255, 10);
+
+        let bufwriter = Vec::new();
+        let mut stream = BitWriter::endian(bufwriter, BigEndian);
+
+        let mut source_model = FenwickModel::with_symbols(u16::MAX as usize, 1 << 30);
+        let contexts = crate::codec::compressed::source_model::cabac_contexts::Contexts::new(
+            &mut source_model,
+            255,
+        );
+
+        let mut encoder = Encoder::new(source_model);
+
+        cube.compress(&mut encoder, &contexts, &mut stream)?;
+
+        eof_context(&contexts, &mut encoder, &mut stream);
+
+        let mut source_model = FenwickModel::with_symbols(u16::MAX as usize, 1 << 30);
+        let contexts = crate::codec::compressed::source_model::cabac_contexts::Contexts::new(
+            &mut source_model,
+            255,
+        );
+        let mut decoder = arithmetic_coding::Decoder::new(source_model);
+        let mut stream = BitReader::endian(Cursor::new(stream.into_writer()), BigEndian);
+
+        let cube2 =
+            EventCube::decompress(&mut decoder, &contexts, &mut stream, 0, 0, 1, 255, 255, 10);
+
+        for c in 0..3 {
+            for y in 0..16 {
+                for x in 0..16 {
+                    if !cube.raw_event_lists[c][y][x].is_empty() {
+                        assert!(!cube2.raw_event_lists[c][y][x].is_empty());
+                        assert_eq!(
+                            cube.raw_event_lists[c][y][x][0],
+                            cube2.raw_event_lists[c][y][x][0]
+                        );
+                        assert_eq!(
+                            cube.raw_event_lists[c][y][x],
+                            cube2.raw_event_lists[c][y][x]
+                        );
+                    } else {
+                        assert!(cube2.raw_event_lists[c][y][x].is_empty());
                     }
                 }
             }

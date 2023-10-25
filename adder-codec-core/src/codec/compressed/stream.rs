@@ -220,7 +220,6 @@ impl<R: Read> ReadCompression<R> for CompressedInput<R> {
                 // Create a temporary u8 stream to read the arithmetic-coded data from
                 let mut adu_stream = BitReader::endian(Cursor::new(adu_bytes), BigEndian);
 
-                dbg!("decompressing");
                 // Decompress the Adu
                 adu.decompress(&mut adu_stream);
             }
@@ -456,7 +455,6 @@ mod tests {
                         d: 7,
                     };
                     if y == candidate_px_idx.0 && x == candidate_px_idx.1 {
-                        dbg!(event.clone());
                         input_px_events.push(event);
                     }
                     compressed_output.ingest_event(event)?;
@@ -468,7 +466,6 @@ mod tests {
 
         let output = compressed_output.into_writer().unwrap().into_inner();
         assert!(!output.is_empty());
-        dbg!(counter);
         // Check that the size is less than the raw events
         assert!((output.len() as u32) < counter * 9);
 
@@ -476,11 +473,9 @@ mod tests {
         compressed_input.meta.plane = plane;
         let mut stream = BitReader::endian(Cursor::new(output), BigEndian);
         for i in 0..counter - 1 {
-            dbg!(i);
             match compressed_input.digest_event(&mut stream) {
                 Ok(event) => {
                     if event.coord.y == candidate_px_idx.0 && event.coord.x == candidate_px_idx.1 {
-                        dbg!(event.clone(), i);
                         output_px_events.push(event);
                     }
                 }

@@ -889,7 +889,7 @@ impl<W: Write + 'static> Video<W> {
                     if e1.coord.c == None || e1.coord.c == Some(0) {
                         if e1.coord != e2.coord
                             && (!cfg!(feature = "feature-logging-nonmaxsuppression")
-                                || e2.delta_t != e1.delta_t)
+                                || e2.t != e1.t)
                         {
                             if is_feature(
                                 e1.coord,
