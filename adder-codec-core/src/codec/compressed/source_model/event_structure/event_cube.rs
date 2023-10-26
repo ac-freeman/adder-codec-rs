@@ -328,17 +328,17 @@ impl EventCube {
                                 // dbg!(event.t);
 
                                 // Shift it back for the event, so we base our next prediction on the reconstructed value!
-                                if bitshift_amt != 0 {
-                                    event.t = (t_prediction as i64
-                                        + ((t_residual as i64) << bitshift_amt as i64))
-                                        as AbsoluteT;
-                                }
+                                // if bitshift_amt != 0 {
+                                event.t = (t_prediction as i64
+                                    + ((t_residual as i64) << bitshift_amt as i64))
+                                    as AbsoluteT;
+                                event.t = max(event.t, prev_event.t);
+                                // }
                                 if tmp {
                                     dbg!(event.t);
                                     // panic!();
                                 }
-                                last_delta_t =
-                                    max(event.t as i64 - prev_event.t as i64, 0) as DeltaT;
+                                last_delta_t = (event.t - prev_event.t) as DeltaT;
                             } else {
                                 encoder.model.set_context(contexts.d_context);
                                 // Else there's no other event for this pixel. Encode a NO_EVENT symbol.
@@ -419,11 +419,15 @@ impl EventCube {
                             }
                             t_residual <<= bitshift_amt as i64;
 
-                            let t = (t_prediction as i64 + t_residual as i64) as AbsoluteT;
+                            let t = max(
+                                (t_prediction as i64 + t_residual as i64) as AbsoluteT,
+                                prev_event.t,
+                            );
                             if t == 511 {
                                 dbg!(t);
                             }
-                            last_delta_t = max(t as i64 - prev_event.t as i64, 0) as DeltaT;
+                            assert!(t >= prev_event.t);
+                            last_delta_t = (t - prev_event.t) as DeltaT;
                             // debug_assert!(
                             //     t <= self.start_t + self.num_intervals as AbsoluteT * self.dt_ref
                             // );
