@@ -160,6 +160,11 @@ pub trait Framer {
 
     /// Ingest a vector of a vector of ADΔER events.
     fn ingest_events_events(&mut self, events: Vec<Vec<Event>>) -> bool;
+    /// For all frames left that we haven't written out yet, for any None pixels, set them to the
+    /// last recorded intensity for that pixel.
+    ///
+    /// Returns `true` if there are frames now ready to write out
+    fn flush_frame_buffer(&mut self) -> bool;
 }
 
 #[derive(Debug, Clone, Default)]
@@ -581,6 +586,56 @@ impl<
 
         self.is_frame_0_filled()
     }
+
+    /// For all frames left that we haven't written out yet, for any None pixels, set them to the
+    /// last recorded intensity for that pixel.
+    ///
+    /// Returns `true` if there are frames now ready to write out
+    fn flush_frame_buffer(&mut self) -> bool {
+        eprintln!(
+            "Flushing frame buffer. {} frames left",
+            self.frames[0].len()
+        );
+        let mut all_filled = true;
+        if self.frames[0].len() > 1 {
+            for (chunk_num, chunk) in self.frames.iter_mut().enumerate() {
+                let frame_chunk = &mut chunk[0];
+                // for frame_chunk in chunk.iter_mut() {
+                for ((y, x, c), px) in frame_chunk.array.indexed_iter_mut() {
+                    if px.is_none() {
+                        // If the pixel is empty, set its intensity to the previous intensity we recorded for it
+                        *px = Some(self.last_frame_intensity_tracker[chunk_num][[y, x, c]]);
+
+                        // Update the fill tracker
+                        frame_chunk.filled_count += 1;
+
+                        // Update the last filled tracker
+                        self.last_filled_tracker[chunk_num][[y, x, c]] += 1;
+
+                        // Update the timestamp tracker
+                        // chunk_ts_tracker[[y, x, c]] += state.ref_interval as BigT;
+                    }
+                }
+
+                // Mark the chunk as filled (ready to write out)
+                self.chunk_filled_tracker[chunk_num] = true;
+            }
+        } else {
+            eprintln!("marking not filled...");
+            self.chunk_filled_tracker[0] = false;
+        }
+
+        dbg!(self.is_frame_0_filled());
+        self.is_frame_0_filled()
+
+        // for chunk in &self.chunk_filled_tracker {
+        //     if !chunk {
+        //         all_filled = false;
+        //     }
+        // }
+        //
+        // all_filled
+    }
 }
 
 fn handle_dtm<
@@ -965,15 +1020,15 @@ fn ingest_event_for_chunk<
             _ => {}
         }
 
-        let mut frame: &mut Option<T>;
+        let mut px: &mut Option<T>;
         for i in prev_last_filled_frame..*last_filled_frame_ref {
             if i - state.frames_written + 1 >= 0 {
-                frame = &mut frame_chunk[(i - state.frames_written + 1) as usize].array
+                px = &mut frame_chunk[(i - state.frames_written + 1) as usize].array
                     [[event.coord.y.into(), event.coord.x.into(), channel.into()]];
-                match frame {
+                match px {
                     Some(_val) => {}
                     None => {
-                        *frame = Some(*last_frame_intensity_ref);
+                        *px = Some(*last_frame_intensity_ref);
                         frame_chunk[(i - state.frames_written + 1) as usize].filled_count += 1;
                     }
                 }

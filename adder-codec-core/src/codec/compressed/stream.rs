@@ -3,7 +3,7 @@ use arithmetic_coding::{Decoder, Encoder};
 use bitstream_io::{BigEndian, BitRead, BitReader, BitWrite, BitWriter};
 use std::cmp::min;
 use std::collections::VecDeque;
-use std::io::{Cursor, Read, Write};
+use std::io::{Cursor, Read, Seek, SeekFrom, Write};
 
 // use crate::codec::compressed::adu::cube::AduCube;
 // use crate::codec::compressed::adu::frame::{Adu, AduChannelType};
@@ -171,7 +171,7 @@ impl<R: Read> CompressedInput<R> {
     }
 }
 
-impl<R: Read> ReadCompression<R> for CompressedInput<R> {
+impl<R: Read + Seek> ReadCompression<R> for CompressedInput<R> {
     fn magic(&self) -> Magic {
         MAGIC_COMPRESSED
     }
@@ -241,9 +241,16 @@ impl<R: Read> ReadCompression<R> for CompressedInput<R> {
     fn set_input_stream_position(
         &mut self,
         reader: &mut BitReader<R, BigEndian>,
-        position: u64,
+        pos: u64,
     ) -> Result<(), CodecError> {
-        // todo!()
+        if (pos - self.meta.header_size as u64) % u64::from(self.meta.event_size) != 0 {
+            eprintln!("Attempted to seek to bad position in stream: {pos}");
+            return Err(CodecError::Seek);
+        }
+
+        if reader.seek_bits(SeekFrom::Start(pos * 8)).is_err() {
+            return Err(CodecError::Seek);
+        }
         Ok(())
     }
 }

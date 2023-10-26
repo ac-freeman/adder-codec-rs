@@ -6,7 +6,6 @@ use bitstream_io::{BigEndian, BitReader};
 use enum_dispatch::enum_dispatch;
 use std::io;
 use std::io::{Read, Seek, Sink, Write};
-use std::time::Instant;
 
 /// Different options for what to with the events we're given
 #[enum_dispatch(WriteCompression<W>)]
@@ -18,6 +17,7 @@ pub enum WriteCompressionEnum<W: Write> {
     /// Write the ADΔER stream as raw events
     RawOutput(RawOutput<W>),
 
+    /// An empty output stream. Send all the data into the void.
     EmptyOutput(EmptyOutput<Sink>),
 }
 
@@ -257,14 +257,21 @@ Encoder options below
 /// Options for what to do with the events we're given, before encoding them
 #[derive(Default, Copy, Clone, PartialEq, Debug)]
 pub struct EncoderOptions {
+    /// Allow the encoder to randomly drop events before compressing, if the event rate is too high
     pub event_drop: EventDrop,
+
+    /// Reorder the events according to their firing times
     pub event_order: EventOrder,
 }
 
+/// Allow the encoder to randomly drop events before compressing, if the event rate is too high
 #[derive(Default, Copy, Clone, PartialEq, Debug)]
 pub enum EventDrop {
+    /// Don't drop any events
     #[default]
     None,
+
+    /// Randomly drop events according to this user-provided event rate
     Manual {
         target_event_rate: f64,
 
@@ -277,6 +284,7 @@ pub enum EventDrop {
     Auto,
 }
 
+/// Reorder the events according to their firing times
 #[derive(Default, Copy, Clone, PartialEq, Debug)]
 pub enum EventOrder {
     /// Pass on the events in the order they're received in

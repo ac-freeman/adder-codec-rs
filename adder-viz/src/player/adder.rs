@@ -584,8 +584,10 @@ impl AdderPlayer {
 
             let image_bevy = prep_bevy_image(image_mat, color, meta.plane.w(), meta.plane.h())?;
 
+            eprintln!("returning image");
             Some(image_bevy)
         } else {
+            eprintln!("frame not filled");
             None
         };
 
@@ -607,18 +609,22 @@ impl AdderPlayer {
                     }
                 }
                 Err(e) => {
-                    eprintln!("{}", e);
+                    eprintln!("Player error: {}", e);
+                    if !frame_sequence.flush_frame_buffer() {
+                        eprintln!("Completely done");
+                        // TODO: Need to reset the UI event count events_ppc count when looping back here
+                        // Loop/restart back to the beginning
+                        stream.decoder.set_input_stream_position(
+                            &mut stream.bitreader,
+                            meta.header_size as u64,
+                        )?;
 
-                    // TODO: Need to reset the UI event count events_ppc count when looping back here
-                    // Loop/restart back to the beginning
-                    stream.decoder.set_input_stream_position(
-                        &mut stream.bitreader,
-                        meta.header_size as u64,
-                    )?;
-
-                    self.frame_sequence =
-                        self.framer_builder.clone().map(|builder| builder.finish());
-                    return Ok((event_count, image_bevy));
+                        self.frame_sequence =
+                            self.framer_builder.clone().map(|builder| builder.finish());
+                        return Ok((event_count, image_bevy));
+                    } else {
+                        return self.consume_source_accurate();
+                    }
                 }
             }
         }
