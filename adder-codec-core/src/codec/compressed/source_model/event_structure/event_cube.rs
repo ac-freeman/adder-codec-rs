@@ -314,14 +314,6 @@ impl EventCube {
                                     encoder.encode(Some(&(*byte as usize)), stream).unwrap();
                                 }
 
-                                let tmp = (t_residual as i64) << bitshift_amt as i64;
-
-                                let tmp = event.t == 512;
-                                if tmp {
-                                    dbg!(event.t, t_prediction, prev_event.t);
-                                }
-                                // dbg!(event.t);
-
                                 // Shift it back for the event, so we base our next prediction on the reconstructed value!
                                 // if bitshift_amt != 0 {
                                 event.t = (t_prediction as i64
@@ -329,10 +321,6 @@ impl EventCube {
                                     as AbsoluteT;
                                 event.t = max(event.t, prev_event.t);
                                 // }
-                                if tmp {
-                                    dbg!(event.t);
-                                    // panic!();
-                                }
                                 last_delta_t = (event.t - prev_event.t) as DeltaT;
                             } else {
                                 encoder.model.set_context(contexts.d_context);

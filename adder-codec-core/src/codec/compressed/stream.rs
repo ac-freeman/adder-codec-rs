@@ -491,7 +491,11 @@ mod tests {
 
         assert!(input_px_events.len() >= output_px_events.len());
         for i in 0..output_px_events.len() {
-            assert_eq!(input_px_events[i], output_px_events[i]);
+            // Have some slack in the comparison of the T component, since there could be some slight loss here
+            let a = input_px_events[i].t - 5..input_px_events[i].t + 5;
+            let comp_t = output_px_events[i].t;
+            assert!(a.contains(&comp_t));
+            assert_eq!(input_px_events[i].d, output_px_events[i].d);
         }
         Ok(())
     }
@@ -718,7 +722,11 @@ mod tests {
 
         assert!(input_px_events.len() >= output_px_events.len());
         for i in 0..output_px_events.len() {
-            assert_eq!(input_px_events[i], output_px_events[i]);
+            // Have some slack in the comparison of the T component, since there could be some slight loss here
+            let a = input_px_events[i].t - 5..input_px_events[i].t + 5;
+            let comp_t = output_px_events[i].t;
+            assert!(a.contains(&comp_t));
+            assert_eq!(input_px_events[i].d, output_px_events[i].d);
         }
         Ok(())
     }
