@@ -25,12 +25,12 @@ pub struct Contexts {
 }
 
 impl Contexts {
-    pub fn new(source_model: &mut FenwickModel, dt_max: DeltaT) -> Contexts {
+    pub fn new(source_model: &mut FenwickModel, dt_ref: DeltaT) -> Contexts {
         let d_context = source_model.push_context_with_weights(d_residual_default_weights());
         let dtref_context = source_model.push_context_with_weights(d_residual_default_weights());
 
         // TODO: Configure this based on the delta_t_max parameter!!
-        let t_weights = t_residual_default_weights(dt_max);
+        let t_weights = t_residual_default_weights(dt_ref);
         let t_residual_max = (t_weights.len() as i64 - 2) / 2;
         let t_context = source_model.push_context_with_weights(t_weights);
 
@@ -69,14 +69,14 @@ impl Contexts {
     }
 }
 
-pub fn t_residual_default_weights(dt_max: DeltaT) -> Weights {
+pub fn t_residual_default_weights(dt_ref: DeltaT) -> Weights {
     // t residuals can fit within i16
 
     // After we've indexed into the correct interval, our timestamp residual can span [-dt_ref, dt_ref]
 
     // We have dt_max/dt_ref count of intervals per adu
     // let mut counts: Vec<u64> = vec![1; u16::MAX as usize];
-    let mut counts: Vec<u64> = vec![1; (dt_max * 2 + 1) as usize];
+    let mut counts: Vec<u64> = vec![1; (dt_ref * 3 + 1) as usize];
 
     // Give higher probability to smaller residuals
     for i in counts.len() / 3..counts.len() * 2 / 3 {
