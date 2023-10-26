@@ -356,10 +356,7 @@ impl EventCube {
                             debug_assert!(
                                 t <= self.start_t + self.num_intervals as AbsoluteT * self.dt_ref
                             );
-                            pixel.push((
-                                ((t - self.start_t) / self.dt_ref) as u8,
-                                EventCoordless { d, t },
-                            ));
+                            pixel.push((0, EventCoordless { d, t }));
 
                             idx += 1;
                         }
