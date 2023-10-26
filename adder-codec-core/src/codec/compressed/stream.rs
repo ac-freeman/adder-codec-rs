@@ -540,7 +540,7 @@ mod tests {
                 d: 7,
             };
 
-            // dbg!(event.clone());
+            dbg!(event.clone());
             input_px_events.push(event);
 
             compressed_output.ingest_event(event)?;
@@ -571,7 +571,7 @@ mod tests {
                 d: 7,
             };
 
-            // dbg!(event.clone());
+            dbg!(event.clone());
             input_px_events.push(event);
 
             compressed_output.ingest_event(event)?;
@@ -581,6 +581,7 @@ mod tests {
 
         let output = compressed_output.into_writer().unwrap().into_inner();
         assert!(!output.is_empty());
+        dbg!("tt");
         // Check that the size is less than the raw events
 
         let mut compressed_input = CompressedInput::new(dt_ref * num_intervals as u32, dt_ref);

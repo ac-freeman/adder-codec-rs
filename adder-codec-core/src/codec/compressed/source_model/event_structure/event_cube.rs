@@ -99,6 +99,10 @@ impl EventCube {
                     if !pixel.is_empty() {
                         let event = pixel.first().unwrap().1;
 
+                        if event.t == 886 {
+                            dbg!(event);
+                        }
+
                         if event.t < self.start_t {
                             let tmp = self.start_t;
                             dbg!(tmp, event.t);
@@ -228,7 +232,7 @@ impl EventCube {
 
                             init.d = (init.d as DResidual + d_residual) as D;
 
-                            debug_assert!(init.t as TResidual + t_residual > 0);
+                            debug_assert!(init.t as TResidual + t_residual >= 0);
                             init.t = (init.t as TResidual + t_residual) as AbsoluteT;
 
                             if init.t < start_t {
@@ -259,10 +263,8 @@ impl EventCube {
         // Intra-code the first event (if present) for each pixel in row-major order
         for c in 0..self.num_channels {
             self.raw_event_lists[c].iter().for_each(|row| {
-                row.iter().for_each(|pixel_opt| {
-                    if !pixel_opt.is_empty() {
-                        let pixel = pixel_opt;
-
+                row.iter().for_each(|pixel| {
+                    if !pixel.is_empty() {
                         let mut idx = 1;
                         let mut last_delta_t: DeltaT = 0;
                         loop {
@@ -272,6 +274,9 @@ impl EventCube {
 
                             if idx < pixel.len() {
                                 let event = pixel[idx];
+                                if event.1.t == 886 {
+                                    dbg!(event);
+                                }
 
                                 // Get the D residual
                                 let d_residual =
@@ -304,12 +309,10 @@ impl EventCube {
                                     encoder.encode(Some(&(*byte as usize)), stream).unwrap();
                                 }
                             } else {
-                                if idx != self.num_intervals {
-                                    encoder.model.set_context(contexts.d_context);
-                                    // Else there's no other event for this pixel. Encode a NO_EVENT symbol.
-                                    for byte in (DRESIDUAL_NO_EVENT).to_be_bytes().iter() {
-                                        encoder.encode(Some(&(*byte as usize)), stream).unwrap();
-                                    }
+                                encoder.model.set_context(contexts.d_context);
+                                // Else there's no other event for this pixel. Encode a NO_EVENT symbol.
+                                for byte in (DRESIDUAL_NO_EVENT).to_be_bytes().iter() {
+                                    encoder.encode(Some(&(*byte as usize)), stream).unwrap();
                                 }
 
                                 break;
@@ -342,9 +345,6 @@ impl EventCube {
                         let mut idx = 1;
                         let mut last_delta_t = 0;
                         loop {
-                            if idx == self.num_intervals + 1 {
-                                break;
-                            }
                             debug_assert!(idx - 1 < pixel.len());
                             let mut prev_event = pixel[idx - 1];
                             decoder.model.set_context(contexts.d_context);
@@ -379,6 +379,9 @@ impl EventCube {
                             let t_residual = TResidual::from_be_bytes(t_residual_buffer);
 
                             let t = (t_prediction as i32 + t_residual as i32) as AbsoluteT;
+                            if t == 785 {
+                                dbg!(t);
+                            }
                             last_delta_t = t - prev_event.1.t;
                             debug_assert!(
                                 t <= self.start_t + self.num_intervals as AbsoluteT * self.dt_ref
