@@ -12,7 +12,7 @@ use std::collections::{HashMap, VecDeque};
 use std::io::Cursor;
 use std::mem::size_of;
 
-type Pixel = Vec<(u8, EventCoordless)>;
+type Pixel = Vec<EventCoordless>;
 
 #[derive(PartialEq, Debug, Clone, Default)]
 pub struct EventCube {
@@ -97,7 +97,7 @@ impl EventCube {
                     encoder.model.set_context(contexts.d_context);
 
                     if !pixel.is_empty() {
-                        let event = pixel.first().unwrap().1;
+                        let event = pixel.first().unwrap();
 
                         let mut d_residual = 0;
 
@@ -129,7 +129,7 @@ impl EventCube {
                             for byte in t_residual.to_be_bytes().iter() {
                                 encoder.encode(Some(&(*byte as usize)), stream).unwrap();
                             }
-                            *init = event;
+                            *init = *event;
                         } else {
                             panic!("No init event");
                         }
@@ -215,11 +215,11 @@ impl EventCube {
 
                             init.d = (init.d as DResidual + d_residual) as D;
 
-                            debug_assert!(init.t as TResidual + t_residual >= 0);
-                            init.t = (init.t as TResidual + t_residual) as AbsoluteT;
+                            debug_assert!(init.t as i64 + t_residual as i64 >= 0);
+                            init.t = (init.t as i64 + t_residual as i64) as AbsoluteT;
 
                             // debug_assert!(init.t < start_t + num_intervals as AbsoluteT * dt_ref);
-                            pixel.push((0, EventCoordless { d, t: init.t }));
+                            pixel.push(EventCoordless { d, t: init.t });
                         } else {
                             panic!("No init event");
                         }
@@ -253,8 +253,7 @@ impl EventCube {
                                 let event = pixel[idx];
 
                                 // Get the D residual
-                                let d_residual =
-                                    event.1.d as DResidual - prev_event.1.d as DResidual;
+                                let d_residual = event.d as DResidual - prev_event.d as DResidual;
                                 // Write the D residual (relative to the start_d for the first event)
                                 for byte in d_residual.to_be_bytes().iter() {
                                     encoder.encode(Some(&(*byte as usize)), stream).unwrap();
@@ -262,7 +261,6 @@ impl EventCube {
 
                                 let t_prediction = generate_t_prediction(
                                     idx,
-                                    prev_event.0,
                                     d_residual,
                                     last_delta_t,
                                     &prev_event,
@@ -271,11 +269,11 @@ impl EventCube {
                                     self.start_t,
                                 );
 
-                                last_delta_t = event.1.t - prev_event.1.t;
+                                last_delta_t = event.t - prev_event.t;
 
                                 // encoder.model.set_context(contexts.dtref_context);
                                 let mut t_residual =
-                                    (event.1.t as i32 - t_prediction as i32) as TResidual;
+                                    (event.t as i32 - t_prediction as i32) as TResidual;
 
                                 encoder.model.set_context(contexts.t_context);
 
@@ -332,11 +330,10 @@ impl EventCube {
                                 break; // We have all the events for this pixel now
                             }
 
-                            let d = (prev_event.1.d as DResidual + d_residual) as D;
+                            let d = (prev_event.d as DResidual + d_residual) as D;
 
                             let t_prediction = generate_t_prediction(
                                 idx,
-                                prev_event.0,
                                 d_residual,
                                 last_delta_t,
                                 &prev_event,
@@ -352,11 +349,11 @@ impl EventCube {
                             let t_residual = TResidual::from_be_bytes(t_residual_buffer);
 
                             let t = (t_prediction as i32 + t_residual as i32) as AbsoluteT;
-                            last_delta_t = t - prev_event.1.t;
+                            last_delta_t = t - prev_event.t;
                             debug_assert!(
                                 t <= self.start_t + self.num_intervals as AbsoluteT * self.dt_ref
                             );
-                            pixel.push((0, EventCoordless { d, t }));
+                            pixel.push(EventCoordless { d, t });
 
                             idx += 1;
                         }
@@ -369,17 +366,16 @@ impl EventCube {
 
 fn generate_t_prediction(
     idx: usize,
-    dtref_idx: u8,
     d_residual: DResidual,
     last_delta_t: DeltaT,
-    prev_event: &(u8, EventCoordless),
+    prev_event: &EventCoordless,
     num_intervals: usize,
     dt_ref: DeltaT,
     start_t: AbsoluteT,
 ) -> AbsoluteT {
     if idx == 1 {
         // We don't have a deltaT context, so just predict double the dtref of the previous event
-        min(prev_event.0 * 2, num_intervals as u8 - 1) as AbsoluteT + start_t
+        start_t + dt_ref as AbsoluteT * idx as AbsoluteT
     } else {
         // We've gotten the DeltaT between the last two events. Use that
         // to form our prediction
@@ -389,8 +385,8 @@ fn generate_t_prediction(
             last_delta_t << d_residual
         };
         max(
-            prev_event.1.t,
-            prev_event.1.t
+            prev_event.t,
+            prev_event.t
                 + min(delta_t_prediction, ((num_intervals as u8) as u32 * dt_ref)) as AbsoluteT,
         )
     }
@@ -408,10 +404,7 @@ impl HandleEvent for EventCube {
 
         let index = 0;
 
-        let item = (
-            index, // The index: the relative interval of dt_ref from the start
-            EventCoordless::from(event),
-        );
+        let item = EventCoordless::from(event);
         self.raw_event_lists[event.coord.c_usize()][event.coord.y_usize()][event.coord.x_usize()]
             .push(item);
 
@@ -424,7 +417,7 @@ impl HandleEvent for EventCube {
                 [event.coord.y_usize()][event.coord.x_usize()]
             .len()
                 - 2];
-            debug_assert!(event.t >= last.1.t);
+            debug_assert!(event.t >= last.t);
         }
 
         self.raw_event_memory[event.coord.c_usize()][event.coord.y_usize()]
@@ -461,8 +454,8 @@ impl HandleEvent for EventCube {
                                             Some(c as u8)
                                         },
                                     },
-                                    d: event.1.d,
-                                    t: event.1.t,
+                                    d: event.d,
+                                    t: event.t,
                                 };
                                 self.decompressed_event_queue.push_back(event);
                             }
