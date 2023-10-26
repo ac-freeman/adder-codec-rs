@@ -16,7 +16,7 @@ pub struct Contexts {
     /// Timestamp residuals context
     pub(crate) t_context: usize,
 
-    t_residual_max: TResidual,
+    t_residual_max: i64,
 
     /// EOF context
     pub(crate) eof_context: usize,
@@ -30,7 +30,7 @@ impl Contexts {
         let dtref_context = source_model.push_context_with_weights(d_residual_default_weights());
 
         let t_weights = t_residual_default_weights(ref_interval);
-        let t_residual_max = (t_weights.len() as TResidual - 2) / 2;
+        let t_residual_max = (t_weights.len() as i64 - 2) / 2;
         let t_context = source_model.push_context_with_weights(t_weights);
 
         let eof_context =
@@ -49,20 +49,20 @@ impl Contexts {
     }
 
     /// Find out how much we need to bitshift the t_residual to fit within the range of the model
-    pub(crate) fn residual_to_bitshift(&self, t_residual_i32: i32) -> (u8, TResidual) {
-        if t_residual_i32.abs() < self.t_residual_max as i32 {
-            (0, t_residual_i32 as TResidual)
+    pub(crate) fn residual_to_bitshift(&self, t_residual_i64: i64) -> (u8, TResidual) {
+        if t_residual_i64.abs() < self.t_residual_max as i64 {
+            (0, t_residual_i64 as TResidual)
         } else {
             let mut bitshift = 0;
-            let mut t_residual = t_residual_i32.abs() as TResidual;
+            let mut t_residual = t_residual_i64.abs();
             while t_residual > self.t_residual_max {
                 t_residual >>= 1;
                 bitshift += 1;
             }
-            if t_residual_i32 < 0 {
-                (bitshift + 1, -t_residual as TResidual)
+            if t_residual_i64 < 0 {
+                (bitshift, -t_residual as TResidual)
             } else {
-                (bitshift + 1, t_residual as TResidual)
+                (bitshift, t_residual as TResidual)
             }
         }
     }

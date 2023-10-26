@@ -98,7 +98,7 @@ impl EventAdu {
             encoder.encode(Some(&(*byte as usize)), stream).unwrap();
         }
 
-        for cube in self.event_cubes.iter() {
+        for cube in self.event_cubes.iter_mut() {
             debug_assert_eq!(cube.start_t, self.start_t);
             cube.compress(&mut encoder, &contexts, stream)?;
         }

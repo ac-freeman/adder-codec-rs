@@ -18,7 +18,7 @@ pub trait HandleEvent {
 
 trait ComponentCompression {
     fn compress(
-        &self,
+        &mut self,
         encoder: &mut Encoder<FenwickModel, BitWriter<Vec<u8>, BigEndian>>,
         contexts: &Contexts,
         stream: &mut BitWriter<Vec<u8>, BigEndian>,
