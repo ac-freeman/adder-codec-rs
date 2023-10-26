@@ -60,6 +60,7 @@ pub struct PixelArena {
     pub(crate) c_thresh: u8,
     pub(crate) c_increase_counter: u8,
     dtm_reached: bool,
+    popped_dtm: bool,
 }
 
 impl PixelArena {
@@ -79,6 +80,7 @@ impl PixelArena {
             c_thresh: 10,
             c_increase_counter: 1,
             dtm_reached: false,
+            popped_dtm: false,
         }
     }
 
@@ -139,7 +141,7 @@ impl PixelArena {
         ref_time: DeltaT,
     ) -> Event {
         let mut event = self.pop_top_event_recursive(next_intensity, mode, ref_time);
-        self.dtm_reached = true;
+        self.popped_dtm = true;
         self.delta_t_to_absolute_t(&mut event, mode, ref_time)
     }
 
@@ -207,6 +209,7 @@ impl PixelArena {
     ) {
         // let mut events = Vec::new();
 
+        let mut local_buffer = Vec::with_capacity(self.length);
         for node_idx in 0..self.length {
             match self.arena[node_idx].best_event {
                 None => {
@@ -214,24 +217,32 @@ impl PixelArena {
                         && self.arena[node_idx].state.integration == 0.0
                     {
                         let mut event64 = self.get_zero_event(node_idx, None);
-                        buffer.push(self.delta_t_to_absolute_t(&mut event64, mode, ref_time));
+                        local_buffer.push(self.delta_t_to_absolute_t(&mut event64, mode, ref_time));
                     }
                 }
                 Some(mut event) => {
                     assert_ne!(node_idx, self.length - 1);
                     let mut event = self.delta_t_to_absolute_t(&mut event, mode, ref_time);
-                    buffer.push(event);
+                    local_buffer.push(event);
                 }
             }
         }
 
-        if multi_mode == PixelMultiMode::Collapse && buffer.len() >= 2 {
+        if multi_mode == PixelMultiMode::Collapse && local_buffer.len() >= 2 && self.popped_dtm {
             // Then discard all the events except the last two, and mark the first of these as an EMPTY event
             // (carrying no intensity info)
-            let last = buffer.len() - 1;
-            buffer[last - 1].d = D_EMPTY;
-            *buffer = vec![buffer[last - 1], buffer[last]];
-            debug_assert!(buffer.len() == 2);
+            let mut start_trash_idx = 0;
+            let last_idx = local_buffer.len() - 1;
+            // loop {
+            //     if buffer[start_trash_idx].t <
+            // }
+
+            local_buffer[last_idx - 1].d = D_EMPTY;
+            buffer.push(local_buffer[last_idx - 1]);
+            buffer.push(local_buffer[last_idx]);
+            // debug_assert!(buffer.len() == 2);
+        } else {
+            buffer.append(&mut local_buffer);
         }
 
         // Move the last node to the front
@@ -250,6 +261,7 @@ impl PixelArena {
         // };
         self.need_to_pop_top = false;
         self.dtm_reached = false;
+        self.popped_dtm = false;
     }
 
     pub fn set_d_for_continuous(
@@ -338,12 +350,13 @@ impl PixelArena {
         debug_assert!(self.length <= self.arena.len());
         assert!(self.length > 0);
 
-        self.need_to_pop_top = self.arena[0].state.d == D_MAX
-            ||
-            // SAFETY:
-            // By design, the integration will not exceed 2^[`D_MAX`], so we can
-            // safely cast it to integer [`D`] type.
-            (!self.dtm_reached && unsafe { self.arena[0].state.delta_t.to_int_unchecked::<DeltaT>() } >= dtm);
+        self.dtm_reached = self.arena[0].state.delta_t >= dtm as f64;
+        self.need_to_pop_top =
+            self.arena[0].state.d == D_MAX || (self.dtm_reached && !self.popped_dtm);
+        // SAFETY:
+        // By design, the integration will not exceed 2^[`D_MAX`], so we can
+        // safely cast it to integer [`D`] type.
+        // (!self.dtm_reached && unsafe { self.arena[0].state.delta_t.to_int_unchecked::<DeltaT>() } >= dtm);
 
         if self.c_thresh < c_thresh_max {
             if self.c_increase_counter >= c_increase_velocity - 1 {
