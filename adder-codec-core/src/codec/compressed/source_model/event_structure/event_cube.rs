@@ -1,5 +1,5 @@
 use crate::codec::compressed::fenwick::context_switching::FenwickModel;
-use crate::codec::compressed::source_model::cabac_contexts::Contexts;
+use crate::codec::compressed::source_model::cabac_contexts::{Contexts, D_RESIDUAL_OFFSET};
 use crate::codec::compressed::source_model::event_structure::{BLOCK_SIZE, BLOCK_SIZE_AREA};
 use crate::codec::compressed::source_model::{ComponentCompression, HandleEvent};
 use crate::codec::compressed::{DResidual, TResidual, DRESIDUAL_NO_EVENT, DRESIDUAL_SKIP_CUBE};
@@ -84,9 +84,11 @@ impl EventCube {
         encoder.model.set_context(contexts.d_context);
         if self.skip_cube {
             // If we're skipping this cube, just encode a NO_EVENT symbol
-            for byte in (DRESIDUAL_SKIP_CUBE).to_be_bytes().iter() {
-                encoder.encode(Some(&(*byte as usize)), stream).unwrap();
-            }
+            let tmp = (DRESIDUAL_SKIP_CUBE + D_RESIDUAL_OFFSET) as usize;
+            encoder.encode(Some(&tmp), stream).unwrap();
+            // for byte in (DRESIDUAL_SKIP_CUBE).to_be_bytes().iter() {
+            //     encoder.encode(Some(&(*byte as usize)), stream).unwrap();
+            // }
             return Ok(()); // We're done
         }
 
@@ -106,14 +108,19 @@ impl EventCube {
                         if let Some(init) = &mut init_event {
                             d_residual = event.d as DResidual - init.d as DResidual;
                             // Write the D residual (relative to the start_d for the first event)
-                            for byte in d_residual.to_be_bytes().iter() {
-                                encoder.encode(Some(&(*byte as usize)), stream).unwrap();
-                            }
+
+                            let tmp = (d_residual + D_RESIDUAL_OFFSET) as usize;
+                            encoder.encode(Some(&tmp), stream).unwrap();
+                            //     for byte in d_residual.to_be_bytes().iter() {
+                            //     encoder.encode(Some(&(*byte as usize)), stream).unwrap();
+                            // }
                         } else {
                             // Write the first event's D directly
-                            for byte in (event.d as DResidual).to_be_bytes().iter() {
-                                encoder.encode(Some(&(*byte as usize)), stream).unwrap();
-                            }
+                            let tmp = (event.d as DResidual + D_RESIDUAL_OFFSET) as usize;
+                            encoder.encode(Some(&tmp), stream).unwrap();
+                            // for byte in (event.d as DResidual).to_be_bytes().iter() {
+                            //     encoder.encode(Some(&(*byte as usize)), stream).unwrap();
+                            // }
 
                             // Create the init event with t being the start_t of the cube
                             init_event = Some(EventCoordless {
@@ -157,9 +164,11 @@ impl EventCube {
                         }
                     } else {
                         // Else there's no event for this pixel. Encode a NO_EVENT symbol.
-                        for byte in (DRESIDUAL_NO_EVENT).to_be_bytes().iter() {
-                            encoder.encode(Some(&(*byte as usize)), stream).unwrap();
-                        }
+                        let tmp = (DRESIDUAL_NO_EVENT + D_RESIDUAL_OFFSET) as usize;
+                        encoder.encode(Some(&tmp), stream).unwrap();
+                        // for byte in (DRESIDUAL_NO_EVENT).to_be_bytes().iter() {
+                        //     encoder.encode(Some(&(*byte as usize)), stream).unwrap();
+                        // }
                     }
                 })
             })
@@ -200,10 +209,14 @@ impl EventCube {
 
                     decoder.model.set_context(contexts.d_context);
 
-                    for byte in d_residual_buffer.iter_mut() {
-                        *byte = decoder.decode(stream).unwrap().unwrap() as u8;
-                    }
-                    let d_residual = DResidual::from_be_bytes(d_residual_buffer);
+
+                    let tmp = decoder.decode(stream).unwrap().unwrap() as usize;
+                    let d_residual = tmp as i16 - D_RESIDUAL_OFFSET;
+                    // for byte in d_residual_buffer.iter_mut() {
+                    //     *byte = decoder.decode(stream).unwrap().unwrap() as u8;
+                    // }
+                    // let d_residual = DResidual::from_be_bytes(d_residual_buffer);
+
 
                     if d_residual == DRESIDUAL_SKIP_CUBE {
                         pixel.clear(); // So we can skip it for intra-coding

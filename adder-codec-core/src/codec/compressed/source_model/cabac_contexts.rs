@@ -26,6 +26,8 @@ pub struct Contexts {
     pub(crate) bitshift_context: usize,
 }
 
+pub const D_RESIDUAL_OFFSET: i16 = 255;
+
 impl Contexts {
     pub fn new(source_model: &mut FenwickModel, dt_ref: DeltaT, dt_max: DeltaT) -> Contexts {
         let d_context = source_model.push_context_with_weights(d_residual_default_weights());
