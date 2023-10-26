@@ -29,7 +29,8 @@ impl Contexts {
         let d_context = source_model.push_context_with_weights(d_residual_default_weights());
         let dtref_context = source_model.push_context_with_weights(d_residual_default_weights());
 
-        let t_weights = t_residual_default_weights(ref_interval);
+        // TODO: Configure this based on the delta_t_max parameter!!
+        let t_weights = t_residual_default_weights(ref_interval * 5);
         let t_residual_max = (t_weights.len() as i64 - 2) / 2;
         let t_context = source_model.push_context_with_weights(t_weights);
 

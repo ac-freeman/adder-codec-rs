@@ -326,8 +326,7 @@ mod tests {
         let bufwriter = Vec::new();
         let mut stream = BitWriter::endian(bufwriter, BigEndian);
 
-        let adu1 = adu.clone();
-        adu.compress(&mut stream)?;
+        adu.compress_test(&mut stream)?;
 
         let mut stream = BitReader::endian(Cursor::new(stream.into_writer()), BigEndian);
         let mut adu2 = EventAdu::new(plane, start_t, dt_ref, num_intervals);
@@ -335,7 +334,7 @@ mod tests {
 
         assert_eq!(adu.event_cubes.shape(), adu2.event_cubes.shape());
         let mut pixel_count = 0;
-        for (cube1, cube2) in adu1.event_cubes.iter().zip(adu2.event_cubes.iter()) {
+        for (cube1, cube2) in adu.event_cubes.iter().zip(adu2.event_cubes.iter()) {
             for (block1, block2) in cube1
                 .raw_event_lists
                 .iter()

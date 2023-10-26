@@ -303,10 +303,6 @@ impl EventCube {
                                 let (bitshift_amt, t_residual) =
                                     contexts.residual_to_bitshift(t_residual_i64);
 
-                                if bitshift_amt != 0 {
-                                    dbg!(bitshift_amt);
-                                }
-
                                 encoder.model.set_context(contexts.bitshift_context);
                                 for byte in bitshift_amt.to_be_bytes().iter() {
                                     encoder.encode(Some(&(*byte as usize)), stream).unwrap();
@@ -413,9 +409,6 @@ impl EventCube {
                             let mut t_residual = TResidual::from_be_bytes(t_residual_buffer) as i64;
 
                             let bitshift_amt = bitshift_buffer[0] as u8;
-                            if bitshift_amt != 0 {
-                                dbg!(bitshift_amt);
-                            }
                             t_residual <<= bitshift_amt as i64;
 
                             let t = max(
