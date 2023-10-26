@@ -88,7 +88,11 @@ impl EventAdu {
     ) -> Result<(), CodecError> {
         // Create a new source model instance
         let mut source_model = FenwickModel::with_symbols(u16::MAX as usize, 1 << 30);
-        let contexts = Contexts::new(&mut source_model, self.dt_ref);
+        let contexts = Contexts::new(
+            &mut source_model,
+            self.dt_ref,
+            self.dt_ref * self.num_intervals as DeltaT,
+        );
 
         let mut encoder = Encoder::new(source_model);
 
@@ -116,7 +120,11 @@ impl EventAdu {
     ) -> Result<(), CodecError> {
         // Create a new source model instance
         let mut source_model = FenwickModel::with_symbols(u16::MAX as usize, 1 << 30);
-        let contexts = Contexts::new(&mut source_model, self.dt_ref);
+        let contexts = Contexts::new(
+            &mut source_model,
+            self.dt_ref,
+            self.dt_ref * self.num_intervals as DeltaT,
+        );
 
         let mut encoder = Encoder::new(source_model);
 
@@ -144,7 +152,11 @@ impl EventAdu {
 
         // Create a new source model instance
         let mut source_model = FenwickModel::with_symbols(u16::MAX as usize, 1 << 30);
-        let contexts = Contexts::new(&mut source_model, self.dt_ref);
+        let contexts = Contexts::new(
+            &mut source_model,
+            self.dt_ref,
+            self.dt_ref * self.num_intervals as DeltaT,
+        );
         let mut decoder = Decoder::new(source_model);
 
         // Read the starting timestamp of the Adu

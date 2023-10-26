@@ -4,7 +4,9 @@ use crate::codec::compressed::source_model::event_structure::{BLOCK_SIZE, BLOCK_
 use crate::codec::compressed::source_model::{ComponentCompression, HandleEvent};
 use crate::codec::compressed::{DResidual, TResidual, DRESIDUAL_NO_EVENT, DRESIDUAL_SKIP_CUBE};
 use crate::codec::CodecError;
-use crate::{AbsoluteT, Coord, DeltaT, Event, EventCoordless, PixelAddress, D, D_NO_EVENT};
+use crate::{
+    AbsoluteT, Coord, DeltaT, Event, EventCoordless, PixelAddress, D, D_EMPTY, D_NO_EVENT,
+};
 use arithmetic_coding::{Decoder, Encoder};
 use bitstream_io::{BigEndian, BitReader, BitWrite, BitWriter};
 use std::cmp::{max, min};
@@ -424,7 +426,7 @@ impl EventCube {
 
 fn generate_t_prediction(
     idx: usize,
-    d_residual: DResidual,
+    mut d_residual: DResidual,
     last_delta_t: DeltaT,
     prev_event: &EventCoordless,
     num_intervals: usize,
@@ -435,6 +437,9 @@ fn generate_t_prediction(
         // We don't have a deltaT context, so just predict double the dtref of the previous event
         start_t + dt_ref as AbsoluteT * idx as AbsoluteT
     } else {
+        if d_residual.abs() > 14 {
+            d_residual = 0;
+        }
         // We've gotten the DeltaT between the last two events. Use that
         // to form our prediction
         let delta_t_prediction: DeltaT = if d_residual < 0 {

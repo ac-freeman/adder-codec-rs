@@ -1,5 +1,5 @@
 use adder_codec_core::Mode::{Continuous, FramePerfect};
-use adder_codec_core::{Coord, DeltaT, Event, Mode, TimeMode, D};
+use adder_codec_core::{Coord, DeltaT, Event, Mode, PixelMultiMode, TimeMode, D};
 use adder_codec_core::{UDshift, D_EMPTY, D_MAX, D_SHIFT, D_ZERO_INTEGRATION};
 use smallvec::{smallvec, SmallVec};
 use std::cmp::min;
@@ -198,7 +198,13 @@ impl PixelArena {
     }
 
     /// Recursively pop all the alt events
-    pub fn pop_best_events(&mut self, buffer: &mut Vec<Event>, mode: Mode, ref_time: DeltaT) {
+    pub fn pop_best_events(
+        &mut self,
+        buffer: &mut Vec<Event>,
+        mode: Mode,
+        multi_mode: PixelMultiMode,
+        ref_time: DeltaT,
+    ) {
         // let mut events = Vec::new();
 
         for node_idx in 0..self.length {
@@ -213,10 +219,19 @@ impl PixelArena {
                 }
                 Some(mut event) => {
                     assert_ne!(node_idx, self.length - 1);
-                    let event = self.delta_t_to_absolute_t(&mut event, mode, ref_time);
+                    let mut event = self.delta_t_to_absolute_t(&mut event, mode, ref_time);
                     buffer.push(event);
                 }
             }
+        }
+
+        if multi_mode == PixelMultiMode::Collapse && buffer.len() >= 2 {
+            // Then discard all the events except the last two, and mark the first of these as an EMPTY event
+            // (carrying no intensity info)
+            let last = buffer.len() - 1;
+            buffer[last - 1].d = D_EMPTY;
+            *buffer = vec![buffer[last - 1], buffer[last]];
+            debug_assert!(buffer.len() == 2);
         }
 
         // Move the last node to the front

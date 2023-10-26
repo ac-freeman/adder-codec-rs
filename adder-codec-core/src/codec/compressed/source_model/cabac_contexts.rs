@@ -2,7 +2,7 @@ use crate::codec::compressed::fenwick::context_switching::FenwickModel;
 use crate::codec::compressed::fenwick::Weights;
 use crate::codec::compressed::TResidual;
 use crate::codec::CodecMetadata;
-use crate::DeltaT;
+use crate::{AbsoluteT, DeltaT};
 use arithmetic_coding::Encoder;
 use bitstream_io::{BigEndian, BitWrite, BitWriter};
 
@@ -18,6 +18,8 @@ pub struct Contexts {
 
     t_residual_max: i64,
 
+    dt_max: i64,
+
     /// EOF context
     pub(crate) eof_context: usize,
 
@@ -25,7 +27,7 @@ pub struct Contexts {
 }
 
 impl Contexts {
-    pub fn new(source_model: &mut FenwickModel, dt_ref: DeltaT) -> Contexts {
+    pub fn new(source_model: &mut FenwickModel, dt_ref: DeltaT, dt_max: DeltaT) -> Contexts {
         let d_context = source_model.push_context_with_weights(d_residual_default_weights());
         let dtref_context = source_model.push_context_with_weights(d_residual_default_weights());
 
@@ -44,9 +46,14 @@ impl Contexts {
             dtref_context,
             t_context,
             t_residual_max,
+            dt_max: dt_max as i64,
             eof_context,
             bitshift_context,
         }
+    }
+
+    pub(crate) fn check_too_far(&self, reference_start_t: AbsoluteT, t: AbsoluteT) -> bool {
+        t < reference_start_t - self.dt_max as AbsoluteT
     }
 
     /// Find out how much we need to bitshift the t_residual to fit within the range of the model

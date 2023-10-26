@@ -202,6 +202,15 @@ pub enum Mode {
     /// Do not do the above ^
     Continuous,
 }
+
+#[derive(Clone, Copy, PartialEq, Default, Debug)]
+pub enum PixelMultiMode {
+    #[default]
+    Normal,
+
+    Collapse,
+}
+
 /// Precision for maximum intensity representable with allowed [`D`] values
 pub type UDshift = u128;
 

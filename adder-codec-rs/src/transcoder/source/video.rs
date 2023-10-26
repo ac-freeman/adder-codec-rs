@@ -12,7 +12,8 @@ use adder_codec_core::codec::{
     CodecError, CodecMetadata, EncoderOptions, EncoderType, LATEST_CODEC_VERSION,
 };
 use adder_codec_core::{
-    Coord, DeltaT, Event, Mode, PlaneError, PlaneSize, SourceCamera, SourceType, TimeMode,
+    Coord, DeltaT, Event, Mode, PixelMultiMode, PlaneError, PlaneSize, SourceCamera, SourceType,
+    TimeMode,
 };
 use bumpalo::Bump;
 use chrono::Local;
@@ -156,6 +157,8 @@ pub struct VideoState {
     pub plane: PlaneSize,
     pub(crate) pixel_tree_mode: Mode,
 
+    pub(crate) pixel_multi_mode: PixelMultiMode,
+
     /// The number of rows of pixels to process at a time (per thread)
     pub chunk_rows: usize,
 
@@ -214,6 +217,7 @@ impl Default for VideoState {
         let mut state = VideoState {
             plane: PlaneSize::default(),
             pixel_tree_mode: Continuous,
+            pixel_multi_mode: Default::default(),
             chunk_rows: 64,
             in_interval_count: 1,
             c_thresh_baseline: 0,
@@ -554,6 +558,7 @@ impl<W: Write + 'static> Video<W> {
             EncoderType::Compressed => {
                 #[cfg(feature = "compression")]
                 {
+                    self.state.pixel_multi_mode = PixelMultiMode::Collapse;
                     let compression = CompressedOutput::new(
                         CodecMetadata {
                             codec_version: LATEST_CODEC_VERSION,
@@ -579,6 +584,7 @@ impl<W: Write + 'static> Video<W> {
                 }
             }
             EncoderType::Raw => {
+                self.state.pixel_multi_mode = PixelMultiMode::Normal;
                 let compression = RawOutput::new(
                     CodecMetadata {
                         codec_version: LATEST_CODEC_VERSION,
@@ -596,6 +602,7 @@ impl<W: Write + 'static> Video<W> {
                 Encoder::new_raw(compression, encoder_options)
             }
             EncoderType::Empty => {
+                self.state.pixel_multi_mode = PixelMultiMode::Normal;
                 let compression = EmptyOutput::new(
                     CodecMetadata {
                         codec_version: LATEST_CODEC_VERSION,
@@ -1141,7 +1148,12 @@ pub fn integrate_for_px(
     if *frame_val < base_val.saturating_sub(px.c_thresh)
         || *frame_val > base_val.saturating_add(px.c_thresh)
     {
-        px.pop_best_events(buffer, state.pixel_tree_mode, state.ref_time);
+        px.pop_best_events(
+            buffer,
+            state.pixel_tree_mode,
+            state.pixel_multi_mode,
+            state.ref_time,
+        );
         grew_buffer = true;
         px.base_val = *frame_val;
 
