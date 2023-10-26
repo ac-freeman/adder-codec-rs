@@ -83,9 +83,9 @@ impl Default for ParamsUiState {
         ParamsUiState {
             delta_t_ref: 255.0,
             delta_t_ref_max: 255.0,
-            delta_t_max_mult: 2,
+            delta_t_max_mult: 15,
             delta_t_ref_slider: 255.0,
-            delta_t_max_mult_slider: 2,
+            delta_t_max_mult_slider: 15,
             scale: 0.5,
             scale_slider: 0.5,
             thread_count: rayon::current_num_threads() - 1,
