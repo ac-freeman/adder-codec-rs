@@ -361,7 +361,6 @@ mod tests {
                     d: 7,
                 };
                 if y == candidate_px_idx.0 && x == candidate_px_idx.1 {
-                    dbg!(event.clone());
                     input_px_events.push(event);
                 }
                 compressed_output.ingest_event(event);
@@ -395,10 +394,8 @@ mod tests {
         compressed_input.meta.plane = plane;
         let mut stream = BitReader::endian(Cursor::new(output), BigEndian);
         for i in 0..counter - 1 {
-            dbg!(i);
             let event = compressed_input.digest_event(&mut stream)?;
             if event.coord.y == candidate_px_idx.0 && event.coord.x == candidate_px_idx.1 {
-                dbg!(event.clone(), i);
                 output_px_events.push(event);
             }
         }
@@ -455,7 +452,6 @@ mod tests {
                         d: 7,
                     };
                     if y == candidate_px_idx.0 && x == candidate_px_idx.1 {
-                        dbg!(event.clone());
                         input_px_events.push(event);
                     }
                     compressed_output.ingest_event(event)?;
@@ -488,7 +484,6 @@ mod tests {
 
         assert!(input_px_events.len() >= output_px_events.len());
         for i in 0..output_px_events.len() {
-            dbg!(output_px_events[i].clone());
             assert_eq!(input_px_events[i], output_px_events[i]);
         }
         Ok(())
@@ -540,7 +535,6 @@ mod tests {
                 d: 7,
             };
 
-            dbg!(event.clone());
             input_px_events.push(event);
 
             compressed_output.ingest_event(event)?;
@@ -571,7 +565,6 @@ mod tests {
                 d: 7,
             };
 
-            dbg!(event.clone());
             input_px_events.push(event);
 
             compressed_output.ingest_event(event)?;
@@ -581,7 +574,6 @@ mod tests {
 
         let output = compressed_output.into_writer().unwrap().into_inner();
         assert!(!output.is_empty());
-        dbg!("tt");
         // Check that the size is less than the raw events
 
         let mut compressed_input = CompressedInput::new(dt_ref * num_intervals as u32, dt_ref);
@@ -593,9 +585,6 @@ mod tests {
                     if event.coord.y == candidate_px_idx.0 && event.coord.x == candidate_px_idx.1 {
                         output_px_events.push(event);
                     }
-                    if event.coord.y == 14 && event.coord.x == 19 {
-                        dbg!(event);
-                    }
                 }
                 Err(CodecError::IoError(e)) if e.kind() == io::ErrorKind::UnexpectedEof => break,
 
@@ -605,7 +594,6 @@ mod tests {
 
         assert!(input_px_events.len() >= output_px_events.len());
         for i in 0..output_px_events.len() {
-            dbg!(input_px_events[i].clone(), output_px_events[i].clone());
             assert_eq!(input_px_events[i], output_px_events[i]);
         }
         Ok(())

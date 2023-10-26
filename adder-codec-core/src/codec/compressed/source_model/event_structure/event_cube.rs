@@ -99,15 +99,6 @@ impl EventCube {
                     if !pixel.is_empty() {
                         let event = pixel.first().unwrap().1;
 
-                        if event.t == 886 {
-                            dbg!(event);
-                        }
-
-                        if event.t < self.start_t {
-                            let tmp = self.start_t;
-                            dbg!(tmp, event.t);
-                        }
-
                         let mut d_residual = 0;
 
                         if let Some(init) = &mut init_event {
@@ -132,10 +123,6 @@ impl EventCube {
                         if let Some(init) = &mut init_event {
                             // Don't do any special prediction here (yet). Just predict the same t as previously found.
                             let mut t_residual = (event.t as i32 - init.t as i32) as TResidual;
-
-                            if event.t < self.start_t {
-                                dbg!(t_residual);
-                            }
 
                             encoder.model.set_context(contexts.t_context);
 
@@ -223,10 +210,6 @@ impl EventCube {
                                 *byte = decoder.decode(stream).unwrap().unwrap() as u8;
                             }
                             let mut t_residual = TResidual::from_be_bytes(t_residual_buffer);
-                            if t_residual == -7852 {
-                                let tmp = start_t;
-                                dbg!(t_residual);
-                            }
 
                             // t_residual += dtref_residual * dt_ref as DResidual;
 
@@ -234,12 +217,6 @@ impl EventCube {
 
                             debug_assert!(init.t as TResidual + t_residual >= 0);
                             init.t = (init.t as TResidual + t_residual) as AbsoluteT;
-
-                            if init.t < start_t {
-                                let tmp = start_t;
-                                dbg!(tmp, init.t);
-                                dbg!(t_residual);
-                            }
 
                             // debug_assert!(init.t < start_t + num_intervals as AbsoluteT * dt_ref);
                             pixel.push((0, EventCoordless { d, t: init.t }));
@@ -274,9 +251,6 @@ impl EventCube {
 
                             if idx < pixel.len() {
                                 let event = pixel[idx];
-                                if event.1.t == 886 {
-                                    dbg!(event);
-                                }
 
                                 // Get the D residual
                                 let d_residual =
@@ -355,7 +329,6 @@ impl EventCube {
                             let d_residual = DResidual::from_be_bytes(d_residual_buffer);
 
                             if d_residual == DRESIDUAL_NO_EVENT {
-                                dbg!(d_residual);
                                 break; // We have all the events for this pixel now
                             }
 
@@ -379,9 +352,6 @@ impl EventCube {
                             let t_residual = TResidual::from_be_bytes(t_residual_buffer);
 
                             let t = (t_prediction as i32 + t_residual as i32) as AbsoluteT;
-                            if t == 785 {
-                                dbg!(t);
-                            }
                             last_delta_t = t - prev_event.1.t;
                             debug_assert!(
                                 t <= self.start_t + self.num_intervals as AbsoluteT * self.dt_ref
@@ -457,7 +427,6 @@ impl HandleEvent for EventCube {
                 [event.coord.y_usize()][event.coord.x_usize()]
             .len()
                 - 2];
-            dbg!(last.1.t, event.t);
             debug_assert!(event.t >= last.1.t);
         }
 

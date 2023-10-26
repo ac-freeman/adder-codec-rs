@@ -86,7 +86,6 @@ impl EventAdu {
         &mut self,
         stream: &mut BitWriter<Vec<u8>, BigEndian>,
     ) -> Result<(), CodecError> {
-        dbg!("compressing with start_t", self.start_t);
         // Create a new source model instance
         let mut source_model = FenwickModel::with_symbols(u16::MAX as usize, 1 << 30);
         let contexts = Contexts::new(&mut source_model, self.dt_ref);
@@ -130,7 +129,6 @@ impl EventAdu {
             *byte = decoder.decode(stream).unwrap().unwrap() as u8;
         }
 
-        dbg!("decompressing with start_t", self.start_t);
         for block_idx_y in 0..self.event_cubes.nrows() {
             for block_idx_x in 0..self.event_cubes.ncols() {
                 self.event_cubes[[block_idx_y, block_idx_x]] = EventCube::decompress(
@@ -216,7 +214,6 @@ impl HandleEvent for EventAdu {
 
     fn clear_decompression(&mut self) {
         if !(self.first_run) {
-            dbg!("clearing decompression");
             // Only do this reset if we're not at the very beginning of the stream
             for cube in self.event_cubes.iter_mut() {
                 cube.clear_compression();
