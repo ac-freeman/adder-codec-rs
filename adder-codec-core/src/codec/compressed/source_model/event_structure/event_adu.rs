@@ -110,6 +110,32 @@ impl EventAdu {
 
         Ok(())
     }
+    pub fn compress_test(
+        &mut self,
+        stream: &mut BitWriter<Vec<u8>, BigEndian>,
+    ) -> Result<(), CodecError> {
+        // Create a new source model instance
+        let mut source_model = FenwickModel::with_symbols(u16::MAX as usize, 1 << 30);
+        let contexts = Contexts::new(&mut source_model, self.dt_ref);
+
+        let mut encoder = Encoder::new(source_model);
+
+        // Write out the starting timestamp of the Adu
+        encoder.model.set_context(contexts.t_context);
+        for byte in self.start_t.to_be_bytes().iter() {
+            encoder.encode(Some(&(*byte as usize)), stream).unwrap();
+        }
+
+        for cube in self.event_cubes.iter_mut() {
+            debug_assert_eq!(cube.start_t, self.start_t);
+            cube.compress(&mut encoder, &contexts, stream)?;
+        }
+
+        // Flush the encoder
+        eof_context(&contexts, &mut encoder, stream);
+
+        Ok(())
+    }
 
     pub fn decompress(&mut self, stream: &mut BitReader<Cursor<Vec<u8>>, BigEndian>) {
         self.clear_decompression();
@@ -349,15 +375,20 @@ mod tests {
         for y in 0..30 {
             for x in 0..16 {
                 for _ in 0..3 {
-                    adu.ingest_event(Event {
+                    let event = Event {
                         coord: Coord { x, y, c: None },
                         t: min(280 + counter, start_t + dt_ref * num_intervals as u32),
                         d: 7,
-                    });
+                    };
+                    counter += 1;
+                    if counter == 233 {
+                        dbg!(event);
+                    }
+                    adu.ingest_event(event);
+
                     if 28 + counter > start_t + dt_ref * num_intervals as u32 {
                         break;
                     } else {
-                        counter += 1;
                     }
                 }
             }
@@ -366,8 +397,7 @@ mod tests {
         let bufwriter = Vec::new();
         let mut stream = BitWriter::endian(bufwriter, BigEndian);
 
-        let adu1 = adu.clone();
-        adu.compress(&mut stream)?;
+        adu.compress_test(&mut stream)?;
 
         let encoded_data = stream.into_writer();
         let mut stream = BitReader::endian(Cursor::new(encoded_data.clone()), BigEndian);
@@ -376,7 +406,7 @@ mod tests {
 
         assert_eq!(adu.event_cubes.shape(), adu2.event_cubes.shape());
         let mut pixel_count = 0;
-        for (cube1, cube2) in adu1.event_cubes.iter().zip(adu2.event_cubes.iter()) {
+        for (cube1, cube2) in adu.event_cubes.iter().zip(adu2.event_cubes.iter()) {
             for (block1, block2) in cube1
                 .raw_event_lists
                 .iter()
@@ -386,8 +416,8 @@ mod tests {
                 for (row1, row2) in block1.iter().zip(block2.iter()) {
                     for (px1, px2) in row1.iter().zip(row2.iter()) {
                         if !px1.is_empty() {
-                            pixel_count += 1;
-                            for (elem1, elem2) in px1.iter().zip(px2.iter()) {
+                            for ((idx, elem1), elem2) in px1.iter().enumerate().zip(px2.iter()) {
+                                pixel_count += 1;
                                 assert!(elem1.t == elem2.t || px2.is_empty());
                             }
                         } else {

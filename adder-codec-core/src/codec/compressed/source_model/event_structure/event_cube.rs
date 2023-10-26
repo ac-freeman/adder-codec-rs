@@ -145,11 +145,10 @@ impl EventCube {
                             let tmp = (t_residual as i64) << bitshift_amt as i64;
 
                             // Shift it back for the event, so we base our next prediction on the reconstructed value!
-                            if bitshift_amt != 0 {
-                                event.t = (init.t as i64
-                                    + ((t_residual as i64) << bitshift_amt as i64))
-                                    as AbsoluteT;
-                            }
+
+                            event.t = (init.t as i64 + ((t_residual as i64) << bitshift_amt as i64))
+                                as AbsoluteT;
+
                             *init = *event;
                         } else {
                             panic!("No init event");
