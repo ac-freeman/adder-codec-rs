@@ -122,7 +122,12 @@ impl EventCube {
 
                         if let Some(init) = &mut init_event {
                             // Don't do any special prediction here (yet). Just predict the same t as previously found.
-                            let mut t_residual = (event.t as i32 - init.t as i32) as TResidual;
+                            let mut t_residual = (event.t as i32 - init.t as i32);
+                            assert!(t_residual > -32769 && t_residual < 32769);
+                            let t_residual = t_residual as TResidual;
+                            if t_residual == -31717 {
+                                dbg!(event.t, init.t);
+                            }
 
                             encoder.model.set_context(contexts.t_context);
 
