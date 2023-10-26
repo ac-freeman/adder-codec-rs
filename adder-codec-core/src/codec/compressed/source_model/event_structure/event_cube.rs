@@ -709,7 +709,7 @@ mod compression_tests {
     use crate::codec::compressed::source_model::event_structure::event_cube::EventCube;
     use crate::codec::compressed::source_model::{ComponentCompression, HandleEvent};
     use crate::codec::CodecMetadata;
-    use crate::{Coord, Event};
+    use crate::{Coord, DeltaT, Event};
     use arithmetic_coding::Encoder;
     use bitstream_io::{BigEndian, BitReader, BitWrite, BitWriter};
     use rand::prelude::StdRng;
@@ -742,6 +742,7 @@ mod compression_tests {
         let contexts = crate::codec::compressed::source_model::cabac_contexts::Contexts::new(
             &mut source_model,
             255,
+            2550,
         );
 
         let mut encoder = Encoder::new(source_model);
@@ -753,6 +754,7 @@ mod compression_tests {
         let contexts = crate::codec::compressed::source_model::cabac_contexts::Contexts::new(
             &mut source_model,
             255,
+            2550,
         );
         let mut decoder = arithmetic_coding::Decoder::new(source_model);
         let mut stream = BitReader::endian(Cursor::new(stream.into_writer()), BigEndian);
@@ -838,6 +840,7 @@ mod compression_tests {
         let contexts = crate::codec::compressed::source_model::cabac_contexts::Contexts::new(
             &mut source_model,
             255,
+            510,
         );
 
         let mut encoder = Encoder::new(source_model);
@@ -850,6 +853,7 @@ mod compression_tests {
         let contexts = crate::codec::compressed::source_model::cabac_contexts::Contexts::new(
             &mut source_model,
             255,
+            510
         );
         let mut decoder = arithmetic_coding::Decoder::new(source_model);
         let mut stream = BitReader::endian(Cursor::new(stream.into_writer()), BigEndian);
@@ -893,6 +897,7 @@ mod compression_tests {
         let contexts = crate::codec::compressed::source_model::cabac_contexts::Contexts::new(
             &mut source_model,
             255,
+            2550,
         );
 
         let mut encoder = Encoder::new(source_model);
@@ -905,6 +910,7 @@ mod compression_tests {
         let contexts = crate::codec::compressed::source_model::cabac_contexts::Contexts::new(
             &mut source_model,
             255,
+            2550,
         );
         let mut decoder = arithmetic_coding::Decoder::new(source_model);
         let mut stream = BitReader::endian(Cursor::new(stream.into_writer()), BigEndian);
@@ -967,6 +973,7 @@ mod compression_tests {
         let contexts = crate::codec::compressed::source_model::cabac_contexts::Contexts::new(
             &mut source_model,
             255,
+            255*num_intervals as DeltaT
         );
 
         let mut encoder = Encoder::new(source_model);
@@ -979,6 +986,7 @@ mod compression_tests {
         let contexts = crate::codec::compressed::source_model::cabac_contexts::Contexts::new(
             &mut source_model,
             255,
+            255*num_intervals as DeltaT
         );
         let mut decoder = arithmetic_coding::Decoder::new(source_model);
         let mut stream = BitReader::endian(Cursor::new(stream.into_writer()), BigEndian);
@@ -1049,6 +1057,7 @@ mod compression_tests {
         let contexts = crate::codec::compressed::source_model::cabac_contexts::Contexts::new(
             &mut source_model,
             255,
+            255*num_intervals as DeltaT
         );
 
         let mut encoder = Encoder::new(source_model);
@@ -1061,6 +1070,7 @@ mod compression_tests {
         let contexts = crate::codec::compressed::source_model::cabac_contexts::Contexts::new(
             &mut source_model,
             255,
+            255*num_intervals as DeltaT
         );
         let mut decoder = arithmetic_coding::Decoder::new(source_model);
         let mut stream = BitReader::endian(Cursor::new(stream.into_writer()), BigEndian);
