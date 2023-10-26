@@ -1,5 +1,6 @@
 use crate::codec::compressed::fenwick::context_switching::FenwickModel;
 use crate::codec::compressed::fenwick::Weights;
+use crate::codec::compressed::TResidual;
 use crate::codec::CodecMetadata;
 use crate::DeltaT;
 use arithmetic_coding::Encoder;
@@ -15,24 +16,54 @@ pub struct Contexts {
     /// Timestamp residuals context
     pub(crate) t_context: usize,
 
+    t_residual_max: TResidual,
+
     /// EOF context
     pub(crate) eof_context: usize,
+
+    pub(crate) bitshift_context: usize,
 }
 
 impl Contexts {
     pub fn new(source_model: &mut FenwickModel, ref_interval: DeltaT) -> Contexts {
         let d_context = source_model.push_context_with_weights(d_residual_default_weights());
         let dtref_context = source_model.push_context_with_weights(d_residual_default_weights());
-        let t_context =
-            source_model.push_context_with_weights(t_residual_default_weights(ref_interval));
+
+        let t_weights = t_residual_default_weights(ref_interval);
+        let t_residual_max = (t_weights.len() as TResidual - 2) / 2;
+        let t_context = source_model.push_context_with_weights(t_weights);
+
         let eof_context =
             source_model.push_context_with_weights(Weights::new_with_counts(1, &vec![1]));
+        let bitshift_context =
+            source_model.push_context_with_weights(Weights::new_with_counts(15, &vec![1; 15]));
 
         Contexts {
             d_context,
             dtref_context,
             t_context,
+            t_residual_max,
             eof_context,
+            bitshift_context,
+        }
+    }
+
+    /// Find out how much we need to bitshift the t_residual to fit within the range of the model
+    pub(crate) fn residual_to_bitshift(&self, t_residual_i32: i32) -> (u8, TResidual) {
+        if t_residual_i32.abs() < self.t_residual_max as i32 {
+            (0, t_residual_i32 as TResidual)
+        } else {
+            let mut bitshift = 0;
+            let mut t_residual = t_residual_i32.abs() as TResidual;
+            while t_residual > self.t_residual_max {
+                t_residual >>= 1;
+                bitshift += 1;
+            }
+            if t_residual_i32 < 0 {
+                (bitshift + 1, -t_residual as TResidual)
+            } else {
+                (bitshift + 1, t_residual as TResidual)
+            }
         }
     }
 }
@@ -43,8 +74,8 @@ pub fn t_residual_default_weights(dt_ref: DeltaT) -> Weights {
     // After we've indexed into the correct interval, our timestamp residual can span [-dt_ref, dt_ref]
 
     // We have dt_max/dt_ref count of intervals per adu
-    let mut counts: Vec<u64> = vec![1; u16::MAX as usize];
-    // let mut counts: Vec<u64> = vec![1; (dt_ref * 2 + 1) as usize];
+    // let mut counts: Vec<u64> = vec![1; u16::MAX as usize];
+    let mut counts: Vec<u64> = vec![1; (dt_ref * 2 + 1) as usize];
 
     // Give higher probability to smaller residuals
     for i in counts.len() / 3..counts.len() * 2 / 3 {

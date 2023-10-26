@@ -321,9 +321,7 @@ mod tests {
                         if !px1.is_empty() {
                             pixel_count += 1;
                             for (elem1, elem2) in px1.iter().zip(px2.iter()) {
-                                let (a, b) = elem1;
-                                let (c, d) = elem2;
-                                assert!(b.t == d.t || px2.is_empty());
+                                assert!(elem1.t == elem2.t || px2.is_empty());
                             }
                         } else {
                             assert!(px1 == px2 || px2.is_empty());
@@ -390,9 +388,7 @@ mod tests {
                         if !px1.is_empty() {
                             pixel_count += 1;
                             for (elem1, elem2) in px1.iter().zip(px2.iter()) {
-                                let (a, b) = elem1;
-                                let (c, d) = elem2;
-                                assert!(b.t == d.t || px2.is_empty());
+                                assert!(elem1.t == elem2.t || px2.is_empty());
                             }
                         } else {
                             assert!(px1 == px2 || px2.is_empty());

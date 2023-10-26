@@ -73,7 +73,7 @@ impl Weights {
         lower..upper
     }
 
-    fn len(&self) -> usize {
+    pub fn len(&self) -> usize {
         self.fenwick_counts.len() - 1
     }
 
