@@ -511,7 +511,7 @@ impl EventCube {
             self.raw_event_lists[c].iter_mut().for_each(|row| {
                 row.iter_mut().for_each(|pixel| {
                     if !pixel.is_empty() {
-                        let mut idx = 2;
+                        let mut idx = 1;
                         let mut last_delta_t: DeltaT = 0;
                         loop {
                             encoder.model.set_context(contexts.d_context);
@@ -605,7 +605,7 @@ impl EventCube {
                 row.iter_mut().for_each(|mut pixel| {
                     if !pixel.is_empty() {
                         // Then look for the next events for this pixel
-                        let mut idx = 2;
+                        let mut idx = 1;
                         let mut last_delta_t = 0;
                         loop {
                             decoder.model.set_context(contexts.d_context);
@@ -687,26 +687,26 @@ fn generate_t_prediction(
     dt_ref: DeltaT,
     start_t: AbsoluteT,
 ) -> AbsoluteT {
-    // if idx == 1 {
-    //     // We don't have a deltaT context, so just predict double the dtref of the previous event
-    //     start_t + dt_ref as AbsoluteT * idx as AbsoluteT
-    // } else {
-    if d_residual.abs() > 14 {
-        d_residual = 0;
-    }
-    // We've gotten the DeltaT between the last two events. Use that
-    // to form our prediction
-    let delta_t_prediction: DeltaT = if d_residual < 0 {
-        last_delta_t >> -d_residual
+    if idx == 1 {
+        // We don't have a deltaT context, so just predict double the dtref of the previous event
+        start_t + dt_ref as AbsoluteT * idx as AbsoluteT
     } else {
-        last_delta_t << d_residual
-    };
-    max(
-        prev_event.t,
-        prev_event.t
-            + min(delta_t_prediction, ((num_intervals as u8) as u32 * dt_ref)) as AbsoluteT,
-    )
-    // }
+        if d_residual.abs() > 14 {
+            d_residual = 0;
+        }
+        // We've gotten the DeltaT between the last two events. Use that
+        // to form our prediction
+        let delta_t_prediction: DeltaT = if d_residual < 0 {
+            last_delta_t >> -d_residual
+        } else {
+            last_delta_t << d_residual
+        };
+        max(
+            prev_event.t,
+            prev_event.t
+                + min(delta_t_prediction, ((num_intervals as u8) as u32 * dt_ref)) as AbsoluteT,
+        )
+    }
 }
 
 impl HandleEvent for EventCube {
@@ -909,7 +909,7 @@ impl ComponentCompression for EventCube {
     ) -> Result<(), CodecError> {
         self.compress_intra(encoder, contexts, stream)?;
         if !self.skip_cube {
-            self.compress_intra_round2(encoder, contexts, stream)?;
+            // self.compress_intra_round2(encoder, contexts, stream)?;
             self.compress_inter(encoder, contexts, stream)?;
         }
         Ok(())
@@ -938,7 +938,7 @@ impl ComponentCompression for EventCube {
             num_intervals,
         );
         if !cube.skip_cube {
-            cube.decompress_intra_round2(decoder, contexts, stream);
+            // cube.decompress_intra_round2(decoder, contexts, stream);
             cube.decompress_inter(decoder, contexts, stream);
         }
         cube
