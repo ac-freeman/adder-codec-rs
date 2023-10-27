@@ -687,26 +687,26 @@ fn generate_t_prediction(
     dt_ref: DeltaT,
     start_t: AbsoluteT,
 ) -> AbsoluteT {
-    if idx == 1 {
-        // We don't have a deltaT context, so just predict double the dtref of the previous event
-        start_t + dt_ref as AbsoluteT * idx as AbsoluteT
-    } else {
-        if d_residual.abs() > 14 {
-            d_residual = 0;
-        }
-        // We've gotten the DeltaT between the last two events. Use that
-        // to form our prediction
-        let delta_t_prediction: DeltaT = if d_residual < 0 {
-            last_delta_t >> -d_residual
-        } else {
-            last_delta_t << d_residual
-        };
-        max(
-            prev_event.t,
-            prev_event.t
-                + min(delta_t_prediction, ((num_intervals as u8) as u32 * dt_ref)) as AbsoluteT,
-        )
+    // if idx == 1 {
+    //     // We don't have a deltaT context, so just predict double the dtref of the previous event
+    //     start_t + dt_ref as AbsoluteT * idx as AbsoluteT
+    // } else {
+    if d_residual.abs() > 14 {
+        d_residual = 0;
     }
+    // We've gotten the DeltaT between the last two events. Use that
+    // to form our prediction
+    let delta_t_prediction: DeltaT = if d_residual < 0 {
+        last_delta_t >> -d_residual
+    } else {
+        last_delta_t << d_residual
+    };
+    max(
+        prev_event.t,
+        prev_event.t
+            + min(delta_t_prediction, ((num_intervals as u8) as u32 * dt_ref)) as AbsoluteT,
+    )
+    // }
 }
 
 impl HandleEvent for EventCube {
