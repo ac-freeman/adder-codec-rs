@@ -229,7 +229,10 @@ impl<R: Read + Seek> Decoder<R> {
         reader: &mut BitReader<R, BigEndian>,
     ) -> Result<u64, CodecError> {
         for i in self.input.meta().event_size as i64..10 {
-            reader.seek_bits(SeekFrom::End(i * 8))?;
+            // TODO: Make this work differently on raw vs. compressed stream
+            reader.seek_bits(SeekFrom::End(
+                i * self.input.meta().plane.volume() as i64 * 8,
+            ))?;
             if let Err(CodecError::Eof) = self.digest_event(reader) {
                 break;
             }
