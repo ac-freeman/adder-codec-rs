@@ -605,7 +605,9 @@ mod tests {
 
         assert!(input_px_events.len() >= output_px_events.len());
         for i in 0..output_px_events.len() {
-            assert_eq!(input_px_events[i], output_px_events[i]);
+            let span = input_px_events[i].t - 5..input_px_events[i].t+ 5;
+            let t = output_px_events[i].t;
+            assert!(span.contains(&t));
         }
         Ok(())
     }

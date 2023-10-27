@@ -28,6 +28,8 @@ pub struct Contexts {
 
 pub const D_RESIDUAL_OFFSET: i16 = 255;
 
+pub const BITSHIFT_ENCODE_FULL: u8 = 15;
+
 impl Contexts {
     pub fn new(source_model: &mut FenwickModel, dt_ref: DeltaT, dt_max: DeltaT) -> Contexts {
         let d_context = source_model.push_context_with_weights(d_residual_default_weights());
@@ -41,7 +43,7 @@ impl Contexts {
         let eof_context =
             source_model.push_context_with_weights(Weights::new_with_counts(1, &vec![1]));
         let bitshift_context =
-            source_model.push_context_with_weights(Weights::new_with_counts(15, &vec![1; 15]));
+            source_model.push_context_with_weights(Weights::new_with_counts(16, &vec![1; 16]));
 
         Contexts {
             d_context,
@@ -59,10 +61,13 @@ impl Contexts {
     }
 
     /// Find out how much we need to bitshift the t_residual to fit within the range of the model
-    pub(crate) fn residual_to_bitshift(&self, t_residual_i64: i64) -> (u8, TResidual) {
+    pub(crate) fn residual_to_bitshift(&self, t_residual_i64: i64) -> (u8, i64) {
         if t_residual_i64.abs() < self.t_residual_max as i64 {
-            (0, t_residual_i64 as TResidual)
-        } else {
+            (0, t_residual_i64)
+        } else if t_residual_i64.abs() > self.dt_max {
+            (BITSHIFT_ENCODE_FULL, t_residual_i64)
+        }
+        else {
             let mut bitshift = 0;
             let mut t_residual = t_residual_i64.abs();
             while t_residual > self.t_residual_max {
@@ -70,9 +75,9 @@ impl Contexts {
                 bitshift += 1;
             }
             if t_residual_i64 < 0 {
-                (bitshift, -t_residual as TResidual)
+                (bitshift, -t_residual)
             } else {
-                (bitshift, t_residual as TResidual)
+                (bitshift, t_residual)
             }
         }
     }
@@ -84,17 +89,21 @@ pub fn t_residual_default_weights(dt_ref: DeltaT) -> Weights {
     // After we've indexed into the correct interval, our timestamp residual can span [-dt_ref, dt_ref]
 
     // We have dt_max/dt_ref count of intervals per adu
-    let mut counts: Vec<u64> = vec![1; (dt_ref * 100 + 1) as usize];
+    let mut counts: Vec<u64> = vec![1; (u8::MAX as usize + 1)];
     // let mut counts: Vec<u64> = vec![1; u16::MAX as usize];
 
     // Give higher probability to smaller residuals
-    for i in counts.len() / 3..counts.len() * 2 / 3 {
-        counts[i] = 5;
+    // for i in counts.len() / 3..counts.len() * 2 / 3 {
+    //     counts[i] = 5;
+    // }
+    // let len = counts.len();
+    // counts[len / 2] = 10;
+    // counts[len / 2 - 1] = 10;
+    // counts[len / 2 + 1] = 10;
+    counts[0] = 100;
+    for i in 0..10 {
+        counts[i] = 10;
     }
-    let len = counts.len();
-    counts[len / 2] = 10;
-    counts[len / 2 - 1] = 10;
-    counts[len / 2 + 1] = 10;
 
     Weights::new_with_counts(counts.len(), &counts)
 }
