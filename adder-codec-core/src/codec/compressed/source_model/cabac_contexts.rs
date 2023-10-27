@@ -64,22 +64,25 @@ impl Contexts {
     pub(crate) fn residual_to_bitshift(&self, t_residual_i64: i64) -> (u8, i64) {
         if t_residual_i64.abs() < self.t_residual_max as i64 {
             (0, t_residual_i64)
-        } else if t_residual_i64.abs() > self.dt_max {
+            // } else if t_residual_i64.abs() > self.dt_max {
+        } else {
+
+            // JUST LOSSLESS FOR NOW
             (BITSHIFT_ENCODE_FULL, t_residual_i64)
         }
-        else {
-            let mut bitshift = 0;
-            let mut t_residual = t_residual_i64.abs();
-            while t_residual > self.t_residual_max {
-                t_residual >>= 1;
-                bitshift += 1;
-            }
-            if t_residual_i64 < 0 {
-                (bitshift, -t_residual)
-            } else {
-                (bitshift, t_residual)
-            }
-        }
+        // else {
+        //     let mut bitshift = 0;
+        //     let mut t_residual = t_residual_i64.abs();
+        //     while t_residual > self.t_residual_max {
+        //         t_residual >>= 1;
+        //         bitshift += 1;
+        //     }
+        //     if t_residual_i64 < 0 {
+        //         (bitshift, -t_residual)
+        //     } else {
+        //         (bitshift, t_residual)
+        //     }
+        // }
     }
 }
 
