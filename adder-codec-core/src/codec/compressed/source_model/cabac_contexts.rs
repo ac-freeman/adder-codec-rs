@@ -2,7 +2,7 @@ use crate::codec::compressed::fenwick::context_switching::FenwickModel;
 use crate::codec::compressed::fenwick::Weights;
 use crate::codec::compressed::TResidual;
 use crate::codec::CodecMetadata;
-use crate::{AbsoluteT, DeltaT};
+use crate::{AbsoluteT, DeltaT, EventCoordless, Intensity, D, D_SHIFT};
 use arithmetic_coding::Encoder;
 use bitstream_io::{BigEndian, BitWrite, BitWriter};
 
@@ -66,7 +66,6 @@ impl Contexts {
             (0, t_residual_i64)
             // } else if t_residual_i64.abs() > self.dt_max {
         } else {
-
             // JUST LOSSLESS FOR NOW
             (BITSHIFT_ENCODE_FULL, t_residual_i64)
         }
@@ -83,6 +82,73 @@ impl Contexts {
         //         (bitshift, t_residual)
         //     }
         // }
+    }
+
+    fn event_to_intensity(&self, d: D, delta_t: DeltaT, dt_ref: DeltaT) -> f64 {
+        let intensity = match d as usize {
+            a if a >= D_SHIFT.len() => f64::from(0),
+            _ => match delta_t {
+                0 => D_SHIFT[d as usize] as Intensity, // treat it as dt = 1
+                _ => D_SHIFT[d as usize] as Intensity / f64::from(delta_t),
+            },
+        };
+        intensity * dt_ref as f64
+    }
+
+    pub(crate) fn residual_to_bitshift2(
+        &self,
+        t_prediction: i64,
+        t_residual_i64: i64,
+        event: &mut EventCoordless,
+        prev_event: &EventCoordless,
+        dt_ref: DeltaT,
+    ) -> (u8, i64) {
+        if t_residual_i64.abs() < self.t_residual_max as i64 {
+            (0, t_residual_i64)
+            // } else if t_residual_i64.abs() > self.dt_max {
+        }
+        // else {
+        //
+        //     // JUST LOSSLESS FOR NOW
+        //     (BITSHIFT_ENCODE_FULL, t_residual_i64)
+        // }
+        else {
+            let actual_dt = event.t - prev_event.t;
+            let actual_intensity = self.event_to_intensity(event.d, actual_dt, dt_ref);
+            let mut recon_intensity = actual_intensity;
+            let mut bitshift = 0;
+            let mut t_residual = t_residual_i64.abs();
+            loop {
+                if t_residual > self.t_residual_max
+                    && actual_intensity - 10.0 < recon_intensity
+                    && actual_intensity + 10.0 > recon_intensity
+                {
+                    if bitshift > 1 {
+                        eprintln!("made it {}", bitshift);
+                    }
+
+                    t_residual >>= 1;
+                    bitshift += 1;
+                    let recon_predicted_t = (t_prediction + t_residual) as AbsoluteT;
+                    if recon_predicted_t < prev_event.t {
+                        break;
+                    }
+                    let recon_predicted_dt = recon_predicted_t - prev_event.t;
+                    recon_intensity = self.event_to_intensity(event.d, recon_predicted_dt, dt_ref);
+                } else {
+                    break;
+                }
+            }
+            if bitshift > 0 {
+                bitshift -= 1;
+            }
+            t_residual = t_residual_i64.abs() >> bitshift;
+            if t_residual_i64 < 0 {
+                (bitshift, -t_residual)
+            } else {
+                (bitshift, t_residual)
+            }
+        }
     }
 }
 

@@ -138,6 +138,13 @@ impl EventCube {
                             let mut t_residual_i64 = (event.t as i64 - init.t as i64);
                             let (bitshift_amt, mut t_residual) =
                                 contexts.residual_to_bitshift(t_residual_i64);
+                            // contexts.residual_to_bitshift2(
+                            //     init.t as i64,
+                            //     t_residual_i64,
+                            //     event,
+                            //     init,
+                            //     self.dt_ref
+                            // );
 
                             encoder.model.set_context(contexts.bitshift_context);
                             for byte in bitshift_amt.to_be_bytes().iter() {
@@ -168,6 +175,7 @@ impl EventCube {
                                     + ((t_residual as i64) << bitshift_amt as i64))
                                     as AbsoluteT;
                             }
+                            debug_assert!(event.t < 2_u32.pow(29));
 
                             *init = *event;
                         } else {
@@ -521,7 +529,8 @@ impl EventCube {
                                 let event = &mut pixel[idx];
 
                                 // Get the D residual
-                                let d_residual = event.d as DResidual - prev_event.d as DResidual;
+                                let mut d_residual =
+                                    event.d as DResidual - prev_event.d as DResidual;
                                 // Write the D residual (relative to the start_d for the first event)
                                 for byte in d_residual.to_be_bytes().iter() {
                                     encoder.encode(Some(&(*byte as usize)), stream).unwrap();
@@ -538,9 +547,16 @@ impl EventCube {
                                 );
 
                                 // encoder.model.set_context(contexts.dtref_context);
+                                let actual_delta_t = event.t - prev_event.t;
                                 let mut t_residual_i64 = (event.t as i64 - t_prediction as i64);
-                                let (bitshift_amt, mut t_residual) =
-                                    contexts.residual_to_bitshift(t_residual_i64);
+                                let (bitshift_amt, mut t_residual) = contexts
+                                    .residual_to_bitshift2(
+                                        t_prediction as i64,
+                                        t_residual_i64,
+                                        event,
+                                        &prev_event,
+                                        self.dt_ref,
+                                    );
 
                                 encoder.model.set_context(contexts.bitshift_context);
                                 for byte in bitshift_amt.to_be_bytes().iter() {
@@ -688,11 +704,14 @@ fn generate_t_prediction(
     start_t: AbsoluteT,
 ) -> AbsoluteT {
     if idx == 1 {
-        // We don't have a deltaT context, so just predict double the dtref of the previous event
-        start_t + dt_ref as AbsoluteT * idx as AbsoluteT
+        // We don't have a deltaT context
+        start_t + last_delta_t as AbsoluteT
     } else {
         if d_residual.abs() > 14 {
             d_residual = 0;
+        }
+        if prev_event.d == D_EMPTY {
+            d_residual = -1;
         }
         // We've gotten the DeltaT between the last two events. Use that
         // to form our prediction
