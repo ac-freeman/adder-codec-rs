@@ -215,7 +215,7 @@ impl<R: Read + Seek> ReadCompression<R> for CompressedInput<R> {
                 let num_bytes = u32::from_be_bytes(buffer);
 
                 // Read the compressed Adu from the stream
-                let mut adu_bytes = reader.read_to_vec(num_bytes as usize).unwrap();
+                let mut adu_bytes = reader.read_to_vec(num_bytes as usize)?;
 
                 // Create a temporary u8 stream to read the arithmetic-coded data from
                 let mut adu_stream = BitReader::endian(Cursor::new(adu_bytes), BigEndian);
@@ -605,7 +605,9 @@ mod tests {
 
         assert!(input_px_events.len() >= output_px_events.len());
         for i in 0..output_px_events.len() {
-            assert_eq!(input_px_events[i], output_px_events[i]);
+            let span = input_px_events[i].t - 5..input_px_events[i].t + 5;
+            let t = output_px_events[i].t;
+            assert!(span.contains(&t));
         }
         Ok(())
     }

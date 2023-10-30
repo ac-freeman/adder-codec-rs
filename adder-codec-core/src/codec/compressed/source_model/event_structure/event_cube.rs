@@ -1,5 +1,7 @@
 use crate::codec::compressed::fenwick::context_switching::FenwickModel;
-use crate::codec::compressed::source_model::cabac_contexts::{Contexts, D_RESIDUAL_OFFSET};
+use crate::codec::compressed::source_model::cabac_contexts::{
+    Contexts, BITSHIFT_ENCODE_FULL, D_RESIDUAL_OFFSET,
+};
 use crate::codec::compressed::source_model::event_structure::{BLOCK_SIZE, BLOCK_SIZE_AREA};
 use crate::codec::compressed::source_model::{ComponentCompression, HandleEvent};
 use crate::codec::compressed::{DResidual, TResidual, DRESIDUAL_NO_EVENT, DRESIDUAL_SKIP_CUBE};
@@ -16,6 +18,8 @@ use std::mem::size_of;
 
 type Pixel = Vec<EventCoordless>;
 
+type EventLists = [[[Pixel; BLOCK_SIZE]; BLOCK_SIZE]; 3];
+
 #[derive(PartialEq, Debug, Clone, Default)]
 pub struct EventCube {
     /// The absolute y-coordinate of the top-left pixel in the cube
@@ -27,7 +31,7 @@ pub struct EventCube {
     num_channels: usize,
 
     /// Contains the sparse events in the cube. The index is the relative interval of dt_ref from the start
-    pub(crate) raw_event_lists: [[[Pixel; BLOCK_SIZE]; BLOCK_SIZE]; 3],
+    pub(crate) raw_event_lists: EventLists,
 
     /// The absolute time of the cube's beginning (not necessarily aligned to an event. We structure
     /// cubes to be in temporal lockstep at the beginning.)
@@ -134,6 +138,13 @@ impl EventCube {
                             let mut t_residual_i64 = (event.t as i64 - init.t as i64);
                             let (bitshift_amt, mut t_residual) =
                                 contexts.residual_to_bitshift(t_residual_i64);
+                            // contexts.residual_to_bitshift2(
+                            //     init.t as i64,
+                            //     t_residual_i64,
+                            //     event,
+                            //     init,
+                            //     self.dt_ref
+                            // );
 
                             encoder.model.set_context(contexts.bitshift_context);
                             for byte in bitshift_amt.to_be_bytes().iter() {
@@ -148,15 +159,23 @@ impl EventCube {
 
                             encoder.model.set_context(contexts.t_context);
 
-                            for byte in t_residual.to_be_bytes().iter() {
-                                encoder.encode(Some(&(*byte as usize)), stream).unwrap();
+                            if bitshift_amt == BITSHIFT_ENCODE_FULL {
+                                for byte in t_residual.to_be_bytes().iter() {
+                                    encoder.encode(Some(&(*byte as usize)), stream).unwrap();
+                                }
+                                event.t = (init.t as i64 + t_residual) as AbsoluteT;
+                            } else {
+                                let t_residual = t_residual as TResidual;
+                                for byte in t_residual.to_be_bytes().iter() {
+                                    encoder.encode(Some(&(*byte as usize)), stream).unwrap();
+                                }
+                                // Shift it back for the event, so we base our next prediction on the reconstructed value!
+                                // if bitshift_amt != 0 {
+                                event.t = (init.t as i64
+                                    + ((t_residual as i64) << bitshift_amt as i64))
+                                    as AbsoluteT;
                             }
-                            let tmp = (t_residual as i64) << bitshift_amt as i64;
-
-                            // Shift it back for the event, so we base our next prediction on the reconstructed value!
-
-                            event.t = (init.t as i64 + ((t_residual as i64) << bitshift_amt as i64))
-                                as AbsoluteT;
+                            debug_assert!(event.t < 2_u32.pow(29));
 
                             *init = *event;
                         } else {
@@ -200,6 +219,7 @@ impl EventCube {
         let mut bitshift_buffer = [0u8; 1];
         let mut dtref_residual_buffer = [0u8; size_of::<TResidual>()];
         let mut t_residual_buffer = [0u8; size_of::<TResidual>()];
+        let mut t_residual_full_buffer = [0u8; size_of::<i64>()];
         let mut init_event: Option<EventCoordless> = None;
 
         for c in 0..cube.num_channels {
@@ -209,14 +229,12 @@ impl EventCube {
 
                     decoder.model.set_context(contexts.d_context);
 
-
                     let tmp = decoder.decode(stream).unwrap().unwrap() as usize;
                     let d_residual = tmp as i16 - D_RESIDUAL_OFFSET;
                     // for byte in d_residual_buffer.iter_mut() {
                     //     *byte = decoder.decode(stream).unwrap().unwrap() as u8;
                     // }
                     // let d_residual = DResidual::from_be_bytes(d_residual_buffer);
-
 
                     if d_residual == DRESIDUAL_SKIP_CUBE {
                         pixel.clear(); // So we can skip it for intra-coding
@@ -245,17 +263,23 @@ impl EventCube {
                             for byte in bitshift_buffer.iter_mut() {
                                 *byte = decoder.decode(stream).unwrap().unwrap() as u8;
                             }
-
-                            decoder.model.set_context(contexts.t_context);
-                            for byte in t_residual_buffer.iter_mut() {
-                                *byte = decoder.decode(stream).unwrap().unwrap() as u8;
-                            }
-                            let mut t_residual = TResidual::from_be_bytes(t_residual_buffer) as i64;
-
                             let bitshift_amt = bitshift_buffer[0] as u8;
-                            t_residual <<= bitshift_amt as i64;
 
-                            // t_residual += dtref_residual * dt_ref as DResidual;
+                            let t_residual = if bitshift_amt == BITSHIFT_ENCODE_FULL {
+                                decoder.model.set_context(contexts.t_context);
+                                for byte in t_residual_full_buffer.iter_mut() {
+                                    *byte = decoder.decode(stream).unwrap().unwrap() as u8;
+                                }
+                                i64::from_be_bytes(t_residual_full_buffer)
+                            } else {
+                                decoder.model.set_context(contexts.t_context);
+                                for byte in t_residual_buffer.iter_mut() {
+                                    *byte = decoder.decode(stream).unwrap().unwrap() as u8;
+                                }
+                                let mut t_residual =
+                                    TResidual::from_be_bytes(t_residual_buffer) as i64;
+                                (t_residual as i64) << bitshift_amt as i64
+                            };
 
                             init.d = (init.d as DResidual + d_residual) as D;
 
@@ -275,13 +299,222 @@ impl EventCube {
         cube
     }
 
+    fn compress_intra_round2(
+        &mut self,
+        encoder: &mut Encoder<FenwickModel, BitWriter<Vec<u8>, BigEndian>>,
+        contexts: &Contexts,
+        stream: &mut BitWriter<Vec<u8>, BigEndian>,
+    ) -> Result<(), CodecError> {
+        let mut last_delta_event_opt: Option<EventCoordless> = None;
+
+        for c in 0..self.num_channels {
+            self.raw_event_lists[c].iter_mut().for_each(|row| {
+                row.iter_mut().for_each(|pixel| {
+                    if !pixel.is_empty() {
+                        let mut idx = 1;
+
+                        let mut prev_event = pixel[idx - 1]; // We can assume for now that this is perfectly decoded, but later we'll corrupt it according to any loss we incur
+
+                        encoder.model.set_context(contexts.d_context);
+
+                        let mut d_residual;
+                        let mut t_prediction;
+
+                        if idx < pixel.len() {
+                            let event = &mut pixel[idx];
+
+                            if let Some(last_delta_event) = last_delta_event_opt {
+                                // Initialize it with this first event
+                                // Get the D residual relative to the previous PIXEL
+                                d_residual = event.d as DResidual - last_delta_event.d as DResidual;
+
+                                t_prediction = generate_t_prediction(
+                                    idx,
+                                    d_residual,
+                                    last_delta_event.t, // The previous pixel's last DeltaT
+                                    &prev_event,
+                                    self.num_intervals,
+                                    self.dt_ref,
+                                    self.start_t,
+                                );
+                            } else {
+                                // First pixel in the cube; get the D residual relative to its previous event
+                                d_residual = event.d as DResidual - prev_event.d as DResidual;
+
+                                t_prediction = generate_t_prediction(
+                                    idx,
+                                    d_residual,
+                                    self.dt_ref,
+                                    &prev_event,
+                                    self.num_intervals,
+                                    self.dt_ref,
+                                    self.start_t,
+                                );
+                            }
+
+                            // Write the D residual
+                            for byte in d_residual.to_be_bytes().iter() {
+                                encoder.encode(Some(&(*byte as usize)), stream).unwrap();
+                            }
+                            let mut t_residual_i64 = (event.t as i64 - t_prediction as i64);
+                            let (bitshift_amt, mut t_residual) =
+                                contexts.residual_to_bitshift(t_residual_i64);
+                            encoder.model.set_context(contexts.bitshift_context);
+                            for byte in bitshift_amt.to_be_bytes().iter() {
+                                encoder.encode(Some(&(*byte as usize)), stream).unwrap();
+                            }
+                            encoder.model.set_context(contexts.t_context);
+                            if bitshift_amt == BITSHIFT_ENCODE_FULL {
+                                for byte in t_residual.to_be_bytes().iter() {
+                                    encoder.encode(Some(&(*byte as usize)), stream).unwrap();
+                                }
+                                event.t = (t_prediction as i64 + t_residual) as AbsoluteT;
+                            } else {
+                                let t_residual = t_residual as TResidual;
+                                for byte in t_residual.to_be_bytes().iter() {
+                                    encoder.encode(Some(&(*byte as usize)), stream).unwrap();
+                                }
+                                // Shift it back for the event, so we base our next prediction on the reconstructed value!
+                                event.t = (t_prediction as i64
+                                    + ((t_residual as i64) << bitshift_amt as i64))
+                                    as AbsoluteT;
+                            }
+
+                            event.t = max(event.t, prev_event.t);
+
+                            last_delta_event_opt = Some(EventCoordless {
+                                d: event.d,
+                                t: (event.t - prev_event.t) as DeltaT,
+                            })
+                        } else {
+                            encoder.model.set_context(contexts.d_context);
+                            // Else there's no other event for this pixel. Encode a NO_EVENT symbol.
+                            for byte in (DRESIDUAL_NO_EVENT).to_be_bytes().iter() {
+                                encoder.encode(Some(&(*byte as usize)), stream).unwrap();
+                            }
+                        }
+                        idx += 1;
+                    }
+                })
+            })
+        }
+        Ok(())
+    }
+
+    fn decompress_intra_round2(
+        &mut self,
+        decoder: &mut Decoder<FenwickModel, BitReader<Cursor<Vec<u8>>, BigEndian>>,
+        contexts: &Contexts,
+        stream: &mut BitReader<Cursor<Vec<u8>>, BigEndian>,
+    ) {
+        let mut d_residual_buffer = [0u8; size_of::<DResidual>()];
+        let mut dtref_residual_buffer = [0u8; size_of::<TResidual>()];
+        let mut t_residual_buffer = [0u8; size_of::<TResidual>()];
+        let mut t_residual_full_buffer = [0u8; size_of::<i64>()];
+        let mut bitshift_buffer = [0u8; 1];
+        let mut init_event: Option<EventCoordless> = None;
+
+        let mut last_delta_event_opt: Option<EventCoordless> = None;
+
+        for c in 0..self.num_channels {
+            self.raw_event_lists[c].iter_mut().for_each(|row| {
+                row.iter_mut().for_each(|mut pixel| {
+                    if !pixel.is_empty() {
+                        // Then look for the next events for this pixel
+                        let mut idx = 1;
+                        let mut last_delta_t = 0;
+
+                        debug_assert!(idx - 1 < pixel.len());
+                        let mut prev_event = pixel[idx - 1];
+                        decoder.model.set_context(contexts.d_context);
+
+                        for byte in d_residual_buffer.iter_mut() {
+                            *byte = decoder.decode(stream).unwrap().unwrap() as u8;
+                        }
+                        let d_residual = DResidual::from_be_bytes(d_residual_buffer);
+
+                        let mut d;
+                        let mut t_prediction;
+                        if d_residual != DRESIDUAL_NO_EVENT {
+                            if let Some(last_delta_event) = last_delta_event_opt {
+                                d = (last_delta_event.d as DResidual + d_residual) as D;
+
+                                t_prediction = generate_t_prediction(
+                                    idx,
+                                    d_residual,
+                                    last_delta_event.t,
+                                    &prev_event,
+                                    self.num_intervals,
+                                    self.dt_ref,
+                                    self.start_t,
+                                );
+                            } else {
+                                d = (prev_event.d as DResidual + d_residual) as D;
+
+                                t_prediction = generate_t_prediction(
+                                    idx,
+                                    d_residual,
+                                    self.dt_ref,
+                                    &prev_event,
+                                    self.num_intervals,
+                                    self.dt_ref,
+                                    self.start_t,
+                                );
+                            }
+
+                            decoder.model.set_context(contexts.bitshift_context);
+                            for byte in bitshift_buffer.iter_mut() {
+                                *byte = decoder.decode(stream).unwrap().unwrap() as u8;
+                            }
+                            let bitshift_amt = bitshift_buffer[0] as u8;
+
+                            let t_residual = if bitshift_amt == BITSHIFT_ENCODE_FULL {
+                                decoder.model.set_context(contexts.t_context);
+                                for byte in t_residual_full_buffer.iter_mut() {
+                                    *byte = decoder.decode(stream).unwrap().unwrap() as u8;
+                                }
+                                i64::from_be_bytes(t_residual_full_buffer) as i64
+                            } else {
+                                decoder.model.set_context(contexts.t_context);
+                                for byte in t_residual_buffer.iter_mut() {
+                                    *byte = decoder.decode(stream).unwrap().unwrap() as u8;
+                                }
+                                let mut t_residual =
+                                    TResidual::from_be_bytes(t_residual_buffer) as i64;
+                                (t_residual as i64) << bitshift_amt as i64
+                            };
+
+                            let t = max(
+                                (t_prediction as i64 + t_residual as i64) as AbsoluteT,
+                                prev_event.t,
+                            );
+                            if t == 511 {
+                                dbg!(t);
+                            }
+                            assert!(t >= prev_event.t);
+                            last_delta_event_opt = Some(EventCoordless {
+                                d,
+                                t: (t - prev_event.t) as DeltaT,
+                            });
+                            // debug_assert!(
+                            //     t <= self.start_t + self.num_intervals as AbsoluteT * self.dt_ref
+                            // );
+                            pixel.push(EventCoordless { d, t });
+
+                            idx += 1;
+                        }
+                    }
+                });
+            });
+        }
+    }
+
     fn compress_inter(
         &mut self,
         encoder: &mut Encoder<FenwickModel, BitWriter<Vec<u8>, BigEndian>>,
         contexts: &Contexts,
         stream: &mut BitWriter<Vec<u8>, BigEndian>,
     ) -> Result<(), CodecError> {
-        // Intra-code the first event (if present) for each pixel in row-major order
         for c in 0..self.num_channels {
             self.raw_event_lists[c].iter_mut().for_each(|row| {
                 row.iter_mut().for_each(|pixel| {
@@ -289,15 +522,15 @@ impl EventCube {
                         let mut idx = 1;
                         let mut last_delta_t: DeltaT = 0;
                         loop {
-                            let mut prev_event = pixel[idx - 1]; // We can assume for now that this is perfectly decoded, but later we'll corrupt it according to any loss we incur
-
                             encoder.model.set_context(contexts.d_context);
 
                             if idx < pixel.len() {
+                                let mut prev_event = pixel[idx - 1]; // We can assume for now that this is perfectly decoded, but later we'll corrupt it according to any loss we incur
                                 let event = &mut pixel[idx];
 
                                 // Get the D residual
-                                let d_residual = event.d as DResidual - prev_event.d as DResidual;
+                                let mut d_residual =
+                                    event.d as DResidual - prev_event.d as DResidual;
                                 // Write the D residual (relative to the start_d for the first event)
                                 for byte in d_residual.to_be_bytes().iter() {
                                     encoder.encode(Some(&(*byte as usize)), stream).unwrap();
@@ -314,9 +547,16 @@ impl EventCube {
                                 );
 
                                 // encoder.model.set_context(contexts.dtref_context);
+                                let actual_delta_t = event.t - prev_event.t;
                                 let mut t_residual_i64 = (event.t as i64 - t_prediction as i64);
-                                let (bitshift_amt, t_residual) =
-                                    contexts.residual_to_bitshift(t_residual_i64);
+                                let (bitshift_amt, mut t_residual) = contexts
+                                    .residual_to_bitshift2(
+                                        t_prediction as i64,
+                                        t_residual_i64,
+                                        event,
+                                        &prev_event,
+                                        self.dt_ref,
+                                    );
 
                                 encoder.model.set_context(contexts.bitshift_context);
                                 for byte in bitshift_amt.to_be_bytes().iter() {
@@ -325,15 +565,23 @@ impl EventCube {
 
                                 encoder.model.set_context(contexts.t_context);
 
-                                for byte in t_residual.to_be_bytes().iter() {
-                                    encoder.encode(Some(&(*byte as usize)), stream).unwrap();
+                                if bitshift_amt == BITSHIFT_ENCODE_FULL {
+                                    for byte in t_residual.to_be_bytes().iter() {
+                                        encoder.encode(Some(&(*byte as usize)), stream).unwrap();
+                                    }
+                                    event.t = (t_prediction as i64 + t_residual) as AbsoluteT;
+                                } else {
+                                    let t_residual = t_residual as TResidual;
+                                    for byte in t_residual.to_be_bytes().iter() {
+                                        encoder.encode(Some(&(*byte as usize)), stream).unwrap();
+                                    }
+                                    // Shift it back for the event, so we base our next prediction on the reconstructed value!
+                                    // if bitshift_amt != 0 {
+                                    event.t = (t_prediction as i64
+                                        + ((t_residual as i64) << bitshift_amt as i64))
+                                        as AbsoluteT;
                                 }
 
-                                // Shift it back for the event, so we base our next prediction on the reconstructed value!
-                                // if bitshift_amt != 0 {
-                                event.t = (t_prediction as i64
-                                    + ((t_residual as i64) << bitshift_amt as i64))
-                                    as AbsoluteT;
                                 event.t = max(event.t, prev_event.t);
                                 // }
                                 last_delta_t = (event.t - prev_event.t) as DeltaT;
@@ -364,6 +612,7 @@ impl EventCube {
         let mut d_residual_buffer = [0u8; size_of::<DResidual>()];
         let mut dtref_residual_buffer = [0u8; size_of::<TResidual>()];
         let mut t_residual_buffer = [0u8; size_of::<TResidual>()];
+        let mut t_residual_full_buffer = [0u8; size_of::<i64>()];
         let mut bitshift_buffer = [0u8; 1];
         let mut init_event: Option<EventCoordless> = None;
 
@@ -375,8 +624,6 @@ impl EventCube {
                         let mut idx = 1;
                         let mut last_delta_t = 0;
                         loop {
-                            debug_assert!(idx - 1 < pixel.len());
-                            let mut prev_event = pixel[idx - 1];
                             decoder.model.set_context(contexts.d_context);
 
                             for byte in d_residual_buffer.iter_mut() {
@@ -387,6 +634,8 @@ impl EventCube {
                             if d_residual == DRESIDUAL_NO_EVENT {
                                 break; // We have all the events for this pixel now
                             }
+                            debug_assert!(idx - 1 < pixel.len());
+                            let mut prev_event = pixel[idx - 1];
 
                             let d = (prev_event.d as DResidual + d_residual) as D;
 
@@ -404,15 +653,23 @@ impl EventCube {
                             for byte in bitshift_buffer.iter_mut() {
                                 *byte = decoder.decode(stream).unwrap().unwrap() as u8;
                             }
-
-                            decoder.model.set_context(contexts.t_context);
-                            for byte in t_residual_buffer.iter_mut() {
-                                *byte = decoder.decode(stream).unwrap().unwrap() as u8;
-                            }
-                            let mut t_residual = TResidual::from_be_bytes(t_residual_buffer) as i64;
-
                             let bitshift_amt = bitshift_buffer[0] as u8;
-                            t_residual <<= bitshift_amt as i64;
+
+                            let t_residual = if bitshift_amt == BITSHIFT_ENCODE_FULL {
+                                decoder.model.set_context(contexts.t_context);
+                                for byte in t_residual_full_buffer.iter_mut() {
+                                    *byte = decoder.decode(stream).unwrap().unwrap() as u8;
+                                }
+                                i64::from_be_bytes(t_residual_full_buffer) as i64
+                            } else {
+                                decoder.model.set_context(contexts.t_context);
+                                for byte in t_residual_buffer.iter_mut() {
+                                    *byte = decoder.decode(stream).unwrap().unwrap() as u8;
+                                }
+                                let mut t_residual =
+                                    TResidual::from_be_bytes(t_residual_buffer) as i64;
+                                (t_residual as i64) << bitshift_amt as i64
+                            };
 
                             let t = max(
                                 (t_prediction as i64 + t_residual as i64) as AbsoluteT,
@@ -447,11 +704,14 @@ fn generate_t_prediction(
     start_t: AbsoluteT,
 ) -> AbsoluteT {
     if idx == 1 {
-        // We don't have a deltaT context, so just predict double the dtref of the previous event
-        start_t + dt_ref as AbsoluteT * idx as AbsoluteT
+        // We don't have a deltaT context
+        start_t + last_delta_t as AbsoluteT
     } else {
         if d_residual.abs() > 14 {
             d_residual = 0;
+        }
+        if prev_event.d == D_EMPTY {
+            d_residual = -1;
         }
         // We've gotten the DeltaT between the last two events. Use that
         // to form our prediction
@@ -668,6 +928,7 @@ impl ComponentCompression for EventCube {
     ) -> Result<(), CodecError> {
         self.compress_intra(encoder, contexts, stream)?;
         if !self.skip_cube {
+            // self.compress_intra_round2(encoder, contexts, stream)?;
             self.compress_inter(encoder, contexts, stream)?;
         }
         Ok(())
@@ -696,6 +957,7 @@ impl ComponentCompression for EventCube {
             num_intervals,
         );
         if !cube.skip_cube {
+            // cube.decompress_intra_round2(decoder, contexts, stream);
             cube.decompress_inter(decoder, contexts, stream);
         }
         cube
@@ -853,7 +1115,7 @@ mod compression_tests {
         let contexts = crate::codec::compressed::source_model::cabac_contexts::Contexts::new(
             &mut source_model,
             255,
-            510
+            510,
         );
         let mut decoder = arithmetic_coding::Decoder::new(source_model);
         let mut stream = BitReader::endian(Cursor::new(stream.into_writer()), BigEndian);
@@ -973,7 +1235,7 @@ mod compression_tests {
         let contexts = crate::codec::compressed::source_model::cabac_contexts::Contexts::new(
             &mut source_model,
             255,
-            255*num_intervals as DeltaT
+            255 * num_intervals as DeltaT,
         );
 
         let mut encoder = Encoder::new(source_model);
@@ -986,7 +1248,7 @@ mod compression_tests {
         let contexts = crate::codec::compressed::source_model::cabac_contexts::Contexts::new(
             &mut source_model,
             255,
-            255*num_intervals as DeltaT
+            255 * num_intervals as DeltaT,
         );
         let mut decoder = arithmetic_coding::Decoder::new(source_model);
         let mut stream = BitReader::endian(Cursor::new(stream.into_writer()), BigEndian);
@@ -1057,7 +1319,7 @@ mod compression_tests {
         let contexts = crate::codec::compressed::source_model::cabac_contexts::Contexts::new(
             &mut source_model,
             255,
-            255*num_intervals as DeltaT
+            255 * num_intervals as DeltaT,
         );
 
         let mut encoder = Encoder::new(source_model);
@@ -1070,7 +1332,7 @@ mod compression_tests {
         let contexts = crate::codec::compressed::source_model::cabac_contexts::Contexts::new(
             &mut source_model,
             255,
-            255*num_intervals as DeltaT
+            255 * num_intervals as DeltaT,
         );
         let mut decoder = arithmetic_coding::Decoder::new(source_model);
         let mut stream = BitReader::endian(Cursor::new(stream.into_writer()), BigEndian);

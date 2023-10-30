@@ -2,7 +2,7 @@ use crate::codec::compressed::fenwick::context_switching::FenwickModel;
 use crate::codec::compressed::fenwick::Weights;
 use crate::codec::compressed::TResidual;
 use crate::codec::CodecMetadata;
-use crate::{AbsoluteT, DeltaT};
+use crate::{AbsoluteT, DeltaT, EventCoordless, Intensity, D, D_SHIFT};
 use arithmetic_coding::Encoder;
 use bitstream_io::{BigEndian, BitWrite, BitWriter};
 
@@ -28,6 +28,8 @@ pub struct Contexts {
 
 pub const D_RESIDUAL_OFFSET: i16 = 255;
 
+pub const BITSHIFT_ENCODE_FULL: u8 = 15;
+
 impl Contexts {
     pub fn new(source_model: &mut FenwickModel, dt_ref: DeltaT, dt_max: DeltaT) -> Contexts {
         let d_context = source_model.push_context_with_weights(d_residual_default_weights());
@@ -41,7 +43,7 @@ impl Contexts {
         let eof_context =
             source_model.push_context_with_weights(Weights::new_with_counts(1, &vec![1]));
         let bitshift_context =
-            source_model.push_context_with_weights(Weights::new_with_counts(15, &vec![1; 15]));
+            source_model.push_context_with_weights(Weights::new_with_counts(16, &vec![1; 16]));
 
         Contexts {
             d_context,
@@ -59,20 +61,92 @@ impl Contexts {
     }
 
     /// Find out how much we need to bitshift the t_residual to fit within the range of the model
-    pub(crate) fn residual_to_bitshift(&self, t_residual_i64: i64) -> (u8, TResidual) {
+    pub(crate) fn residual_to_bitshift(&self, t_residual_i64: i64) -> (u8, i64) {
         if t_residual_i64.abs() < self.t_residual_max as i64 {
-            (0, t_residual_i64 as TResidual)
+            (0, t_residual_i64)
+            // } else if t_residual_i64.abs() > self.dt_max {
         } else {
+            // JUST LOSSLESS FOR NOW
+            (BITSHIFT_ENCODE_FULL, t_residual_i64)
+        }
+        // else {
+        //     let mut bitshift = 0;
+        //     let mut t_residual = t_residual_i64.abs();
+        //     while t_residual > self.t_residual_max {
+        //         t_residual >>= 1;
+        //         bitshift += 1;
+        //     }
+        //     if t_residual_i64 < 0 {
+        //         (bitshift, -t_residual)
+        //     } else {
+        //         (bitshift, t_residual)
+        //     }
+        // }
+    }
+
+    fn event_to_intensity(&self, d: D, delta_t: DeltaT, dt_ref: DeltaT) -> f64 {
+        let intensity = match d as usize {
+            a if a >= D_SHIFT.len() => f64::from(0),
+            _ => match delta_t {
+                0 => D_SHIFT[d as usize] as Intensity, // treat it as dt = 1
+                _ => D_SHIFT[d as usize] as Intensity / f64::from(delta_t),
+            },
+        };
+        intensity * dt_ref as f64
+    }
+
+    pub(crate) fn residual_to_bitshift2(
+        &self,
+        t_prediction: i64,
+        t_residual_i64: i64,
+        event: &mut EventCoordless,
+        prev_event: &EventCoordless,
+        dt_ref: DeltaT,
+    ) -> (u8, i64) {
+        if t_residual_i64.abs() < self.t_residual_max as i64 {
+            (0, t_residual_i64)
+            // } else if t_residual_i64.abs() > self.dt_max {
+        }
+        // else {
+        //
+        //     // JUST LOSSLESS FOR NOW
+        //     (BITSHIFT_ENCODE_FULL, t_residual_i64)
+        // }
+        else {
+            let actual_dt = event.t - prev_event.t;
+            let actual_intensity = self.event_to_intensity(event.d, actual_dt, dt_ref);
+            let mut recon_intensity = actual_intensity;
             let mut bitshift = 0;
             let mut t_residual = t_residual_i64.abs();
-            while t_residual > self.t_residual_max {
-                t_residual >>= 1;
-                bitshift += 1;
+            loop {
+                if t_residual > self.t_residual_max
+                    && actual_intensity - 10.0 < recon_intensity
+                    && actual_intensity + 10.0 > recon_intensity
+                {
+                    if bitshift > 1 {
+                        eprintln!("made it {}", bitshift);
+                    }
+
+                    t_residual >>= 1;
+                    bitshift += 1;
+                    let recon_predicted_t = (t_prediction + t_residual) as AbsoluteT;
+                    if recon_predicted_t < prev_event.t {
+                        break;
+                    }
+                    let recon_predicted_dt = recon_predicted_t - prev_event.t;
+                    recon_intensity = self.event_to_intensity(event.d, recon_predicted_dt, dt_ref);
+                } else {
+                    break;
+                }
             }
+            if bitshift > 0 {
+                bitshift -= 1;
+            }
+            t_residual = t_residual_i64.abs() >> bitshift;
             if t_residual_i64 < 0 {
-                (bitshift, -t_residual as TResidual)
+                (bitshift, -t_residual)
             } else {
-                (bitshift, t_residual as TResidual)
+                (bitshift, t_residual)
             }
         }
     }
@@ -84,17 +158,21 @@ pub fn t_residual_default_weights(dt_ref: DeltaT) -> Weights {
     // After we've indexed into the correct interval, our timestamp residual can span [-dt_ref, dt_ref]
 
     // We have dt_max/dt_ref count of intervals per adu
-    let mut counts: Vec<u64> = vec![1; (dt_ref * 100 + 1) as usize];
+    let mut counts: Vec<u64> = vec![1; (u8::MAX as usize + 1)];
     // let mut counts: Vec<u64> = vec![1; u16::MAX as usize];
 
     // Give higher probability to smaller residuals
-    for i in counts.len() / 3..counts.len() * 2 / 3 {
-        counts[i] = 5;
+    // for i in counts.len() / 3..counts.len() * 2 / 3 {
+    //     counts[i] = 5;
+    // }
+    // let len = counts.len();
+    // counts[len / 2] = 10;
+    // counts[len / 2 - 1] = 10;
+    // counts[len / 2 + 1] = 10;
+    counts[0] = 100;
+    for i in 0..10 {
+        counts[i] = 10;
     }
-    let len = counts.len();
-    counts[len / 2] = 10;
-    counts[len / 2 - 1] = 10;
-    counts[len / 2 + 1] = 10;
 
     Weights::new_with_counts(counts.len(), &counts)
 }
