@@ -33,7 +33,7 @@ pub struct Encoder<W: Write> {
         WithOtherIntEncoding<DefaultOptions, FixintEncoding>,
         bincode::config::BigEndian,
     >,
-    options: EncoderOptions,
+    pub options: EncoderOptions,
     state: EncoderState,
 }
 
@@ -56,7 +56,7 @@ impl Default for EncoderState {
 #[allow(dead_code)]
 impl<W: Write + 'static> Encoder<W> {
     /// Create a new [`Encoder`] with an empty compression scheme
-    pub fn new_empty(compression: EmptyOutput<Sink>) -> Self
+    pub fn new_empty(compression: EmptyOutput<Sink>, options: EncoderOptions) -> Self
     where
         Self: Sized,
     {
@@ -65,7 +65,7 @@ impl<W: Write + 'static> Encoder<W> {
             bincode: DefaultOptions::new()
                 .with_fixint_encoding()
                 .with_big_endian(),
-            options: EncoderOptions::default(),
+            options,
             state: EncoderState::default(),
         };
         encoder.encode_header().unwrap();

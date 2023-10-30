@@ -20,7 +20,6 @@ use adder_codec_core::PlaneSize;
 use adder_codec_core::TimeMode;
 #[cfg(feature = "open-cv")]
 use adder_codec_rs::transcoder::source::davis::TranscoderMode::RawDvs;
-use adder_codec_rs::transcoder::source::{CRF, DEFAULT_CRF_QUALITY};
 use adder_codec_rs::utils::cv::{calculate_quality_metrics, QualityMetrics};
 use adder_codec_rs::utils::viz::ShowFeatureMode;
 use bevy_egui::egui::plot::Corner::LeftTop;
@@ -30,6 +29,7 @@ use std::default::Default;
 use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::path::PathBuf;
+use adder_codec_core::codec::rate_controller::{CRF, DEFAULT_CRF_QUALITY};
 
 pub struct ParamsUiState {
     pub(crate) delta_t_ref: f32,
@@ -103,7 +103,7 @@ impl Default for ParamsUiState {
             limit_bandwidth: false,
             bandwidth_target_event_rate: 5_000_000.0,
             bandwidth_target_event_rate_slider: 5_000_000.0,
-            encoder_options: Default::default(),
+            encoder_options: EncoderOptions::default(PlaneSize::default()),
             bandwidth_alpha: 0.999,
             alpha_slider: 0.999,
             time_mode: TimeMode::default(),
@@ -516,34 +516,41 @@ impl TranscoderState {
             }
         };
 
+        let binding = source.get_video_ref().get_encoder_options();
+        let parameters = binding.crf.get_parameters();
+
+
         // TODO: Refactor all this garbage code
         if self.ui_state.auto_quality
             && (!self.ui_state.auto_quality_mirror
-                || self.ui_state.crf != source.get_video_ref().state.crf_quality)
+                || self.ui_state.crf != source.get_video_ref().get_encoder_options().crf.get_quality().unwrap_or(DEFAULT_CRF_QUALITY))
         {
             self.ui_state.auto_quality_mirror = true;
             source.crf(self.ui_state.crf);
 
             let video = source.get_video_ref();
+
+            let binding = video.get_encoder_options();
+            let parameters = binding.crf.get_parameters();
             // Update ui state to match
-            self.ui_state.adder_tresh_baseline = video.state.c_thresh_baseline;
+            self.ui_state.adder_tresh_baseline = parameters.c_thresh_baseline;
             self.ui_state.adder_tresh_baseline_slider = self.ui_state.adder_tresh_baseline;
-            self.ui_state.adder_tresh_max = video.state.c_thresh_max as u8;
+            self.ui_state.adder_tresh_max = parameters.c_thresh_max as u8;
             self.ui_state.adder_tresh_max_slider = self.ui_state.adder_tresh_max;
             self.ui_state.delta_t_max_mult = video.state.delta_t_max / video.state.ref_time;
             self.ui_state.delta_t_max_mult_slider = self.ui_state.delta_t_max_mult;
-            self.ui_state.adder_tresh_velocity = video.state.c_increase_velocity;
+            self.ui_state.adder_tresh_velocity = parameters.c_increase_velocity;
             self.ui_state.adder_tresh_velocity_slider = self.ui_state.adder_tresh_velocity;
-            self.ui_state.feature_radius = video.state.feature_c_radius as f32;
+            self.ui_state.feature_radius = parameters.feature_c_radius as f32;
             self.ui_state.feature_radius_slider = self.ui_state.feature_radius;
         } else if self.ui_state.adder_tresh_baseline
-            != source.get_video_ref().state.c_thresh_baseline
-            || self.ui_state.adder_tresh_max != source.get_video_ref().state.c_thresh_max as u8
+            != parameters.c_thresh_baseline
+            || self.ui_state.adder_tresh_max != parameters.c_thresh_max as u8
             || self.ui_state.delta_t_max_mult
                 != source.get_video_ref().state.delta_t_max / source.get_video_ref().state.ref_time
             || self.ui_state.adder_tresh_velocity
-                != source.get_video_ref().state.c_increase_velocity
-            || self.ui_state.feature_radius as u16 != source.get_video_ref().state.feature_c_radius
+                != parameters.c_increase_velocity
+            || self.ui_state.feature_radius as u16 != parameters.feature_c_radius
         {
             let video = source.get_video_mut();
             video.update_quality_manual(

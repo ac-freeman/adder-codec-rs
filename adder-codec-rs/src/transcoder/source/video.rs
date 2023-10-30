@@ -39,7 +39,6 @@ use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator};
 use rayon::ThreadPool;
 
 use crate::transcoder::source::video::FramedViewMode::SAE;
-use crate::transcoder::source::{CRF, DEFAULT_CRF_QUALITY};
 use crate::utils::cv::is_feature;
 #[cfg(feature = "feature-logging")]
 use crate::utils::logging::{LogFeature, LogFeatureSource};
@@ -47,6 +46,7 @@ use crate::utils::viz::{draw_feature_coord, draw_feature_event, ShowFeatureMode}
 use thiserror::Error;
 use tokio::task::JoinError;
 use video_rs::Frame;
+use adder_codec_core::codec::rate_controller::{Crf, CrfParameters};
 
 /// Various errors that can occur during an ADΔER transcode
 #[derive(Error, Debug)]
@@ -166,15 +166,7 @@ pub struct VideoState {
     pub in_interval_count: u32,
     // pub(crate) c_thresh_pos: u8,
     // pub(crate) c_thresh_neg: u8,
-    /// The baseline (starting) contrast threshold for all pixels
-    pub c_thresh_baseline: u8,
 
-    /// The maximum contrast threshold for all pixels
-    pub c_thresh_max: u8,
-
-    /// The velocity at which to increase the contrast threshold for all pixels (increment c by 1
-    /// for every X input intervals, if it's stable)
-    pub c_increase_velocity: u8,
 
     /// The maximum time difference between events of the same pixel, in ticks
     pub delta_t_max: u32,
@@ -184,14 +176,7 @@ pub struct VideoState {
     pub(crate) ref_time_divisor: f64,
     pub tps: DeltaT,
 
-    /// Constant Rate Factor (CRF) quality setting for the encoder. 0 is lossless, 9 is worst quality.
-    /// Determines:
-    /// * The baseline (starting) c-threshold for all pixels
-    /// * The maximum c-threshold for all pixels
-    /// * The Dt_max multiplier
-    /// * The c-threshold increase velocity (how often to increase C if the intensity is stable)
-    /// * The radius for which to reset the c-threshold for neighboring pixels (if feature detection is enabled)
-    pub crf_quality: u8,
+
     pub(crate) show_display: bool,
     pub(crate) show_live: bool,
 
@@ -203,9 +188,6 @@ pub struct VideoState {
 
     /// Whether or not to draw the features on the display mat, and the mode to do it in
     show_features: ShowFeatureMode,
-
-    /// The radius for which to reset the c-threshold for neighboring pixels (if feature detection is enabled)
-    pub feature_c_radius: u16,
 
     features: Vec<HashSet<Coord>>,
 
@@ -220,53 +202,47 @@ impl Default for VideoState {
             pixel_multi_mode: Default::default(),
             chunk_rows: 64,
             in_interval_count: 1,
-            c_thresh_baseline: 0,
-            c_thresh_max: 0,
-            c_increase_velocity: 1,
             delta_t_max: 7650,
             ref_time: 255,
             ref_time_divisor: 1.0,
             tps: 7650,
-            crf_quality: 0,
             show_display: false,
             show_live: false,
             feature_detection: false,
             running_intensities: Default::default(),
             show_features: ShowFeatureMode::Off,
-            feature_c_radius: 0,
             features: Default::default(),
             feature_log_handle: None,
         };
-        state.update_crf(DEFAULT_CRF_QUALITY);
         state
     }
 }
 
-impl VideoState {
-    fn update_crf(&mut self, crf: u8) {
-        self.crf_quality = crf;
-        self.c_thresh_baseline = CRF[crf as usize][0] as u8;
-        self.c_thresh_max = CRF[crf as usize][1] as u8;
-
-        self.c_increase_velocity = CRF[crf as usize][2] as u8;
-        self.feature_c_radius = (CRF[crf as usize][3] * self.plane.min_resolution() as f32) as u16;
-    }
-
-    fn update_quality_manual(
-        &mut self,
-        c_thresh_baseline: u8,
-        c_thresh_max: u8,
-        delta_t_max_multiplier: u32,
-        c_increase_velocity: u8,
-        feature_c_radius: f32,
-    ) {
-        self.c_thresh_baseline = c_thresh_baseline;
-        self.c_thresh_max = c_thresh_max;
-        self.delta_t_max = delta_t_max_multiplier * self.ref_time;
-        self.c_increase_velocity = c_increase_velocity;
-        self.feature_c_radius = feature_c_radius as u16; // The absolute pixel count radius
-    }
-}
+// impl VideoState {
+//     fn update_crf(&mut self, crf: u8) {
+//         self.crf_quality = crf;
+//         self.c_thresh_baseline = CRF[crf as usize][0] as u8;
+//         self.c_thresh_max = CRF[crf as usize][1] as u8;
+//
+//         self.c_increase_velocity = CRF[crf as usize][2] as u8;
+//         self.feature_c_radius = (CRF[crf as usize][3] * self.plane.min_resolution() as f32) as u16;
+//     }
+//
+//     fn update_quality_manual(
+//         &mut self,
+//         c_thresh_baseline: u8,
+//         c_thresh_max: u8,
+//         delta_t_max_multiplier: u32,
+//         c_increase_velocity: u8,
+//         feature_c_radius: f32,
+//     ) {
+//         self.c_thresh_baseline = c_thresh_baseline;
+//         self.c_thresh_max = c_thresh_max;
+//         self.delta_t_max = delta_t_max_multiplier * self.ref_time;
+//         self.c_increase_velocity = c_increase_velocity;
+//         self.feature_c_radius = feature_c_radius as u16; // The absolute pixel count radius
+//     }
+// }
 
 /// A builder for a [`Video`]
 pub trait VideoBuilder<W> {
@@ -411,7 +387,7 @@ impl<W: Write + 'static> Video<W> {
 
         match writer {
             None => {
-                let encoder: Encoder<W> = Encoder::new_empty(EmptyOutput::new(meta, sink()));
+                let encoder: Encoder<W> = Encoder::new_empty(EmptyOutput::new(meta, sink()), EncoderOptions::default(state.plane));
                 Ok(Video {
                     state,
                     event_pixel_trees,
@@ -427,7 +403,7 @@ impl<W: Write + 'static> Video<W> {
                 let encoder = Encoder::new_raw(
                     // TODO: Allow for compressed representation (not just raw)
                     RawOutput::new(meta, w),
-                    EncoderOptions::default(),
+                    EncoderOptions::default(state.plane),
                 );
                 Ok(Video {
                     state,
@@ -452,7 +428,7 @@ impl<W: Write + 'static> Video<W> {
         for px in self.event_pixel_trees.iter_mut() {
             px.c_thresh = c_thresh_pos;
         }
-        self.state.c_thresh_baseline = c_thresh_pos;
+        self.encoder.options.crf.override_c_thresh_baseline(c_thresh_pos);
         self
     }
 
@@ -617,7 +593,7 @@ impl<W: Write + 'static> Video<W> {
                     },
                     sink(),
                 );
-                Encoder::new_empty(compression)
+                Encoder::new_empty(compression, encoder_options)
             }
         };
 
@@ -641,7 +617,7 @@ impl<W: Write + 'static> Video<W> {
     /// Returns an error if the stream writer cannot be closed cleanly.
     pub fn end_write_stream(&mut self) -> Result<Option<W>, SourceError> {
         let mut tmp: Encoder<W> =
-            Encoder::new_empty(EmptyOutput::new(CodecMetadata::default(), sink()));
+            Encoder::new_empty(EmptyOutput::new(CodecMetadata::default(), sink()), self.encoder.options.clone());
         swap(&mut self.encoder, &mut tmp);
         Ok(tmp.close_writer()?)
     }
@@ -656,6 +632,8 @@ impl<W: Write + 'static> Video<W> {
         if self.state.in_interval_count == 0 {
             self.set_initial_d(&matrix);
         }
+
+        let parameters = self.encoder.options.crf.get_parameters().clone();
 
         self.state.in_interval_count += 1;
 
@@ -694,6 +672,7 @@ impl<W: Write + 'static> Video<W> {
                         time_spanned,
                         &mut buffer,
                         &self.state,
+                        &parameters,
                     );
                 }
                 buffer
@@ -857,7 +836,7 @@ impl<W: Write + 'static> Video<W> {
         for px in self.event_pixel_trees.iter_mut() {
             px.c_thresh = c;
         }
-        self.state.c_thresh_baseline = c;
+        self.encoder.options.crf.override_c_thresh_baseline(c)
     }
 
     /// Set a new value for `c_thresh_neg`
@@ -1028,6 +1007,8 @@ impl<W: Write + 'static> Video<W> {
             }
         }
 
+        let parameters = self.encoder.options.crf.get_parameters();
+
         for feature_set in new_features {
             for (coord) in feature_set {
                 if self.state.show_features == ShowFeatureMode::Instant {
@@ -1038,7 +1019,7 @@ impl<W: Write + 'static> Video<W> {
                         self.state.plane.c() != 1,
                     );
                 }
-                let radius = self.state.feature_c_radius as i32;
+                let radius =parameters.feature_c_radius as i32;
                 for row in (coord.y() as i32 - radius).max(0)
                     ..(coord.y() as i32 + radius).min(self.state.plane.h() as i32)
                 {
@@ -1047,7 +1028,7 @@ impl<W: Write + 'static> Video<W> {
                     {
                         for c in 0..self.state.plane.c() {
                             self.event_pixel_trees[[row as usize, col as usize, c as usize]]
-                                .c_thresh = self.state.c_thresh_baseline;
+                                .c_thresh = parameters.c_thresh_baseline;
                         }
                     }
                 }
@@ -1070,10 +1051,12 @@ impl<W: Write + 'static> Video<W> {
 
     /// Update the CRF value and set the baseline c for all pixels
     pub(crate) fn update_crf(&mut self, crf: u8) {
-        self.state.update_crf(crf);
+        self.encoder.options.crf = Crf::new(Some(crf), self.state.plane);
+
+        let c_thresh_baseline = self.encoder.options.crf.get_parameters().c_thresh_baseline;
 
         for px in self.event_pixel_trees.iter_mut() {
-            px.c_thresh = self.state.c_thresh_baseline;
+            px.c_thresh = c_thresh_baseline;
             px.c_increase_counter = 0;
         }
     }
@@ -1092,15 +1075,18 @@ impl<W: Write + 'static> Video<W> {
         c_thresh_max: u8,
         delta_t_max_multiplier: u32,
         c_increase_velocity: u8,
-        feature_c_radius_denom: f32,
+        feature_c_radius: f32,
     ) {
-        self.state.update_quality_manual(
-            c_thresh_baseline,
-            c_thresh_max,
-            delta_t_max_multiplier,
-            c_increase_velocity,
-            feature_c_radius_denom,
-        );
+        {
+            let crf = &mut self.encoder.options.crf;
+
+            crf.override_c_thresh_baseline(c_thresh_baseline);
+            crf.override_c_thresh_max(c_thresh_max);
+            crf.override_c_increase_velocity(c_increase_velocity);
+            crf.override_feature_c_radius(feature_c_radius as u16); // The absolute pixel count radius
+        }
+        self.state.delta_t_max = delta_t_max_multiplier * self.state.ref_time;
+
 
         for px in self.event_pixel_trees.iter_mut() {
             px.c_thresh = c_thresh_baseline;
@@ -1136,6 +1122,7 @@ pub fn integrate_for_px(
     time_spanned: f32,
     buffer: &mut Vec<Event>,
     state: &VideoState,
+    parameters: &CrfParameters
 ) -> bool {
     let mut grew_buffer = false;
     if px.need_to_pop_top {
@@ -1166,14 +1153,15 @@ pub fn integrate_for_px(
         }
     }
 
+
     px.integrate(
         intensity,
         time_spanned.into(),
         state.pixel_tree_mode,
         state.delta_t_max,
         state.ref_time,
-        state.c_thresh_max,
-        state.c_increase_velocity,
+        parameters.c_thresh_max,
+        parameters.c_increase_velocity,
     );
 
     if px.need_to_pop_top {
