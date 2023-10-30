@@ -43,10 +43,10 @@ use crate::utils::cv::is_feature;
 #[cfg(feature = "feature-logging")]
 use crate::utils::logging::{LogFeature, LogFeatureSource};
 use crate::utils::viz::{draw_feature_coord, draw_feature_event, ShowFeatureMode};
+use adder_codec_core::codec::rate_controller::{Crf, CrfParameters};
 use thiserror::Error;
 use tokio::task::JoinError;
 use video_rs::Frame;
-use adder_codec_core::codec::rate_controller::{Crf, CrfParameters};
 
 /// Various errors that can occur during an ADΔER transcode
 #[derive(Error, Debug)]
@@ -166,8 +166,6 @@ pub struct VideoState {
     pub in_interval_count: u32,
     // pub(crate) c_thresh_pos: u8,
     // pub(crate) c_thresh_neg: u8,
-
-
     /// The maximum time difference between events of the same pixel, in ticks
     pub delta_t_max: u32,
 
@@ -175,7 +173,6 @@ pub struct VideoState {
     pub ref_time: u32,
     pub(crate) ref_time_divisor: f64,
     pub tps: DeltaT,
-
 
     pub(crate) show_display: bool,
     pub(crate) show_live: bool,
@@ -387,7 +384,10 @@ impl<W: Write + 'static> Video<W> {
 
         match writer {
             None => {
-                let encoder: Encoder<W> = Encoder::new_empty(EmptyOutput::new(meta, sink()), EncoderOptions::default(state.plane));
+                let encoder: Encoder<W> = Encoder::new_empty(
+                    EmptyOutput::new(meta, sink()),
+                    EncoderOptions::default(state.plane),
+                );
                 Ok(Video {
                     state,
                     event_pixel_trees,
@@ -429,7 +429,10 @@ impl<W: Write + 'static> Video<W> {
             px.c_thresh = c_thresh_pos;
         }
         dbg!("t");
-        self.encoder.options.crf.override_c_thresh_baseline(c_thresh_pos);
+        self.encoder
+            .options
+            .crf
+            .override_c_thresh_baseline(c_thresh_pos);
         self
     }
 
@@ -617,8 +620,10 @@ impl<W: Write + 'static> Video<W> {
     /// # Errors
     /// Returns an error if the stream writer cannot be closed cleanly.
     pub fn end_write_stream(&mut self) -> Result<Option<W>, SourceError> {
-        let mut tmp: Encoder<W> =
-            Encoder::new_empty(EmptyOutput::new(CodecMetadata::default(), sink()), self.encoder.options.clone());
+        let mut tmp: Encoder<W> = Encoder::new_empty(
+            EmptyOutput::new(CodecMetadata::default(), sink()),
+            self.encoder.options.clone(),
+        );
         swap(&mut self.encoder, &mut tmp);
         Ok(tmp.close_writer()?)
     }
@@ -1021,7 +1026,7 @@ impl<W: Write + 'static> Video<W> {
                         self.state.plane.c() != 1,
                     );
                 }
-                let radius =parameters.feature_c_radius as i32;
+                let radius = parameters.feature_c_radius as i32;
                 for row in (coord.y() as i32 - radius).max(0)
                     ..(coord.y() as i32 + radius).min(self.state.plane.h() as i32)
                 {
@@ -1089,9 +1094,7 @@ impl<W: Write + 'static> Video<W> {
             crf.override_feature_c_radius(feature_c_radius as u16); // The absolute pixel count radius
         }
         self.state.delta_t_max = delta_t_max_multiplier * self.state.ref_time;
-        eprintln!("sync 2");
         self.encoder.sync_crf();
-
 
         for px in self.event_pixel_trees.iter_mut() {
             px.c_thresh = c_thresh_baseline;
@@ -1127,7 +1130,7 @@ pub fn integrate_for_px(
     time_spanned: f32,
     buffer: &mut Vec<Event>,
     state: &VideoState,
-    parameters: &CrfParameters
+    parameters: &CrfParameters,
 ) -> bool {
     let mut grew_buffer = false;
     if px.need_to_pop_top {
@@ -1157,7 +1160,6 @@ pub fn integrate_for_px(
             };
         }
     }
-
 
     px.integrate(
         intensity,

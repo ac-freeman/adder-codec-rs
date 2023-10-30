@@ -18,12 +18,12 @@ use adder_codec_rs::transcoder::source::davis::TranscoderMode;
 use adder_codec_rs::davis_edi_rs::util::reconstructor::Reconstructor;
 
 use crate::transcoder::ui::{ParamsUiState, TranscoderState};
+use adder_codec_core::codec::rate_controller::DEFAULT_CRF_QUALITY;
 use adder_codec_core::SourceCamera::{DavisU8, FramedU8};
 use adder_codec_rs::transcoder::source::video::VideoBuilder;
 use bevy_egui::egui::{Color32, RichText};
 #[cfg(feature = "open-cv")]
 use opencv::Result;
-use adder_codec_core::codec::rate_controller::DEFAULT_CRF_QUALITY;
 
 #[derive(Default)]
 pub struct AdderTranscoder {
@@ -70,7 +70,13 @@ impl AdderTranscoder {
                             ui_state.color,
                             ui_state.scale,
                         )?
-                            .crf(ui_state.encoder_options.crf.get_quality().unwrap_or(DEFAULT_CRF_QUALITY))
+                        .crf(
+                            ui_state
+                                .encoder_options
+                                .crf
+                                .get_quality()
+                                .unwrap_or(DEFAULT_CRF_QUALITY),
+                        )
                         .frame_start(current_frame)?
                         .chunk_rows(64)
                         .auto_time_parameters(
@@ -88,8 +94,6 @@ impl AdderTranscoder {
                                 let out_path = output_path.to_str().unwrap();
                                 let writer = BufWriter::new(File::create(out_path)?);
 
-                                eprintln!("calling write out with options:");
-                                dbg!(ui_state.encoder_options);
                                 framed = *framed.write_out(
                                     FramedU8,
                                     ui_state.time_mode,

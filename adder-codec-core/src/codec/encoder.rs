@@ -86,7 +86,6 @@ impl<W: Write + 'static> Encoder<W> {
                 .with_big_endian(),
             options,
             state: Default::default(),
-
         };
         encoder.encode_header().unwrap();
         encoder
@@ -291,11 +290,9 @@ impl<W: Write + 'static> Encoder<W> {
         self.options
     }
 
-
     /// Keeps the compressed output options in sync with the encoder options. This prevents us
     /// from constantly having to look up a reference-counted variable, which is costly at this scale.
     pub fn sync_crf(&mut self) {
-        eprintln!("Syncing crf");
         match &mut self.output {
             WriteCompressionEnum::CompressedOutput(compressed_output) => {
                 compressed_output.options = self.options.clone();
@@ -341,10 +338,10 @@ mod tests {
             bincode: DefaultOptions::new()
                 .with_fixint_encoding()
                 .with_big_endian(),
-            options: EncoderOptions::default(PlaneSize{
+            options: EncoderOptions::default(PlaneSize {
                 width: 100,
                 height: 100,
-                channels: 1
+                channels: 1,
             }),
             state: EncoderState::default(),
         };
@@ -376,10 +373,10 @@ mod tests {
             bincode: DefaultOptions::new()
                 .with_fixint_encoding()
                 .with_big_endian(),
-            options: EncoderOptions::default(PlaneSize{
+            options: EncoderOptions::default(PlaneSize {
                 width: 100,
                 height: 100,
-                channels: 1
+                channels: 1,
             }),
             state: EncoderState::default(),
         };
@@ -410,12 +407,14 @@ mod tests {
             },
             bufwriter,
         );
-        let mut encoder: Encoder<BufWriter<Vec<u8>>> =
-            Encoder::new_raw(compression, EncoderOptions::default(PlaneSize{
+        let mut encoder: Encoder<BufWriter<Vec<u8>>> = Encoder::new_raw(
+            compression,
+            EncoderOptions::default(PlaneSize {
                 width: 1,
                 height: 1,
-                channels: 3
-            }));
+                channels: 3,
+            }),
+        );
 
         let event = Event {
             coord: Coord {
@@ -450,7 +449,6 @@ mod tests {
                 delta_t_max: 0,
                 event_size: 0,
                 source_camera: Default::default(),
-
             },
             // frame: Default::default(),
             // adu: Adu::new(),
@@ -517,6 +515,7 @@ mod tests {
             },
             bufwriter,
         );
-        let _encoder = Encoder::new_compressed(compression, EncoderOptions::default(PlaneSize::default()));
+        let _encoder =
+            Encoder::new_compressed(compression, EncoderOptions::default(PlaneSize::default()));
     }
 }

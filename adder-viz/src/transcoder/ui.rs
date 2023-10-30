@@ -15,6 +15,7 @@ use std::collections::VecDeque;
 use std::error::Error;
 
 use crate::utils::PlotY;
+use adder_codec_core::codec::rate_controller::{Crf, CRF, DEFAULT_CRF_QUALITY};
 use adder_codec_core::codec::{EncoderOptions, EncoderType, EventDrop, EventOrder};
 use adder_codec_core::PlaneSize;
 use adder_codec_core::TimeMode;
@@ -29,7 +30,6 @@ use std::default::Default;
 use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::path::PathBuf;
-use adder_codec_core::codec::rate_controller::{CRF, Crf, DEFAULT_CRF_QUALITY};
 
 pub struct ParamsUiState {
     pub(crate) delta_t_ref: f32,
@@ -241,7 +241,12 @@ impl TranscoderState {
             .spacing([10.0, 4.0])
             .striped(true)
             .show(ui, |ui| {
-                side_panel_grid_contents(&self.transcoder, ui, &mut self.ui_state, &self.ui_info_state);
+                side_panel_grid_contents(
+                    &self.transcoder,
+                    ui,
+                    &mut self.ui_state,
+                    &self.ui_info_state,
+                );
             });
     }
 
@@ -444,8 +449,8 @@ impl TranscoderState {
                                         != self.ui_state.encoder_type
                                     || source.get_video_ref().get_encoder_options().event_drop
                                         != self.ui_state.encoder_options.event_drop
-                                || source.get_video_ref().get_encoder_options().event_order
-                                != self.ui_state.encoder_options.event_order)
+                                    || source.get_video_ref().get_encoder_options().event_order
+                                        != self.ui_state.encoder_options.event_order)
                                     && self.ui_info_state.output_path.is_some())
                             {
                                 if self.ui_state.davis_mode_radio_state == RawDvs {
@@ -478,10 +483,10 @@ impl TranscoderState {
                         || source.get_ref_time() != self.ui_state.delta_t_ref as u32
                         || ((source.get_video_ref().get_time_mode() != self.ui_state.time_mode
                             || source.get_video_ref().encoder_type != self.ui_state.encoder_type
-                        || source.get_video_ref().get_encoder_options().event_drop
-                        != self.ui_state.encoder_options.event_drop
-                        || source.get_video_ref().get_encoder_options().event_order
-                        != self.ui_state.encoder_options.event_order)
+                            || source.get_video_ref().get_encoder_options().event_drop
+                                != self.ui_state.encoder_options.event_drop
+                            || source.get_video_ref().get_encoder_options().event_order
+                                != self.ui_state.encoder_options.event_order)
                             && self.ui_info_state.output_path.is_some())
                         || match source.get_video_ref().state.plane.c() {
                             1 => {
@@ -513,17 +518,24 @@ impl TranscoderState {
         let binding = source.get_video_ref().get_encoder_options();
         let parameters = binding.crf.get_parameters();
 
-
         // TODO: Refactor all this garbage code
         if self.ui_state.auto_quality
             && (!self.ui_state.auto_quality_mirror
-                || self.ui_state.encoder_options.crf.get_quality() != source.get_video_ref().get_encoder_options().crf.get_quality())
+                || self.ui_state.encoder_options.crf.get_quality()
+                    != source
+                        .get_video_ref()
+                        .get_encoder_options()
+                        .crf
+                        .get_quality())
         {
-
-            let tmp = source.get_video_ref().get_encoder_options().crf.get_quality();
             self.ui_state.auto_quality_mirror = true;
-            eprintln!("ui 0");
-            source.crf(self.ui_state.encoder_options.crf.get_quality().unwrap_or(DEFAULT_CRF_QUALITY));
+            source.crf(
+                self.ui_state
+                    .encoder_options
+                    .crf
+                    .get_quality()
+                    .unwrap_or(DEFAULT_CRF_QUALITY),
+            );
 
             let video = source.get_video_ref();
 
@@ -539,11 +551,15 @@ impl TranscoderState {
             self.ui_state.delta_t_max_mult_slider = self.ui_state.delta_t_max_mult;
             self.ui_state.adder_tresh_velocity_slider = parameters.c_increase_velocity;
             self.ui_state.feature_radius_slider = parameters.feature_c_radius;
-
-        } else if !self.ui_state.auto_quality && (
-            self.ui_state.delta_t_max_mult
+        } else if !self.ui_state.auto_quality
+            && (self.ui_state.delta_t_max_mult
                 != source.get_video_ref().state.delta_t_max / source.get_video_ref().state.ref_time
-            || self.ui_state.encoder_options.crf.get_parameters() != source.get_video_ref().get_encoder_options().crf.get_parameters())
+                || self.ui_state.encoder_options.crf.get_parameters()
+                    != source
+                        .get_video_ref()
+                        .get_encoder_options()
+                        .crf
+                        .get_parameters())
         {
             let video = source.get_video_mut();
             let parameters = self.ui_state.encoder_options.crf.get_parameters();
@@ -699,7 +715,7 @@ fn side_panel_grid_contents(
     transcoder: &AdderTranscoder,
     ui: &mut Ui,
     ui_state: &mut ParamsUiState,
-    info_ui_state: &InfoUiState
+    info_ui_state: &InfoUiState,
 ) {
     let dtr_max = ui_state.delta_t_ref_max;
 
@@ -731,7 +747,11 @@ fn side_panel_grid_contents(
     ui.end_row();
 
     ui.label("CRF quality:");
-    let mut crf = ui_state.encoder_options.crf.get_quality().unwrap_or(DEFAULT_CRF_QUALITY);
+    let mut crf = ui_state
+        .encoder_options
+        .crf
+        .get_quality()
+        .unwrap_or(DEFAULT_CRF_QUALITY);
     slider_pm(
         ui_state.auto_quality,
         false,
@@ -742,7 +762,14 @@ fn side_panel_grid_contents(
         vec![],
         1,
     );
-    if ui_state.auto_quality && crf != ui_state.encoder_options.crf.get_quality().unwrap_or(DEFAULT_CRF_QUALITY) {
+    if ui_state.auto_quality
+        && crf
+            != ui_state
+                .encoder_options
+                .crf
+                .get_quality()
+                .unwrap_or(DEFAULT_CRF_QUALITY)
+    {
         ui_state.encoder_options.crf = Crf::new(Some(crf), info_ui_state.plane);
     }
     ui.end_row();

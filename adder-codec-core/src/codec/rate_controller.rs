@@ -9,12 +9,12 @@ pub static CRF: [[f32; 4]; 10] = [
     /*1*/    [0.0,     3.0,                      9.0,                     1.0/12.0],
     /*2*/    [1.0,     5.0,                       8.0,                     1.0/14.0],
     /*3*/    [2.0,     7.0,                       7.0,                     1.0/15.0],
-    /*4*/    [3.0,    9.0,                      6.0,                     1.0/16.0],
-    /*5*/    [3.0,    10.0,                       5.0,                     1.0/17.0],
-    /*6*/    [4.0,    15.0,                       4.0,                     1.0/18.0],
-    /*7*/    [5.0,    20.0,                       3.0,                     1.0/20.0],
-    /*8*/    [6.0,    30.0,                       2.0,                     1.0/22.0],
-    /*9*/    [7.0,   40.0,                      1.0,                     1.0/25.0],
+    /*4*/    [3.0,    9.0,                      6.0,                     1.0/18.0],
+    /*5*/    [3.0,    10.0,                       5.0,                     1.0/20.0],
+    /*6*/    [4.0,    13.0,                       4.0,                     1.0/25.0],
+    /*7*/    [5.0,    16.0,                       3.0,                     1.0/30.0],
+    /*8*/    [6.0,    18.0,                       2.0,                     1.0/35.0],
+    /*9*/    [7.0,   20.0,                      1.0,                     1.0/40.0],
 ];
 
 /// The default CRF quality level
@@ -22,7 +22,6 @@ pub const DEFAULT_CRF_QUALITY: u8 = 3;
 
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub struct Crf {
-
     /// Constant Rate Factor (CRF) quality setting for the encoder. 0 is lossless, 9 is worst quality.
     /// Determines:
     /// * The baseline (starting) c-threshold for all pixels
@@ -57,12 +56,13 @@ impl Crf {
 
         Crf {
             crf_quality: crf,
-           parameters: CrfParameters {
-               c_thresh_baseline: CRF[default_crf as usize][0] as u8,
-               c_thresh_max: CRF[default_crf as usize][1] as u8,
-               c_increase_velocity: CRF[default_crf as usize][2] as u8,
-               feature_c_radius: (CRF[default_crf as usize][3] * plane.min_resolution() as f32) as u16,
-           }
+            parameters: CrfParameters {
+                c_thresh_baseline: CRF[default_crf as usize][0] as u8,
+                c_thresh_max: CRF[default_crf as usize][1] as u8,
+                c_increase_velocity: CRF[default_crf as usize][2] as u8,
+                feature_c_radius: (CRF[default_crf as usize][3] * plane.min_resolution() as f32)
+                    as u16,
+            },
         }
     }
 
@@ -98,4 +98,3 @@ impl Crf {
         self.crf_quality
     }
 }
-
