@@ -160,6 +160,11 @@ pub trait Framer {
 
     /// Ingest a vector of a vector of ADΔER events.
     fn ingest_events_events(&mut self, events: Vec<Vec<Event>>) -> bool;
+    /// For all frames left that we haven't written out yet, for any None pixels, set them to the
+    /// last recorded intensity for that pixel.
+    ///
+    /// Returns `true` if there are frames now ready to write out
+    fn flush_frame_buffer(&mut self) -> bool;
 }
 
 #[derive(Debug, Clone, Default)]
@@ -396,7 +401,7 @@ impl<
     ///             c: Some(1)
     ///         },
     ///         d: 5,
-    ///         delta_t: 1000
+    ///         t: 1000
     ///     };
     /// frame_sequence.ingest_event(&mut event, None);
     /// let elem = frame_sequence.px_at_current(5, 5, 1).unwrap();
@@ -411,7 +416,7 @@ impl<
             return false;
         }
 
-        let time = event.delta_t;
+        let time = event.t;
         event.coord.y -= (chunk_num * self.chunk_rows) as u16; // Modify the coordinate here, so it gets ingested at the right place
 
         let frame_chunk = &mut self.frames[chunk_num];
@@ -456,7 +461,7 @@ impl<
                 <T as Into<f64>>::into(*last_frame_intensity_ref) as u8;
 
             if let Some(last) = last_event {
-                if time != last.delta_t {
+                if time != last.t {
                     // todo!();
                     if is_feature(event.coord, self.state.plane, &self.running_intensities).unwrap()
                     {
@@ -580,6 +585,56 @@ impl<
             );
 
         self.is_frame_0_filled()
+    }
+
+    /// For all frames left that we haven't written out yet, for any None pixels, set them to the
+    /// last recorded intensity for that pixel.
+    ///
+    /// Returns `true` if there are frames now ready to write out
+    fn flush_frame_buffer(&mut self) -> bool {
+        eprintln!(
+            "Flushing frame buffer. {} frames left",
+            self.frames[0].len()
+        );
+        let mut all_filled = true;
+        if self.frames[0].len() > 1 {
+            for (chunk_num, chunk) in self.frames.iter_mut().enumerate() {
+                let frame_chunk = &mut chunk[0];
+                // for frame_chunk in chunk.iter_mut() {
+                for ((y, x, c), px) in frame_chunk.array.indexed_iter_mut() {
+                    if px.is_none() {
+                        // If the pixel is empty, set its intensity to the previous intensity we recorded for it
+                        *px = Some(self.last_frame_intensity_tracker[chunk_num][[y, x, c]]);
+
+                        // Update the fill tracker
+                        frame_chunk.filled_count += 1;
+
+                        // Update the last filled tracker
+                        self.last_filled_tracker[chunk_num][[y, x, c]] += 1;
+
+                        // Update the timestamp tracker
+                        // chunk_ts_tracker[[y, x, c]] += state.ref_interval as BigT;
+                    }
+                }
+
+                // Mark the chunk as filled (ready to write out)
+                self.chunk_filled_tracker[chunk_num] = true;
+            }
+        } else {
+            eprintln!("marking not filled...");
+            self.chunk_filled_tracker[0] = false;
+        }
+
+        dbg!(self.is_frame_0_filled());
+        self.is_frame_0_filled()
+
+        // for chunk in &self.chunk_filled_tracker {
+        //     if !chunk {
+        //         all_filled = false;
+        //     }
+        // }
+        //
+        // all_filled
     }
 }
 
@@ -897,9 +952,9 @@ fn ingest_event_for_chunk<
     let prev_running_ts = *running_ts_ref;
 
     if state.codec_version >= 2 && state.time_mode == TimeMode::AbsoluteT {
-        *running_ts_ref = event.delta_t as BigT;
+        *running_ts_ref = event.t as BigT;
     } else {
-        *running_ts_ref += u64::from(event.delta_t);
+        *running_ts_ref += u64::from(event.t);
     }
 
     if ((running_ts_ref.saturating_sub(1)) as i64 / i64::from(state.tpf)) > *last_filled_frame_ref {
@@ -915,7 +970,7 @@ fn ingest_event_for_chunk<
                 && state.view_mode != FramedViewMode::SAE
             {
                 // event.delta_t -= ((*last_filled_frame_ref + 1) * state.ref_interval as i64) as u32;
-                event.delta_t = event.delta_t.saturating_sub(prev_running_ts as u32);
+                event.t = event.t.saturating_sub(prev_running_ts as u32);
             }
 
             // TODO: Handle SAE view mode
@@ -965,15 +1020,15 @@ fn ingest_event_for_chunk<
             _ => {}
         }
 
-        let mut frame: &mut Option<T>;
+        let mut px: &mut Option<T>;
         for i in prev_last_filled_frame..*last_filled_frame_ref {
             if i - state.frames_written + 1 >= 0 {
-                frame = &mut frame_chunk[(i - state.frames_written + 1) as usize].array
+                px = &mut frame_chunk[(i - state.frames_written + 1) as usize].array
                     [[event.coord.y.into(), event.coord.x.into(), channel.into()]];
-                match frame {
+                match px {
                     Some(_val) => {}
                     None => {
-                        *frame = Some(*last_frame_intensity_ref);
+                        *px = Some(*last_frame_intensity_ref);
                         frame_chunk[(i - state.frames_written + 1) as usize].filled_count += 1;
                     }
                 }

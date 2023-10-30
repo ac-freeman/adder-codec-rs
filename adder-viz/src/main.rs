@@ -66,7 +66,7 @@ fn main() {
         .init_resource::<PlayerState>()
         .add_plugins(DefaultPlugins.set(WindowPlugin {
             primary_window: Some(Window {
-                title: "ADΔER Tuner".to_string(),
+                title: "ADΔER Viz".to_string(),
                 resolution: WindowResolution::default(),
                 present_mode: PresentMode::AutoVsync,
                 ..default()

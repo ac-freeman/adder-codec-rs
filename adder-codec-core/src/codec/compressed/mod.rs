@@ -1,12 +1,16 @@
-pub mod adu;
-pub mod blocks;
 pub mod fenwick;
+mod source_model;
 /// Compressed codec
 pub mod stream;
 
 pub const BLOCK_SIZE_BIG: usize = 64;
 
 pub const BLOCK_SIZE_BIG_AREA: usize = BLOCK_SIZE_BIG * BLOCK_SIZE_BIG;
+
+pub type DResidual = i16;
+pub const DRESIDUAL_NO_EVENT: DResidual = 256;
+pub const DRESIDUAL_SKIP_CUBE: DResidual = 257;
+pub type TResidual = i16;
 
 #[cfg(test)]
 mod tests {
@@ -34,7 +38,7 @@ mod tests {
                 c: None,
             },
             d: 5,
-            delta_t: 100,
+            t: 100,
         };
         encoder.ingest_event(test_event).unwrap();
         encoder.flush_writer().unwrap();
@@ -49,9 +53,9 @@ mod tests {
         let mut encoder = Encoder::new_compressed(output, EncoderOptions::default());
         let meta = encoder.meta().clone();
         encoder.ingest_event(test_event).unwrap();
-        test_event.delta_t += 100;
+        test_event.t += 100;
         encoder.ingest_event(test_event).unwrap();
-        test_event.delta_t += 100;
+        test_event.t += 100;
         encoder.ingest_event(test_event).unwrap();
         encoder.flush_writer().unwrap();
         let writer = encoder.close_writer().unwrap().unwrap();

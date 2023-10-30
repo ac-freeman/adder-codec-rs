@@ -3,7 +3,9 @@ use crate::utils::prep_bevy_image;
 use crate::{slider_pm, Images};
 #[cfg(feature = "open-cv")]
 use adder_codec_rs::transcoder::source::davis::TranscoderMode;
-use adder_codec_rs::transcoder::source::video::{FramedViewMode, Source, SourceError};
+use adder_codec_rs::transcoder::source::video::{
+    FramedViewMode, Source, SourceError, VideoBuilder,
+};
 use bevy::ecs::system::Resource;
 use bevy::prelude::{Assets, Commands, Image, Res, ResMut, Time};
 use bevy_egui::egui;
@@ -26,7 +28,7 @@ use bevy_egui::egui::plot::Legend;
 use egui::plot::Plot;
 use std::default::Default;
 use std::fs::File;
-use std::io::BufWriter;
+use std::io::{BufWriter, Write};
 use std::path::PathBuf;
 
 pub struct ParamsUiState {
@@ -81,14 +83,14 @@ impl Default for ParamsUiState {
         ParamsUiState {
             delta_t_ref: 255.0,
             delta_t_ref_max: 255.0,
-            delta_t_max_mult: 2,
+            delta_t_max_mult: 30,
             delta_t_ref_slider: 255.0,
-            delta_t_max_mult_slider: 2,
-            scale: 0.5,
-            scale_slider: 0.5,
+            delta_t_max_mult_slider: 30,
+            scale: 0.25,
+            scale_slider: 0.25,
             thread_count: rayon::current_num_threads() - 1,
             thread_count_slider: rayon::current_num_threads() - 1,
-            color: true,
+            color: false,
             show_original: true,
             view_mode_radio_state: FramedViewMode::Intensity,
             #[cfg(feature = "open-cv")]
@@ -229,6 +231,16 @@ impl TranscoderState {
                 self.ui_state = Default::default();
             }
             if ui.add(egui::Button::new("Reset video")).clicked() {
+                if let Some(framed_source) = &mut self.transcoder.framed_source {
+                    match framed_source.get_video_mut().end_write_stream() {
+                        Ok(Some(mut writer)) => {
+                            writer.flush();
+                        }
+                        Ok(None) => {}
+                        Err(_) => {}
+                    }
+                }
+
                 self.transcoder = AdderTranscoder::default();
                 self.ui_info_state = InfoUiState::default();
                 commands.insert_resource(Images::default());

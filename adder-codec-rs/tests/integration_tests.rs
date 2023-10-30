@@ -336,7 +336,7 @@ fn test_encode_event() {
             c: None,
         },
         d: 5,
-        delta_t: 1000,
+        t: 1000,
     };
     stream.ingest_event(event).unwrap();
     cleanup_raw_writer(n, stream)
@@ -353,7 +353,7 @@ fn test_encode_events() {
             c: None,
         },
         d: 5,
-        delta_t: 1000,
+        t: 1000,
     };
     let events = vec![event, event, event];
     stream.ingest_events(&events).unwrap();
@@ -399,7 +399,7 @@ fn read_event() {
             c: None,
         },
         d: 5,
-        delta_t: 1000,
+        t: 1000,
     };
     stream.ingest_event(event).unwrap();
     stream.flush_writer().unwrap();
@@ -437,7 +437,7 @@ fn test_event_framer_ingest() {
             c: Some(1),
         },
         d: 5,
-        delta_t: 5000,
+        t: 5000,
     };
     frame_sequence.ingest_event(&mut event, None);
 
@@ -448,7 +448,7 @@ fn test_event_framer_ingest() {
             c: Some(1),
         },
         d: 5,
-        delta_t: 5100,
+        t: 5100,
     };
     frame_sequence.ingest_event(&mut event2, None);
 }
@@ -474,7 +474,7 @@ fn test_event_framer_ingest_get_filled() {
                     c: None,
                 },
                 d: 5,
-                delta_t: 5100,
+                t: 5100,
             };
             let filled = frame_sequence.ingest_event(&mut event, None);
             if i < 4 || j < 4 {
@@ -512,7 +512,7 @@ fn get_frame_bytes_eventcoordless() {
                     c: None,
                 },
                 d: 5,
-                delta_t: 5100,
+                t: 5100,
             };
             let filled = frame_sequence.ingest_event(&mut event, None);
             if i < 4 || j < 4 {
@@ -570,7 +570,7 @@ fn get_frame_bytes_u8() {
                     c: None,
                 },
                 d: 5,
-                delta_t: 5100,
+                t: 5100,
             };
             let filled = frame_sequence.ingest_event(&mut event, None);
             if i < 4 || j < 4 {
@@ -627,7 +627,7 @@ fn get_frame_bytes_u16() {
                     c: None,
                 },
                 d: 5,
-                delta_t: 5100,
+                t: 5100,
             };
             let filled = frame_sequence.ingest_event(&mut event, None);
             if i < 4 || j < 4 {
@@ -683,7 +683,7 @@ fn get_frame_bytes_u32() {
                     c: None,
                 },
                 d: 5,
-                delta_t: 5100,
+                t: 5100,
             };
             let filled = frame_sequence.ingest_event(&mut event, None);
             if i < 4 || j < 4 {
@@ -802,7 +802,7 @@ fn test_get_empty_frame() {
             c: None,
         },
         d: 5,
-        delta_t: 500,
+        t: 500,
     };
 
     // TODO: check that events ingested with times after they've been popped off don't actually get

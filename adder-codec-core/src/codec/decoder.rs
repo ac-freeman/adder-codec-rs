@@ -2,8 +2,8 @@ use crate::codec::{CodecError, CodecMetadata, ReadCompression, ReadCompressionEn
 use crate::SourceType::*;
 use crate::{Event, PlaneSize, SourceCamera, SourceType};
 
-#[cfg(feature = "compression")]
-use crate::codec::compressed::adu::frame::Adu;
+// #[cfg(feature = "compression")]
+// use crate::codec::compressed::adu::frame::Adu;
 #[cfg(feature = "compression")]
 use crate::codec::compressed::stream::CompressedInput;
 #[cfg(feature = "compression")]
@@ -195,15 +195,15 @@ impl<R: Read + Seek> Decoder<R> {
         self.input.digest_event(reader)
     }
 
-    /// Read and decode the next event from the input stream
-    #[cfg(feature = "compression")]
-    #[inline]
-    pub fn digest_event_debug(
-        &mut self,
-        reader: &mut BitReader<R, BigEndian>,
-    ) -> Result<(Option<Adu>, Event), CodecError> {
-        self.input.digest_event_debug(reader)
-    }
+    // Read and decode the next event from the input stream
+    // #[cfg(feature = "compression")]
+    // #[inline]
+    // pub fn digest_event_debug(
+    //     &mut self,
+    //     reader: &mut BitReader<R, BigEndian>,
+    // ) -> Result<(Option<Adu>, Event), CodecError> {
+    //     self.input.digest_event_debug(reader)
+    // }
 
     /// Sets the input stream position to the given absolute byte position
     pub fn set_input_stream_position(
@@ -229,7 +229,10 @@ impl<R: Read + Seek> Decoder<R> {
         reader: &mut BitReader<R, BigEndian>,
     ) -> Result<u64, CodecError> {
         for i in self.input.meta().event_size as i64..10 {
-            reader.seek_bits(SeekFrom::End(i * 8))?;
+            // TODO: Make this work differently on raw vs. compressed stream
+            reader.seek_bits(SeekFrom::End(
+                i * self.input.meta().plane.volume() as i64 * 8,
+            ))?;
             if let Err(CodecError::Eof) = self.digest_event(reader) {
                 break;
             }
@@ -258,7 +261,7 @@ mod tests {
                 c: None,
             },
             d: 0,
-            delta_t: 0,
+            t: 0,
         }
     }
 
