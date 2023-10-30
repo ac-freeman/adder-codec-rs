@@ -399,7 +399,9 @@ impl PlayerState {
         };
 
         player = player.reconstruction_method(self.ui_state.reconstruction_method.clone());
-        player = player.stream_pos(self.ui_info_state.stream_state.file_pos);
+        // player = player.stream_pos(self.ui_info_state.stream_state.file_pos);
+        // TODO: Restore
+        player = player.stream_pos(0);
 
         let plane = player
             .input_stream

@@ -110,7 +110,6 @@ fn update_ui_scale_factor(
 
         if let Ok(window) = windows.get_single() {
             let scale_factor = if toggle_scale_factor.unwrap_or(true) {
-                eprintln!("using default scale factor");
                 1.0
             } else {
                 eprintln!(
