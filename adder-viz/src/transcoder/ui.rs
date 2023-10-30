@@ -448,7 +448,6 @@ impl TranscoderState {
                                 != self.ui_state.encoder_options.event_order)
                                     && self.ui_info_state.output_path.is_some())
                             {
-                                dbg!("replacing here");
                                 if self.ui_state.davis_mode_radio_state == RawDvs {
                                     // self.ui_state.davis_output_fps = 1000000.0;
                                     // self.ui_state.davis_output_fps_slider = 1000000.0;
@@ -522,8 +521,6 @@ impl TranscoderState {
         {
 
             let tmp = source.get_video_ref().get_encoder_options().crf.get_quality();
-            dbg!(tmp);
-            dbg!(self.ui_state.encoder_options.crf);
             self.ui_state.auto_quality_mirror = true;
             eprintln!("ui 0");
             source.crf(self.ui_state.encoder_options.crf.get_quality().unwrap_or(DEFAULT_CRF_QUALITY));
@@ -548,10 +545,8 @@ impl TranscoderState {
                 != source.get_video_ref().state.delta_t_max / source.get_video_ref().state.ref_time
             || self.ui_state.encoder_options.crf.get_parameters() != source.get_video_ref().get_encoder_options().crf.get_parameters())
         {
-            dbg!("reset");
             let video = source.get_video_mut();
             let parameters = self.ui_state.encoder_options.crf.get_parameters();
-            dbg!(parameters);
             video.update_quality_manual(
                 parameters.c_thresh_baseline,
                 parameters.c_thresh_max,
@@ -777,7 +772,6 @@ fn side_panel_grid_contents(
         vec![],
         1,
     );
-    dbg!(ui_state.adder_tresh_baseline_slider);
     ui.end_row();
 
     ui.label("Threshold max:");

@@ -1054,9 +1054,7 @@ impl<W: Write + 'static> Video<W> {
     /// Update the CRF value and set the baseline c for all pixels
     pub(crate) fn update_crf(&mut self, crf: u8) {
         self.encoder.options.crf = Crf::new(Some(crf), self.state.plane);
-        eprintln!("sync1");
         self.encoder.sync_crf();
-        dbg!(self.encoder.options.crf);
 
         let c_thresh_baseline = self.encoder.options.crf.get_parameters().c_thresh_baseline;
 

@@ -124,10 +124,6 @@ impl Contexts {
                     && actual_intensity - c_thresh_max  < recon_intensity
                     && actual_intensity + c_thresh_max > recon_intensity
                 {
-                    if bitshift > 1 {
-                        eprintln!("made it {}", bitshift);
-                    }
-
                     t_residual >>= 1;
                     bitshift += 1;
                     let recon_predicted_t = (t_prediction + t_residual) as AbsoluteT;
