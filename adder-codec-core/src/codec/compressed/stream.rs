@@ -1,4 +1,4 @@
-use crate::codec::{CodecError, CodecMetadata, ReadCompression, WriteCompression};
+use crate::codec::{CodecError, CodecMetadata, EncoderOptions, ReadCompression, WriteCompression};
 use arithmetic_coding::{Decoder, Encoder};
 use bitstream_io::{BigEndian, BitRead, BitReader, BitWrite, BitWriter};
 use std::cmp::min;
@@ -36,6 +36,7 @@ pub struct CompressedOutput<W: Write> {
     //     Option<arithmetic_coding::Encoder<FenwickModel, BitWriter<Vec<u8>, BigEndian>>>,
     // pub(crate) contexts: Option<Contexts>,
     pub(crate) stream: Option<BitWriter<W, BigEndian>>,
+    pub(crate) options: EncoderOptions,
 }
 
 /// Read compressed ADΔER data from a stream.
@@ -48,6 +49,7 @@ pub struct CompressedInput<R: Read> {
     // (todo) when the ADU is decoded, so that they can be popped off the end of the vector.
     decoded_event_queue: VecDeque<Event>,
     _phantom: std::marker::PhantomData<R>,
+
 }
 
 impl<W: Write> CompressedOutput<W> {
@@ -66,7 +68,13 @@ impl<W: Write> CompressedOutput<W> {
             // arithmetic_coder: Some(arithmetic_coder),
             // contexts: Some(contexts),
             stream: Some(BitWriter::endian(writer, BigEndian)),
+            options: EncoderOptions::default(meta.plane),
         }
+    }
+
+    /// Keep the compressed encoder's option state synchronized with the high-level encoder container
+    pub(crate) fn with_options(&mut self, options: EncoderOptions) {
+        self.options = options;
     }
 
     /// Convenience function to get a mutable reference to the underlying stream.
@@ -118,8 +126,10 @@ impl<W: Write> WriteCompression<W> for CompressedOutput<W> {
                 // Create a temporary u8 stream to write the arithmetic-coded data to
                 let mut temp_stream = BitWriter::endian(Vec::new(), BigEndian);
 
+                let parameters = self.options.crf.get_parameters();
+
                 // Compress the Adu. This also writes the EOF symbol and flushes the encoder
-                self.adu.compress(&mut temp_stream)?;
+                self.adu.compress(&mut temp_stream, parameters.c_thresh_max)?;
 
                 let written_data = temp_stream.into_writer();
 

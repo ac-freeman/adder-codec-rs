@@ -85,6 +85,7 @@ impl EventAdu {
     pub fn compress(
         &mut self,
         stream: &mut BitWriter<Vec<u8>, BigEndian>,
+        c_thresh_max: u8,
     ) -> Result<(), CodecError> {
         // Create a new source model instance
         let mut source_model = FenwickModel::with_symbols(u16::MAX as usize, 1 << 30);
@@ -104,7 +105,7 @@ impl EventAdu {
 
         for cube in self.event_cubes.iter_mut() {
             debug_assert_eq!(cube.start_t, self.start_t);
-            cube.compress(&mut encoder, &contexts, stream)?;
+            cube.compress(&mut encoder, &contexts, stream, Some(c_thresh_max))?;
         }
 
         // Flush the encoder
@@ -117,6 +118,7 @@ impl EventAdu {
     pub fn compress_test(
         &mut self,
         stream: &mut BitWriter<Vec<u8>, BigEndian>,
+        c_thresh_max: u8,
     ) -> Result<(), CodecError> {
         // Create a new source model instance
         let mut source_model = FenwickModel::with_symbols(u16::MAX as usize, 1 << 30);
@@ -136,7 +138,7 @@ impl EventAdu {
 
         for cube in self.event_cubes.iter_mut() {
             debug_assert_eq!(cube.start_t, self.start_t);
-            cube.compress(&mut encoder, &contexts, stream)?;
+            cube.compress(&mut encoder, &contexts, stream, Some(c_thresh_max))?;
         }
 
         // Flush the encoder

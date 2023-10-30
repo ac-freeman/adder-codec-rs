@@ -74,10 +74,11 @@ impl<W: Write + 'static> Encoder<W> {
 
     /// Create a new [`Encoder`] with the given compression scheme
     #[cfg(feature = "compression")]
-    pub fn new_compressed(compression: CompressedOutput<W>, options: EncoderOptions) -> Self
+    pub fn new_compressed(mut compression: CompressedOutput<W>, options: EncoderOptions) -> Self
     where
         Self: Sized,
     {
+        compression.with_options(options);
         let mut encoder = Self {
             output: WriteCompressionEnum::CompressedOutput(compression),
             bincode: DefaultOptions::new()
@@ -85,6 +86,7 @@ impl<W: Write + 'static> Encoder<W> {
                 .with_big_endian(),
             options,
             state: Default::default(),
+
         };
         encoder.encode_header().unwrap();
         encoder
@@ -287,6 +289,19 @@ impl<W: Write + 'static> Encoder<W> {
 
     pub fn get_options(&self) -> EncoderOptions {
         self.options
+    }
+
+
+    /// Keeps the compressed output options in sync with the encoder options. This prevents us
+    /// from constantly having to look up a reference-counted variable, which is costly at this scale.
+    pub fn sync_crf(&mut self) {
+        match &mut self.output {
+            WriteCompressionEnum::CompressedOutput(compressed_output) => {
+                compressed_output.options = self.options.clone();
+            }
+            WriteCompressionEnum::RawOutput(_) => {}
+            WriteCompressionEnum::EmptyOutput(_) => {}
+        }
     }
 }
 
