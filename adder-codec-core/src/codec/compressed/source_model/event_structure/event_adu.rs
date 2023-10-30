@@ -340,7 +340,7 @@ mod tests {
         let bufwriter = Vec::new();
         let mut stream = BitWriter::endian(bufwriter, BigEndian);
 
-        adu.compress_test(&mut stream)?;
+        adu.compress_test(&mut stream, 0)?;
 
         let mut stream = BitReader::endian(Cursor::new(stream.into_writer()), BigEndian);
         let mut adu2 = EventAdu::new(plane, start_t, dt_ref, num_intervals);
@@ -410,7 +410,7 @@ mod tests {
         let bufwriter = Vec::new();
         let mut stream = BitWriter::endian(bufwriter, BigEndian);
 
-        adu.compress_test(&mut stream)?;
+        adu.compress_test(&mut stream, 0)?;
 
         let encoded_data = stream.into_writer();
         let mut stream = BitReader::endian(Cursor::new(encoded_data.clone()), BigEndian);

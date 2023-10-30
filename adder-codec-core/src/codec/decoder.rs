@@ -252,6 +252,7 @@ mod tests {
     use crate::codec::{EncoderOptions, EventOrder};
     use crate::Coord;
     use std::io::{BufReader, BufWriter, Cursor, Write};
+    use crate::codec::rate_controller::Crf;
 
     fn stock_event() -> Event {
         Event {
@@ -284,7 +285,11 @@ mod tests {
             bufwriter,
         );
         let mut encoder: Encoder<BufWriter<Vec<u8>>> =
-            Encoder::new_raw(compression, EncoderOptions::default());
+            Encoder::new_raw(compression, EncoderOptions::default(PlaneSize{
+                width: 100,
+                height: 100,
+                channels: 1
+            }));
 
         let event = stock_event();
         encoder.ingest_event(event).unwrap();
@@ -318,6 +323,11 @@ mod tests {
             EncoderOptions {
                 event_drop: Default::default(),
                 event_order: EventOrder::Interleaved,
+                crf: Crf::new(None, PlaneSize{
+                    width: 100,
+                    height: 100,
+                    channels: 1
+                }),
             },
         );
 
@@ -350,7 +360,11 @@ mod tests {
             bufwriter,
         );
         let encoder: Encoder<BufWriter<Vec<u8>>> =
-            Encoder::new_compressed(compression, EncoderOptions::default());
+            Encoder::new_compressed(compression, EncoderOptions::default(PlaneSize{
+                width: 100,
+                height: 100,
+                channels: 1
+            }));
 
         // let event = stock_event();
         //

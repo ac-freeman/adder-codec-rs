@@ -29,7 +29,7 @@ use std::default::Default;
 use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::path::PathBuf;
-use adder_codec_core::codec::rate_controller::{CRF, DEFAULT_CRF_QUALITY};
+use adder_codec_core::codec::rate_controller::{CRF, Crf, DEFAULT_CRF_QUALITY};
 
 pub struct ParamsUiState {
     pub(crate) delta_t_ref: f32,
@@ -63,15 +63,10 @@ pub struct ParamsUiState {
     pub(crate) show_features: ShowFeatureMode,
     pub(crate) auto_quality: bool,
     auto_quality_mirror: bool,
-    pub(crate) crf: u8,
     pub(crate) crf_slider: u8,
-    feature_radius: f32,
-    feature_radius_slider: f32,
-    adder_tresh_velocity: u8,
+    feature_radius_slider: u16,
     adder_tresh_velocity_slider: u8,
-    adder_tresh_max: u8,
     adder_tresh_max_slider: u8,
-    pub(crate) adder_tresh_baseline: u8,
     adder_tresh_baseline_slider: u8,
     metric_mse: bool,
     metric_psnr: bool,
@@ -112,15 +107,10 @@ impl Default for ParamsUiState {
             show_features: ShowFeatureMode::Off,
             auto_quality: false,
             auto_quality_mirror: false,
-            crf: DEFAULT_CRF_QUALITY,
             crf_slider: DEFAULT_CRF_QUALITY,
-            feature_radius: 5.0,
-            feature_radius_slider: 5.0,
-            adder_tresh_velocity: CRF[DEFAULT_CRF_QUALITY as usize][2] as u8,
+            feature_radius_slider: 5,
             adder_tresh_velocity_slider: CRF[DEFAULT_CRF_QUALITY as usize][2] as u8,
-            adder_tresh_max: CRF[DEFAULT_CRF_QUALITY as usize][1] as u8,
             adder_tresh_max_slider: CRF[DEFAULT_CRF_QUALITY as usize][1] as u8,
-            adder_tresh_baseline: CRF[DEFAULT_CRF_QUALITY as usize][0] as u8,
             adder_tresh_baseline_slider: CRF[DEFAULT_CRF_QUALITY as usize][0] as u8,
             metric_mse: true,
             metric_psnr: true,
@@ -251,7 +241,7 @@ impl TranscoderState {
             .spacing([10.0, 4.0])
             .striped(true)
             .show(ui, |ui| {
-                side_panel_grid_contents(&self.transcoder, ui, &mut self.ui_state);
+                side_panel_grid_contents(&self.transcoder, ui, &mut self.ui_state, &self.ui_info_state);
             });
     }
 
@@ -452,10 +442,13 @@ impl TranscoderState {
                                     != self.ui_state.time_mode
                                     || source.get_video_ref().encoder_type
                                         != self.ui_state.encoder_type
-                                    || source.get_video_ref().get_encoder_options()
-                                        != self.ui_state.encoder_options)
+                                    || source.get_video_ref().get_encoder_options().event_drop
+                                        != self.ui_state.encoder_options.event_drop
+                                || source.get_video_ref().get_encoder_options().event_order
+                                != self.ui_state.encoder_options.event_order)
                                     && self.ui_info_state.output_path.is_some())
                             {
+                                dbg!("replacing here");
                                 if self.ui_state.davis_mode_radio_state == RawDvs {
                                     // self.ui_state.davis_output_fps = 1000000.0;
                                     // self.ui_state.davis_output_fps_slider = 1000000.0;
@@ -486,8 +479,10 @@ impl TranscoderState {
                         || source.get_ref_time() != self.ui_state.delta_t_ref as u32
                         || ((source.get_video_ref().get_time_mode() != self.ui_state.time_mode
                             || source.get_video_ref().encoder_type != self.ui_state.encoder_type
-                            || source.get_video_ref().get_encoder_options()
-                                != self.ui_state.encoder_options)
+                        || source.get_video_ref().get_encoder_options().event_drop
+                        != self.ui_state.encoder_options.event_drop
+                        || source.get_video_ref().get_encoder_options().event_order
+                        != self.ui_state.encoder_options.event_order)
                             && self.ui_info_state.output_path.is_some())
                         || match source.get_video_ref().state.plane.c() {
                             1 => {
@@ -523,42 +518,46 @@ impl TranscoderState {
         // TODO: Refactor all this garbage code
         if self.ui_state.auto_quality
             && (!self.ui_state.auto_quality_mirror
-                || self.ui_state.crf != source.get_video_ref().get_encoder_options().crf.get_quality().unwrap_or(DEFAULT_CRF_QUALITY))
+                || self.ui_state.encoder_options.crf.get_quality() != source.get_video_ref().get_encoder_options().crf.get_quality())
         {
+
+            let tmp = source.get_video_ref().get_encoder_options().crf.get_quality();
+            dbg!(tmp);
+            dbg!(self.ui_state.encoder_options.crf);
             self.ui_state.auto_quality_mirror = true;
-            source.crf(self.ui_state.crf);
+            eprintln!("ui 0");
+            source.crf(self.ui_state.encoder_options.crf.get_quality().unwrap_or(DEFAULT_CRF_QUALITY));
 
             let video = source.get_video_ref();
 
             let binding = video.get_encoder_options();
             let parameters = binding.crf.get_parameters();
+
+            self.ui_state.encoder_options = binding.clone();
             // Update ui state to match
-            self.ui_state.adder_tresh_baseline = parameters.c_thresh_baseline;
-            self.ui_state.adder_tresh_baseline_slider = self.ui_state.adder_tresh_baseline;
-            self.ui_state.adder_tresh_max = parameters.c_thresh_max as u8;
-            self.ui_state.adder_tresh_max_slider = self.ui_state.adder_tresh_max;
+            self.ui_state.crf_slider = binding.crf.get_quality().unwrap_or(DEFAULT_CRF_QUALITY);
+            self.ui_state.adder_tresh_baseline_slider = parameters.c_thresh_baseline;
+            self.ui_state.adder_tresh_max_slider = parameters.c_thresh_max;
             self.ui_state.delta_t_max_mult = video.state.delta_t_max / video.state.ref_time;
             self.ui_state.delta_t_max_mult_slider = self.ui_state.delta_t_max_mult;
-            self.ui_state.adder_tresh_velocity = parameters.c_increase_velocity;
-            self.ui_state.adder_tresh_velocity_slider = self.ui_state.adder_tresh_velocity;
-            self.ui_state.feature_radius = parameters.feature_c_radius as f32;
-            self.ui_state.feature_radius_slider = self.ui_state.feature_radius;
-        } else if self.ui_state.adder_tresh_baseline
-            != parameters.c_thresh_baseline
-            || self.ui_state.adder_tresh_max != parameters.c_thresh_max as u8
-            || self.ui_state.delta_t_max_mult
+            self.ui_state.adder_tresh_velocity_slider = parameters.c_increase_velocity;
+            self.ui_state.feature_radius_slider = parameters.feature_c_radius;
+
+        } else if !self.ui_state.auto_quality && (
+            self.ui_state.delta_t_max_mult
                 != source.get_video_ref().state.delta_t_max / source.get_video_ref().state.ref_time
-            || self.ui_state.adder_tresh_velocity
-                != parameters.c_increase_velocity
-            || self.ui_state.feature_radius as u16 != parameters.feature_c_radius
+            || self.ui_state.encoder_options.crf.get_parameters() != source.get_video_ref().get_encoder_options().crf.get_parameters())
         {
+            dbg!("reset");
             let video = source.get_video_mut();
+            let parameters = self.ui_state.encoder_options.crf.get_parameters();
+            dbg!(parameters);
             video.update_quality_manual(
-                self.ui_state.adder_tresh_baseline,
-                self.ui_state.adder_tresh_max,
+                parameters.c_thresh_baseline,
+                parameters.c_thresh_max,
                 self.ui_state.delta_t_max_mult,
-                self.ui_state.adder_tresh_velocity,
-                self.ui_state.feature_radius,
+                parameters.c_increase_velocity,
+                parameters.feature_c_radius as f32,
             )
         }
 
@@ -705,6 +704,7 @@ fn side_panel_grid_contents(
     transcoder: &AdderTranscoder,
     ui: &mut Ui,
     ui_state: &mut ParamsUiState,
+    info_ui_state: &InfoUiState
 ) {
     let dtr_max = ui_state.delta_t_ref_max;
 
@@ -736,16 +736,20 @@ fn side_panel_grid_contents(
     ui.end_row();
 
     ui.label("CRF quality:");
+    let mut crf = ui_state.encoder_options.crf.get_quality().unwrap_or(DEFAULT_CRF_QUALITY);
     slider_pm(
         ui_state.auto_quality,
         false,
         ui,
-        &mut ui_state.crf,
+        &mut crf,
         &mut ui_state.crf_slider,
         0..=CRF.len() as u8 - 1,
         vec![],
         1,
     );
+    if ui_state.auto_quality && crf != ui_state.encoder_options.crf.get_quality().unwrap_or(DEFAULT_CRF_QUALITY) {
+        ui_state.encoder_options.crf = Crf::new(Some(crf), info_ui_state.plane);
+    }
     ui.end_row();
 
     ui.label("Δt_max multiplier:");
@@ -761,17 +765,19 @@ fn side_panel_grid_contents(
     );
     ui.end_row();
 
+    let mut parameters = ui_state.encoder_options.crf.get_parameters_mut();
     ui.label("Threshold baseline:");
     slider_pm(
         !ui_state.auto_quality,
         false,
         ui,
-        &mut ui_state.adder_tresh_baseline,
+        &mut parameters.c_thresh_baseline,
         &mut ui_state.adder_tresh_baseline_slider,
         0..=255,
         vec![],
         1,
     );
+    dbg!(ui_state.adder_tresh_baseline_slider);
     ui.end_row();
 
     ui.label("Threshold max:");
@@ -779,7 +785,7 @@ fn side_panel_grid_contents(
         !ui_state.auto_quality,
         false,
         ui,
-        &mut ui_state.adder_tresh_max,
+        &mut parameters.c_thresh_max,
         &mut ui_state.adder_tresh_max_slider,
         0..=255,
         vec![],
@@ -792,7 +798,7 @@ fn side_panel_grid_contents(
         !ui_state.auto_quality,
         false,
         ui,
-        &mut ui_state.adder_tresh_velocity,
+        &mut parameters.c_increase_velocity,
         &mut ui_state.adder_tresh_velocity_slider,
         1..=30,
         vec![],
@@ -805,11 +811,11 @@ fn side_panel_grid_contents(
         !ui_state.auto_quality,
         false,
         ui,
-        &mut ui_state.feature_radius,
+        &mut parameters.feature_c_radius,
         &mut ui_state.feature_radius_slider,
-        0.0..=100.0,
+        0..=100,
         vec![],
-        1.0,
+        1,
     );
     ui.end_row();
 

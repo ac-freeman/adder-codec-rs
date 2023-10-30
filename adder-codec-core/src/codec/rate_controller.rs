@@ -67,27 +67,35 @@ impl Crf {
     }
 
     pub fn override_c_thresh_baseline(&mut self, baseline: u8) {
+        dbg!("a");
         self.parameters.c_thresh_baseline = baseline;
         self.crf_quality = None;
     }
 
     pub fn override_c_thresh_max(&mut self, max: u8) {
+        dbg!("b");
         self.parameters.c_thresh_max = max;
         self.crf_quality = None;
     }
 
     pub fn override_c_increase_velocity(&mut self, velocity: u8) {
+        dbg!("c");
         self.parameters.c_increase_velocity = velocity;
         self.crf_quality = None;
     }
 
     pub fn override_feature_c_radius(&mut self, radius: u16) {
+        dbg!("d");
         self.parameters.feature_c_radius = radius;
         self.crf_quality = None;
     }
 
     pub fn get_parameters(&self) -> &CrfParameters {
         &self.parameters
+    }
+
+    pub fn get_parameters_mut(&mut self) -> &mut CrfParameters {
+        &mut self.parameters
     }
 
     pub fn get_quality(&self) -> Option<u8> {

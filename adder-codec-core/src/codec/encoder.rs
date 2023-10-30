@@ -295,6 +295,7 @@ impl<W: Write + 'static> Encoder<W> {
     /// Keeps the compressed output options in sync with the encoder options. This prevents us
     /// from constantly having to look up a reference-counted variable, which is costly at this scale.
     pub fn sync_crf(&mut self) {
+        eprintln!("Syncing crf");
         match &mut self.output {
             WriteCompressionEnum::CompressedOutput(compressed_output) => {
                 compressed_output.options = self.options.clone();
@@ -340,7 +341,11 @@ mod tests {
             bincode: DefaultOptions::new()
                 .with_fixint_encoding()
                 .with_big_endian(),
-            options: EncoderOptions::default(),
+            options: EncoderOptions::default(PlaneSize{
+                width: 100,
+                height: 100,
+                channels: 1
+            }),
             state: EncoderState::default(),
         };
         let mut writer = encoder.close_writer().unwrap().unwrap();
@@ -371,7 +376,11 @@ mod tests {
             bincode: DefaultOptions::new()
                 .with_fixint_encoding()
                 .with_big_endian(),
-            options: EncoderOptions::default(),
+            options: EncoderOptions::default(PlaneSize{
+                width: 100,
+                height: 100,
+                channels: 1
+            }),
             state: EncoderState::default(),
         };
         let mut writer = encoder.close_writer().unwrap().unwrap();
@@ -402,7 +411,11 @@ mod tests {
             bufwriter,
         );
         let mut encoder: Encoder<BufWriter<Vec<u8>>> =
-            Encoder::new_raw(compression, Default::default());
+            Encoder::new_raw(compression, EncoderOptions::default(PlaneSize{
+                width: 1,
+                height: 1,
+                channels: 3
+            }));
 
         let event = Event {
             coord: Coord {
@@ -437,19 +450,21 @@ mod tests {
                 delta_t_max: 0,
                 event_size: 0,
                 source_camera: Default::default(),
+
             },
             // frame: Default::default(),
             // adu: Adu::new(),
             // contexts: None,
             adu: Default::default(),
             stream: Some(BitWriter::endian(bufwriter, BigEndian)),
+            options: EncoderOptions::default(PlaneSize::default()),
         };
         let _encoder = Encoder {
             output: WriteCompressionEnum::CompressedOutput(compression),
             bincode: DefaultOptions::new()
                 .with_fixint_encoding()
                 .with_big_endian(),
-            options: Default::default(),
+            options: EncoderOptions::default(PlaneSize::default()),
             state: Default::default(),
         };
     }
@@ -478,7 +493,7 @@ mod tests {
             bincode: DefaultOptions::new()
                 .with_fixint_encoding()
                 .with_big_endian(),
-            options: Default::default(),
+            options: EncoderOptions::default(PlaneSize::default()),
             state: Default::default(),
         };
     }
@@ -502,6 +517,6 @@ mod tests {
             },
             bufwriter,
         );
-        let _encoder = Encoder::new_compressed(compression, EncoderOptions::default());
+        let _encoder = Encoder::new_compressed(compression, EncoderOptions::default(PlaneSize::default()));
     }
 }

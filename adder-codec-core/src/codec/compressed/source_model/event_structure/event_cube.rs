@@ -1110,7 +1110,7 @@ mod compression_tests {
 
         let mut encoder = Encoder::new(source_model);
 
-        cube.compress(&mut encoder, &contexts, &mut stream, )?;
+        cube.compress(&mut encoder, &contexts, &mut stream, Some(0))?;
 
         eof_context(&contexts, &mut encoder, &mut stream);
 
@@ -1167,7 +1167,7 @@ mod compression_tests {
 
         let mut encoder = Encoder::new(source_model);
 
-        cube.compress(&mut encoder, &contexts, &mut stream, )?;
+        cube.compress(&mut encoder, &contexts, &mut stream, Some(0))?;
 
         eof_context(&contexts, &mut encoder, &mut stream);
 
@@ -1243,7 +1243,7 @@ mod compression_tests {
 
         let mut encoder = Encoder::new(source_model);
 
-        cube.compress(&mut encoder, &contexts, &mut stream, )?;
+        cube.compress(&mut encoder, &contexts, &mut stream, Some(0))?;
 
         eof_context(&contexts, &mut encoder, &mut stream);
 
@@ -1327,7 +1327,7 @@ mod compression_tests {
 
         let mut encoder = Encoder::new(source_model);
 
-        cube.compress(&mut encoder, &contexts, &mut stream, )?;
+        cube.compress(&mut encoder, &contexts, &mut stream, Some(0))?;
 
         eof_context(&contexts, &mut encoder, &mut stream);
 

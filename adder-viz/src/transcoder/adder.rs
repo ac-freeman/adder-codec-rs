@@ -23,6 +23,7 @@ use adder_codec_rs::transcoder::source::video::VideoBuilder;
 use bevy_egui::egui::{Color32, RichText};
 #[cfg(feature = "open-cv")]
 use opencv::Result;
+use adder_codec_core::codec::rate_controller::DEFAULT_CRF_QUALITY;
 
 #[derive(Default)]
 pub struct AdderTranscoder {
@@ -69,6 +70,7 @@ impl AdderTranscoder {
                             ui_state.color,
                             ui_state.scale,
                         )?
+                            .crf(ui_state.encoder_options.crf.get_quality().unwrap_or(DEFAULT_CRF_QUALITY))
                         .frame_start(current_frame)?
                         .chunk_rows(64)
                         .auto_time_parameters(
@@ -85,6 +87,9 @@ impl AdderTranscoder {
                             Some(output_path) => {
                                 let out_path = output_path.to_str().unwrap();
                                 let writer = BufWriter::new(File::create(out_path)?);
+
+                                eprintln!("calling write out with options:");
+                                dbg!(ui_state.encoder_options);
                                 framed = *framed.write_out(
                                     FramedU8,
                                     ui_state.time_mode,
@@ -179,7 +184,7 @@ impl AdderTranscoder {
                             Davis::new(reconstructor, rt, ui_state.davis_mode_radio_state)?
                                 .optimize_adder_controller(false) // TODO
                                 .mode(ui_state.davis_mode_radio_state)
-                                .crf(DEFAULT_CRF_QUALITY)
+                                .crf(ui_state.crf)
                                 .time_parameters(
                                     1000000_u32,
                                     (1_000_000.0 / ui_state.davis_output_fps) as DeltaT,
@@ -229,6 +234,8 @@ pub(crate) fn replace_adder_transcoder(
     output_path_opt: Option<PathBuf>,
     current_frame: u32,
 ) {
+    dbg!("REPLACING");
+
     let ui_info_state = &mut transcoder_state.ui_info_state;
     ui_info_state.events_per_sec = 0.0;
     ui_info_state.events_ppc_total = 0.0;

@@ -428,6 +428,7 @@ impl<W: Write + 'static> Video<W> {
         for px in self.event_pixel_trees.iter_mut() {
             px.c_thresh = c_thresh_pos;
         }
+        dbg!("t");
         self.encoder.options.crf.override_c_thresh_baseline(c_thresh_pos);
         self
     }
@@ -836,6 +837,7 @@ impl<W: Write + 'static> Video<W> {
         for px in self.event_pixel_trees.iter_mut() {
             px.c_thresh = c;
         }
+        dbg!("t1");
         self.encoder.options.crf.override_c_thresh_baseline(c)
     }
 
@@ -1052,7 +1054,9 @@ impl<W: Write + 'static> Video<W> {
     /// Update the CRF value and set the baseline c for all pixels
     pub(crate) fn update_crf(&mut self, crf: u8) {
         self.encoder.options.crf = Crf::new(Some(crf), self.state.plane);
+        eprintln!("sync1");
         self.encoder.sync_crf();
+        dbg!(self.encoder.options.crf);
 
         let c_thresh_baseline = self.encoder.options.crf.get_parameters().c_thresh_baseline;
 
@@ -1087,6 +1091,8 @@ impl<W: Write + 'static> Video<W> {
             crf.override_feature_c_radius(feature_c_radius as u16); // The absolute pixel count radius
         }
         self.state.delta_t_max = delta_t_max_multiplier * self.state.ref_time;
+        eprintln!("sync 2");
+        self.encoder.sync_crf();
 
 
         for px in self.event_pixel_trees.iter_mut() {
