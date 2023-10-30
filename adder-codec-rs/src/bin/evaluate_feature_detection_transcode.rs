@@ -16,7 +16,10 @@ use std::error::Error;
 use std::fs::File;
 use std::io::Write;
 
-use adder_codec_core::TimeMode;
+use adder_codec_core::codec::rate_controller::Crf;
+use adder_codec_core::codec::{EncoderOptions, EncoderType};
+use adder_codec_core::TimeMode::AbsoluteT;
+use adder_codec_core::{SourceCamera, TimeMode};
 use adder_codec_rs::transcoder::source::framed::Framed;
 use adder_codec_rs::utils::viz::ShowFeatureMode::Off;
 use std::io::{BufWriter, Cursor};
@@ -29,6 +32,14 @@ pub struct TranscodeFeatureEvalArgs {
     /// Use color? (For framed input, most likely)
     #[clap(long, action)]
     pub color_input: bool,
+
+    /// Perform source-modeled compression?
+    #[clap(long, action)]
+    pub compressed: bool,
+
+    /// Path to output file
+    #[clap(short, long, default_value = "")]
+    pub output_filename: String,
 
     /// CRF quality. 0 = lossless, 9 = worst quality
     #[clap(short, long, default_value_t = 6)]
@@ -101,6 +112,23 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     args.crf,
                     path.file_stem().unwrap().to_str().unwrap().to_string()
                 ));
+
+                if args.output_filename.len() > 0 {
+                    let mut options = EncoderOptions::default(framed.get_video_ref().state.plane);
+                    options.crf = Crf::new(Some(args.crf), framed.get_video_ref().state.plane);
+
+                    framed.write_out(
+                        SourceCamera::FramedU8,
+                        AbsoluteT,
+                        if args.compressed {
+                            EncoderType::Compressed
+                        } else {
+                            EncoderType::Raw
+                        },
+                        options,
+                        BufWriter::new(File::create(args.output_filename)?),
+                    )?;
+                }
 
                 Ok(framed)
             }
