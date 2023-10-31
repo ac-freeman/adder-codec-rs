@@ -64,17 +64,20 @@ pub fn is_feature(
                     && *tab == 0)
         );
         // const uchar* tab = &threshold_tab[0] - v + 2
-        let width = plane.w() as isize;
+        let c = plane.c_usize() as isize;
+        let width = plane.w() as isize * c;
         // Get a raw pointer to the intensities
         let ptr = img.as_ptr();
 
         let y = coord.y as isize;
         let x = coord.x as isize;
-        debug_assert_eq!(candidate, *ptr.offset((y * width + x) as isize) as i16);
+        debug_assert_eq!(candidate, *ptr.offset((y * width + x * c)) as i16);
 
         let mut d = *tab
-            .offset(*ptr.offset((y + CIRCLE3[0][1]) * width + (x + CIRCLE3[0][0])) as isize)
-            | *tab.offset(*ptr.offset((y + CIRCLE3[8][1]) * width + (x + CIRCLE3[8][0])) as isize);
+            .offset(*ptr.offset((y + CIRCLE3[0][1]) * width + (x + CIRCLE3[0][0]) * c) as isize)
+            | *tab.offset(
+                *ptr.offset((y + CIRCLE3[8][1]) * width + (x + CIRCLE3[8][0]) * c) as isize,
+            );
 
         // If both check pixels are within the intensity threshold range, it's not a feature
         if d == 0 {
@@ -82,15 +85,21 @@ pub fn is_feature(
         }
 
         // Check other pixels that are on opposite sides of the circle
-        d &= *tab.offset(*ptr.offset((y + CIRCLE3[2][1]) * width + (x + CIRCLE3[2][0])) as isize)
-            | *tab
-                .offset(*ptr.offset((y + CIRCLE3[10][1]) * width + (x + CIRCLE3[10][0])) as isize);
-        d &= *tab.offset(*ptr.offset((y + CIRCLE3[4][1]) * width + (x + CIRCLE3[4][0])) as isize)
-            | *tab
-                .offset(*ptr.offset((y + CIRCLE3[12][1]) * width + (x + CIRCLE3[12][0])) as isize);
-        d &= *tab.offset(*ptr.offset((y + CIRCLE3[6][1]) * width + (x + CIRCLE3[6][0])) as isize)
-            | *tab
-                .offset(*ptr.offset((y + CIRCLE3[14][1]) * width + (x + CIRCLE3[14][0])) as isize);
+        d &= *tab
+            .offset(*ptr.offset((y + CIRCLE3[2][1]) * width + (x + CIRCLE3[2][0]) * c) as isize)
+            | *tab.offset(
+                *ptr.offset((y + CIRCLE3[10][1]) * width + (x + CIRCLE3[10][0]) * c) as isize,
+            );
+        d &= *tab
+            .offset(*ptr.offset((y + CIRCLE3[4][1]) * width + (x + CIRCLE3[4][0]) * c) as isize)
+            | *tab.offset(
+                *ptr.offset((y + CIRCLE3[12][1]) * width + (x + CIRCLE3[12][0]) * c) as isize,
+            );
+        d &= *tab
+            .offset(*ptr.offset((y + CIRCLE3[6][1]) * width + (x + CIRCLE3[6][0]) * c) as isize)
+            | *tab.offset(
+                *ptr.offset((y + CIRCLE3[14][1]) * width + (x + CIRCLE3[14][0]) * c) as isize,
+            );
 
         // Not a feature
         if d == 0 {
@@ -98,17 +107,26 @@ pub fn is_feature(
         }
 
         // Check other pixels that are on opposite sides of the circle
-        d &= *tab.offset(*ptr.offset((y + CIRCLE3[1][1]) * width + (x + CIRCLE3[1][0])) as isize)
-            | *tab.offset(*ptr.offset((y + CIRCLE3[9][1]) * width + (x + CIRCLE3[9][0])) as isize);
-        d &= *tab.offset(*ptr.offset((y + CIRCLE3[3][1]) * width + (x + CIRCLE3[3][0])) as isize)
-            | *tab
-                .offset(*ptr.offset((y + CIRCLE3[11][1]) * width + (x + CIRCLE3[11][0])) as isize);
-        d &= *tab.offset(*ptr.offset((y + CIRCLE3[5][1]) * width + (x + CIRCLE3[5][0])) as isize)
-            | *tab
-                .offset(*ptr.offset((y + CIRCLE3[13][1]) * width + (x + CIRCLE3[13][0])) as isize);
-        d &= *tab.offset(*ptr.offset((y + CIRCLE3[7][1]) * width + (x + CIRCLE3[7][0])) as isize)
-            | *tab
-                .offset(*ptr.offset((y + CIRCLE3[15][1]) * width + (x + CIRCLE3[15][0])) as isize);
+        d &= *tab
+            .offset(*ptr.offset((y + CIRCLE3[1][1]) * width + (x + CIRCLE3[1][0]) * c) as isize)
+            | *tab.offset(
+                *ptr.offset((y + CIRCLE3[9][1]) * width + (x + CIRCLE3[9][0]) * c) as isize,
+            );
+        d &= *tab
+            .offset(*ptr.offset((y + CIRCLE3[3][1]) * width + (x + CIRCLE3[3][0]) * c) as isize)
+            | *tab.offset(
+                *ptr.offset((y + CIRCLE3[11][1]) * width + (x + CIRCLE3[11][0]) * c) as isize,
+            );
+        d &= *tab
+            .offset(*ptr.offset((y + CIRCLE3[5][1]) * width + (x + CIRCLE3[5][0]) * c) as isize)
+            | *tab.offset(
+                *ptr.offset((y + CIRCLE3[13][1]) * width + (x + CIRCLE3[13][0]) * c) as isize,
+            );
+        d &= *tab
+            .offset(*ptr.offset((y + CIRCLE3[7][1]) * width + (x + CIRCLE3[7][0]) * c) as isize)
+            | *tab.offset(
+                *ptr.offset((y + CIRCLE3[15][1]) * width + (x + CIRCLE3[15][0]) * c) as isize,
+            );
 
         if d & 1 > 0 {
             // It's a dark streak
@@ -116,7 +134,7 @@ pub fn is_feature(
             let mut count = 0;
 
             for k in 0..16 {
-                let x = *ptr.offset((y + CIRCLE3[k][1]) * width + (x + CIRCLE3[k][0])) as i16;
+                let x = *ptr.offset((y + CIRCLE3[k][1]) * width + (x + CIRCLE3[k][0]) * c) as i16;
                 if x < vt {
                     count += 1;
                     if count == STREAK_SIZE {
@@ -127,8 +145,8 @@ pub fn is_feature(
                 }
             }
             for k in 16..25 {
-                let x =
-                    *ptr.offset((y + CIRCLE3[k - 16][1]) * width + (x + CIRCLE3[k - 16][0])) as i16;
+                let x = *ptr.offset((y + CIRCLE3[k - 16][1]) * width + (x + CIRCLE3[k - 16][0]) * c)
+                    as i16;
                 if x < vt {
                     count += 1;
                     if count == STREAK_SIZE {
@@ -150,7 +168,7 @@ pub fn is_feature(
             let vt = candidate + INTENSITY_THRESHOLD;
             let mut count = 0;
             for k in 0..16 {
-                let x = *ptr.offset((y + CIRCLE3[k][1]) * width + (x + CIRCLE3[k][0])) as i16;
+                let x = *ptr.offset((y + CIRCLE3[k][1]) * width + (x + CIRCLE3[k][0]) * c) as i16;
                 if x > vt {
                     count += 1;
                     if count == STREAK_SIZE {
@@ -161,8 +179,8 @@ pub fn is_feature(
                 }
             }
             for k in 16..25 {
-                let x =
-                    *ptr.offset((y + CIRCLE3[k - 16][1]) * width + (x + CIRCLE3[k - 16][0])) as i16;
+                let x = *ptr.offset((y + CIRCLE3[k - 16][1]) * width + (x + CIRCLE3[k - 16][0]) * c)
+                    as i16;
                 if x > vt {
                     count += 1;
                     if count == STREAK_SIZE {
