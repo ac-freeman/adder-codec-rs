@@ -118,9 +118,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 .show_display(false)
                 .detect_features(args.detect_features, Off)
                 .log_path(format!(
-                    "{}_{}_{}_",
+                    "{}_{}_{}_{}_",
                     args.crf,
                     if args.compressed { "compressed" } else { "raw" },
+                    if args.detect_features {
+                        "features"
+                    } else {
+                        "nofeatures"
+                    },
                     path.file_stem().unwrap().to_str().unwrap().to_string()
                 ));
 
