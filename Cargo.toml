@@ -16,7 +16,7 @@ opt-level = 3
 panic = "unwind"
 
 [profile.dev.package."adder-codec-rs"]
-opt-level = 3
+opt-level = 0
 overflow-checks = false
 #panic = "abort"
 
