@@ -64,35 +64,53 @@ pub fn is_feature(
         let x = coord.x as isize;
 
         let mut count = 0;
-        if (*ptr.offset((y + CIRCLE3[4][1]) * width + x + CIRCLE3[4][0]) as i16 - candidate).abs()
-            > INTENSITY_THRESHOLD
-        {
-            count += 1;
-        }
-        if (*ptr.offset((y + CIRCLE3[12][1]) * width + x + CIRCLE3[12][0]) as i16 - candidate).abs()
-            > INTENSITY_THRESHOLD
-        {
-            count += 1;
-        }
-        if (*ptr.offset((y + CIRCLE3[1][1]) * width + x + CIRCLE3[1][0]) as i16 - candidate).abs()
-            > INTENSITY_THRESHOLD
-        {
-            count += 1;
-        }
+        let mut d = *tab.offset(*ptr.offset((y + CIRCLE3[0][1]) * width + CIRCLE3[0][0]) as isize)
+            | *tab.offset(*ptr.offset((y + CIRCLE3[8][1]) * width + CIRCLE3[8][0]) as isize);
 
-        if count == 0 {
+        if d == 0 {
             return Ok(false);
         }
 
-        if (*ptr.offset((y + CIRCLE3[7][1]) * width + x + CIRCLE3[7][0]) as i16 - candidate).abs()
-            > INTENSITY_THRESHOLD
-        {
-            count += 1;
-        }
+        d &= *tab.offset(*ptr.offset((y + CIRCLE3[2][1]) * width + CIRCLE3[2][0]) as isize)
+            | *tab.offset(*ptr.offset((y + CIRCLE3[10][1]) * width + CIRCLE3[10][0]) as isize);
+        d &= *tab.offset(*ptr.offset((y + CIRCLE3[4][1]) * width + CIRCLE3[4][0]) as isize)
+            | *tab.offset(*ptr.offset((y + CIRCLE3[12][1]) * width + CIRCLE3[12][0]) as isize);
+        d &= *tab.offset(*ptr.offset((y + CIRCLE3[6][1]) * width + CIRCLE3[6][0]) as isize)
+            | *tab.offset(*ptr.offset((y + CIRCLE3[14][1]) * width + CIRCLE3[14][0]) as isize);
 
-        if count <= 1 {
+        if d == 0 {
             return Ok(false);
         }
+
+        // if (*ptr.offset((y + CIRCLE3[4][1]) * width + x + CIRCLE3[4][0]) as i16 - candidate).abs()
+        //     > INTENSITY_THRESHOLD
+        // {
+        //     count += 1;
+        // }
+        // if (*ptr.offset((y + CIRCLE3[12][1]) * width + x + CIRCLE3[12][0]) as i16 - candidate).abs()
+        //     > INTENSITY_THRESHOLD
+        // {
+        //     count += 1;
+        // }
+        // if (*ptr.offset((y + CIRCLE3[1][1]) * width + x + CIRCLE3[1][0]) as i16 - candidate).abs()
+        //     > INTENSITY_THRESHOLD
+        // {
+        //     count += 1;
+        // }
+        //
+        // if count == 0 {
+        //     return Ok(false);
+        // }
+        //
+        // if (*ptr.offset((y + CIRCLE3[7][1]) * width + x + CIRCLE3[7][0]) as i16 - candidate).abs()
+        //     > INTENSITY_THRESHOLD
+        // {
+        //     count += 1;
+        // }
+        //
+        // if count <= 1 {
+        //     return Ok(false);
+        // }
 
         for i in 0..16 {
             // Bright or dark streak?
