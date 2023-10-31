@@ -990,6 +990,33 @@ impl<W: Write + 'static> Video<W> {
                 handle
                     .write_all(&serde_pickle::to_vec(&out, Default::default()).unwrap())
                     .unwrap();
+
+                // Combine self.state.features into one hashset:
+                let mut combined_features = HashSet::new();
+                for feature_set in &self.state.features {
+                    for (coord) in feature_set {
+                        combined_features.insert(*coord);
+                    }
+                }
+                let (precision, recall, accuracy) =
+                    crate::utils::cv::feature_precision_recall_accuracy(
+                        &keypoints,
+                        &combined_features,
+                        self.state.plane,
+                    );
+                let out = format!("\nFeature results: \n");
+                handle
+                    .write_all(&serde_pickle::to_vec(&out, Default::default()).unwrap())
+                    .unwrap();
+                handle
+                    .write_all(&serde_pickle::to_vec(&precision, Default::default()).unwrap())
+                    .unwrap();
+                handle
+                    .write_all(&serde_pickle::to_vec(&recall, Default::default()).unwrap())
+                    .unwrap();
+                handle
+                    .write_all(&serde_pickle::to_vec(&accuracy, Default::default()).unwrap())
+                    .unwrap();
             }
 
             let mut keypoint_mat = Mat::default();

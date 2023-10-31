@@ -1,8 +1,10 @@
 use crate::transcoder::source::video::SourceError;
-use adder_codec_core::{Coord, Event, PlaneSize};
+use adder_codec_core::{Coord, Event, PixelAddress, PlaneSize};
 use const_for::const_for;
 use ndarray::{s, Array3, ArrayView, Axis, Dimension, Ix2, Ix3, RemoveAxis};
+use opencv::core::KeyPointTraitConst;
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::error::Error;
 use video_rs::Frame;
 
@@ -229,6 +231,55 @@ pub fn handle_color(mut input: Frame, color: bool) -> Result<Frame, SourceError>
         input.collapse_axis(Axis(2), 0);
     }
     Ok(input)
+}
+
+#[cfg(feature = "open-cv")]
+pub fn feature_precision_recall_accuracy(
+    gt: &opencv::core::Vector<opencv::core::KeyPoint>,
+    prediction: &HashSet<Coord>,
+    plane: PlaneSize,
+) -> (f64, f64, f64) {
+    let (mut tp, mut fp, mut tn, mut fnn) = (0, 0, 0, 0);
+
+    // Channel of first pred event:
+    let channel = match prediction.iter().next() {
+        None => None,
+        Some(coord) => coord.c,
+    };
+
+    // convert the keypoints vec to a hashset for convenience
+    let mut gt_hash = HashSet::<Coord>::new();
+    for keypoint in gt {
+        gt_hash.insert(Coord::new(
+            keypoint.pt().x as PixelAddress,
+            keypoint.pt().y as PixelAddress,
+            channel,
+        ));
+    }
+
+    for y in 0..plane.h() {
+        for x in 0..plane.w() {
+            let coord = Coord::new(x, y, None);
+            if prediction.contains(&coord) {
+                if gt_hash.contains(&coord) {
+                    tp += 1;
+                } else {
+                    fp += 1;
+                }
+            } else {
+                if gt_hash.contains(&coord) {
+                    fnn += 1;
+                } else {
+                    tn += 1;
+                }
+            }
+        }
+    }
+
+    let precision = (tp as f64) / ((tp + fp) as f64);
+    let recall = (tp as f64) / ((tp + fnn) as f64);
+    let accuracy = ((tp + tn) as f64) / ((tp + tn + fp + fnn) as f64);
+    (precision, recall, accuracy)
 }
 
 /// Container for quality metric results
