@@ -126,19 +126,23 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
                 if args.output_filename.len() > 0 {
                     let mut options = EncoderOptions::default(framed.get_video_ref().state.plane);
-                    options.crf = Crf::new(Some(args.crf), framed.get_video_ref().state.plane);
 
-                    framed = *framed.write_out(
-                        SourceCamera::FramedU8,
-                        AbsoluteT,
-                        if args.compressed {
-                            EncoderType::Compressed
-                        } else {
-                            EncoderType::Raw
-                        },
-                        options,
-                        BufWriter::new(File::create(args.output_filename.clone())?),
-                    )?;
+                    let plane = framed.get_video_ref().state.plane;
+                    options.crf = Crf::new(Some(args.crf), plane);
+
+                    framed = framed
+                        .write_out(
+                            SourceCamera::FramedU8,
+                            AbsoluteT,
+                            if args.compressed {
+                                EncoderType::Compressed
+                            } else {
+                                EncoderType::Raw
+                            },
+                            options,
+                            BufWriter::new(File::create(args.output_filename.clone())?),
+                        )?
+                        .chunk_rows(plane.h_usize());
                 }
 
                 Ok(framed)
@@ -263,6 +267,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     .write_all(&serde_pickle::to_vec(&out, Default::default()).unwrap())
                     .unwrap();
 
+                let pb = ProgressBar::new(args.frame_count_max.into());
                 loop {
                     let (_, frame) = cap.decode()?;
                     let input_frame = handle_color(frame, args.color_input)?;
@@ -294,6 +299,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     let metrics = metrics.unwrap();
                     let bytes = serde_pickle::to_vec(&metrics, Default::default()).unwrap();
                     handle.write_all(&bytes).unwrap();
+                    pb.inc(1);
                 }
             }
         }

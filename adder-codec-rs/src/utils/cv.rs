@@ -1,5 +1,6 @@
 use crate::transcoder::source::video::SourceError;
 use adder_codec_core::{Coord, Event, PlaneSize};
+use const_for::const_for;
 use ndarray::{s, Array3, ArrayView, Axis, Dimension, Ix2, Ix3, RemoveAxis};
 use serde::{Deserialize, Serialize};
 use std::error::Error;
@@ -11,7 +12,7 @@ pub const INTENSITY_THRESHOLD: i16 = 30;
 
 /// Indices for the asynchronous FAST 9_16 algorithm
 #[rustfmt::skip]
-const CIRCLE3: [[i32; 2]; 16] = [
+const CIRCLE3: [[isize; 2]; 16] = [
     [0, 3], [1, 3], [2, 2], [3, 1],
     [3, 0], [3, -1], [2, -2], [1, -3],
     [0, -3], [-1, -3], [-2, -2], [-3, -1],
@@ -19,6 +20,23 @@ const CIRCLE3: [[i32; 2]; 16] = [
 ];
 
 const STREAK_SIZE: usize = 9;
+
+const fn threshold_table() -> [u8; 512] {
+    let mut table = [0; 512];
+    const_for!(i in -255..256 => {
+        table[(i + 255) as usize] = if i < -INTENSITY_THRESHOLD {
+            1
+        } else if i > INTENSITY_THRESHOLD {
+            2
+        } else {
+            0
+        };
+    });
+
+    table
+}
+
+const THRESHOLD_TABLE: [u8; 512] = threshold_table();
 
 /// Check if the given event is a feature
 ///
@@ -34,39 +52,29 @@ pub fn is_feature(
     }
     unsafe {
         let candidate: i16 = *img.uget((coord.y_usize(), coord.x_usize(), 0)) as i16;
-        let y = coord.y as i32;
-        let x = coord.x as i32;
+        let tab: *const u8 =
+            THRESHOLD_TABLE.as_ptr().offset((255 - candidate) as isize) as *const u8;
+        // const uchar* tab = &threshold_tab[0] - v + 255;
+
+        let width = plane.w() as isize;
+        // Get a raw pointer to the intensities
+        let ptr = img.as_ptr();
+
+        let y = coord.y as isize;
+        let x = coord.x as isize;
 
         let mut count = 0;
-        if (*img.uget((
-            (y + CIRCLE3[4][1]) as usize,
-            (x + CIRCLE3[4][0]) as usize,
-            0,
-        )) as i16
-            - candidate)
-            .abs()
+        if (*ptr.offset((y + CIRCLE3[4][1]) * width + x + CIRCLE3[4][0]) as i16 - candidate).abs()
             > INTENSITY_THRESHOLD
         {
             count += 1;
         }
-        if (*img.uget((
-            (y + CIRCLE3[12][1]) as usize,
-            (x + CIRCLE3[12][0]) as usize,
-            0,
-        )) as i16
-            - candidate)
-            .abs()
+        if (*ptr.offset((y + CIRCLE3[12][1]) * width + x + CIRCLE3[12][0]) as i16 - candidate).abs()
             > INTENSITY_THRESHOLD
         {
             count += 1;
         }
-        if (*img.uget((
-            (y + CIRCLE3[1][1]) as usize,
-            (x + CIRCLE3[1][0]) as usize,
-            0,
-        )) as i16
-            - candidate)
-            .abs()
+        if (*ptr.offset((y + CIRCLE3[1][1]) * width + x + CIRCLE3[1][0]) as i16 - candidate).abs()
             > INTENSITY_THRESHOLD
         {
             count += 1;
@@ -76,13 +84,7 @@ pub fn is_feature(
             return Ok(false);
         }
 
-        if (*img.uget((
-            (y + CIRCLE3[7][1]) as usize,
-            (x + CIRCLE3[7][0]) as usize,
-            0,
-        )) as i16
-            - candidate)
-            .abs()
+        if (*ptr.offset((y + CIRCLE3[7][1]) * width + x + CIRCLE3[7][0]) as i16 - candidate).abs()
             > INTENSITY_THRESHOLD
         {
             count += 1;
@@ -94,31 +96,23 @@ pub fn is_feature(
 
         for i in 0..16 {
             // Bright or dark streak?
-            let brighter = *img.uget((
-                (y + CIRCLE3[i][1]) as usize,
-                (x + CIRCLE3[i][0]) as usize,
-                0,
-            )) as i16
-                > candidate;
+            let brighter =
+                *ptr.offset((y + CIRCLE3[i][1]) * width + CIRCLE3[i][0]) as i16 > candidate;
 
             let mut did_break = false;
 
             for j in 0..STREAK_SIZE {
                 if brighter {
-                    if *img.uget((
-                        (y + CIRCLE3[(i + j) % 16][1]) as usize,
-                        (x + CIRCLE3[(i + j) % 16][0]) as usize,
-                        0,
-                    )) as i16
+                    if *ptr.offset(
+                        (y + CIRCLE3[(i + j) % 16][1]) * width + x + CIRCLE3[(i + j) % 16][0],
+                    ) as i16
                         <= candidate + INTENSITY_THRESHOLD
                     {
                         did_break = true;
                     }
-                } else if *img.uget((
-                    (y + CIRCLE3[(i + j) % 16][1]) as usize,
-                    (x + CIRCLE3[(i + j) % 16][0]) as usize,
-                    0,
-                )) as i16
+                } else if *ptr
+                    .offset((y + CIRCLE3[(i + j) % 16][1]) * width + x + CIRCLE3[(i + j) % 16][0])
+                    as i16
                     >= candidate - INTENSITY_THRESHOLD
                 {
                     did_break = true;
