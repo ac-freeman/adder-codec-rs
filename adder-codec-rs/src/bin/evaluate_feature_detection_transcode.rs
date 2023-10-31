@@ -281,7 +281,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     let mut recon_image = match recon_image {
                         None => {
                             println!("Finished");
-                            return Ok(());
+                            break;
                         }
                         Some(a) => a,
                     };
@@ -300,6 +300,30 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     let bytes = serde_pickle::to_vec(&metrics, Default::default()).unwrap();
                     handle.write_all(&bytes).unwrap();
                     pb.inc(1);
+                }
+
+                if args.compressed {
+                    let out = format!("\nCompressed adu sizes\n");
+                    handle
+                        .write_all(&serde_pickle::to_vec(&out, Default::default()).unwrap())
+                        .unwrap();
+
+                    let pb = ProgressBar::new((args.frame_count_max / args.delta_t_max).into());
+                    // Decode the whole file again, just to log the compressed size of each ADU
+                    let (mut stream, mut bitreader) = open_file_decoder(&args.output_filename)?;
+                    let mut last_pos = 0;
+                    loop {
+                        stream.digest_event(&mut bitreader)?;
+                        let new_pos = stream.get_input_stream_position(&mut bitreader)?;
+                        if new_pos > last_pos {
+                            let bytes =
+                                serde_pickle::to_vec(&(new_pos - last_pos), Default::default())
+                                    .unwrap();
+                            handle.write_all(&bytes).unwrap();
+                            pb.inc(1);
+                            last_pos = new_pos;
+                        }
+                    }
                 }
             }
         }
@@ -374,7 +398,6 @@ fn reconstruct_frame_from_adder(
                 }
             }
             Err(e) => {
-                eprintln!("Player error: {}", e);
                 if !frame_sequence.flush_frame_buffer() {
                     eprintln!("Completely done");
 

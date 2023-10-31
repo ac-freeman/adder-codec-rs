@@ -2,7 +2,6 @@ use crate::transcoder::source::video::SourceError;
 use adder_codec_core::{Coord, Event, PixelAddress, PlaneSize};
 use const_for::const_for;
 use ndarray::{s, Array3, ArrayView, Axis, Dimension, Ix2, Ix3, RemoveAxis};
-use opencv::core::KeyPointTraitConst;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::error::Error;

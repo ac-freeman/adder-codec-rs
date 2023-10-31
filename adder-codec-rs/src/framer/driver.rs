@@ -597,10 +597,6 @@ impl<
     ///
     /// Returns `true` if there are frames now ready to write out
     fn flush_frame_buffer(&mut self) -> bool {
-        eprintln!(
-            "Flushing frame buffer. {} frames left",
-            self.frames[0].len()
-        );
         let mut all_filled = true;
         if self.frames[0].len() > 1 {
             for (chunk_num, chunk) in self.frames.iter_mut().enumerate() {
