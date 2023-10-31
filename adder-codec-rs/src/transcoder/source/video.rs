@@ -1,5 +1,7 @@
 #[cfg(feature = "open-cv")]
 use opencv::core::{Mat, Size};
+#[cfg(feature = "opencv")]
+use opencv::prelude::*;
 use std::collections::HashSet;
 use std::io::{sink, Write};
 use std::mem::swap;
@@ -320,7 +322,7 @@ pub struct Video<W: Write> {
 
     /// Channel for sending events to the encoder
     pub event_sender: Sender<Vec<Event>>,
-    pub(crate) encoder: Encoder<W>,
+    pub encoder: Encoder<W>,
 
     pub encoder_type: EncoderType,
     // TODO: Hold multiple encoder options and an enum, so that boxing isn't required.
@@ -989,6 +991,7 @@ impl<W: Write + 'static> Video<W> {
                     .write_all(&serde_pickle::to_vec(&out, Default::default()).unwrap())
                     .unwrap();
             }
+
             let mut keypoint_mat = Mat::default();
             opencv::features2d::draw_keypoints(
                 &cv_mat,
@@ -997,6 +1000,7 @@ impl<W: Write + 'static> Video<W> {
                 opencv::core::Scalar::new(0.0, 0.0, 255.0, 0.0),
                 opencv::features2d::DrawMatchesFlags::DEFAULT,
             )?;
+
             // show_display_force("keypoints", &keypoint_mat, 1)?;
         }
 

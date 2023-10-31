@@ -341,8 +341,13 @@ impl<W: Write + 'static> Integration<W> {
                                 Continuous,
                                 video.state.delta_t_max,
                                 video.state.ref_time,
-                                video.state.c_thresh_max,
-                                video.state.c_increase_velocity,
+                                video.encoder.options.crf.get_parameters().c_thresh_max,
+                                video
+                                    .encoder
+                                    .options
+                                    .crf
+                                    .get_parameters()
+                                    .c_increase_velocity,
                             );
                             let running_t_after = px.running_t;
                             debug_assert_eq!(
@@ -377,7 +382,12 @@ impl<W: Write + 'static> Integration<W> {
                             if frame_val_u8 < base_val.saturating_sub(px.c_thresh)
                                 || frame_val_u8 > base_val.saturating_add(px.c_thresh)
                             {
-                                px.pop_best_events(&mut buffer, Continuous, video.state.ref_time);
+                                px.pop_best_events(
+                                    &mut buffer,
+                                    Continuous,
+                                    video.state.pixel_multi_mode,
+                                    video.state.ref_time,
+                                );
                                 px.base_val = frame_val_u8;
 
                                 // If continuous mode and the D value needs to be different now
@@ -535,6 +545,7 @@ impl<W: Write + 'static> Integration<W> {
                         delta_t_ticks,
                         &mut buffer,
                         &video.state,
+                        video.encoder.options.crf.get_parameters(),
                     );
                 }
                 buffer
@@ -657,6 +668,7 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Davis<W> {
                                 px.pop_best_events(
                                     &mut buffer,
                                     self.video.state.pixel_tree_mode,
+                                    self.video.state.pixel_multi_mode,
                                     self.video.state.ref_time,
                                 );
                             }

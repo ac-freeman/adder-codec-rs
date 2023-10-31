@@ -294,6 +294,7 @@ impl<W: Write + 'static> Encoder<W> {
     /// from constantly having to look up a reference-counted variable, which is costly at this scale.
     pub fn sync_crf(&mut self) {
         match &mut self.output {
+            #[cfg(feature = "compression")]
             WriteCompressionEnum::CompressedOutput(compressed_output) => {
                 compressed_output.options = self.options.clone();
             }
