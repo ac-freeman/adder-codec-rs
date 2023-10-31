@@ -2,6 +2,8 @@ use crate::transcoder::source::video::SourceError;
 use adder_codec_core::{Coord, Event, PixelAddress, PlaneSize};
 use const_for::const_for;
 use ndarray::{s, Array3, ArrayView, Axis, Dimension, Ix2, Ix3, RemoveAxis};
+#[cfg(feature = "open-cv")]
+use opencv::prelude::KeyPointTraitConst;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::error::Error;
@@ -196,36 +198,6 @@ pub fn is_feature(
                 }
             }
         }
-
-        // for i in 0..16 {
-        //     // Bright or dark streak?
-        //     let brighter =
-        //         *ptr.offset((y + CIRCLE3[i][1]) * width + CIRCLE3[i][0]) as i16 > candidate;
-        //
-        //     let mut did_break = false;
-        //
-        //     for j in 0..STREAK_SIZE {
-        //         if brighter {
-        //             if *ptr.offset(
-        //                 (y + CIRCLE3[(i + j) % 16][1]) * width + x + CIRCLE3[(i + j) % 16][0],
-        //             ) as i16
-        //                 <= candidate + INTENSITY_THRESHOLD
-        //             {
-        //                 did_break = true;
-        //             }
-        //         } else if *ptr
-        //             .offset((y + CIRCLE3[(i + j) % 16][1]) * width + x + CIRCLE3[(i + j) % 16][0])
-        //             as i16
-        //             >= candidate - INTENSITY_THRESHOLD
-        //         {
-        //             did_break = true;
-        //         }
-        //     }
-        //
-        //     if !did_break {
-        //         return Ok(true);
-        //     }
-        // }
     }
 
     Ok(false)
