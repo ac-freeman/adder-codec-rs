@@ -2,7 +2,7 @@
 Created on 10/19/23 to evaluate feature detection speed & accuracy, and CRF quality.
 
 Example usage:
-cargo run --bin evaluate_feature_detection_transcode --release --features "open-cv feature-logging" -- --crf 6 --delta-t-max 76500 --frame-count-max 500 --input-filename "/home/andrew/Downloads/bunny/bunny.mp4" --scale 0.25 --detect-features
+cargo run --bin evaluate_feature_detection_transcode --release --features "open-cv feature-logging" -- --crf 6 --delta-t-max 7650 --frame-count-max 500 --input-filename "/home/andrew/Downloads/bunny/bunny.mp4" --scale 0.25 --detect-features
 
  */
 extern crate core;
@@ -58,7 +58,7 @@ pub struct TranscodeFeatureEvalArgs {
     #[clap(long, action)]
     pub detect_features: bool,
 
-    /// Override what the CRF setting determines: Max number of ticks for any event
+    /// Max number of ticks before a pixel fires its FIRST event
     #[clap(short, long, default_value_t = 15300)]
     pub delta_t_max: u32,
 
@@ -80,7 +80,7 @@ pub struct TranscodeFeatureEvalArgs {
 
     /// Number of threads to use. If not provided, will default to the number of cores on the
     /// system.
-    #[clap(long, default_value_t = 4)]
+    #[clap(long, default_value_t = 0)]
     pub thread_count: u8,
 }
 
@@ -92,6 +92,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         0 => current_num_threads(),
         num => num as usize,
     };
+    eprintln!("Using {} threads", num_threads);
 
     let now = std::time::Instant::now();
 
@@ -199,6 +200,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
         pb.inc(1);
         interval_count += 1;
     }
+    match source.get_video_mut().end_write_stream() {
+        Ok(Some(mut writer)) => {
+            writer.flush();
+        }
+        Ok(None) => {}
+        Err(_) => {}
+    }
 
     println!("\n\n{} ms elapsed\n\n", now.elapsed().as_millis());
 
@@ -249,7 +257,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
             let video = &mut source.get_video_mut();
             if let Some(handle) = &mut video.state.feature_log_handle {
-                writeln!(handle, "RECONSTRUCTION")?;
+                eprintln!("Reconstructing");
+                let out = format!("\nRECONSTRUCTION\n");
+                handle
+                    .write_all(&serde_pickle::to_vec(&out, Default::default()).unwrap())
+                    .unwrap();
 
                 loop {
                     let (_, frame) = cap.decode()?;
@@ -259,8 +271,15 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         &mut frame_sequence,
                         &mut stream,
                         &mut bitreader,
-                    )?;
-                    let mut recon_image = recon_image.unwrap();
+                    )
+                    .unwrap();
+                    let mut recon_image = match recon_image {
+                        None => {
+                            println!("Finished");
+                            return Ok(());
+                        }
+                        Some(a) => a,
+                    };
                     // Get the quality metrics compared to the source video
                     #[rustfmt::skip]
                         let metrics = calculate_quality_metrics(
@@ -338,17 +357,20 @@ fn reconstruct_frame_from_adder(
                 last_event = Some(event.clone());
 
                 if filled {
-                    return Ok((event_count, image));
+                    match image {
+                        None => {
+                            return reconstruct_frame_from_adder(frame_sequence, stream, bitreader);
+                        }
+                        Some(image) => {
+                            return Ok((event_count, Some(image)));
+                        }
+                    }
                 }
             }
             Err(e) => {
                 eprintln!("Player error: {}", e);
                 if !frame_sequence.flush_frame_buffer() {
                     eprintln!("Completely done");
-                    // TODO: Need to reset the UI event count events_ppc count when looping back here
-                    // Loop/restart back to the beginning
-                    stream
-                        .set_input_stream_position(bitreader, stream.meta().header_size as u64)?;
 
                     return Ok((event_count, image));
                 } else {

@@ -18,11 +18,16 @@ const CIRCLE3: [[i32; 2]; 16] = [
     [-3, 0], [-3, 1], [-2, 2], [-1, 3]
 ];
 
+const STREAK_SIZE: usize = 9;
+
 /// Check if the given event is a feature
+///
+/// count_filter: whether or not to perform the quick check of 4 pixels in the circle (OpenCV implementation by default doesn't do this)
 pub fn is_feature(
     coord: Coord,
     plane: PlaneSize,
     img: &Array3<u8>,
+    // spot_check: bool,
 ) -> Result<bool, Box<dyn Error>> {
     if coord.is_border(plane.w_usize(), plane.h_usize(), 3) {
         return Ok(false);
@@ -67,6 +72,10 @@ pub fn is_feature(
             count += 1;
         }
 
+        if count == 0 {
+            return Ok(false);
+        }
+
         if (*img.uget((
             (y + CIRCLE3[7][1]) as usize,
             (x + CIRCLE3[7][0]) as usize,
@@ -79,14 +88,12 @@ pub fn is_feature(
             count += 1;
         }
 
-        if count <= 2 {
+        if count <= 1 {
             return Ok(false);
         }
 
-        let streak_size = 9;
-
         for i in 0..16 {
-            // Are we looking at a bright or dark streak?
+            // Bright or dark streak?
             let brighter = *img.uget((
                 (y + CIRCLE3[i][1]) as usize,
                 (x + CIRCLE3[i][0]) as usize,
@@ -96,7 +103,7 @@ pub fn is_feature(
 
             let mut did_break = false;
 
-            for j in 0..streak_size {
+            for j in 0..STREAK_SIZE {
                 if brighter {
                     if *img.uget((
                         (y + CIRCLE3[(i + j) % 16][1]) as usize,
