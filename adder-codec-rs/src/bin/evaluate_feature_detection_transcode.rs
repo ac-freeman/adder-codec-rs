@@ -273,6 +273,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     .unwrap();
 
                 let pb = ProgressBar::new(args.frame_count_max.into());
+                let mut last_metrics = QualityMetrics::default();
                 loop {
                     let (_, frame) = cap.decode()?;
                     let input_frame = handle_color(frame, args.color_input)?;
@@ -285,6 +286,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     .unwrap();
                     let mut recon_image = match recon_image {
                         None => {
+                            dbg!(last_metrics);
                             println!("Finished");
                             break;
                         }
@@ -302,18 +304,20 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         },
                     );
                     let metrics = metrics.unwrap();
+                    last_metrics = metrics.clone();
                     let bytes = serde_pickle::to_vec(&metrics, Default::default()).unwrap();
                     handle.write_all(&bytes).unwrap();
                     pb.inc(1);
                 }
 
                 if args.compressed {
+                    eprintln!("get compressed adu sizes");
                     let out = format!("\nCompressed adu sizes\n");
                     handle
                         .write_all(&serde_pickle::to_vec(&out, Default::default()).unwrap())
                         .unwrap();
 
-                    let pb = ProgressBar::new((args.frame_count_max / args.delta_t_max).into());
+                    let pb = ProgressBar::new((args.frame_count_max / 30).into());
                     // Decode the whole file again, just to log the compressed size of each ADU
                     let (mut stream, mut bitreader) = open_file_decoder(&args.output_filename)?;
                     let mut last_pos = 0;
@@ -326,6 +330,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                                     .unwrap();
                             handle.write_all(&bytes).unwrap();
                             pb.inc(1);
+                            eprintln!("\n{}", new_pos - last_pos);
                             last_pos = new_pos;
                         }
                     }

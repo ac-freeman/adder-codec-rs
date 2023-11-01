@@ -272,7 +272,7 @@ pub fn feature_precision_recall_accuracy(
 }
 
 /// Container for quality metric results
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Copy, Clone)]
 pub struct QualityMetrics {
     /// Peak signal-to-noise ratio
     pub psnr: Option<f64>,
