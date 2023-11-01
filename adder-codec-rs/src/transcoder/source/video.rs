@@ -875,9 +875,12 @@ impl<W: Write + 'static> Video<W> {
         let start = Instant::now();
 
         big_buffer
-            .par_iter()
-            .zip(self.state.features.par_iter_mut())
-            .zip(new_features.par_iter_mut())
+            // .par_iter()
+            // .zip(self.state.features.par_iter_mut())
+            // .zip(new_features.par_iter_mut())
+            .iter()
+            .zip(self.state.features.iter_mut())
+            .zip(new_features.iter_mut())
             .for_each(|((events, feature_set), new_features)| {
                 for (e1, e2) in events.iter().circular_tuple_windows() {
                     if e1.coord.c == None || e1.coord.c == Some(0) {
@@ -909,18 +912,23 @@ impl<W: Write + 'static> Video<W> {
 
             if let Some(handle) = &mut self.state.feature_log_handle {
                 for feature_set in &self.state.features {
-                    for (coord) in feature_set {
-                        let bytes = serde_pickle::to_vec(
-                            &LogFeature::from_coord(
-                                *coord,
-                                LogFeatureSource::ADDER,
-                                cfg!(feature = "feature-logging-nonmaxsuppression"),
-                            ),
-                            Default::default(),
+                    // for (coord) in feature_set {
+                    //     let bytes = serde_pickle::to_vec(
+                    //         &LogFeature::from_coord(
+                    //             *coord,
+                    //             LogFeatureSource::ADDER,
+                    //             cfg!(feature = "feature-logging-nonmaxsuppression"),
+                    //         ),
+                    //         Default::default(),
+                    //     )
+                    //     .unwrap();
+                    //     handle.write_all(&bytes).unwrap();
+                    // }
+                    handle
+                        .write_all(
+                            &serde_pickle::to_vec(&feature_set.len(), Default::default()).unwrap(),
                         )
                         .unwrap();
-                        handle.write_all(&bytes).unwrap();
-                    }
                 }
 
                 let out = format!("\nADDER FAST: {}\n", total_duration_nanos);
@@ -973,22 +981,52 @@ impl<W: Write + 'static> Video<W> {
 
             let duration = start.elapsed();
             if let Some(handle) = &mut self.state.feature_log_handle {
-                for keypoint in &keypoints {
-                    let bytes = serde_pickle::to_vec(
-                        &LogFeature::from_keypoint(
-                            &keypoint,
-                            LogFeatureSource::OpenCV,
-                            cfg!(feature = "feature-logging-nonmaxsuppression"),
-                        ),
-                        Default::default(),
-                    )
+                // for keypoint in &keypoints {
+                //     let bytes = serde_pickle::to_vec(
+                //         &LogFeature::from_keypoint(
+                //             &keypoint,
+                //             LogFeatureSource::OpenCV,
+                //             cfg!(feature = "feature-logging-nonmaxsuppression"),
+                //         ),
+                //         Default::default(),
+                //     )
+                //     .unwrap();
+                //     handle.write_all(&bytes).unwrap();
+                // }
+                handle
+                    .write_all(&serde_pickle::to_vec(&keypoints.len(), Default::default()).unwrap())
                     .unwrap();
-                    handle.write_all(&bytes).unwrap();
-                }
 
                 let out = format!("\nOpenCV FAST: {}\n", duration.as_nanos());
                 handle
                     .write_all(&serde_pickle::to_vec(&out, Default::default()).unwrap())
+                    .unwrap();
+
+                // Combine self.state.features into one hashset:
+                let mut combined_features = HashSet::new();
+                for feature_set in &self.state.features {
+                    for (coord) in feature_set {
+                        combined_features.insert(*coord);
+                    }
+                }
+                let (precision, recall, accuracy) =
+                    crate::utils::cv::feature_precision_recall_accuracy(
+                        &keypoints,
+                        &combined_features,
+                        self.state.plane,
+                    );
+                let out = format!("\nFeature results: \n");
+                handle
+                    .write_all(&serde_pickle::to_vec(&out, Default::default()).unwrap())
+                    .unwrap();
+                handle
+                    .write_all(&serde_pickle::to_vec(&precision, Default::default()).unwrap())
+                    .unwrap();
+                handle
+                    .write_all(&serde_pickle::to_vec(&recall, Default::default()).unwrap())
+                    .unwrap();
+                handle
+                    .write_all(&serde_pickle::to_vec(&accuracy, Default::default()).unwrap())
                     .unwrap();
             }
 

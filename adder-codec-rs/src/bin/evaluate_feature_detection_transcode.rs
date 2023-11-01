@@ -118,27 +118,36 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 .show_display(false)
                 .detect_features(args.detect_features, Off)
                 .log_path(format!(
-                    "{}_{}_{}_",
+                    "{}_{}_{}_{}_",
                     args.crf,
                     if args.compressed { "compressed" } else { "raw" },
+                    if args.detect_features {
+                        "features"
+                    } else {
+                        "nofeatures"
+                    },
                     path.file_stem().unwrap().to_str().unwrap().to_string()
                 ));
 
                 if args.output_filename.len() > 0 {
                     let mut options = EncoderOptions::default(framed.get_video_ref().state.plane);
-                    options.crf = Crf::new(Some(args.crf), framed.get_video_ref().state.plane);
 
-                    framed = *framed.write_out(
-                        SourceCamera::FramedU8,
-                        AbsoluteT,
-                        if args.compressed {
-                            EncoderType::Compressed
-                        } else {
-                            EncoderType::Raw
-                        },
-                        options,
-                        BufWriter::new(File::create(args.output_filename.clone())?),
-                    )?;
+                    let plane = framed.get_video_ref().state.plane;
+                    options.crf = Crf::new(Some(args.crf), plane);
+
+                    framed = framed
+                        .write_out(
+                            SourceCamera::FramedU8,
+                            AbsoluteT,
+                            if args.compressed {
+                                EncoderType::Compressed
+                            } else {
+                                EncoderType::Raw
+                            },
+                            options,
+                            BufWriter::new(File::create(args.output_filename.clone())?),
+                        )?
+                        .chunk_rows(plane.h_usize());
                 }
 
                 Ok(framed)
@@ -263,6 +272,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     .write_all(&serde_pickle::to_vec(&out, Default::default()).unwrap())
                     .unwrap();
 
+                let pb = ProgressBar::new(args.frame_count_max.into());
+                let mut last_metrics = QualityMetrics::default();
                 loop {
                     let (_, frame) = cap.decode()?;
                     let input_frame = handle_color(frame, args.color_input)?;
@@ -275,8 +286,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     .unwrap();
                     let mut recon_image = match recon_image {
                         None => {
+                            dbg!(last_metrics);
                             println!("Finished");
-                            return Ok(());
+                            break;
                         }
                         Some(a) => a,
                     };
@@ -292,8 +304,36 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         },
                     );
                     let metrics = metrics.unwrap();
+                    last_metrics = metrics.clone();
                     let bytes = serde_pickle::to_vec(&metrics, Default::default()).unwrap();
                     handle.write_all(&bytes).unwrap();
+                    pb.inc(1);
+                }
+
+                if args.compressed {
+                    eprintln!("get compressed adu sizes");
+                    let out = format!("\nCompressed adu sizes\n");
+                    handle
+                        .write_all(&serde_pickle::to_vec(&out, Default::default()).unwrap())
+                        .unwrap();
+
+                    let pb = ProgressBar::new((args.frame_count_max / 30).into());
+                    // Decode the whole file again, just to log the compressed size of each ADU
+                    let (mut stream, mut bitreader) = open_file_decoder(&args.output_filename)?;
+                    let mut last_pos = 0;
+                    loop {
+                        stream.digest_event(&mut bitreader)?;
+                        let new_pos = stream.get_input_stream_position(&mut bitreader)?;
+                        if new_pos > last_pos {
+                            let bytes =
+                                serde_pickle::to_vec(&(new_pos - last_pos), Default::default())
+                                    .unwrap();
+                            handle.write_all(&bytes).unwrap();
+                            pb.inc(1);
+                            eprintln!("\n{}", new_pos - last_pos);
+                            last_pos = new_pos;
+                        }
+                    }
                 }
             }
         }
@@ -368,7 +408,6 @@ fn reconstruct_frame_from_adder(
                 }
             }
             Err(e) => {
-                eprintln!("Player error: {}", e);
                 if !frame_sequence.flush_frame_buffer() {
                     eprintln!("Completely done");
 
