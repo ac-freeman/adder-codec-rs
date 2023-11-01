@@ -514,6 +514,7 @@ impl EventCube {
         encoder: &mut Encoder<FenwickModel, BitWriter<Vec<u8>, BigEndian>>,
         contexts: &Contexts,
         stream: &mut BitWriter<Vec<u8>, BigEndian>,
+        c_thresh_max: u8,
     ) -> Result<(), CodecError> {
         for c in 0..self.num_channels {
             self.raw_event_lists[c].iter_mut().for_each(|row| {
@@ -556,6 +557,7 @@ impl EventCube {
                                         event,
                                         &prev_event,
                                         self.dt_ref,
+                                        c_thresh_max as f64
                                     );
 
                                 encoder.model.set_context(contexts.bitshift_context);
@@ -925,11 +927,12 @@ impl ComponentCompression for EventCube {
         encoder: &mut Encoder<FenwickModel, BitWriter<Vec<u8>, BigEndian>>,
         contexts: &Contexts,
         stream: &mut BitWriter<Vec<u8>, BigEndian>,
+        c_thresh_max: Option<u8>,
     ) -> Result<(), CodecError> {
         self.compress_intra(encoder, contexts, stream)?;
         if !self.skip_cube {
             // self.compress_intra_round2(encoder, contexts, stream)?;
-            self.compress_inter(encoder, contexts, stream)?;
+            self.compress_inter(encoder, contexts, stream, c_thresh_max.unwrap_or(7))?;
         }
         Ok(())
     }
@@ -1107,7 +1110,7 @@ mod compression_tests {
 
         let mut encoder = Encoder::new(source_model);
 
-        cube.compress(&mut encoder, &contexts, &mut stream)?;
+        cube.compress(&mut encoder, &contexts, &mut stream, Some(0))?;
 
         eof_context(&contexts, &mut encoder, &mut stream);
 
@@ -1164,7 +1167,7 @@ mod compression_tests {
 
         let mut encoder = Encoder::new(source_model);
 
-        cube.compress(&mut encoder, &contexts, &mut stream)?;
+        cube.compress(&mut encoder, &contexts, &mut stream, Some(0))?;
 
         eof_context(&contexts, &mut encoder, &mut stream);
 
@@ -1240,7 +1243,7 @@ mod compression_tests {
 
         let mut encoder = Encoder::new(source_model);
 
-        cube.compress(&mut encoder, &contexts, &mut stream)?;
+        cube.compress(&mut encoder, &contexts, &mut stream, Some(0))?;
 
         eof_context(&contexts, &mut encoder, &mut stream);
 
@@ -1324,7 +1327,7 @@ mod compression_tests {
 
         let mut encoder = Encoder::new(source_model);
 
-        cube.compress(&mut encoder, &contexts, &mut stream)?;
+        cube.compress(&mut encoder, &contexts, &mut stream, Some(0))?;
 
         eof_context(&contexts, &mut encoder, &mut stream);
 

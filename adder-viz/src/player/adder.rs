@@ -584,10 +584,8 @@ impl AdderPlayer {
 
             let image_bevy = prep_bevy_image(image_mat, color, meta.plane.w(), meta.plane.h())?;
 
-            eprintln!("returning image");
             Some(image_bevy)
         } else {
-            eprintln!("frame not filled");
             None
         };
 

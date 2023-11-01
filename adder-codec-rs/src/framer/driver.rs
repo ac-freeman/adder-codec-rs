@@ -465,9 +465,15 @@ impl<
                     // todo!();
                     if is_feature(event.coord, self.state.plane, &self.running_intensities).unwrap()
                     {
-                        let mut idx =
-                            (time / (self.state.tpf) - self.state.frames_written as u32) as usize;
-                        if time % self.state.tpf == 0 {
+                        debug_assert!(self.state.frames_written >= 0);
+                        let mut idx = if (time / self.state.tpf) as i64 >= self.state.frames_written
+                        {
+                            (time / (self.state.tpf) - self.state.frames_written as u32) as usize
+                        } else {
+                            0
+                        };
+
+                        if time % self.state.tpf == 0 && idx > 0 {
                             idx -= 1;
                         }
                         // dbg!(time);
@@ -475,7 +481,6 @@ impl<
                         // dbg!(idx);
                         if idx >= self.features.len() {
                             if self.features.len() == 0 {
-                                dbg!("creating first...");
                                 // Create the first
                                 self.features.push_back(FeatureInterval {
                                     end_ts: self.state.tpf as BigT,
@@ -592,10 +597,6 @@ impl<
     ///
     /// Returns `true` if there are frames now ready to write out
     fn flush_frame_buffer(&mut self) -> bool {
-        eprintln!(
-            "Flushing frame buffer. {} frames left",
-            self.frames[0].len()
-        );
         let mut all_filled = true;
         if self.frames[0].len() > 1 {
             for (chunk_num, chunk) in self.frames.iter_mut().enumerate() {
@@ -625,7 +626,6 @@ impl<
             self.chunk_filled_tracker[0] = false;
         }
 
-        dbg!(self.is_frame_0_filled());
         self.is_frame_0_filled()
 
         // for chunk in &self.chunk_filled_tracker {

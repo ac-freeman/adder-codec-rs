@@ -22,7 +22,7 @@ trait ComponentCompression {
         encoder: &mut Encoder<FenwickModel, BitWriter<Vec<u8>, BigEndian>>,
         contexts: &Contexts,
         stream: &mut BitWriter<Vec<u8>, BigEndian>,
-        // dtm: DeltaT,
+        threshold_option: Option<u8>,
     ) -> Result<(), CodecError>;
     fn decompress(
         decoder: &mut Decoder<FenwickModel, BitReader<Cursor<Vec<u8>>, BigEndian>>,

@@ -65,6 +65,7 @@ mod header;
 
 /// Raw codec utilities
 pub mod raw;
+pub mod rate_controller;
 
 /// Current latest version of the codec.
 ///
@@ -198,6 +199,7 @@ use crate::codec::compressed::stream::{CompressedInput, CompressedOutput};
 use crate::codec::empty::stream::EmptyOutput;
 use crate::codec::raw::stream::{RawInput, RawOutput};
 use thiserror::Error;
+use crate::codec::rate_controller::Crf;
 
 #[allow(missing_docs)]
 #[derive(Error, Debug)]
@@ -254,15 +256,30 @@ pub enum CodecError {
 Encoder options below
  */
 
-/// Options for what to do with the events we're given, before encoding them
-#[derive(Default, Copy, Clone, PartialEq, Debug)]
+/// Options related to encoder controls
+#[derive(Copy, Clone, PartialEq, Debug)]
 pub struct EncoderOptions {
     /// Allow the encoder to randomly drop events before compressing, if the event rate is too high
     pub event_drop: EventDrop,
 
     /// Reorder the events according to their firing times
     pub event_order: EventOrder,
+
+    pub crf: Crf
 }
+
+impl EncoderOptions {
+    pub fn default(plane: PlaneSize) -> Self {
+        Self {
+            event_drop: Default::default(),
+            event_order: Default::default(),
+            crf: Crf::new(None, plane)
+        }
+    }
+
+
+}
+
 
 /// Allow the encoder to randomly drop events before compressing, if the event rate is too high
 #[derive(Default, Copy, Clone, PartialEq, Debug)]

@@ -8,7 +8,7 @@ use crate::utils::viz::ShowFeatureMode;
 use adder_codec_core::codec::{EncoderOptions, EncoderType};
 use ndarray::Axis;
 
-use crate::utils::cv::{calculate_quality_metrics, QualityMetrics};
+use crate::utils::cv::{calculate_quality_metrics, handle_color, QualityMetrics};
 use chrono::Local;
 use rayon::ThreadPool;
 use std::io::Write;
@@ -297,23 +297,4 @@ impl<W: Write + 'static> VideoBuilder<W> for Framed<W> {
         }
         self
     }
-}
-
-fn handle_color(mut input: Frame, color: bool) -> Result<Frame, SourceError> {
-    if !color {
-        // Map the three color channels to a single grayscale channel
-        input
-            .exact_chunks_mut((1, 1, 3))
-            .into_iter()
-            .for_each(|mut v| unsafe {
-                *v.uget_mut((0, 0, 0)) = (*v.uget((0, 0, 0)) as f64 * 0.114
-                    + *v.uget((0, 0, 1)) as f64 * 0.587
-                    + *v.uget((0, 0, 2)) as f64 * 0.299)
-                    as u8;
-            });
-
-        // Remove the color channels
-        input.collapse_axis(Axis(2), 0);
-    }
-    Ok(input)
 }

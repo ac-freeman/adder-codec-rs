@@ -102,6 +102,7 @@ impl Contexts {
         event: &mut EventCoordless,
         prev_event: &EventCoordless,
         dt_ref: DeltaT,
+        c_thresh_max: f64
     ) -> (u8, i64) {
         if t_residual_i64.abs() < self.t_residual_max as i64 {
             (0, t_residual_i64)
@@ -120,13 +121,9 @@ impl Contexts {
             let mut t_residual = t_residual_i64.abs();
             loop {
                 if t_residual > self.t_residual_max
-                    && actual_intensity - 10.0 < recon_intensity
-                    && actual_intensity + 10.0 > recon_intensity
+                    && actual_intensity - c_thresh_max  < recon_intensity
+                    && actual_intensity + c_thresh_max > recon_intensity
                 {
-                    if bitshift > 1 {
-                        eprintln!("made it {}", bitshift);
-                    }
-
                     t_residual >>= 1;
                     bitshift += 1;
                     let recon_predicted_t = (t_prediction + t_residual) as AbsoluteT;
