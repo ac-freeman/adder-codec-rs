@@ -35,7 +35,7 @@ pub enum FramerMode {
 pub struct FramerBuilder {
     plane: PlaneSize,
     tps: DeltaT,
-    output_fps: f32,
+    output_fps: Option<f32>,
     mode: FramerMode,
     view_mode: FramedViewMode,
     source: SourceType,
@@ -58,7 +58,7 @@ impl FramerBuilder {
             plane,
             chunk_rows,
             tps: 150_000,
-            output_fps: 30.0,
+            output_fps: None,
             mode: FramerMode::INSTANTANEOUS,
             view_mode: FramedViewMode::Intensity,
             source: SourceType::U8,
@@ -78,7 +78,7 @@ impl FramerBuilder {
         tps: DeltaT,
         ref_interval: DeltaT,
         delta_t_max: DeltaT,
-        output_fps: f32,
+        output_fps: Option<f32>,
     ) -> FramerBuilder {
         self.tps = tps;
         self.ref_interval = ref_interval;
@@ -338,7 +338,11 @@ impl<
             }
         }
 
-        dbg!((builder.tps as f32 / builder.output_fps) as u32);
+        let tpf = if let Some(output_fps) = builder.output_fps {
+            (builder.tps as f32 / output_fps) as u32
+        } else {
+            builder.ref_interval
+        };
 
         // Array3::<Option<T>>::new(num_rows, num_cols, num_channels);
         FrameSequence {
@@ -346,7 +350,7 @@ impl<
                 plane: *plane,
                 frames_written: 0,
                 view_mode: builder.view_mode,
-                tpf: (builder.tps as f32 / builder.output_fps) as u32,
+                tpf,
                 source: builder.source,
                 codec_version: builder.codec_version,
                 source_camera: builder.source_camera,
