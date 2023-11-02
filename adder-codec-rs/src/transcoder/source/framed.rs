@@ -148,7 +148,7 @@ impl<W: Write + 'static> Source<W> for Framed<W> {
                     QualityMetrics {
                         mse: Some(0.0),
                         psnr: Some(0.0),
-                        ssim: Some(0.0),
+                        ssim: None,
                     });
 
                 let metrics = metrics.unwrap();

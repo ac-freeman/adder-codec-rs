@@ -305,7 +305,11 @@ pub fn calculate_quality_metrics(
         return Err("Shapes of original and reconstructed images must match".into());
     }
 
-    let mse = calculate_mse(original, reconstructed)?;
+    let mut mse = calculate_mse(original, reconstructed)?;
+    if mse == 0.0 {
+        // Make sure that PSNR isn't undefined
+        mse = 0.0000001;
+    }
     if results.mse.is_some() {
         results.mse = Some(mse);
     }

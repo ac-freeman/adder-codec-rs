@@ -441,14 +441,14 @@ impl<
         self.chunk_filled_tracker[chunk_num] = filled;
 
         if grew {
-            handle_dtm(
-                frame_chunk,
-                &mut self.chunk_filled_tracker[chunk_num],
-                &mut self.last_filled_tracker[chunk_num],
-                &mut self.pixel_ts_tracker[chunk_num],
-                &mut self.last_frame_intensity_tracker[chunk_num],
-                &self.state,
-            );
+            // handle_dtm(
+            //     frame_chunk,
+            //     &mut self.chunk_filled_tracker[chunk_num],
+            //     &mut self.last_filled_tracker[chunk_num],
+            //     &mut self.pixel_ts_tracker[chunk_num],
+            //     &mut self.last_frame_intensity_tracker[chunk_num],
+            //     &self.state,
+            // );
         }
 
         if self.detect_features {
@@ -575,16 +575,16 @@ impl<
                         );
                         *chunk_filled = filled;
 
-                        if grew {
-                            handle_dtm(
-                                frame_chunk,
-                                chunk_filled,
-                                chunk_last_filled_tracker,
-                                chunk_ts_tracker,
-                                last_frame_intensity_tracker,
-                                &self.state,
-                            );
-                        }
+                        // if grew {
+                        //     handle_dtm(
+                        //         frame_chunk,
+                        //         chunk_filled,
+                        //         chunk_last_filled_tracker,
+                        //         chunk_ts_tracker,
+                        //         last_frame_intensity_tracker,
+                        //         &self.state,
+                        //     );
+                        // }
                     }
                 },
             );

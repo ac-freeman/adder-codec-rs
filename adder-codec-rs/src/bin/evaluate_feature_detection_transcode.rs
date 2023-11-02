@@ -10,6 +10,7 @@ extern crate core;
 use adder_codec_rs::transcoder::source::video::{
     FramedViewMode, Source, SourceError, VideoBuilder,
 };
+use std::collections::VecDeque;
 
 use clap::Parser;
 use indicatif::ProgressBar;
@@ -30,6 +31,7 @@ use adder_codec_rs::utils::cv::{calculate_quality_metrics, handle_color, Quality
 use adder_codec_rs::utils::viz::ShowFeatureMode::Off;
 use bitstream_io::{BigEndian, BitReader};
 use ndarray::{Array3, ArrayBase, Ix3, OwnedRepr};
+use opencv::core::{no_array, MatExprTraitConst, MatTrait, MatTraitManual, CV_8SC1, CV_8UC1};
 use std::io::{BufWriter, Cursor};
 use std::path::{Path, PathBuf};
 use video_rs::{Locator, Options, Resize};
@@ -197,13 +199,16 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let pb = ProgressBar::new(args.frame_count_max.into());
     let mut interval_count = 0;
 
+    let mut input_frame_memory = VecDeque::new();
+
     while interval_count < args.frame_count_max {
         match source.consume(1, &pool) {
-            Ok(events_vec_vec) => {}
+            Ok(events_vec_vec) => {
+                input_frame_memory.push_back(source.get_last_input_frame().clone());
+            }
             Err(SourceError::Open) => {}
             Err(e) => {
                 eprintln!("Error: {:?}", e);
-                return Ok(());
             }
         };
         pb.inc(1);
@@ -224,24 +229,24 @@ async fn main() -> Result<(), Box<dyn Error>> {
         // Reconstruct the video to determine what loss is from transcoder vs source-modeled compression
         if args.output_filename.len() > 0 {
             // Setup another input framed video reader
-            let orig_source = Locator::Path(PathBuf::from(args.input_filename));
-            let mut cap = video_rs::Decoder::new(&orig_source)?;
-            let (width, height) = cap.size();
-            let width = ((width as f64) * args.scale) as u32;
-            let height = ((height as f64) * args.scale) as u32;
+            // let orig_source = Locator::Path(PathBuf::from(args.input_filename));
+            // let mut cap = video_rs::Decoder::new(&orig_source)?;
+            // let (width, height) = cap.size();
+            // let width = ((width as f64) * args.scale) as u32;
+            // let height = ((height as f64) * args.scale) as u32;
 
-            cap = video_rs::Decoder::new_with_options_and_resize(
-                &orig_source,
-                &Options::default(),
-                Resize::Fit(width, height),
-            )?;
-            let video_frame_count = cap.frame_count();
-            if args.frame_idx_start >= video_frame_count as u32 {
-                return Err(Box::try_from("Start idx out of bounds").unwrap());
-            };
-            let source_fps = cap.frame_rate();
-            let ts_millis = (args.frame_idx_start as f32 / source_fps * 1000.0) as i64;
-            cap.reader.seek(ts_millis)?;
+            // cap = video_rs::Decoder::new_with_options_and_resize(
+            //     &orig_source,
+            //     &Options::default(),
+            //     Resize::Fit(width, height),
+            // )?;
+            // let video_frame_count = cap.frame_count();
+            // if args.frame_idx_start >= video_frame_count as u32 {
+            //     return Err(Box::try_from("Start idx out of bounds").unwrap());
+            // };
+            // let source_fps = cap.frame_rate();
+            // let ts_millis = (args.frame_idx_start as f32 / source_fps * 1000.0) as i64;
+            // cap.reader.seek(ts_millis)?;
 
             // Setup the addder video reader
             let (mut stream, mut bitreader) = open_file_decoder(&args.output_filename)?;
@@ -274,24 +279,106 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
                 let pb = ProgressBar::new(args.frame_count_max.into());
                 let mut last_metrics = QualityMetrics::default();
-                loop {
-                    let (_, frame) = cap.decode()?;
-                    let input_frame = handle_color(frame, args.color_input)?;
 
-                    let (event_count, mut recon_image) = reconstruct_frame_from_adder(
+                let mut recon_interval_count = 0;
+                let recon_skip = 5;
+                loop {
+                    let (event_count, mut recon_image) = match reconstruct_frame_from_adder(
                         &mut frame_sequence,
                         &mut stream,
                         &mut bitreader,
-                    )
-                    .unwrap();
-                    let mut recon_image = match recon_image {
-                        None => {
+                    ) {
+                        Ok(a) => a,
+                        Err(_) => {
                             dbg!(last_metrics);
                             println!("Finished");
                             break;
                         }
+                    };
+                    let mut recon_image = match recon_image {
+                        None => continue,
+                        Some(a) => {
+                            eprintln!("received image");
+                            a
+                        }
+                    };
+                    // recon_interval_count += 1;
+                    // if recon_interval_count < recon_skip {
+                    //     continue;
+                    // }
+
+                    eprintln!("Decoding image");
+                    // let (_, frame) = cap.decode()?;
+                    // let input_frame = handle_color(frame, args.color_input)?;
+                    let input_frame = match input_frame_memory.pop_front() {
+                        None => {
+                            eprintln!("No more input frames");
+                            break;
+                        }
                         Some(a) => a,
                     };
+
+                    // Convert to an opencv mat for debugging
+                    let mut display_mat = opencv::core::Mat::zeros(270, 480, CV_8UC1)?
+                        .to_mat()
+                        .unwrap();
+
+                    let mut y: usize = 0;
+                    let mut x: usize = 0;
+                    let mut c: usize = 0;
+
+                    for px in recon_image.iter_mut() {
+                        *display_mat.at_2d_mut::<u8>(y as i32, x as i32)? = *px;
+                        x += 1;
+                        if x == meta.plane.w_usize() {
+                            x = 0;
+                            y += 1;
+                        }
+                    }
+
+                    opencv::highgui::imshow("debug", &display_mat)?;
+                    opencv::highgui::wait_key(1);
+
+                    let mut display_mat2 = opencv::core::Mat::zeros(270, 480, CV_8UC1)?
+                        .to_mat()
+                        .unwrap();
+
+                    let mut y: usize = 0;
+                    let mut x: usize = 0;
+                    let mut c: usize = 0;
+
+                    for px in input_frame.iter() {
+                        *display_mat2.at_2d_mut::<u8>(y as i32, x as i32)? = *px;
+                        x += 1;
+                        if x == meta.plane.w_usize() {
+                            x = 0;
+                            y += 1;
+                        }
+                    }
+
+                    opencv::highgui::imshow("debug_orig", &display_mat2)?;
+                    opencv::highgui::wait_key(1);
+
+                    // Get the difference of the two mats
+                    let mut display_mat3 = opencv::core::Mat::zeros(270, 480, CV_8UC1)?
+                        .to_mat()
+                        .unwrap();
+                    opencv::core::subtract(
+                        &display_mat,
+                        &display_mat2,
+                        &mut display_mat3,
+                        &no_array(),
+                        -1,
+                    )
+                    .unwrap();
+                    for byte in display_mat3.data_bytes_mut().unwrap().iter_mut() {
+                        if *byte != 0 {
+                            *byte - 255;
+                        }
+                    }
+                    opencv::highgui::imshow("diff", &display_mat3)?;
+                    opencv::highgui::wait_key(0);
+
                     // Get the quality metrics compared to the source video
                     #[rustfmt::skip]
                         let metrics = calculate_quality_metrics(
@@ -300,10 +387,15 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         QualityMetrics {
                             mse: Some(0.0),
                             psnr: Some(0.0),
-                            ssim: Some(0.0),
+                            ssim: None,
                         },
                     );
                     let metrics = metrics.unwrap();
+                    eprintln!("{}", metrics.psnr.unwrap());
+                    if args.crf == 0 && metrics.psnr.unwrap() < 30.0 {
+                        opencv::highgui::wait_key(0);
+                        panic!("PSNR too low; got {}", metrics.psnr.unwrap());
+                    }
                     last_metrics = metrics.clone();
                     let bytes = serde_pickle::to_vec(&metrics, Default::default()).unwrap();
                     handle.write_all(&bytes).unwrap();
@@ -353,6 +445,7 @@ fn reconstruct_frame_from_adder(
             stream.meta().plane.w_usize(),
             stream.meta().plane.c_usize(),
         ));
+        eprintln!("Got image 1");
         let new_frame = frame_sequence.pop_next_frame().unwrap();
         let mut y: usize = 0;
         let mut x: usize = 0;
@@ -386,36 +479,34 @@ fn reconstruct_frame_from_adder(
         return Ok((0, image));
     }
 
-    let mut event_count = 0;
-    let mut last_event: Option<Event> = None;
-    loop {
-        match stream.digest_event(bitreader) {
-            Ok(mut event) => {
-                event_count += 1;
-                let filled = frame_sequence.ingest_event(&mut event, last_event);
+    match stream.digest_event(bitreader) {
+        Ok(mut event) => {
+            let filled = frame_sequence.ingest_event(&mut event, None);
 
-                last_event = Some(event.clone());
+            // if filled {
+            //     match image {
+            //         None => {
+            //             return reconstruct_frame_from_adder(frame_sequence, stream, bitreader);
+            //         }
+            //         Some(image) => {
+            //             eprintln!("Got image 2");
+            //             return Ok((event_count, Some(image)));
+            //         }
+            //     }
+            // }
+        }
+        Err(e) => {
+            eprintln!("FLUSHING FRAME BUFFER");
+            if !frame_sequence.flush_frame_buffer() {
+                eprintln!("Completely done");
 
-                if filled {
-                    match image {
-                        None => {
-                            return reconstruct_frame_from_adder(frame_sequence, stream, bitreader);
-                        }
-                        Some(image) => {
-                            return Ok((event_count, Some(image)));
-                        }
-                    }
-                }
+                return Err(Box::try_from("Completely done").unwrap());
             }
-            Err(e) => {
-                if !frame_sequence.flush_frame_buffer() {
-                    eprintln!("Completely done");
-
-                    return Ok((event_count, image));
-                } else {
-                    return reconstruct_frame_from_adder(frame_sequence, stream, bitreader);
-                }
-            }
+            // else {
+            //     eprintln!("ready to write");
+            //     return reconstruct_frame_from_adder(frame_sequence, stream, bitreader);
+            // }
         }
     }
+    Ok((0, None))
 }
