@@ -252,7 +252,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
             let (mut stream, mut bitreader) = open_file_decoder(&args.output_filename)?;
 
             let meta = *stream.meta();
-            let mut reconstructed_frame_rate = (meta.tps / meta.ref_interval) as f32;
+            dbg!(meta.tps);
+            dbg!(meta.ref_interval);
+            let mut reconstructed_frame_rate = meta.tps as f32 / meta.ref_interval as f32;
+            eprintln!("Reconstructed frame rate: {}", reconstructed_frame_rate);
 
             let framer_builder: FramerBuilder = FramerBuilder::new(meta.plane, 260)
                 .codec_version(meta.codec_version, meta.time_mode)

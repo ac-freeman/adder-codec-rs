@@ -338,13 +338,15 @@ impl<
             }
         }
 
+        dbg!((builder.tps as f32 / builder.output_fps) as u32);
+
         // Array3::<Option<T>>::new(num_rows, num_cols, num_channels);
         FrameSequence {
             state: FrameSequenceState {
                 plane: *plane,
                 frames_written: 0,
                 view_mode: builder.view_mode,
-                tpf: builder.tps / builder.output_fps as u32,
+                tpf: (builder.tps as f32 / builder.output_fps) as u32,
                 source: builder.source,
                 codec_version: builder.codec_version,
                 source_camera: builder.source_camera,
