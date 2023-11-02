@@ -285,10 +285,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     };
                     let mut recon_image = match recon_image {
                         None => continue,
-                        Some(a) => {
-                            eprintln!("received image");
-                            a
-                        }
+                        Some(a) => a,
                     };
 
                     let (_, frame) = cap.decode()?;
