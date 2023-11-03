@@ -16,7 +16,7 @@ use adder_codec_core::codec::{
 };
 use adder_codec_core::{
     Coord, DeltaT, Event, Mode, PixelMultiMode, PlaneError, PlaneSize, SourceCamera, SourceType,
-    TimeMode,
+    TimeMode, D_EMPTY,
 };
 use bumpalo::Bump;
 use chrono::Local;
@@ -888,6 +888,7 @@ impl<W: Write + 'static> Video<W> {
                         if e1.coord != e2.coord
                             && (!cfg!(feature = "feature-logging-nonmaxsuppression")
                                 || e2.t != e1.t)
+                            && e1.d != D_EMPTY
                         {
                             if is_feature(
                                 e1.coord,
