@@ -31,7 +31,6 @@ use adder_codec_rs::utils::cv::{calculate_quality_metrics, handle_color, Quality
 use adder_codec_rs::utils::viz::ShowFeatureMode::Off;
 use bitstream_io::{BigEndian, BitReader};
 use ndarray::{Array3, ArrayBase, Ix3, OwnedRepr};
-use opencv::core::{no_array, MatExprTraitConst, MatTrait, MatTraitManual, CV_8SC1, CV_8UC1};
 use std::io::{BufWriter, Cursor};
 use std::path::{Path, PathBuf};
 use video_rs::{Locator, Options, Resize};
@@ -391,18 +390,6 @@ fn reconstruct_frame_from_adder(
     match stream.digest_event(bitreader) {
         Ok(mut event) => {
             let filled = frame_sequence.ingest_event(&mut event, None);
-
-            // if filled {
-            //     match image {
-            //         None => {
-            //             return reconstruct_frame_from_adder(frame_sequence, stream, bitreader);
-            //         }
-            //         Some(image) => {
-            //             eprintln!("Got image 2");
-            //             return Ok((event_count, Some(image)));
-            //         }
-            //     }
-            // }
         }
         Err(e) => {
             if !frame_sequence.flush_frame_buffer() {
@@ -410,10 +397,6 @@ fn reconstruct_frame_from_adder(
 
                 return Err(Box::try_from("Completely done").unwrap());
             }
-            // else {
-            //     eprintln!("ready to write");
-            //     return reconstruct_frame_from_adder(frame_sequence, stream, bitreader);
-            // }
         }
     }
     Ok((0, None))
