@@ -159,6 +159,8 @@ impl PixelArena {
                 if root.state.integration == 0.0 && root.state.delta_t > 0.0 {
                     self.get_zero_event(0, Some(next_intensity))
                 } else {
+                    // TODO: Can probably remove this now with the new definition of dt_max
+
                     // We can reach here under frame-perfect integration when approaching dtm. The new
                     // node might not have the right D set.
                     // TODO: cover with a unit test

@@ -2,6 +2,7 @@
 use opencv::core::{Mat, Size};
 #[cfg(feature = "opencv")]
 use opencv::prelude::*;
+use std::cmp::min;
 use std::collections::HashSet;
 use std::io::{sink, Write};
 use std::mem::swap;
@@ -1077,7 +1078,7 @@ impl<W: Write + 'static> Video<W> {
                     {
                         for c in 0..self.state.plane.c() {
                             self.event_pixel_trees[[row as usize, col as usize, c as usize]]
-                                .c_thresh = parameters.c_thresh_baseline;
+                                .c_thresh = min(parameters.c_thresh_baseline, 2);
                         }
                     }
                 }

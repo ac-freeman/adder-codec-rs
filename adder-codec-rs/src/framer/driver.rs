@@ -35,7 +35,7 @@ pub enum FramerMode {
 pub struct FramerBuilder {
     plane: PlaneSize,
     tps: DeltaT,
-    output_fps: f32,
+    output_fps: Option<f32>,
     mode: FramerMode,
     view_mode: FramedViewMode,
     source: SourceType,
@@ -58,7 +58,7 @@ impl FramerBuilder {
             plane,
             chunk_rows,
             tps: 150_000,
-            output_fps: 30.0,
+            output_fps: None,
             mode: FramerMode::INSTANTANEOUS,
             view_mode: FramedViewMode::Intensity,
             source: SourceType::U8,
@@ -78,7 +78,7 @@ impl FramerBuilder {
         tps: DeltaT,
         ref_interval: DeltaT,
         delta_t_max: DeltaT,
-        output_fps: f32,
+        output_fps: Option<f32>,
     ) -> FramerBuilder {
         self.tps = tps;
         self.ref_interval = ref_interval;
@@ -338,13 +338,19 @@ impl<
             }
         }
 
+        let tpf = if let Some(output_fps) = builder.output_fps {
+            (builder.tps as f32 / output_fps) as u32
+        } else {
+            builder.ref_interval
+        };
+
         // Array3::<Option<T>>::new(num_rows, num_cols, num_channels);
         FrameSequence {
             state: FrameSequenceState {
                 plane: *plane,
                 frames_written: 0,
                 view_mode: builder.view_mode,
-                tpf: builder.tps / builder.output_fps as u32,
+                tpf,
                 source: builder.source,
                 codec_version: builder.codec_version,
                 source_camera: builder.source_camera,
@@ -441,14 +447,14 @@ impl<
         self.chunk_filled_tracker[chunk_num] = filled;
 
         if grew {
-            handle_dtm(
-                frame_chunk,
-                &mut self.chunk_filled_tracker[chunk_num],
-                &mut self.last_filled_tracker[chunk_num],
-                &mut self.pixel_ts_tracker[chunk_num],
-                &mut self.last_frame_intensity_tracker[chunk_num],
-                &self.state,
-            );
+            // handle_dtm(
+            //     frame_chunk,
+            //     &mut self.chunk_filled_tracker[chunk_num],
+            //     &mut self.last_filled_tracker[chunk_num],
+            //     &mut self.pixel_ts_tracker[chunk_num],
+            //     &mut self.last_frame_intensity_tracker[chunk_num],
+            //     &self.state,
+            // );
         }
 
         if self.detect_features {
@@ -575,16 +581,16 @@ impl<
                         );
                         *chunk_filled = filled;
 
-                        if grew {
-                            handle_dtm(
-                                frame_chunk,
-                                chunk_filled,
-                                chunk_last_filled_tracker,
-                                chunk_ts_tracker,
-                                last_frame_intensity_tracker,
-                                &self.state,
-                            );
-                        }
+                        // if grew {
+                        //     handle_dtm(
+                        //         frame_chunk,
+                        //         chunk_filled,
+                        //         chunk_last_filled_tracker,
+                        //         chunk_ts_tracker,
+                        //         last_frame_intensity_tracker,
+                        //         &self.state,
+                        //     );
+                        // }
                     }
                 },
             );
