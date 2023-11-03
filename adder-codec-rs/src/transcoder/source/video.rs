@@ -1186,12 +1186,16 @@ pub fn integrate_for_px(
     if *frame_val < base_val.saturating_sub(px.c_thresh)
         || *frame_val > base_val.saturating_add(px.c_thresh)
     {
+        let tmp = buffer.len();
         px.pop_best_events(
             buffer,
             state.pixel_tree_mode,
             state.pixel_multi_mode,
             state.ref_time,
         );
+        if buffer.len() > tmp + 3 {
+            dbg!("hm", state.pixel_multi_mode);
+        }
         grew_buffer = true;
         px.base_val = *frame_val;
 
