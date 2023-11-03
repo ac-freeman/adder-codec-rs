@@ -231,7 +231,6 @@ impl PixelArena {
         }
 
         if multi_mode == PixelMultiMode::Collapse && local_buffer.len() >= 2 && self.popped_dtm {
-            dbg!("collapsing");
             // Then discard all the events except the last two, and mark the first of these as an EMPTY event
             // (carrying no intensity info)
             let mut start_trash_idx = 0;
@@ -244,21 +243,22 @@ impl PixelArena {
             buffer.push(local_buffer[last_idx - 1]);
             buffer.push(local_buffer[last_idx]);
             // debug_assert!(buffer.len() == 2);
-        } else if multi_mode == PixelMultiMode::Collapse && local_buffer.len() >= 3 {
-            dbg!("collapsing");
-            // Then discard all the events except the last two, and mark the first of these as an EMPTY event
-            // (carrying no intensity info)
-            let mut start_trash_idx = 0;
-            let last_idx = local_buffer.len() - 1;
-            // loop {
-            //     if buffer[start_trash_idx].t <
-            // }
-
-            local_buffer[last_idx - 1].d = D_EMPTY;
-            buffer.push(local_buffer[0]);
-            buffer.push(local_buffer[last_idx - 1]);
-            buffer.push(local_buffer[last_idx]);
-        } else {
+        }
+        // else if multi_mode == PixelMultiMode::Collapse && local_buffer.len() >= 3 {
+        //     // Then discard all the events except the first and last two, and mark the second of these as an EMPTY event
+        //     // (carrying no intensity info)
+        //     let mut start_trash_idx = 0;
+        //     let last_idx = local_buffer.len() - 1;
+        //     // loop {
+        //     //     if buffer[start_trash_idx].t <
+        //     // }
+        //
+        //     local_buffer[last_idx - 1].d = D_EMPTY;
+        //     buffer.push(local_buffer[0]);
+        //     buffer.push(local_buffer[last_idx - 1]);
+        //     buffer.push(local_buffer[last_idx]);
+        // }
+        else {
             buffer.append(&mut local_buffer);
         }
 
