@@ -2,7 +2,7 @@ use crate::codec::compressed::fenwick::context_switching::FenwickModel;
 use crate::codec::compressed::fenwick::Weights;
 use crate::codec::compressed::TResidual;
 use crate::codec::CodecMetadata;
-use crate::{AbsoluteT, DeltaT, EventCoordless, Intensity, D, D_SHIFT};
+use crate::{AbsoluteT, DeltaT, EventCoordless, Intensity, D, D_EMPTY, D_SHIFT};
 use arithmetic_coding::Encoder;
 use bitstream_io::{BigEndian, BitWrite, BitWriter};
 
@@ -102,18 +102,15 @@ impl Contexts {
         event: &mut EventCoordless,
         prev_event: &EventCoordless,
         dt_ref: DeltaT,
-        c_thresh_max: f64
+        c_thresh_max: f64,
     ) -> (u8, i64) {
         if t_residual_i64.abs() < self.t_residual_max as i64 {
             (0, t_residual_i64)
             // } else if t_residual_i64.abs() > self.dt_max {
-        }
-        // else {
-        //
-        //     // JUST LOSSLESS FOR NOW
-        //     (BITSHIFT_ENCODE_FULL, t_residual_i64)
-        // }
-        else {
+        } else if event.d == D_EMPTY {
+            // JUST LOSSLESS FOR NOW
+            (BITSHIFT_ENCODE_FULL, t_residual_i64)
+        } else {
             let actual_dt = event.t - prev_event.t;
             let actual_intensity = self.event_to_intensity(event.d, actual_dt, dt_ref);
             let mut recon_intensity = actual_intensity;
@@ -121,7 +118,7 @@ impl Contexts {
             let mut t_residual = t_residual_i64.abs();
             loop {
                 if t_residual > self.t_residual_max
-                    && actual_intensity - c_thresh_max  < recon_intensity
+                    && actual_intensity - c_thresh_max < recon_intensity
                     && actual_intensity + c_thresh_max > recon_intensity
                 {
                     t_residual >>= 1;

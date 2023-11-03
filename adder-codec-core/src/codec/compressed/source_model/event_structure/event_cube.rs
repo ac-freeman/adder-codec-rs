@@ -557,7 +557,7 @@ impl EventCube {
                                         event,
                                         &prev_event,
                                         self.dt_ref,
-                                        c_thresh_max as f64
+                                        c_thresh_max as f64,
                                     );
 
                                 encoder.model.set_context(contexts.bitshift_context);
@@ -677,10 +677,7 @@ impl EventCube {
                                 (t_prediction as i64 + t_residual as i64) as AbsoluteT,
                                 prev_event.t,
                             );
-                            if t == 511 {
-                                dbg!(t);
-                            }
-                            assert!(t >= prev_event.t);
+                            debug_assert!(t >= prev_event.t);
                             last_delta_t = (t - prev_event.t) as DeltaT;
                             // debug_assert!(
                             //     t <= self.start_t + self.num_intervals as AbsoluteT * self.dt_ref

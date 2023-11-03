@@ -1193,9 +1193,6 @@ pub fn integrate_for_px(
             state.pixel_multi_mode,
             state.ref_time,
         );
-        if buffer.len() > tmp + 3 {
-            dbg!("hm", state.pixel_multi_mode);
-        }
         grew_buffer = true;
         px.base_val = *frame_val;
 
