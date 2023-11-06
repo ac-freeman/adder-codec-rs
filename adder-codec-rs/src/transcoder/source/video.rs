@@ -1229,9 +1229,9 @@ pub fn integrate_for_px(
         grew_buffer = true;
     }
 
-    if buffer.len() - start_len > 5 {
-        dbg!("hm", buffer.len() - start_len);
-    }
+    // if buffer.len() - start_len > 5 {
+    //     dbg!("hm", buffer.len() - start_len);
+    // }
     grew_buffer
 }
 
