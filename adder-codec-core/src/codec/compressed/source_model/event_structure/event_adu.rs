@@ -181,7 +181,7 @@ impl EventAdu {
 
         for block_idx_y in 0..self.event_cubes.nrows() {
             for block_idx_x in 0..self.event_cubes.ncols() {
-                self.event_cubes[[block_idx_y, block_idx_x]] = EventCube::decompress_intra(
+                self.event_cubes[[block_idx_y, block_idx_x]].decompress_intra(
                     &mut decoder,
                     &contexts,
                     stream,

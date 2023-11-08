@@ -25,6 +25,7 @@ trait ComponentCompression {
         threshold_option: Option<u8>,
     ) -> Result<(), CodecError>;
     fn decompress_intra(
+        &mut self,
         decoder: &mut Decoder<FenwickModel, BitReader<Cursor<Vec<u8>>, BigEndian>>,
         contexts: &Contexts,
         stream: &mut BitReader<Cursor<Vec<u8>>, BigEndian>,
@@ -34,7 +35,7 @@ trait ComponentCompression {
         start_t: AbsoluteT,
         dt_ref: DeltaT,
         num_intervals: usize,
-    ) -> Self;
+    );
     fn decompress_inter(
         &mut self,
         decoder: &mut Decoder<FenwickModel, BitReader<Cursor<Vec<u8>>, BigEndian>>,

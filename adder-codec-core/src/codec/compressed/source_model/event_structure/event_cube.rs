@@ -524,6 +524,7 @@ impl ComponentCompression for EventCube {
     }
 
     fn decompress_intra(
+        &mut self,
         decoder: &mut Decoder<FenwickModel, BitReader<Cursor<Vec<u8>>, BigEndian>>,
         contexts: &Contexts,
         stream: &mut BitReader<Cursor<Vec<u8>>, BigEndian>,
@@ -533,15 +534,15 @@ impl ComponentCompression for EventCube {
         start_t: AbsoluteT,
         dt_ref: DeltaT,
         num_intervals: usize,
-    ) -> Self {
-        let mut cube = Self::new(
-            block_idx_y as PixelAddress * BLOCK_SIZE as u16,
-            block_idx_x as PixelAddress * BLOCK_SIZE as u16,
-            num_channels,
-            start_t,
-            dt_ref,
-            num_intervals,
-        );
+    ) {
+        // let mut cube = Self::new(
+        //     block_idx_y as PixelAddress * BLOCK_SIZE as u16,
+        //     block_idx_x as PixelAddress * BLOCK_SIZE as u16,
+        //     num_channels,
+        //     start_t,
+        //     dt_ref,
+        //     num_intervals,
+        // );
 
         let mut d_residual_buffer = [0u8; size_of::<DResidual>()];
         let mut bitshift_buffer = [0u8; 1];
@@ -550,10 +551,10 @@ impl ComponentCompression for EventCube {
         let mut t_residual_full_buffer = [0u8; size_of::<i64>()];
         let mut init_event: Option<EventCoordless> = None;
 
-        for c in 0..cube.num_channels {
+        for c in 0..self.num_channels {
             for y in 0..BLOCK_SIZE {
                 for x in 0..BLOCK_SIZE {
-                    let mut pixel = &mut cube.raw_event_lists[c][y][x];
+                    let mut pixel = &mut self.raw_event_lists[c][y][x];
 
                     decoder.model.set_context(contexts.d_context);
 
@@ -566,8 +567,8 @@ impl ComponentCompression for EventCube {
 
                     if d_residual == DRESIDUAL_SKIP_CUBE {
                         pixel.clear(); // So we can skip it for intra-coding
-                        cube.skip_cube = true;
-                        return cube;
+                        self.skip_cube = true;
+                        return;
                     } else if d_residual == DRESIDUAL_NO_EVENT {
                         pixel.clear(); // So we can skip it for intra-coding
                     } else {
@@ -576,7 +577,7 @@ impl ComponentCompression for EventCube {
                         } else {
                             // There is no init event
                             init_event = Some(EventCoordless { d: 0, t: start_t });
-                            cube.skip_cube = false;
+                            self.skip_cube = false;
                             d_residual as D
                         };
 
@@ -623,8 +624,6 @@ impl ComponentCompression for EventCube {
                 }
             }
         }
-
-        cube
     }
 
     fn decompress_inter(
@@ -781,17 +780,9 @@ mod compression_tests {
         let mut decoder = arithmetic_coding::Decoder::new(source_model);
         let mut stream = BitReader::endian(Cursor::new(stream.into_writer()), BigEndian);
 
-        let cube2 = EventCube::decompress_intra(
-            &mut decoder,
-            &contexts,
-            &mut stream,
-            0,
-            0,
-            1,
-            255,
-            255,
-            10,
-        );
+        let mut cube2 = cube.clone();
+
+        cube2.decompress_intra(&mut decoder, &contexts, &mut stream, 0, 0, 1, 255, 255, 10);
 
         for c in 0..3 {
             for y in 0..16 {
@@ -881,17 +872,8 @@ mod compression_tests {
         let mut decoder = arithmetic_coding::Decoder::new(source_model);
         let mut stream = BitReader::endian(Cursor::new(stream.into_writer()), BigEndian);
 
-        let mut cube2 = EventCube::decompress_intra(
-            &mut decoder,
-            &contexts,
-            &mut stream,
-            0,
-            0,
-            1,
-            255,
-            255,
-            10,
-        );
+        let mut cube2 = cube.clone();
+        cube2.decompress_intra(&mut decoder, &contexts, &mut stream, 0, 0, 1, 255, 255, 10);
         cube2.decompress_inter(&mut decoder, &contexts, &mut stream, 0, 0, 1, 255, 255, 10);
 
         for c in 0..3 {
@@ -949,17 +931,8 @@ mod compression_tests {
         let mut decoder = arithmetic_coding::Decoder::new(source_model);
         let mut stream = BitReader::endian(Cursor::new(stream.into_writer()), BigEndian);
 
-        let mut cube2 = EventCube::decompress_intra(
-            &mut decoder,
-            &contexts,
-            &mut stream,
-            0,
-            0,
-            1,
-            255,
-            255,
-            10,
-        );
+        let mut cube2 = cube.clone();
+        cube2.decompress_intra(&mut decoder, &contexts, &mut stream, 0, 0, 1, 255, 255, 10);
         cube2.decompress_inter(&mut decoder, &contexts, &mut stream, 0, 0, 1, 255, 255, 10);
 
         for c in 0..3 {
@@ -1036,7 +1009,8 @@ mod compression_tests {
         let mut decoder = arithmetic_coding::Decoder::new(source_model);
         let mut stream = BitReader::endian(Cursor::new(stream.into_writer()), BigEndian);
 
-        let mut cube2 = EventCube::decompress_intra(
+        let mut cube2 = cube.clone();
+        cube2.decompress_intra(
             &mut decoder,
             &contexts,
             &mut stream,
@@ -1132,7 +1106,8 @@ mod compression_tests {
         let mut decoder = arithmetic_coding::Decoder::new(source_model);
         let mut stream = BitReader::endian(Cursor::new(stream.into_writer()), BigEndian);
 
-        let mut cube2 = EventCube::decompress_intra(
+        let mut cube2 = cube.clone();
+        cube2.decompress_intra(
             &mut decoder,
             &contexts,
             &mut stream,
