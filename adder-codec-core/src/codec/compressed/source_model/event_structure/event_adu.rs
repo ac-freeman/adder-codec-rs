@@ -105,7 +105,12 @@ impl EventAdu {
 
         for cube in self.event_cubes.iter_mut() {
             debug_assert_eq!(cube.start_t, self.start_t);
-            cube.compress(&mut encoder, &contexts, stream, Some(c_thresh_max))?;
+            cube.compress_intra(&mut encoder, &contexts, stream, Some(c_thresh_max))?;
+        }
+
+        for cube in self.event_cubes.iter_mut() {
+            debug_assert_eq!(cube.start_t, self.start_t);
+            cube.compress_inter(&mut encoder, &contexts, stream, Some(c_thresh_max))?;
         }
 
         // Flush the encoder
@@ -138,7 +143,12 @@ impl EventAdu {
 
         for cube in self.event_cubes.iter_mut() {
             debug_assert_eq!(cube.start_t, self.start_t);
-            cube.compress(&mut encoder, &contexts, stream, Some(c_thresh_max))?;
+            cube.compress_intra(&mut encoder, &contexts, stream, Some(c_thresh_max))?;
+        }
+
+        for cube in self.event_cubes.iter_mut() {
+            debug_assert_eq!(cube.start_t, self.start_t);
+            cube.compress_inter(&mut encoder, &contexts, stream, Some(c_thresh_max))?;
         }
 
         // Flush the encoder
@@ -171,7 +181,27 @@ impl EventAdu {
 
         for block_idx_y in 0..self.event_cubes.nrows() {
             for block_idx_x in 0..self.event_cubes.ncols() {
-                self.event_cubes[[block_idx_y, block_idx_x]] = EventCube::decompress(
+                self.event_cubes[[block_idx_y, block_idx_x]] = EventCube::decompress_intra(
+                    &mut decoder,
+                    &contexts,
+                    stream,
+                    block_idx_y,
+                    block_idx_x,
+                    self.plane.c_usize(),
+                    self.start_t,
+                    self.dt_ref,
+                    self.num_intervals,
+                );
+                debug_assert_eq!(
+                    self.event_cubes[[block_idx_y, block_idx_x]].start_t,
+                    self.start_t
+                );
+            }
+        }
+
+        for block_idx_y in 0..self.event_cubes.nrows() {
+            for block_idx_x in 0..self.event_cubes.ncols() {
+                self.event_cubes[[block_idx_y, block_idx_x]].decompress_inter(
                     &mut decoder,
                     &contexts,
                     stream,
