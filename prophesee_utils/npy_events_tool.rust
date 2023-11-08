@@ -1,0 +1,62 @@
+use std::fs::File;
+use std::io::{Read, Seek, SeekFrom};
+use ndarray::Array2;
+use byteorder::{LittleEndian, ReadBytesExt};
+
+fn stream_td_data(file_handle: &mut File, buffer: &mut Array2<u32>, dtype: &[(String, String)], ev_count: i32) {
+    let mut dat = vec![[0u32; 2]; ev_count as usize];
+    file_handle.read_exact(unsafe { 
+        std::mem::transmute::<&mut [[u8; 8]], &mut [[u32; 2]]>(&mut dat)
+    }).unwrap();
+    let count = dat.len();
+    for (name, _) in dtype {
+        match name.as_ref() {
+            "t" => {
+                for i in 0..count {
+                    buffer[[i, 0]] = dat[i][0];
+                }
+            }
+            _ => {} // Handle other fields if needed
+        }
+    }
+}
+
+fn parse_header(fhandle: &mut File) -> (u64, Vec<(String, String)>, usize, (Option<i32>, Option<i32>)) {
+    let mut magic = [0u8; 6];
+    fhandle.read_exact(&mut magic).unwrap();
+    assert_eq!(magic, *b"\x93NUMPY", "Invalid magic number");
+
+    let major = fhandle.read_u8().unwrap();
+    let minor = fhandle.read_u8().unwrap();
+    let header_len = fhandle.read_u16::<LittleEndian>().unwrap() as usize;
+
+    let mut header = vec![0u8; header_len];
+    fhandle.read_exact(&mut header).unwrap();
+    let header_str = String::from_utf8(header).unwrap();
+    let header_lines: Vec<&str> = header_str.lines().collect();
+
+    let dtype_line = header_lines.iter().find(|line| line.starts_with("{'descr': '")).unwrap();
+    let dtype_str = dtype_line.trim_start_matches("{'descr': '").trim_end_matches("',");
+
+    let dtype_parts: Vec<&str> = dtype_str.split('<').collect();
+    let dtype_name = dtype_parts[0];
+    let dtype_size = match dtype_parts[1] {
+        "u4" => 4,
+        "i4" => 4,
+        _ => panic!("Unsupported dtype size"),
+    };
+
+    let dtype = vec![(dtype_name.to_string(), dtype_size.to_string())];
+
+    let shape_line = header_lines.iter().find(|line| line.starts_with("('shape', (")).unwrap();
+    let shape_str = shape_line.trim_start_matches("('shape', (").trim_end_matches(")),");
+    let shape_parts: Vec<&str> = shape_str.split(", ").collect();
+    let shape = (
+        shape_parts[0].parse::<i32>().ok(),
+        shape_parts[1].parse::<i32>().ok(),
+    );
+
+    let start = fhandle.seek(SeekFrom::Current(0)).unwrap() as u64;
+
+    (start, dtype, dtype_size, shape)
+}
