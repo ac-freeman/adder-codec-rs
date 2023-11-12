@@ -127,7 +127,6 @@ impl<W: Write> WriteCompression<W> for CompressedOutput<W> {
 
                 let parameters = self.options.crf.get_parameters();
 
-                let start = std::time::Instant::now();
                 // Compress the Adu. This also writes the EOF symbol and flushes the encoder
                 self.adu
                     .compress(&mut temp_stream, parameters.c_thresh_max)?;
@@ -139,9 +138,6 @@ impl<W: Write> WriteCompression<W> for CompressedOutput<W> {
 
                 // Write the temporary stream to the actual stream
                 stream.write_bytes(&written_data)?;
-
-                let duration = start.elapsed();
-                println!("Compressed Adu in {:?} ns", duration.as_nanos());
             }
         }
 

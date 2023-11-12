@@ -536,7 +536,6 @@ impl<W: Write + 'static> Video<W> {
         encoder_options: EncoderOptions,
         write: W,
     ) -> Result<Self, SourceError> {
-        // TODO: Allow for compressed representation (not just raw)
         let encoder: Encoder<_> = match encoder_type {
             EncoderType::Compressed => {
                 #[cfg(feature = "compression")]

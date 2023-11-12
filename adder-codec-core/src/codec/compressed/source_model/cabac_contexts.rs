@@ -139,10 +139,16 @@ impl Contexts {
                 bitshift -= 1;
             }
             t_residual = t_residual_i64.abs() >> bitshift;
-            if t_residual_i64 < 0 {
-                (bitshift, -t_residual)
+
+            if t_residual.abs() < self.t_residual_max as i64 {
+                if t_residual_i64 < 0 {
+                    (bitshift, -t_residual)
+                } else {
+                    (bitshift, t_residual)
+                }
             } else {
-                (bitshift, t_residual)
+                // JUST LOSSLESS
+                (BITSHIFT_ENCODE_FULL, t_residual_i64)
             }
         }
     }

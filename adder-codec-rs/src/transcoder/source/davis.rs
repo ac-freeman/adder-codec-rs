@@ -1009,6 +1009,7 @@ impl<W: Write + 'static> VideoBuilder<W> for Davis<W> {
         delta_t_max: DeltaT,
         time_mode: Option<TimeMode>,
     ) -> Result<Self, SourceError> {
+        eprintln!("setting dtref to {}", ref_time);
         self.video = self
             .video
             .time_parameters(tps, ref_time, delta_t_max, time_mode)?;

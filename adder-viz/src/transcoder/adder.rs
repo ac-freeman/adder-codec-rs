@@ -198,7 +198,9 @@ impl AdderTranscoder {
                                 .time_parameters(
                                     1000000_u32,
                                     (1_000_000.0 / ui_state.davis_output_fps) as DeltaT,
-                                    (1_000_000.0 * ui_state.delta_t_max_mult as f32) as u32,
+                                    ((1_000_000.0 / ui_state.davis_output_fps)
+                                        * ui_state.delta_t_max_mult as f64)
+                                        as u32,
                                     Some(ui_state.time_mode),
                                 )?;
 

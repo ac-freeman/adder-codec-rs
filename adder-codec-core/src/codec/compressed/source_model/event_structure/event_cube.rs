@@ -379,12 +379,6 @@ impl ComponentCompression for EventCube {
                                 encoder.encode(Some(&(*byte as usize)), stream).unwrap();
                             }
 
-                            // assert!(t_residual > -32769 && t_residual < 32769);
-
-                            if t_residual == -31717 {
-                                dbg!(event.t, init.t);
-                            }
-
                             encoder.model.set_context(contexts.t_context);
 
                             if bitshift_amt == BITSHIFT_ENCODE_FULL {
@@ -490,6 +484,7 @@ impl ComponentCompression for EventCube {
                                         encoder.encode(Some(&(*byte as usize)), stream).unwrap();
                                     }
                                     event.t = (t_prediction as i64 + t_residual) as AbsoluteT;
+                                    debug_assert!(event.t < 5000000);
                                 } else {
                                     let t_residual = t_residual as TResidual;
                                     for byte in t_residual.to_be_bytes().iter() {
@@ -500,10 +495,11 @@ impl ComponentCompression for EventCube {
                                     event.t = (t_prediction as i64
                                         + ((t_residual as i64) << bitshift_amt as i64))
                                         as AbsoluteT;
+                                    debug_assert!(event.t < 5000000);
                                 }
 
                                 event.t = max(event.t, prev_event.t);
-                                // }
+                                debug_assert!(event.t >= prev_event.t);
                                 last_delta_t = (event.t - prev_event.t) as DeltaT;
                             } else {
                                 encoder.model.set_context(contexts.d_context);
