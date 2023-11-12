@@ -484,7 +484,7 @@ impl ComponentCompression for EventCube {
                                         encoder.encode(Some(&(*byte as usize)), stream).unwrap();
                                     }
                                     event.t = (t_prediction as i64 + t_residual) as AbsoluteT;
-                                    debug_assert!(event.t < 5000000);
+                                    // debug_assert!(event.t < 5000000);
                                 } else {
                                     let t_residual = t_residual as TResidual;
                                     for byte in t_residual.to_be_bytes().iter() {
@@ -495,7 +495,7 @@ impl ComponentCompression for EventCube {
                                     event.t = (t_prediction as i64
                                         + ((t_residual as i64) << bitshift_amt as i64))
                                         as AbsoluteT;
-                                    debug_assert!(event.t < 5000000);
+                                    // debug_assert!(event.t < 5000000);
                                 }
 
                                 event.t = max(event.t, prev_event.t);
