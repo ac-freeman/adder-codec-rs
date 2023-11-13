@@ -159,6 +159,8 @@ impl PixelArena {
                 if root.state.integration == 0.0 && root.state.delta_t > 0.0 {
                     self.get_zero_event(0, Some(next_intensity))
                 } else {
+                    // TODO: Can probably remove this now with the new definition of dt_max
+
                     // We can reach here under frame-perfect integration when approaching dtm. The new
                     // node might not have the right D set.
                     // TODO: cover with a unit test
@@ -241,7 +243,22 @@ impl PixelArena {
             buffer.push(local_buffer[last_idx - 1]);
             buffer.push(local_buffer[last_idx]);
             // debug_assert!(buffer.len() == 2);
-        } else {
+        }
+        // else if multi_mode == PixelMultiMode::Collapse && local_buffer.len() >= 3 {
+        //     // Then discard all the events except the first and last two, and mark the second of these as an EMPTY event
+        //     // (carrying no intensity info)
+        //     let mut start_trash_idx = 0;
+        //     let last_idx = local_buffer.len() - 1;
+        //     // loop {
+        //     //     if buffer[start_trash_idx].t <
+        //     // }
+        //
+        //     local_buffer[last_idx - 1].d = D_EMPTY;
+        //     buffer.push(local_buffer[0]);
+        //     buffer.push(local_buffer[last_idx - 1]);
+        //     buffer.push(local_buffer[last_idx]);
+        // }
+        else {
             buffer.append(&mut local_buffer);
         }
 

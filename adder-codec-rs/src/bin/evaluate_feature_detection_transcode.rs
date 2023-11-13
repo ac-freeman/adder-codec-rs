@@ -10,6 +10,7 @@ extern crate core;
 use adder_codec_rs::transcoder::source::video::{
     FramedViewMode, Source, SourceError, VideoBuilder,
 };
+use std::collections::VecDeque;
 
 use clap::Parser;
 use indicatif::ProgressBar;
@@ -203,7 +204,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
             Err(SourceError::Open) => {}
             Err(e) => {
                 eprintln!("Error: {:?}", e);
-                return Ok(());
             }
         };
         pb.inc(1);
@@ -247,16 +247,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
             let (mut stream, mut bitreader) = open_file_decoder(&args.output_filename)?;
 
             let meta = *stream.meta();
-            let mut reconstructed_frame_rate = (meta.tps / meta.ref_interval) as f32;
 
             let framer_builder: FramerBuilder = FramerBuilder::new(meta.plane, 260)
                 .codec_version(meta.codec_version, meta.time_mode)
-                .time_parameters(
-                    meta.tps,
-                    meta.ref_interval,
-                    meta.delta_t_max,
-                    reconstructed_frame_rate,
-                )
+                .time_parameters(meta.tps, meta.ref_interval, meta.delta_t_max, None)
                 .mode(INSTANTANEOUS)
                 .view_mode(FramedViewMode::Intensity)
                 .detect_features(false)
@@ -274,24 +268,28 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
                 let pb = ProgressBar::new(args.frame_count_max.into());
                 let mut last_metrics = QualityMetrics::default();
-                loop {
-                    let (_, frame) = cap.decode()?;
-                    let input_frame = handle_color(frame, args.color_input)?;
 
-                    let (event_count, mut recon_image) = reconstruct_frame_from_adder(
+                loop {
+                    let (event_count, mut recon_image) = match reconstruct_frame_from_adder(
                         &mut frame_sequence,
                         &mut stream,
                         &mut bitreader,
-                    )
-                    .unwrap();
-                    let mut recon_image = match recon_image {
-                        None => {
+                    ) {
+                        Ok(a) => a,
+                        Err(_) => {
                             dbg!(last_metrics);
                             println!("Finished");
                             break;
                         }
+                    };
+                    let mut recon_image = match recon_image {
+                        None => continue,
                         Some(a) => a,
                     };
+
+                    let (_, frame) = cap.decode()?;
+                    let input_frame = handle_color(frame, args.color_input)?;
+
                     // Get the quality metrics compared to the source video
                     #[rustfmt::skip]
                         let metrics = calculate_quality_metrics(
@@ -300,10 +298,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         QualityMetrics {
                             mse: Some(0.0),
                             psnr: Some(0.0),
-                            ssim: Some(0.0),
+                            ssim: None,
                         },
                     );
                     let metrics = metrics.unwrap();
+                    if args.crf == 0 && metrics.psnr.unwrap() < 40.0 {
+                        panic!("PSNR too low; got {}", metrics.psnr.unwrap());
+                    }
                     last_metrics = metrics.clone();
                     let bytes = serde_pickle::to_vec(&metrics, Default::default()).unwrap();
                     handle.write_all(&bytes).unwrap();
@@ -386,36 +387,17 @@ fn reconstruct_frame_from_adder(
         return Ok((0, image));
     }
 
-    let mut event_count = 0;
-    let mut last_event: Option<Event> = None;
-    loop {
-        match stream.digest_event(bitreader) {
-            Ok(mut event) => {
-                event_count += 1;
-                let filled = frame_sequence.ingest_event(&mut event, last_event);
+    match stream.digest_event(bitreader) {
+        Ok(mut event) => {
+            let filled = frame_sequence.ingest_event(&mut event, None);
+        }
+        Err(e) => {
+            if !frame_sequence.flush_frame_buffer() {
+                eprintln!("Completely done");
 
-                last_event = Some(event.clone());
-
-                if filled {
-                    match image {
-                        None => {
-                            return reconstruct_frame_from_adder(frame_sequence, stream, bitreader);
-                        }
-                        Some(image) => {
-                            return Ok((event_count, Some(image)));
-                        }
-                    }
-                }
-            }
-            Err(e) => {
-                if !frame_sequence.flush_frame_buffer() {
-                    eprintln!("Completely done");
-
-                    return Ok((event_count, image));
-                } else {
-                    return reconstruct_frame_from_adder(frame_sequence, stream, bitreader);
-                }
+                return Err(Box::try_from("Completely done").unwrap());
             }
         }
     }
+    Ok((0, None))
 }

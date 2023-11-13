@@ -158,7 +158,7 @@ impl<W: Write + 'static> SimulProcessor<W> {
                     source.video.state.tps,
                     ref_time,
                     source.video.state.delta_t_max,
-                    reconstructed_frame_rate,
+                    Some(reconstructed_frame_rate),
                 )
                 .mode(INSTANTANEOUS)
                 .source(U8, FramedU8)

@@ -35,7 +35,7 @@ pub enum FramerMode {
 pub struct FramerBuilder {
     plane: PlaneSize,
     tps: DeltaT,
-    output_fps: f32,
+    output_fps: Option<f32>,
     mode: FramerMode,
     view_mode: FramedViewMode,
     source: SourceType,
@@ -45,6 +45,7 @@ pub struct FramerBuilder {
     ref_interval: DeltaT,
     delta_t_max: DeltaT,
     detect_features: bool,
+    buffer_limit: Option<u32>,
 
     /// The number of rows to process in each chunk (thread).
     pub chunk_rows: usize,
@@ -58,7 +59,7 @@ impl FramerBuilder {
             plane,
             chunk_rows,
             tps: 150_000,
-            output_fps: 30.0,
+            output_fps: None,
             mode: FramerMode::INSTANTANEOUS,
             view_mode: FramedViewMode::Intensity,
             source: SourceType::U8,
@@ -68,6 +69,7 @@ impl FramerBuilder {
             ref_interval: 5000,
             delta_t_max: 5000,
             detect_features: false,
+            buffer_limit: None,
         }
     }
 
@@ -78,12 +80,17 @@ impl FramerBuilder {
         tps: DeltaT,
         ref_interval: DeltaT,
         delta_t_max: DeltaT,
-        output_fps: f32,
+        output_fps: Option<f32>,
     ) -> FramerBuilder {
         self.tps = tps;
         self.ref_interval = ref_interval;
         self.delta_t_max = delta_t_max;
         self.output_fps = output_fps;
+        self
+    }
+
+    pub fn buffer_limit(mut self, buffer_limit: Option<u32>) -> FramerBuilder {
+        self.buffer_limit = buffer_limit;
         self
     }
 
@@ -256,6 +263,7 @@ pub struct FrameSequence<T> {
     pub(crate) mode: FramerMode,
     pub(crate) detect_features: bool,
     pub(crate) features: VecDeque<FeatureInterval>,
+    buffer_limit: Option<u32>,
 
     pub(crate) running_intensities: Array3<u8>,
 
@@ -338,13 +346,19 @@ impl<
             }
         }
 
+        let tpf = if let Some(output_fps) = builder.output_fps {
+            (builder.tps as f32 / output_fps) as u32
+        } else {
+            builder.ref_interval
+        };
+
         // Array3::<Option<T>>::new(num_rows, num_cols, num_channels);
         FrameSequence {
             state: FrameSequenceState {
                 plane: *plane,
                 frames_written: 0,
                 view_mode: builder.view_mode,
-                tpf: builder.tps / builder.output_fps as u32,
+                tpf,
                 source: builder.source,
                 codec_version: builder.codec_version,
                 source_camera: builder.source_camera,
@@ -365,6 +379,7 @@ impl<
                 builder.plane.c_usize(),
             )),
             detect_features: builder.detect_features,
+            buffer_limit: builder.buffer_limit,
             features: VecDeque::with_capacity(
                 (builder.delta_t_max / builder.ref_interval) as usize,
             ),
@@ -436,19 +451,20 @@ impl<
             last_filled_frame_ref,
             last_frame_intensity_ref,
             &self.state,
+            self.buffer_limit,
         );
 
         self.chunk_filled_tracker[chunk_num] = filled;
 
         if grew {
-            handle_dtm(
-                frame_chunk,
-                &mut self.chunk_filled_tracker[chunk_num],
-                &mut self.last_filled_tracker[chunk_num],
-                &mut self.pixel_ts_tracker[chunk_num],
-                &mut self.last_frame_intensity_tracker[chunk_num],
-                &self.state,
-            );
+            // handle_dtm(
+            //     frame_chunk,
+            //     &mut self.chunk_filled_tracker[chunk_num],
+            //     &mut self.last_filled_tracker[chunk_num],
+            //     &mut self.pixel_ts_tracker[chunk_num],
+            //     &mut self.last_frame_intensity_tracker[chunk_num],
+            //     &self.state,
+            // );
         }
 
         if self.detect_features {
@@ -572,19 +588,20 @@ impl<
                             last_filled_frame_ref,
                             last_frame_intensity_ref,
                             &self.state,
+                            self.buffer_limit,
                         );
                         *chunk_filled = filled;
 
-                        if grew {
-                            handle_dtm(
-                                frame_chunk,
-                                chunk_filled,
-                                chunk_last_filled_tracker,
-                                chunk_ts_tracker,
-                                last_frame_intensity_tracker,
-                                &self.state,
-                            );
-                        }
+                        // if grew {
+                        //     handle_dtm(
+                        //         frame_chunk,
+                        //         chunk_filled,
+                        //         chunk_last_filled_tracker,
+                        //         chunk_ts_tracker,
+                        //         last_frame_intensity_tracker,
+                        //         &self.state,
+                        //     );
+                        // }
                     }
                 },
             );
@@ -944,6 +961,7 @@ fn ingest_event_for_chunk<
     last_filled_frame_ref: &mut i64,
     last_frame_intensity_ref: &mut T,
     state: &FrameSequenceState,
+    buffer_limit: Option<u32>,
 ) -> (bool, bool) {
     let channel = event.coord.c.unwrap_or(0);
     let mut grew = false;
@@ -952,6 +970,12 @@ fn ingest_event_for_chunk<
     let prev_running_ts = *running_ts_ref;
 
     if state.codec_version >= 2 && state.time_mode == TimeMode::AbsoluteT {
+        if prev_running_ts >= event.t as BigT {
+            return (
+                frame_chunk[0].filled_count == frame_chunk[0].array.len(),
+                false,
+            );
+        }
         *running_ts_ref = event.t as BigT;
     } else {
         *running_ts_ref += u64::from(event.t);
@@ -1056,6 +1080,12 @@ fn ingest_event_for_chunk<
     {
         *running_ts_ref =
             ((*running_ts_ref / u64::from(state.ref_interval)) + 1) * u64::from(state.ref_interval);
+    }
+
+    if let Some(buffer_limit) = buffer_limit {
+        if *last_filled_frame_ref > state.frames_written + buffer_limit as i64 {
+            frame_chunk[0].filled_count = frame_chunk[0].array.len();
+        }
     }
 
     debug_assert!(*last_filled_frame_ref >= 0);
