@@ -83,6 +83,7 @@ impl AdderPlayer {
         playback_speed: f32,
         view_mode: FramedViewMode,
         detect_features: bool,
+        buffer_limit: Option<u32>,
     ) -> Result<Self, Box<dyn Error>> {
         match path_buf.extension() {
             None => Err(Box::new(AdderPlayerError("Invalid file type".into()))),
@@ -107,6 +108,7 @@ impl AdderPlayer {
                             Some(reconstructed_frame_rate),
                         )
                         .mode(INSTANTANEOUS)
+                        .buffer_limit(buffer_limit)
                         .view_mode(view_mode)
                         .detect_features(detect_features)
                         .source(stream.get_source_type(), meta.source_camera);
@@ -470,7 +472,8 @@ impl AdderPlayer {
                     break None;
                 }
                 _ => {
-                    eprintln!("???");
+                    // Got an event with 0 integration, so don't need to update a pixel value
+                    // eprintln!("???");
                 }
             }
         };
@@ -505,11 +508,10 @@ impl AdderPlayer {
             for chunk in new_frame {
                 // match frame_sequence.pop_next_frame_for_chunk(chunk_num) {
                 //     Some(arr) => {
-                for px in chunk.iter() {
+                for (idx, px) in chunk.iter().enumerate() {
                     match px {
                         Some(event) => {
                             db[idx] = *event;
-                            idx += 1;
                         }
                         None => {}
                     };

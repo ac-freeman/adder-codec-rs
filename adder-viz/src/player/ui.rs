@@ -59,6 +59,7 @@ pub struct PlayerUiState {
     ui_sliders: PlayerUiSliders,
     ui_sliders_drag: PlayerUiSliders,
     pub(crate) detect_features: bool,
+    pub(crate) buffer_limit: Option<u32>,
 }
 
 impl Default for PlayerUiState {
@@ -75,6 +76,7 @@ impl Default for PlayerUiState {
             ui_sliders: Default::default(),
             ui_sliders_drag: Default::default(),
             detect_features: false,
+            buffer_limit: None,
         }
     }
 }
@@ -287,6 +289,41 @@ impl PlayerState {
             &mut self.ui_state.reconstruction_method,
         );
 
+        let mut limit_frame_buffer_bool = self.ui_state.buffer_limit.is_some();
+        need_to_update |= add_checkbox_row(
+            true,
+            "Frame buffer",
+            "Limit frame buffer?",
+            ui,
+            &mut limit_frame_buffer_bool,
+        );
+        if limit_frame_buffer_bool && self.ui_state.buffer_limit.is_none() {
+            self.ui_state.buffer_limit = Some(100);
+        } else if !limit_frame_buffer_bool {
+            self.ui_state.buffer_limit = None;
+        }
+
+        let mut buffer_limit = self.ui_state.buffer_limit.unwrap_or(100);
+        let mut buffer_limit_tmp = buffer_limit;
+        add_slider_row(
+            limit_frame_buffer_bool,
+            false,
+            "Buffer limit:",
+            ui,
+            &mut buffer_limit,
+            &mut buffer_limit_tmp,
+            0..=1000,
+            vec![10, 100, 250, 500, 750],
+            10,
+        );
+
+        if limit_frame_buffer_bool
+            && (buffer_limit != buffer_limit_tmp
+                || self.ui_state.buffer_limit != Some(buffer_limit_tmp))
+        {
+            self.ui_state.buffer_limit = Some(buffer_limit_tmp);
+        }
+
         ui.label("Processing:");
         need_to_update |= ui
             .add_enabled(
@@ -383,6 +420,7 @@ impl PlayerState {
             self.ui_state.ui_sliders.playback_speed,
             self.ui_state.view_mode,
             self.ui_state.detect_features,
+            self.ui_state.buffer_limit,
         ) {
             Ok(player) => {
                 self.ui_info_state.source_name = RichText::from(match path_buf.to_str() {

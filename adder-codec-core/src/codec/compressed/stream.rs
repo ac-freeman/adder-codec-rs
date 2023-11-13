@@ -49,7 +49,6 @@ pub struct CompressedInput<R: Read> {
     // (todo) when the ADU is decoded, so that they can be popped off the end of the vector.
     decoded_event_queue: VecDeque<Event>,
     _phantom: std::marker::PhantomData<R>,
-
 }
 
 impl<W: Write> CompressedOutput<W> {
@@ -129,7 +128,8 @@ impl<W: Write> WriteCompression<W> for CompressedOutput<W> {
                 let parameters = self.options.crf.get_parameters();
 
                 // Compress the Adu. This also writes the EOF symbol and flushes the encoder
-                self.adu.compress(&mut temp_stream, parameters.c_thresh_max)?;
+                self.adu
+                    .compress(&mut temp_stream, parameters.c_thresh_max)?;
 
                 let written_data = temp_stream.into_writer();
 
@@ -219,6 +219,7 @@ impl<R: Read + Seek> ReadCompression<R> for CompressedInput<R> {
 
         if let Some(adu) = &mut self.adu {
             if adu.decoder_is_empty() {
+                let start = std::time::Instant::now();
                 // Read the size of the Adu in bytes
                 let mut buffer = [0u8; 4];
                 reader.read_bytes(&mut buffer)?;
@@ -232,6 +233,9 @@ impl<R: Read + Seek> ReadCompression<R> for CompressedInput<R> {
 
                 // Decompress the Adu
                 adu.decompress(&mut adu_stream);
+
+                let duration = start.elapsed();
+                println!("Decompressed Adu in {:?} ns", duration.as_nanos());
             }
             // Then return the next event from the queue
             match adu.digest_event() {

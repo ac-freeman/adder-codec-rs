@@ -16,7 +16,7 @@ use adder_codec_core::codec::{
 };
 use adder_codec_core::{
     Coord, DeltaT, Event, Mode, PixelMultiMode, PlaneError, PlaneSize, SourceCamera, SourceType,
-    TimeMode,
+    TimeMode, D_EMPTY,
 };
 use bumpalo::Bump;
 use chrono::Local;
@@ -536,7 +536,6 @@ impl<W: Write + 'static> Video<W> {
         encoder_options: EncoderOptions,
         write: W,
     ) -> Result<Self, SourceError> {
-        // TODO: Allow for compressed representation (not just raw)
         let encoder: Encoder<_> = match encoder_type {
             EncoderType::Compressed => {
                 #[cfg(feature = "compression")]
@@ -761,6 +760,13 @@ impl<W: Write + 'static> Video<W> {
                 for events_vec in &big_buffer {
                     events_per_sec += events_vec.len() as f64;
                 }
+
+                // dbg!(events_per_sec / self.state.plane.volume() as f64);
+
+                // if events_per_sec > self.state.plane.volume() as f64 * 5.0 {
+                //     dbg!(events_per_sec);
+                // }
+
                 events_per_sec *= (self.state.tps as f64 / self.state.ref_time as f64);
 
                 let bitrate =
@@ -888,6 +894,7 @@ impl<W: Write + 'static> Video<W> {
                         if e1.coord != e2.coord
                             && (!cfg!(feature = "feature-logging-nonmaxsuppression")
                                 || e2.t != e1.t)
+                            && e1.d != D_EMPTY
                         {
                             if is_feature(
                                 e1.coord,
@@ -1175,6 +1182,7 @@ pub fn integrate_for_px(
     state: &VideoState,
     parameters: &CrfParameters,
 ) -> bool {
+    let start_len = buffer.len();
     let mut grew_buffer = false;
     if px.need_to_pop_top {
         buffer.push(px.pop_top_event(intensity, state.pixel_tree_mode, state.ref_time));
@@ -1186,6 +1194,7 @@ pub fn integrate_for_px(
     if *frame_val < base_val.saturating_sub(px.c_thresh)
         || *frame_val > base_val.saturating_add(px.c_thresh)
     {
+        let tmp = buffer.len();
         px.pop_best_events(
             buffer,
             state.pixel_tree_mode,
@@ -1218,6 +1227,10 @@ pub fn integrate_for_px(
         buffer.push(px.pop_top_event(intensity, state.pixel_tree_mode, state.ref_time));
         grew_buffer = true;
     }
+
+    // if buffer.len() - start_len > 5 {
+    //     dbg!("hm", buffer.len() - start_len);
+    // }
     grew_buffer
 }
 

@@ -17,14 +17,15 @@ pub trait HandleEvent {
 }
 
 trait ComponentCompression {
-    fn compress(
+    fn compress_intra(
         &mut self,
         encoder: &mut Encoder<FenwickModel, BitWriter<Vec<u8>, BigEndian>>,
         contexts: &Contexts,
         stream: &mut BitWriter<Vec<u8>, BigEndian>,
         threshold_option: Option<u8>,
     ) -> Result<(), CodecError>;
-    fn decompress(
+    fn decompress_intra(
+        &mut self,
         decoder: &mut Decoder<FenwickModel, BitReader<Cursor<Vec<u8>>, BigEndian>>,
         contexts: &Contexts,
         stream: &mut BitReader<Cursor<Vec<u8>>, BigEndian>,
@@ -34,7 +35,26 @@ trait ComponentCompression {
         start_t: AbsoluteT,
         dt_ref: DeltaT,
         num_intervals: usize,
-    ) -> Self;
+    );
+    fn decompress_inter(
+        &mut self,
+        decoder: &mut Decoder<FenwickModel, BitReader<Cursor<Vec<u8>>, BigEndian>>,
+        contexts: &Contexts,
+        stream: &mut BitReader<Cursor<Vec<u8>>, BigEndian>,
+        block_idx_y: usize,
+        block_idx_x: usize,
+        num_channels: usize,
+        start_t: AbsoluteT,
+        dt_ref: DeltaT,
+        num_intervals: usize,
+    );
+    fn compress_inter(
+        &mut self,
+        encoder: &mut Encoder<FenwickModel, BitWriter<Vec<u8>, BigEndian>>,
+        contexts: &Contexts,
+        stream: &mut BitWriter<Vec<u8>, BigEndian>,
+        c_thresh_max: Option<u8>,
+    ) -> Result<(), CodecError>;
 }
 pub mod cabac_contexts;
 pub mod event_structure;
