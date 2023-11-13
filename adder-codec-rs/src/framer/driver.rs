@@ -45,6 +45,7 @@ pub struct FramerBuilder {
     ref_interval: DeltaT,
     delta_t_max: DeltaT,
     detect_features: bool,
+    buffer_limit: Option<u32>,
 
     /// The number of rows to process in each chunk (thread).
     pub chunk_rows: usize,
@@ -68,6 +69,7 @@ impl FramerBuilder {
             ref_interval: 5000,
             delta_t_max: 5000,
             detect_features: false,
+            buffer_limit: None,
         }
     }
 
@@ -84,6 +86,11 @@ impl FramerBuilder {
         self.ref_interval = ref_interval;
         self.delta_t_max = delta_t_max;
         self.output_fps = output_fps;
+        self
+    }
+
+    pub fn buffer_limit(mut self, buffer_limit: Option<u32>) -> FramerBuilder {
+        self.buffer_limit = buffer_limit;
         self
     }
 
@@ -256,6 +263,7 @@ pub struct FrameSequence<T> {
     pub(crate) mode: FramerMode,
     pub(crate) detect_features: bool,
     pub(crate) features: VecDeque<FeatureInterval>,
+    buffer_limit: Option<u32>,
 
     pub(crate) running_intensities: Array3<u8>,
 
@@ -371,6 +379,7 @@ impl<
                 builder.plane.c_usize(),
             )),
             detect_features: builder.detect_features,
+            buffer_limit: builder.buffer_limit,
             features: VecDeque::with_capacity(
                 (builder.delta_t_max / builder.ref_interval) as usize,
             ),
@@ -442,6 +451,7 @@ impl<
             last_filled_frame_ref,
             last_frame_intensity_ref,
             &self.state,
+            self.buffer_limit,
         );
 
         self.chunk_filled_tracker[chunk_num] = filled;
@@ -578,6 +588,7 @@ impl<
                             last_filled_frame_ref,
                             last_frame_intensity_ref,
                             &self.state,
+                            self.buffer_limit,
                         );
                         *chunk_filled = filled;
 
@@ -950,6 +961,7 @@ fn ingest_event_for_chunk<
     last_filled_frame_ref: &mut i64,
     last_frame_intensity_ref: &mut T,
     state: &FrameSequenceState,
+    buffer_limit: Option<u32>,
 ) -> (bool, bool) {
     let channel = event.coord.c.unwrap_or(0);
     let mut grew = false;
@@ -958,6 +970,12 @@ fn ingest_event_for_chunk<
     let prev_running_ts = *running_ts_ref;
 
     if state.codec_version >= 2 && state.time_mode == TimeMode::AbsoluteT {
+        if prev_running_ts >= event.t as BigT {
+            return (
+                frame_chunk[0].filled_count == frame_chunk[0].array.len(),
+                false,
+            );
+        }
         *running_ts_ref = event.t as BigT;
     } else {
         *running_ts_ref += u64::from(event.t);
@@ -1062,6 +1080,12 @@ fn ingest_event_for_chunk<
     {
         *running_ts_ref =
             ((*running_ts_ref / u64::from(state.ref_interval)) + 1) * u64::from(state.ref_interval);
+    }
+
+    if let Some(buffer_limit) = buffer_limit {
+        if *last_filled_frame_ref > state.frames_written + buffer_limit as i64 {
+            frame_chunk[0].filled_count = frame_chunk[0].array.len();
+        }
     }
 
     debug_assert!(*last_filled_frame_ref >= 0);
