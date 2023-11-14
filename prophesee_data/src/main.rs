@@ -25,7 +25,6 @@ fn parse_header(file: &mut BufReader<File>) -> io::Result<(u64, u8, u8, Option<(
         bod = file.seek(SeekFrom::Current(0))?; // Get the current position
         let mut line = Vec::new(); // Change to Vec<u8>
         file.read_until(b'\n', &mut line)?; // Read until newline as binary data
-
         if line.is_empty() || line[0] != b'%' {
             end_of_header = true;
         } else {
@@ -56,7 +55,6 @@ fn parse_header(file: &mut BufReader<File>) -> io::Result<(u64, u8, u8, Option<(
 
     // Parse data
     file.seek(SeekFrom::Start(bod))?; // Seek back to the position after the header
-
     let (ev_type, ev_size) = if num_comment_line > 0 {
         // Read event type and size
         let mut buf = [0; 2]; // Adjust the buffer size based on your data size
@@ -68,7 +66,7 @@ fn parse_header(file: &mut BufReader<File>) -> io::Result<(u64, u8, u8, Option<(
     } else {
         (0, 0) // Placeholder values, replace with actual logic
     };
-
+    bod = file.seek(SeekFrom::Current(0))?;
     Ok((bod, ev_type, ev_size, Some((size[0].unwrap_or(0), size[1].unwrap_or(0)))))
 }
 
@@ -76,7 +74,7 @@ fn stream_td_data(file: &mut BufReader<File>, buffer: &mut Vec<Event>, ev_count:
     // Read binary data directly into the buffer
     buffer.clear(); // Clear the buffer to ensure correct size
     buffer.reserve(ev_count);
-
+    println!("ev_count: {:?}", ev_count);
     for _ in 0..ev_count {
         let mut event_data = [0; std::mem::size_of::<Event>()];
 
@@ -104,7 +102,6 @@ fn count_events(filename: &str) -> io::Result<usize> {
     let mut file = BufReader::new(File::open(&path)?);
 
     let (bod, _, ev_size, _) = parse_header(&mut file)?;
-
     file.seek(SeekFrom::End(0))?;
     let eod = file.stream_position()? as u64;
 
@@ -118,7 +115,6 @@ fn count_events(filename: &str) -> io::Result<usize> {
     if eod < bod {
         return Err(io::Error::new(io::ErrorKind::UnexpectedEof, "Unexpected end of file"));
     }
-
     Ok(((eod - bod) / u64::from(ev_size)) as usize)
 }
 
@@ -129,11 +125,14 @@ fn main() {
 
     // Parse header
     let (bod, _, _, size) = parse_header(&mut file).unwrap();
-
     // Get the count of events from the file
     if let Ok(ev_count) = count_events(file_path) {
         // Prepare buffer for events
         let mut event_buffer = Vec::with_capacity(ev_count);
+        if let Err(err) = file.seek(SeekFrom::Start(bod)) {
+            eprintln!("Error seeking file: {}", err);
+            return;
+        }
 
         // Stream data into the buffer
         stream_td_data(&mut file, &mut event_buffer, ev_count);
@@ -149,3 +148,4 @@ fn main() {
         eprintln!("Failed to get event count from the file.");
     }
 }
+
