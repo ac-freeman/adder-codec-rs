@@ -1,11 +1,10 @@
-use bincode::deserialize;
 use serde::Deserialize;
 use std::fs::File;
 use std::io::{self, BufRead, BufReader, Read, Seek, SeekFrom};
 use std::path::Path;
 
 #[allow(dead_code)] // Suppress unused fields warning
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 struct Event {
     t: u32,
     x: u16,
@@ -70,31 +69,35 @@ fn parse_header(file: &mut BufReader<File>) -> io::Result<(u64, u8, u8, Option<(
     Ok((bod, ev_type, ev_size, Some((size[0].unwrap_or(0), size[1].unwrap_or(0)))))
 }
 
-fn stream_td_data(file: &mut BufReader<File>, buffer: &mut Vec<Event>, ev_count: usize) -> io::Result<()> {
-    // Read binary data directly into the buffer
-    buffer.clear(); // Clear the buffer to ensure correct size
-    buffer.reserve(ev_count);
-    println!("ev_count: {:?}", ev_count);
-    for _ in 0..ev_count {
-        let mut event_data = [0; std::mem::size_of::<Event>()];
+fn stream_td_data(
+    reader: &mut BufReader<File>,
+    offset: u64,
+    count: usize,
+    event_buffer: &mut Vec<Event>,
+) -> io::Result<()> {
+    for i in 0..count {
+        // Move the file pointer to the specified offset for each iteration
+        let current_offset = offset + (i as u64) * 8; // Assuming each record is 8 bytes
+        reader.seek(SeekFrom::Start(current_offset))?;
 
-        // Use read_exact and handle UnexpectedEof
-        if let Err(err) = file.read_exact(&mut event_data) {
-            if err.kind() == io::ErrorKind::UnexpectedEof {
-                eprintln!("Warning: Unexpected end of file while reading event data.");
-                break; // Break the loop if we encounter unexpected end-of-file
-            } else {
-                return Err(err); // Propagate other errors
-            }
-        }
+        // Read one record
+        let mut buffer = [0; 8]; // Adjust this size to match your record size
+        reader.read_exact(&mut buffer)?;
 
-        let event: Event = deserialize(&event_data).map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err))?;
-        buffer.push(event);
+        // Interpret the bytes as 't' and 'data'
+        let t = u32::from_le_bytes([buffer[0], buffer[1], buffer[2], buffer[3]]);
+        let data = i32::from_le_bytes([buffer[4], buffer[5], buffer[6], buffer[7]]);
+
+        // Perform bitwise operations
+        let x = (data & 16383) as u16;
+        let y = ((data & 268419072) >> 14) as u16;
+        let p = ((data & 268435456) >> 28) as u8;
+
+        event_buffer.push(Event { t, x, y, p });
     }
 
     Ok(())
 }
-
 
 
 fn count_events(filename: &str) -> io::Result<usize> {
@@ -120,7 +123,7 @@ fn count_events(filename: &str) -> io::Result<usize> {
 
 
 fn main() {
-    let file_path = "/home/argha/Documents/github/prophesee_data/obj_010369_td.dat";
+    let file_path: &str = "/home/argha/Documents/github/prophesee_data/obj_010369_td.dat";
     let mut file = BufReader::new(File::open(file_path).unwrap());
 
     // Parse header
@@ -128,22 +131,33 @@ fn main() {
     // Get the count of events from the file
     if let Ok(ev_count) = count_events(file_path) {
         // Prepare buffer for events
-        let mut event_buffer = Vec::with_capacity(ev_count);
+        let mut event_buffer: Vec<Event> = Vec::new();
         if let Err(err) = file.seek(SeekFrom::Start(bod)) {
             eprintln!("Error seeking file: {}", err);
             return;
         }
 
         // Stream data into the buffer
-        stream_td_data(&mut file, &mut event_buffer, ev_count);
-
+        if let Err(e) = stream_td_data(&mut file, 93, ev_count, &mut event_buffer) {
+            eprintln!("Error: {}", e);
+        }
+    
+        // for (i, event) in event_buffer.iter().enumerate() {
+        //     println!(
+        //         "Record {}: t: {}, x: {}, y: {}, p: {}",
+        //         i + 1,
+        //         event.t,
+        //         event.x,
+        //         event.y,
+        //         event.p
+        //     );
+        // }
         // Display results
-        println!("Position after header: {}", bod);
         if let Some((height, width)) = size {
             println!("Height: {}, Width: {}", height, width);
         }
         println!("Event Count: {}", event_buffer.len());
-        println!("Loaded Events: {:?}", event_buffer);
+        println!("Loaded events: {:?}", event_buffer);
     } else {
         eprintln!("Failed to get event count from the file.");
     }
