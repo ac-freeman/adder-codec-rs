@@ -508,13 +508,14 @@ impl AdderPlayer {
             for chunk in new_frame {
                 // match frame_sequence.pop_next_frame_for_chunk(chunk_num) {
                 //     Some(arr) => {
-                for (idx, px) in chunk.iter().enumerate() {
+                for px in chunk.iter() {
                     match px {
                         Some(event) => {
                             db[idx] = *event;
                         }
                         None => {}
                     };
+                    idx += 1;
                 }
                 // }
                 // None => {
