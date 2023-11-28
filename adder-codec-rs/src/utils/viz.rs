@@ -72,6 +72,12 @@ pub async fn download_file(
     }
     Ok(())
 }
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub enum ShowFeatureMode {
+    Off,
+    Instant,
+    Hold,
+}
 
 /// The display mode for visualizing detected features
 #[derive(Debug, PartialEq, Clone, Copy)]
