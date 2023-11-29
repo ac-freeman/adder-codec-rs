@@ -13,7 +13,7 @@ use chrono::Local;
 use rayon::ThreadPool;
 use std::io::Write;
 use std::path::PathBuf;
-use video_rs::{self, Decoder, Frame, Locator, Options, Resize};
+use video_rs_adder_dep::{self, Decoder, Frame, Locator, Options, Resize};
 
 /// Attributes of a framed video -> ADΔER transcode
 pub struct Framed<W: Write + 'static> {

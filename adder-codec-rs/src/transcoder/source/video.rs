@@ -49,7 +49,7 @@ use crate::utils::viz::{draw_feature_coord, draw_feature_event, ShowFeatureMode}
 use adder_codec_core::codec::rate_controller::{Crf, CrfParameters};
 use thiserror::Error;
 use tokio::task::JoinError;
-use video_rs::Frame;
+use video_rs_adder_dep::Frame;
 
 /// Various errors that can occur during an ADΔER transcode
 #[derive(Error, Debug)]
@@ -89,7 +89,7 @@ pub enum SourceError {
 
     /// video-rs error
     #[error("video-rs error")]
-    VideoError(video_rs::Error),
+    VideoError(video_rs_adder_dep::Error),
 
     /// Codec error
     #[error("Codec core error")]
@@ -129,8 +129,8 @@ impl From<adder_codec_core::codec::CodecError> for SourceError {
     }
 }
 
-impl From<video_rs::Error> for SourceError {
-    fn from(value: video_rs::Error) -> Self {
+impl From<video_rs_adder_dep::Error> for SourceError {
+    fn from(value: video_rs_adder_dep::Error) -> Self {
         SourceError::VideoError(value)
     }
 }
@@ -917,6 +917,30 @@ impl<W: Write + 'static> Video<W> {
         #[cfg(feature = "feature-logging")]
         {
             let total_duration_nanos = start.elapsed().as_nanos();
+            eprintln!("reg adder {}", total_duration_nanos);
+
+            let start_tmp = Instant::now();
+            let mut new_features_tmp: Vec<Vec<Coord>> =
+                vec![Vec::with_capacity(self.state.features[0].len()); self.state.features.len()];
+            for row in 0..self.state.plane.h() {
+                for col in 0..self.state.plane.w() {
+                    if is_feature(
+                        Coord {
+                            x: col,
+                            y: row,
+                            c: None,
+                        },
+                        self.state.plane,
+                        &self.state.running_intensities,
+                    )
+                    .unwrap()
+                    {
+                        eprint!("");
+                    }
+                }
+            }
+            let total_duration_nanos_tmp = start.elapsed().as_nanos();
+            eprintln!("TMP adder {}", total_duration_nanos_tmp);
 
             if let Some(handle) = &mut self.state.feature_log_handle {
                 for feature_set in &self.state.features {
@@ -1005,6 +1029,7 @@ impl<W: Write + 'static> Video<W> {
                     .write_all(&serde_pickle::to_vec(&keypoints.len(), Default::default()).unwrap())
                     .unwrap();
 
+                eprintln!("OpenCV FAST: {}", duration.as_nanos());
                 let out = format!("\nOpenCV FAST: {}\n", duration.as_nanos());
                 handle
                     .write_all(&serde_pickle::to_vec(&out, Default::default()).unwrap())

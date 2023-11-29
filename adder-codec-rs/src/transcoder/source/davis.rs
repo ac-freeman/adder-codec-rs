@@ -32,7 +32,7 @@ use crate::framer::scale_intensity::{FrameValue, SaeTime};
 use crate::transcoder::event_pixel_tree::Intensity32;
 use crate::utils::viz::ShowFeatureMode;
 use tokio::runtime::Runtime;
-use video_rs::Frame;
+use video_rs_adder_dep::Frame;
 
 /// The EDI reconstruction mode, determining how intensities are integrated for the ADΔER model
 #[derive(PartialEq, Eq, Clone, Copy)]
@@ -834,7 +834,7 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Davis<W> {
             };
 
             let mut frame = unsafe {
-                video_rs::Frame::from_shape_vec_unchecked(
+                video_rs_adder_dep::Frame::from_shape_vec_unchecked(
                     (
                         self.video.state.plane.h_usize(),
                         self.video.state.plane.w_usize(),
