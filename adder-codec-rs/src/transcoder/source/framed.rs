@@ -6,10 +6,10 @@ use adder_codec_core::{DeltaT, Event, PlaneSize, SourceCamera, TimeMode};
 
 use crate::utils::viz::ShowFeatureMode;
 use adder_codec_core::codec::{EncoderOptions, EncoderType};
-use ndarray::Axis;
 
-use crate::utils::cv::{calculate_quality_metrics, handle_color, QualityMetrics};
-use chrono::Local;
+
+use crate::utils::cv::{handle_color};
+
 use rayon::ThreadPool;
 use std::io::Write;
 use std::path::PathBuf;

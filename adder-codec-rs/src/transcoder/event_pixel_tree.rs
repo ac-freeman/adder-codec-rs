@@ -224,7 +224,7 @@ impl PixelArena {
                 }
                 Some(mut event) => {
                     assert_ne!(node_idx, self.length - 1);
-                    let mut event = self.delta_t_to_absolute_t(&mut event, mode, ref_time);
+                    let event = self.delta_t_to_absolute_t(&mut event, mode, ref_time);
                     local_buffer.push(event);
                 }
             }
@@ -233,7 +233,7 @@ impl PixelArena {
         if multi_mode == PixelMultiMode::Collapse && local_buffer.len() >= 2 && self.popped_dtm {
             // Then discard all the events except the last two, and mark the first of these as an EMPTY event
             // (carrying no intensity info)
-            let mut start_trash_idx = 0;
+            let _start_trash_idx = 0;
             let last_idx = local_buffer.len() - 1;
             // loop {
             //     if buffer[start_trash_idx].t <
@@ -648,7 +648,7 @@ mod tests {
     fn test_pop_best_states() {
         let mut tree = make_tree();
         let mut events = Vec::new();
-        tree.pop_best_events(&mut events, Continuous, 20);
+        tree.pop_best_events(&mut events, Continuous, PixelMultiMode::default(), 20);
         assert_eq!(events.len(), 2);
         assert_eq!(events[0].d, 7);
         let tmp = events[0].t;
@@ -670,7 +670,7 @@ mod tests {
     fn test_pop_best_states2() {
         let mut tree = make_tree2();
         let mut events = Vec::new();
-        tree.pop_best_events(&mut events, Continuous, 34);
+        tree.pop_best_events(&mut events, Continuous, PixelMultiMode::default(), 34);
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].d, 8);
         let tmp = events[0].t;
@@ -703,7 +703,7 @@ mod tests {
         );
         assert!(tree.need_to_pop_top);
         let mut events = Vec::new();
-        tree.pop_best_events(&mut events, Continuous, 100_000);
+        tree.pop_best_events(&mut events, Continuous, PixelMultiMode::default(), 100_000);
         assert!(!tree.need_to_pop_top);
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].d, 126);
@@ -768,7 +768,12 @@ mod tests {
         assert_eq!(tmp, 48000.0);
 
         // New intensity is different, so forcibly pop off the best events
-        tree.pop_best_events(&mut Vec::new(), FramePerfect, 5_000);
+        tree.pop_best_events(
+            &mut Vec::new(),
+            FramePerfect,
+            PixelMultiMode::default(),
+            5_000,
+        );
 
         tree.integrate(600.0, 3_000.0, FramePerfect, dtm, 5_000, 0, 255);
         assert!(tree.need_to_pop_top);
@@ -885,7 +890,7 @@ mod tests {
         tree.integrate(140.0, 30.0, Continuous, dtm, 30, 0, 255);
         tree.integrate(103.0, 30.0, Continuous, dtm, 30, 0, 255);
         let mut events = Vec::new();
-        tree.pop_best_events(&mut events, Continuous, 30);
+        tree.pop_best_events(&mut events, Continuous, PixelMultiMode::default(), 30);
         let dt = events[0].t;
         assert_eq!(events[0].d, 8);
         assert_eq!(dt, 74);
@@ -916,7 +921,7 @@ mod tests {
         tree.integrate(107.0, 30.0, Continuous, dtm, 30, 0, 255);
 
         let mut events = Vec::new();
-        tree.pop_best_events(&mut events, Continuous, 30);
+        tree.pop_best_events(&mut events, Continuous, PixelMultiMode::default(), 30);
 
         let ev = tree.set_d_for_continuous(10.0, 30).unwrap();
         let dt = ev.t;
@@ -946,7 +951,7 @@ mod tests {
         tree.integrate(107.0, 30.0, Continuous, dtm, 30, 0, 255);
 
         let mut events = Vec::new();
-        tree.pop_best_events(&mut events, Continuous, 30);
+        tree.pop_best_events(&mut events, Continuous, PixelMultiMode::default(), 30);
 
         let ev = tree.set_d_for_continuous(10.0, 30).unwrap();
         let dt = ev.t;

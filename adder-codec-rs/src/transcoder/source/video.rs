@@ -6,7 +6,7 @@ use std::cmp::min;
 use std::collections::HashSet;
 use std::io::{sink, Write};
 use std::mem::swap;
-use std::os::raw::c_void;
+
 
 use adder_codec_core::codec::empty::stream::EmptyOutput;
 use adder_codec_core::codec::encoder::Encoder;
@@ -19,7 +19,7 @@ use adder_codec_core::{
     TimeMode, D_EMPTY,
 };
 use bumpalo::Bump;
-use chrono::Local;
+
 use std::sync::mpsc::{channel, Sender};
 use std::time::Instant;
 
@@ -35,7 +35,7 @@ use opencv::{highgui, imgproc::resize, prelude::*};
 use adder_codec_core::codec::compressed::stream::CompressedOutput;
 use adder_codec_core::Mode::Continuous;
 use itertools::Itertools;
-use ndarray::{Array, Array3, Axis, ShapeError, Zip};
+use ndarray::{Array, Array3, Axis, ShapeError};
 use rayon::iter::ParallelIterator;
 use rayon::iter::{IndexedParallelIterator, IntoParallelRefMutIterator};
 use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator};
@@ -45,7 +45,7 @@ use crate::transcoder::source::video::FramedViewMode::SAE;
 use crate::utils::cv::is_feature;
 #[cfg(feature = "feature-logging")]
 use crate::utils::logging::{LogFeature, LogFeatureSource};
-use crate::utils::viz::{draw_feature_coord, draw_feature_event, ShowFeatureMode};
+use crate::utils::viz::{draw_feature_coord, ShowFeatureMode};
 use adder_codec_core::codec::rate_controller::{Crf, CrfParameters};
 use thiserror::Error;
 use tokio::task::JoinError;
@@ -196,7 +196,7 @@ pub struct VideoState {
 
 impl Default for VideoState {
     fn default() -> Self {
-        let mut state = VideoState {
+        let state = VideoState {
             plane: PlaneSize::default(),
             pixel_tree_mode: Continuous,
             pixel_multi_mode: Default::default(),
@@ -367,7 +367,7 @@ impl<W: Write + 'static> Video<W> {
 
         let event_pixel_trees: Array3<PixelArena> =
             Array3::from_shape_vec((plane.h_usize(), plane.w_usize(), plane.c_usize()), data)?;
-        let mut instantaneous_frame =
+        let instantaneous_frame =
             Array3::zeros((plane.h_usize(), plane.w_usize(), plane.c_usize()));
 
         state.plane = plane;
@@ -712,7 +712,7 @@ impl<W: Write + 'static> Video<W> {
                 let x = (idx % self.state.plane.area_wc()) / self.state.plane.c_usize();
                 let c = idx % self.state.plane.c_usize();
 
-                let sae_time = self.event_pixel_trees[[y, x, c]].last_fired_t;
+                let _sae_time = self.event_pixel_trees[[y, x, c]].last_fired_t;
 
                 // Set the instantaneous frame value to the best queue'd event for the pixel
                 *val = match self.event_pixel_trees[[y, x, c]].arena[0].best_event {
@@ -879,7 +879,7 @@ impl<W: Write + 'static> Video<W> {
         let mut new_features: Vec<Vec<Coord>> =
             vec![Vec::with_capacity(self.state.features[0].len()); self.state.features.len()];
 
-        let start = Instant::now();
+        let _start = Instant::now();
 
         big_buffer
             // .par_iter()
@@ -1053,7 +1053,7 @@ impl<W: Write + 'static> Video<W> {
         if self.state.show_features == ShowFeatureMode::Hold {
             // Display the feature on the viz frame
             for feature_set in &self.state.features {
-                for (coord) in feature_set {
+                for coord in feature_set {
                     draw_feature_coord(
                         coord.x,
                         coord.y,
@@ -1067,7 +1067,7 @@ impl<W: Write + 'static> Video<W> {
         let parameters = self.encoder.options.crf.get_parameters();
 
         for feature_set in new_features {
-            for (coord) in feature_set {
+            for coord in feature_set {
                 if self.state.show_features == ShowFeatureMode::Instant {
                     draw_feature_coord(
                         coord.x,
@@ -1182,7 +1182,7 @@ pub fn integrate_for_px(
     state: &VideoState,
     parameters: &CrfParameters,
 ) -> bool {
-    let start_len = buffer.len();
+    let _start_len = buffer.len();
     let mut grew_buffer = false;
     if px.need_to_pop_top {
         buffer.push(px.pop_top_event(intensity, state.pixel_tree_mode, state.ref_time));
@@ -1194,7 +1194,7 @@ pub fn integrate_for_px(
     if *frame_val < base_val.saturating_sub(px.c_thresh)
         || *frame_val > base_val.saturating_add(px.c_thresh)
     {
-        let tmp = buffer.len();
+        let _tmp = buffer.len();
         px.pop_best_events(
             buffer,
             state.pixel_tree_mode,

@@ -580,7 +580,7 @@ impl<
                         let last_frame_intensity_ref = &mut last_frame_intensity_tracker
                             [[event.coord.y.into(), event.coord.x.into(), channel.into()]];
 
-                        let (filled, grew) = ingest_event_for_chunk(
+                        let (filled, _grew) = ingest_event_for_chunk(
                             event,
                             frame_chunk,
                             running_ts_ref,
@@ -614,7 +614,7 @@ impl<
     ///
     /// Returns `true` if there are frames now ready to write out
     fn flush_frame_buffer(&mut self) -> bool {
-        let mut all_filled = true;
+        let _all_filled = true;
         if self.frames[0].len() > 1 {
             for (chunk_num, chunk) in self.frames.iter_mut().enumerate() {
                 let frame_chunk = &mut chunk[0];
@@ -669,7 +669,7 @@ fn handle_dtm<
     frame_chunk: &mut VecDeque<Frame<Option<T>>>,
     chunk_filled: &mut bool,
     chunk_last_filled_tracker: &mut Array3<i64>,
-    chunk_ts_tracker: &mut Array3<BigT>,
+    _chunk_ts_tracker: &mut Array3<BigT>,
     last_frame_intensity_tracker: &Array3<T>,
     state: &FrameSequenceState,
 ) {

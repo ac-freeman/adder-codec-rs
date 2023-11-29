@@ -95,7 +95,9 @@ mod tests {
     use adder_codec_core::codec::decoder::Decoder;
     use adder_codec_core::codec::encoder::Encoder;
     use adder_codec_core::codec::raw::stream::{RawInput, RawOutput};
-    use adder_codec_core::codec::{CodecMetadata, ReadCompression, WriteCompression};
+    use adder_codec_core::codec::{
+        CodecMetadata, EncoderOptions, ReadCompression, WriteCompression,
+    };
     use adder_codec_core::SourceCamera::FramedU8;
     use adder_codec_core::TimeMode::AbsoluteT;
     use adder_codec_core::{Coord, Event, PlaneSize, TimeMode};
@@ -128,7 +130,7 @@ mod tests {
             },
             bufwriter,
         );
-        let mut stream = Encoder::new_raw(compression, Default::default());
+        let mut stream = Encoder::new_raw(compression, EncoderOptions::default(plane));
 
         // Encode the events
         let event: Event = Event {
@@ -178,7 +180,7 @@ mod tests {
             },
             bufwriter,
         );
-        let mut stream = Encoder::new_raw(compression, Default::default());
+        let mut stream = Encoder::new_raw(compression, EncoderOptions::default(plane));
 
         stream = migrate_v2(reader, &mut bitreader, stream)?;
 
@@ -232,7 +234,7 @@ mod tests {
         meta.codec_version = 2;
         meta.time_mode = AbsoluteT;
         let compression = RawOutput::new(meta, bufwriter);
-        let mut stream = Encoder::new_raw(compression, Default::default());
+        let mut stream = Encoder::new_raw(compression, EncoderOptions::default(meta.plane));
 
         stream = migrate_v2(reader, &mut bitreader, stream)?;
 
@@ -295,7 +297,7 @@ mod tests {
                     input_stream_t.meta().tps,
                     input_stream_t.meta().ref_interval,
                     input_stream_t.meta().delta_t_max,
-                    reconstructed_frame_rate,
+                    Some(reconstructed_frame_rate),
                 )
                 .mode(INSTANTANEOUS)
                 .source(
@@ -316,7 +318,7 @@ mod tests {
                     input_stream_dt.meta().tps,
                     input_stream_dt.meta().ref_interval,
                     input_stream_dt.meta().delta_t_max,
-                    reconstructed_frame_rate,
+                    Some(reconstructed_frame_rate),
                 )
                 .mode(INSTANTANEOUS)
                 .source(
@@ -392,7 +394,7 @@ mod tests {
                     input_stream_t.meta().tps,
                     input_stream_t.meta().ref_interval,
                     input_stream_t.meta().delta_t_max,
-                    reconstructed_frame_rate,
+                    Some(reconstructed_frame_rate),
                 )
                 .mode(INSTANTANEOUS)
                 .source(
@@ -413,7 +415,7 @@ mod tests {
                     input_stream_dt.meta().tps,
                     input_stream_dt.meta().ref_interval,
                     input_stream_dt.meta().delta_t_max,
-                    reconstructed_frame_rate,
+                    Some(reconstructed_frame_rate),
                 )
                 .mode(INSTANTANEOUS)
                 .source(

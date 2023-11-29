@@ -1,11 +1,11 @@
 use crate::transcoder::source::video::SourceError;
-use adder_codec_core::{Coord, Event, PixelAddress, PlaneSize};
+use adder_codec_core::{Coord, PlaneSize};
 use const_for::const_for;
-use ndarray::{s, Array3, ArrayView, Axis, Dimension, Ix2, Ix3, RemoveAxis};
+use ndarray::{Array3, ArrayView, Axis, Ix2};
 #[cfg(feature = "open-cv")]
 use opencv::prelude::KeyPointTraitConst;
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+
 use std::error::Error;
 use video_rs_adder_dep::Frame;
 
@@ -73,7 +73,7 @@ pub fn is_feature(
 
         let y = coord.y as isize;
         let x = coord.x as isize;
-        debug_assert_eq!(candidate, *ptr.offset((y * width + x * c)) as i16);
+        debug_assert_eq!(candidate, *ptr.offset(y * width + x * c) as i16);
 
         let mut d = *tab
             .offset(*ptr.offset((y + CIRCLE3[0][1]) * width + (x + CIRCLE3[0][0]) * c) as isize)
@@ -373,7 +373,7 @@ fn calculate_ssim(
             .sum::<f64>()
             / results
                 .iter()
-                .map(|r| (DEFAULT_WINDOW_SIZE * DEFAULT_WINDOW_SIZE) as f64)
+                .map(|_r| (DEFAULT_WINDOW_SIZE * DEFAULT_WINDOW_SIZE) as f64)
                 .sum::<f64>();
         scores.push(score)
     }

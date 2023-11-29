@@ -4,7 +4,7 @@ use opencv::core::{Mat, MatTraitConst, MatTraitConstManual};
 use std::error::Error;
 use std::fs::File;
 use std::io;
-use std::io::{BufWriter, Cursor, Write};
+use std::io::{Cursor, Write};
 use std::path::Path;
 use std::process::{Command, Output};
 use video_rs_adder_dep::Frame;

@@ -3,8 +3,8 @@ extern crate adder_codec_core;
 use adder_codec_core::codec::compressed::stream::CompressedOutput;
 use adder_codec_core::codec::encoder::Encoder;
 use adder_codec_core::codec::raw::stream::RawInput;
-use adder_codec_core::codec::CodecError;
-use adder_codec_core::{open_file_decoder, Event};
+use adder_codec_core::codec::{CodecError, EncoderOptions};
+use adder_codec_core::{open_file_decoder, Event, PlaneSize};
 use std::error::Error;
 use std::io::BufWriter;
 
@@ -26,8 +26,10 @@ fn test_build_first_frame() -> Result<(), Box<dyn Error>> {
     // Create the compressed encoder
     let bufwriter = BufWriter::new(vec![]);
     let compression = CompressedOutput::new(stream.meta().clone(), bufwriter);
-    let mut encoder: Encoder<BufWriter<Vec<u8>>> =
-        Encoder::new_compressed(compression, Default::default());
+    let mut encoder: Encoder<BufWriter<Vec<u8>>> = Encoder::new_compressed(
+        compression,
+        EncoderOptions::default(stream.meta().clone().plane),
+    );
 
     for i in 0..24000 {
         // Loop through the events and ingest them to the compressor
@@ -46,8 +48,10 @@ fn test_build_many_frames() -> Result<(), Box<dyn Error>> {
     // Create the compressed encoder
     let bufwriter = BufWriter::new(vec![]);
     let compression = CompressedOutput::new(stream.meta().clone(), bufwriter);
-    let mut encoder: Encoder<BufWriter<Vec<u8>>> =
-        Encoder::new_compressed(compression, Default::default());
+    let mut encoder: Encoder<BufWriter<Vec<u8>>> = Encoder::new_compressed(
+        compression,
+        EncoderOptions::default(stream.meta().clone().plane),
+    );
 
     let mut event_count: u32 = 0;
     loop {
