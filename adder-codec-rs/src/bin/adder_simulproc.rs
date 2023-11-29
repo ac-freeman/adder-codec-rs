@@ -75,11 +75,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
     if !args.output_events_filename.is_empty() {
         let path = Path::new(&args.output_events_filename);
         let file = File::create(path)?;
+        let plane = source.get_video_ref().state.plane;
         source = *source.write_out(
             FramedU8,
             time_mode,
             EncoderType::Raw,
-            EncoderOptions::default(),
+            EncoderOptions::default(plane),
             BufWriter::new(file),
         )?;
     }

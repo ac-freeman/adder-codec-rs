@@ -33,7 +33,7 @@ use bitstream_io::{BigEndian, BitReader};
 use ndarray::{Array3, ArrayBase, Ix3, OwnedRepr};
 use std::io::{BufWriter, Cursor};
 use std::path::{Path, PathBuf};
-use video_rs::{Locator, Options, Resize};
+use video_rs_adder_dep::{Locator, Options, Resize};
 
 /// Command line argument parser
 #[derive(Parser, Debug, Default, serde::Deserialize)]
@@ -225,12 +225,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
         if args.output_filename.len() > 0 {
             // Setup another input framed video reader
             let orig_source = Locator::Path(PathBuf::from(args.input_filename));
-            let mut cap = video_rs::Decoder::new(&orig_source)?;
+            let mut cap = video_rs_adder_dep::Decoder::new(&orig_source)?;
             let (width, height) = cap.size();
             let width = ((width as f64) * args.scale) as u32;
             let height = ((height as f64) * args.scale) as u32;
 
-            cap = video_rs::Decoder::new_with_options_and_resize(
+            cap = video_rs_adder_dep::Decoder::new_with_options_and_resize(
                 &orig_source,
                 &Options::default(),
                 Resize::Fit(width, height),

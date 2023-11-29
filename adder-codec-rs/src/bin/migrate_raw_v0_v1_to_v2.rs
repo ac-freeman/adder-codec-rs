@@ -47,8 +47,10 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let mut new_meta = *input_stream.meta();
     new_meta.time_mode = time_mode;
     let compression = RawOutput::new(new_meta, bufwriter);
-    let mut encoder: Encoder<BufWriter<File>> =
-        Encoder::new_raw(compression, EncoderOptions::default());
+    let mut encoder: Encoder<BufWriter<File>> = Encoder::new_raw(
+        compression,
+        EncoderOptions::default(input_stream.meta().plane),
+    );
 
     encoder = migrate_v2(input_stream, &mut bitreader, encoder)?;
 
