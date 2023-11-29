@@ -30,7 +30,7 @@ feature-logging-nonmaxsuppression = ["feature-logging"]
 
 
 [dependencies]
-adder-codec-core = { path = "../adder-codec-core", version = "0.2.1", default-features = false, optional = true}
+adder-codec-core = { path = "../adder-codec-core", version = "0.3.0", default-features = false, optional = true}
 async-trait = "0.1.66"
 bincode = "1.3.3"
 bitvec = "1.0.1"
