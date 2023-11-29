@@ -6,7 +6,8 @@ use std::cmp::min;
 use std::collections::HashSet;
 use std::io::{sink, Write};
 use std::mem::swap;
-
+#[cfg(feature = "feature-logging")]
+use std::os::raw::c_void;
 
 use adder_codec_core::codec::empty::stream::EmptyOutput;
 use adder_codec_core::codec::encoder::Encoder;
@@ -916,7 +917,7 @@ impl<W: Write + 'static> Video<W> {
 
         #[cfg(feature = "feature-logging")]
         {
-            let total_duration_nanos = start.elapsed().as_nanos();
+            let total_duration_nanos = _start.elapsed().as_nanos();
 
             if let Some(handle) = &mut self.state.feature_log_handle {
                 for feature_set in &self.state.features {

@@ -4,6 +4,8 @@ use opencv::core::{Mat, MatTraitConst, MatTraitConstManual};
 use std::error::Error;
 use std::fs::File;
 use std::io;
+#[cfg(feature = "open-cv")]
+use std::io::BufWriter;
 use std::io::{Cursor, Write};
 use std::path::Path;
 use std::process::{Command, Output};
