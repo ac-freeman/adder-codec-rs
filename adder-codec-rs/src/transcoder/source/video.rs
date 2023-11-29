@@ -785,6 +785,13 @@ impl<W: Write + 'static> Video<W> {
             }
         }
 
+        if self.state.show_features == ShowFeatureMode::Hold {
+            // Display the feature on the viz frame
+            for ((x, y), ()) in &self.state.features {
+                draw_feature_coord(*x, *y, &mut self.instantaneous_frame)?;
+            }
+        }
+
         if self.state.show_live {
             // show_display("instance", &self.instantaneous_frame, 1, self)?;
         }
@@ -1115,6 +1122,8 @@ impl<W: Write + 'static> Video<W> {
                     }
                 }
             }
+        } else {
+            self.state.features.remove(&(e.coord.x(), e.coord.y()));
         }
 
         Ok(())
