@@ -27,7 +27,7 @@ use std::fmt;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::Path;
-use video_rs::Frame;
+use video_rs_adder_dep::Frame;
 
 pub type PlayerArtifact = (u64, Option<Image>);
 pub type PlayerStreamArtifact = (u64, StreamState, Option<Image>);

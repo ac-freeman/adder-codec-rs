@@ -246,7 +246,7 @@ pub(crate) fn replace_adder_transcoder(
     output_path_opt: Option<PathBuf>,
     current_frame: u32,
 ) {
-    dbg!("REPLACING");
+    dbg!("Looping video");
 
     let ui_info_state = &mut transcoder_state.ui_info_state;
     ui_info_state.events_per_sec = 0.0;

@@ -4,7 +4,7 @@ use bevy_egui::egui::plot::{Line, PlotPoints};
 use ndarray::{Array, Axis};
 use std::collections::VecDeque;
 use std::error::Error;
-use video_rs::Frame;
+use video_rs_adder_dep::Frame;
 
 pub(crate) mod slider;
 

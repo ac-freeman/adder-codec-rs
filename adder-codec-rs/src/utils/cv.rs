@@ -7,7 +7,7 @@ use opencv::prelude::KeyPointTraitConst;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::error::Error;
-use video_rs::Frame;
+use video_rs_adder_dep::Frame;
 
 // TODO: Explore optimal threshold values
 /// The threshold for feature detection

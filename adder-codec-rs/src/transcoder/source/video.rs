@@ -49,7 +49,7 @@ use crate::utils::viz::{draw_feature_coord, draw_feature_event, ShowFeatureMode}
 use adder_codec_core::codec::rate_controller::{Crf, CrfParameters};
 use thiserror::Error;
 use tokio::task::JoinError;
-use video_rs::Frame;
+use video_rs_adder_dep::Frame;
 
 /// Various errors that can occur during an ADΔER transcode
 #[derive(Error, Debug)]
@@ -89,7 +89,7 @@ pub enum SourceError {
 
     /// video-rs error
     #[error("video-rs error")]
-    VideoError(video_rs::Error),
+    VideoError(video_rs_adder_dep::Error),
 
     /// Codec error
     #[error("Codec core error")]
@@ -129,8 +129,8 @@ impl From<adder_codec_core::codec::CodecError> for SourceError {
     }
 }
 
-impl From<video_rs::Error> for SourceError {
-    fn from(value: video_rs::Error) -> Self {
+impl From<video_rs_adder_dep::Error> for SourceError {
+    fn from(value: video_rs_adder_dep::Error) -> Self {
         SourceError::VideoError(value)
     }
 }
