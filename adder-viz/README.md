@@ -20,7 +20,7 @@ Install with DVS/DAVIS support:
 
 `cargo install adder-viz -F "open-cv"`
 
-Install with source-modeled compression support:
+Install with source-modeled compression support (requires **Rust Nightly**!):
 
 `cargo install adder-viz -F "compression"`
 
