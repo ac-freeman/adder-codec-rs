@@ -5,7 +5,7 @@
 use arithmetic_coding::Model;
 
 use super::Weights;
-use crate::codec_old::compressed::fenwick::ValueError;
+use crate::codec::compressed::fenwick::ValueError;
 
 #[derive(Debug, Clone)]
 pub struct FenwickModel {

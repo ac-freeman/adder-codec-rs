@@ -1,6 +1,6 @@
 <component name="ProjectRunConfigurationManager">
   <configuration default="false" name="Run adderinfo" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
-    <option name="command" value="run -p adder-info -- -i &quot;$USER_HOME$/Downloads/tmp_events.adder&quot; -d" />
+    <option name="command" value="run -p adder-info -- -i &quot;$USER_HOME$/Downloads/virat_compressed6.adder&quot;" />
     <option name="workingDirectory" value="file://$PROJECT_DIR$" />
     <option name="emulateTerminal" value="false" />
     <option name="channel" value="DEFAULT" />

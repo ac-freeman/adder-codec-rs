@@ -1,3 +1,5 @@
+#![cfg(feature = "open-cv")]
+
 use adder_codec_rs::transcoder::source::davis::Davis;
 use adder_codec_rs::transcoder::source::video::{Source, VideoBuilder};
 use clap::Parser;
@@ -6,7 +8,7 @@ use davis_edi_rs::Args as EdiArgs;
 
 use serde::Deserialize;
 
-use adder_codec_core::DeltaT;
+use adder_codec_core::{DeltaT, PlaneSize};
 
 use adder_codec_core::codec::{EncoderOptions, EncoderType};
 use adder_codec_core::SourceCamera::DavisU8;
@@ -151,7 +153,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         DavisU8,
         TimeMode::AbsoluteT,
         EncoderType::Raw,
-        EncoderOptions::default(),
+        EncoderOptions::default(PlaneSize::new(346, 260, 1)?),
         writer,
     )?;
 

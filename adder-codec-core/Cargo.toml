@@ -1,6 +1,6 @@
 [package]
 name = "adder-codec-core"
-version = "0.2.1"
+version = "0.3.0"
 edition = "2021"
 authors = ["Andrew C. Freeman"]
 description = """Core library for encoding/decoding ADΔER events
@@ -11,10 +11,13 @@ readme = "README.md"
 license = "MIT OR Apache-2.0"
 keywords = ["neuromorphic", "decoding", "event", "asynchronous", "video"]
 categories = ["multimedia::encoding", "multimedia::video", "science"]
+exclude = [
+    "tests/samples/*",
+]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [features]
-default = []
+default = ["compression"]
 compression = ["dep:arithmetic-coding"]
 
 [dependencies]
@@ -36,3 +39,4 @@ serde_bytes = "0.11.6"
 serde_json = "1.0"
 thiserror = "1.0.38"
 transpose = "0.2.2"
+ndarray = "0.15.6"

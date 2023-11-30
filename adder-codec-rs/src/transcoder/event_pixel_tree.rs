@@ -1,5 +1,5 @@
 use adder_codec_core::Mode::{Continuous, FramePerfect};
-use adder_codec_core::{Coord, DeltaT, Event, Mode, TimeMode, D};
+use adder_codec_core::{Coord, DeltaT, Event, Mode, PixelMultiMode, TimeMode, D};
 use adder_codec_core::{UDshift, D_EMPTY, D_MAX, D_SHIFT, D_ZERO_INTEGRATION};
 use smallvec::{smallvec, SmallVec};
 use std::cmp::min;
@@ -23,7 +23,7 @@ impl From<Event64> for Event {
         Event {
             coord: event_64.coord,
             d: event_64.d,
-            delta_t: event_64.delta_t as DeltaT,
+            t: event_64.delta_t as DeltaT,
         }
     }
 }
@@ -39,7 +39,7 @@ pub(crate) struct PixelState {
 #[repr(packed)]
 #[derive(Clone, Copy, Debug)]
 pub struct PixelNode {
-    /// Will have the smaller D value
+    /// Specifies if the next pixel in the arena vec exists
     alt: Option<()>,
 
     pub(crate) state: PixelState,
@@ -59,6 +59,8 @@ pub struct PixelArena {
     pub arena: SmallVec<[PixelNode; 6]>,
     pub(crate) c_thresh: u8,
     pub(crate) c_increase_counter: u8,
+    dtm_reached: bool,
+    popped_dtm: bool,
 }
 
 impl PixelArena {
@@ -77,6 +79,8 @@ impl PixelArena {
             arena,
             c_thresh: 10,
             c_increase_counter: 1,
+            dtm_reached: false,
+            popped_dtm: false,
         }
     }
 
@@ -126,7 +130,7 @@ impl PixelArena {
         Event {
             coord: self.coord,
             d: event.d,
-            delta_t: event.delta_t as DeltaT,
+            t: event.delta_t as DeltaT,
         }
     }
 
@@ -137,6 +141,7 @@ impl PixelArena {
         ref_time: DeltaT,
     ) -> Event {
         let mut event = self.pop_top_event_recursive(next_intensity, mode, ref_time);
+        self.popped_dtm = true;
         self.delta_t_to_absolute_t(&mut event, mode, ref_time)
     }
 
@@ -154,6 +159,8 @@ impl PixelArena {
                 if root.state.integration == 0.0 && root.state.delta_t > 0.0 {
                     self.get_zero_event(0, Some(next_intensity))
                 } else {
+                    // TODO: Can probably remove this now with the new definition of dt_max
+
                     // We can reach here under frame-perfect integration when approaching dtm. The new
                     // node might not have the right D set.
                     // TODO: cover with a unit test
@@ -195,9 +202,16 @@ impl PixelArena {
     }
 
     /// Recursively pop all the alt events
-    pub fn pop_best_events(&mut self, buffer: &mut Vec<Event>, mode: Mode, ref_time: DeltaT) {
+    pub fn pop_best_events(
+        &mut self,
+        buffer: &mut Vec<Event>,
+        mode: Mode,
+        multi_mode: PixelMultiMode,
+        ref_time: DeltaT,
+    ) {
         // let mut events = Vec::new();
 
+        let mut local_buffer = Vec::with_capacity(self.length);
         for node_idx in 0..self.length {
             match self.arena[node_idx].best_event {
                 None => {
@@ -205,15 +219,47 @@ impl PixelArena {
                         && self.arena[node_idx].state.integration == 0.0
                     {
                         let mut event64 = self.get_zero_event(node_idx, None);
-                        buffer.push(self.delta_t_to_absolute_t(&mut event64, mode, ref_time));
+                        local_buffer.push(self.delta_t_to_absolute_t(&mut event64, mode, ref_time));
                     }
                 }
                 Some(mut event) => {
                     assert_ne!(node_idx, self.length - 1);
                     let event = self.delta_t_to_absolute_t(&mut event, mode, ref_time);
-                    buffer.push(event);
+                    local_buffer.push(event);
                 }
             }
+        }
+
+        if multi_mode == PixelMultiMode::Collapse && local_buffer.len() >= 2 && self.popped_dtm {
+            // Then discard all the events except the last two, and mark the first of these as an EMPTY event
+            // (carrying no intensity info)
+            let _start_trash_idx = 0;
+            let last_idx = local_buffer.len() - 1;
+            // loop {
+            //     if buffer[start_trash_idx].t <
+            // }
+
+            local_buffer[last_idx - 1].d = D_EMPTY;
+            buffer.push(local_buffer[last_idx - 1]);
+            buffer.push(local_buffer[last_idx]);
+            // debug_assert!(buffer.len() == 2);
+        }
+        // else if multi_mode == PixelMultiMode::Collapse && local_buffer.len() >= 3 {
+        //     // Then discard all the events except the first and last two, and mark the second of these as an EMPTY event
+        //     // (carrying no intensity info)
+        //     let mut start_trash_idx = 0;
+        //     let last_idx = local_buffer.len() - 1;
+        //     // loop {
+        //     //     if buffer[start_trash_idx].t <
+        //     // }
+        //
+        //     local_buffer[last_idx - 1].d = D_EMPTY;
+        //     buffer.push(local_buffer[0]);
+        //     buffer.push(local_buffer[last_idx - 1]);
+        //     buffer.push(local_buffer[last_idx]);
+        // }
+        else {
+            buffer.append(&mut local_buffer);
         }
 
         // Move the last node to the front
@@ -231,6 +277,8 @@ impl PixelArena {
         //     }
         // };
         self.need_to_pop_top = false;
+        self.dtm_reached = false;
+        self.popped_dtm = false;
     }
 
     pub fn set_d_for_continuous(
@@ -319,15 +367,16 @@ impl PixelArena {
         debug_assert!(self.length <= self.arena.len());
         assert!(self.length > 0);
 
-        self.need_to_pop_top = self.arena[0].state.d == D_MAX
-            ||
-            // SAFETY:
-            // By design, the integration will not exceed 2^[`D_MAX`], so we can
-            // safely cast it to integer [`D`] type.
-            unsafe { self.arena[0].state.delta_t.to_int_unchecked::<DeltaT>() } >= dtm;
+        self.dtm_reached = self.arena[0].state.delta_t >= dtm as f64;
+        self.need_to_pop_top =
+            self.arena[0].state.d == D_MAX || (self.dtm_reached && !self.popped_dtm);
+        // SAFETY:
+        // By design, the integration will not exceed 2^[`D_MAX`], so we can
+        // safely cast it to integer [`D`] type.
+        // (!self.dtm_reached && unsafe { self.arena[0].state.delta_t.to_int_unchecked::<DeltaT>() } >= dtm);
 
         if self.c_thresh < c_thresh_max {
-            if self.c_increase_counter == c_increase_velocity - 1 {
+            if self.c_increase_counter >= c_increase_velocity - 1 {
                 // Increment the threshold
                 self.c_thresh += 1;
                 self.c_increase_counter = 0;
@@ -478,7 +527,7 @@ mod tests {
                 assert_eq!(event.d, 6);
 
                 // Refer to https://github.com/rust-lang/rust/issues/82523
-                let tmp = event.delta_t;
+                let tmp = event.t;
                 assert_eq!(tmp, 12);
             }
         }
@@ -599,13 +648,13 @@ mod tests {
     fn test_pop_best_states() {
         let mut tree = make_tree();
         let mut events = Vec::new();
-        tree.pop_best_events(&mut events, Continuous, 20);
+        tree.pop_best_events(&mut events, Continuous, PixelMultiMode::default(), 20);
         assert_eq!(events.len(), 2);
         assert_eq!(events[0].d, 7);
-        let tmp = events[0].delta_t;
+        let tmp = events[0].t;
         assert_eq!(tmp, 25);
         assert_eq!(events[1].d, 6);
-        let tmp = events[1].delta_t;
+        let tmp = events[1].t;
         assert_eq!(tmp, 12);
         assert_eq!(tree.arena[0].state.d, 6);
         assert!(f32_slack(tree.arena[0].state.integration, 8.0));
@@ -621,10 +670,10 @@ mod tests {
     fn test_pop_best_states2() {
         let mut tree = make_tree2();
         let mut events = Vec::new();
-        tree.pop_best_events(&mut events, Continuous, 34);
+        tree.pop_best_events(&mut events, Continuous, PixelMultiMode::default(), 34);
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].d, 8);
-        let tmp = events[0].delta_t;
+        let tmp = events[0].t;
         assert_eq!(tmp, 108);
         assert_eq!(tree.arena[0].state.d, 4);
         assert!(f32_slack(tree.arena[0].state.integration, 0.0));
@@ -654,11 +703,11 @@ mod tests {
         );
         assert!(tree.need_to_pop_top);
         let mut events = Vec::new();
-        tree.pop_best_events(&mut events, Continuous, 100_000);
+        tree.pop_best_events(&mut events, Continuous, PixelMultiMode::default(), 100_000);
         assert!(!tree.need_to_pop_top);
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].d, 126);
-        let tmp = events[0].delta_t;
+        let tmp = events[0].t;
         assert_eq!(tmp, 100_000);
         assert!(f32_slack(tree.arena[0].state.integration, 0.0));
     }
@@ -683,6 +732,51 @@ mod tests {
         assert!(!tree.need_to_pop_top);
         let tmp = tree.arena[0].state.delta_t;
         assert_eq!(tmp, 70_000.0)
+    }
+
+    #[test]
+    fn test_new_dtm() {
+        // Test the new definition for deltat_max (the max time for a constant pixel to fire its FIRST event)
+
+        let dtm = 2_000;
+        let mut tree = PixelArena::new(
+            245.0,
+            Coord {
+                x: 0,
+                y: 0,
+                c: None,
+            },
+        );
+        tree.integrate(245.0, 1_000.0, FramePerfect, dtm, 5_000, 0, 255);
+        assert!(!tree.need_to_pop_top);
+        tree.integrate(245.0, 1_000.0, FramePerfect, dtm, 5_000, 0, 255);
+        assert!(tree.need_to_pop_top);
+
+        // We've hit DTM, so pop the top event
+        let _ = tree.pop_top_event(245.0, FramePerfect, 5_000);
+        assert!(!tree.need_to_pop_top);
+
+        // We continue integrating the SAME intensity, so we shouldn't need to pop again until the
+        // intensity CHANGES
+        for _ in 0..47 {
+            tree.integrate(245.0, 1_000.0, FramePerfect, dtm, 5_000, 0, 255);
+        }
+        tree.integrate(245.0, 1_000.0, FramePerfect, dtm, 5_000, 0, 255);
+        assert!(!tree.need_to_pop_top);
+
+        let tmp = tree.arena[0].state.delta_t;
+        assert_eq!(tmp, 48000.0);
+
+        // New intensity is different, so forcibly pop off the best events
+        tree.pop_best_events(
+            &mut Vec::new(),
+            FramePerfect,
+            PixelMultiMode::default(),
+            5_000,
+        );
+
+        tree.integrate(600.0, 3_000.0, FramePerfect, dtm, 5_000, 0, 255);
+        assert!(tree.need_to_pop_top);
     }
 
     #[test]
@@ -796,11 +890,11 @@ mod tests {
         tree.integrate(140.0, 30.0, Continuous, dtm, 30, 0, 255);
         tree.integrate(103.0, 30.0, Continuous, dtm, 30, 0, 255);
         let mut events = Vec::new();
-        tree.pop_best_events(&mut events, Continuous, 30);
-        let dt = events[0].delta_t;
+        tree.pop_best_events(&mut events, Continuous, PixelMultiMode::default(), 30);
+        let dt = events[0].t;
         assert_eq!(events[0].d, 8);
         assert_eq!(dt, 74);
-        let dt = events[1].delta_t;
+        let dt = events[1].t;
         assert_eq!(events[1].d, 7);
         assert_eq!(dt, 110);
     }
@@ -827,10 +921,10 @@ mod tests {
         tree.integrate(107.0, 30.0, Continuous, dtm, 30, 0, 255);
 
         let mut events = Vec::new();
-        tree.pop_best_events(&mut events, Continuous, 30);
+        tree.pop_best_events(&mut events, Continuous, PixelMultiMode::default(), 30);
 
         let ev = tree.set_d_for_continuous(10.0, 30).unwrap();
-        let dt = ev.delta_t;
+        let dt = ev.t;
         assert_eq!(dt, 1);
         assert_eq!(ev.d, 255);
     }
@@ -857,10 +951,10 @@ mod tests {
         tree.integrate(107.0, 30.0, Continuous, dtm, 30, 0, 255);
 
         let mut events = Vec::new();
-        tree.pop_best_events(&mut events, Continuous, 30);
+        tree.pop_best_events(&mut events, Continuous, PixelMultiMode::default(), 30);
 
         let ev = tree.set_d_for_continuous(10.0, 30).unwrap();
-        let dt = ev.delta_t;
+        let dt = ev.t;
         assert_eq!(dt, 110);
         assert_eq!(ev.d, 255);
     }

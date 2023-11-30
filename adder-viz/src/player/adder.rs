@@ -5,21 +5,29 @@ use adder_codec_core::*;
 use adder_codec_rs::framer::driver::FramerMode::INSTANTANEOUS;
 use adder_codec_rs::framer::driver::{FrameSequence, Framer, FramerBuilder};
 use adder_codec_rs::framer::scale_intensity::event_to_intensity;
-use adder_codec_rs::transcoder::source::video::{show_display_force, FramedViewMode};
+
+use crate::utils::prep_bevy_image;
+#[cfg(feature = "open-cv")]
+use adder_codec_rs::transcoder::source::video::show_display_force;
+use adder_codec_rs::transcoder::source::video::FramedViewMode;
+use adder_codec_rs::utils::cv::is_feature;
+use adder_codec_rs::utils::viz::draw_feature_coord;
 use bevy::prelude::Image;
-use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
 use ndarray::Array;
 use ndarray::Array3;
+#[cfg(feature = "open-cv")]
 use opencv::core::{
     create_continuous, KeyPoint, Mat, MatTraitConstManual, MatTraitManual, Scalar, Vector, CV_8UC1,
     CV_8UC3,
 };
+#[cfg(feature = "open-cv")]
 use opencv::imgproc;
 use std::error::Error;
 use std::fmt;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::Path;
+use video_rs_adder_dep::Frame;
 
 pub type PlayerArtifact = (u64, Option<Image>);
 pub type PlayerStreamArtifact = (u64, StreamState, Option<Image>);
@@ -47,7 +55,8 @@ pub struct AdderPlayer {
     pub(crate) framer_builder: Option<FramerBuilder>,
     pub(crate) frame_sequence: Option<FrameSequence<u8>>, // TODO: remove this
     pub(crate) input_stream: Option<InputStream>,
-    pub(crate) display_mat: Mat,
+    pub(crate) display_frame: Frame,
+    pub(crate) running_intensities: Array3<u8>,
     playback_speed: f32,
     reconstruction_method: ReconstructionMethod,
     current_frame: u32,
@@ -74,6 +83,7 @@ impl AdderPlayer {
         playback_speed: f32,
         view_mode: FramedViewMode,
         detect_features: bool,
+        buffer_limit: Option<u32>,
     ) -> Result<Self, Box<dyn Error>> {
         match path_buf.extension() {
             None => Err(Box::new(AdderPlayerError("Invalid file type".into()))),
@@ -84,9 +94,10 @@ impl AdderPlayer {
                     let (stream, bitreader) = open_file_decoder(&input_path)?;
 
                     let meta = *stream.meta();
-                    let mut reconstructed_frame_rate = (meta.tps / meta.ref_interval) as f64;
 
-                    reconstructed_frame_rate /= playback_speed as f64;
+                    let mut reconstructed_frame_rate = meta.tps as f32 / meta.ref_interval as f32;
+
+                    reconstructed_frame_rate /= playback_speed as f32;
 
                     let framer_builder: FramerBuilder = FramerBuilder::new(meta.plane, 260)
                         .codec_version(meta.codec_version, meta.time_mode)
@@ -94,39 +105,15 @@ impl AdderPlayer {
                             meta.tps,
                             meta.ref_interval,
                             meta.delta_t_max,
-                            reconstructed_frame_rate,
+                            Some(reconstructed_frame_rate),
                         )
                         .mode(INSTANTANEOUS)
+                        .buffer_limit(buffer_limit)
                         .view_mode(view_mode)
                         .detect_features(detect_features)
                         .source(stream.get_source_type(), meta.source_camera);
 
                     let frame_sequence: FrameSequence<u8> = framer_builder.clone().finish();
-
-                    let mut display_mat = Mat::default();
-                    match meta.plane.c() {
-                        1 => {
-                            create_continuous(
-                                meta.plane.h() as i32,
-                                meta.plane.w() as i32,
-                                CV_8UC1,
-                                &mut display_mat,
-                            )?;
-                        }
-                        3 => {
-                            create_continuous(
-                                meta.plane.h() as i32,
-                                meta.plane.w() as i32,
-                                CV_8UC3,
-                                &mut display_mat,
-                            )?;
-                        }
-                        _ => {
-                            return Err(Box::new(AdderPlayerError(
-                                "Bad number of channels".into(),
-                            )));
-                        }
-                    }
 
                     Ok(AdderPlayer {
                         stream_state: StreamState {
@@ -151,7 +138,16 @@ impl AdderPlayer {
                             decoder: stream,
                             bitreader,
                         }),
-                        display_mat,
+                        display_frame: Array3::zeros((
+                            meta.plane.h_usize(),
+                            meta.plane.w_usize(),
+                            meta.plane.c_usize(),
+                        )),
+                        running_intensities: Array3::zeros((
+                            meta.plane.h_usize(),
+                            meta.plane.w_usize(),
+                            1,
+                        )),
                         playback_speed,
                         reconstruction_method: ReconstructionMethod::Accurate,
                         current_frame: 0,
@@ -191,7 +187,7 @@ impl AdderPlayer {
         self
     }
 
-    pub fn consume_source(&mut self) -> PlayerStreamArtifact {
+    pub fn consume_source(&mut self, detect_features: bool) -> PlayerStreamArtifact {
         let stream = match &mut self.input_stream {
             None => {
                 return (0, self.stream_state.clone(), None);
@@ -211,14 +207,14 @@ impl AdderPlayer {
                         eprintln!("TODO Error");
                     }
                     Some(frame_sequence) => {
-                        frame_sequence.state.frames_written = 0;
+                        frame_sequence.state.reset();
                     }
                 };
             }
         }
 
         let res = match self.reconstruction_method {
-            ReconstructionMethod::Fast => self.consume_source_fast(),
+            ReconstructionMethod::Fast => self.consume_source_fast(detect_features),
             ReconstructionMethod::Accurate => self.consume_source_accurate(),
         };
 
@@ -235,7 +231,10 @@ impl AdderPlayer {
         }
     }
 
-    fn consume_source_fast(&mut self) -> Result<PlayerArtifact, Box<dyn Error>> {
+    fn consume_source_fast(
+        &mut self,
+        detect_features: bool,
+    ) -> Result<PlayerArtifact, Box<dyn Error>> {
         let mut event_count = 0;
 
         if self.current_frame == 0 {
@@ -252,52 +251,36 @@ impl AdderPlayer {
 
         let frame_length = meta.ref_interval as f64 * self.playback_speed as f64; //TODO: temp
 
-        let mut display_mat = &mut self.display_mat;
-
-        if self.view_mode == FramedViewMode::DeltaT {
-            opencv::core::normalize(
-                &display_mat.clone(),
-                &mut display_mat,
-                0.0,
-                255.0,
-                opencv::core::NORM_MINMAX,
-                opencv::core::CV_8U,
-                &Mat::default(),
-            )?;
-            opencv::core::subtract(
-                &Scalar::new(255.0, 255.0, 255.0, 0.0),
-                &display_mat.clone(),
-                &mut display_mat,
-                &Mat::default(),
-                opencv::core::CV_8U,
-            )?;
-        }
+        // if self.view_mode == FramedViewMode::DeltaT {
+        //     opencv::core::normalize(
+        //         &display_mat.clone(),
+        //         &mut display_mat,
+        //         0.0,
+        //         255.0,
+        //         opencv::core::NORM_MINMAX,
+        //         opencv::core::CV_8U,
+        //         &Mat::default(),
+        //     )?;
+        //     opencv::core::subtract(
+        //         &Scalar::new(255.0, 255.0, 255.0, 0.0),
+        //         &display_mat.clone(),
+        //         &mut display_mat,
+        //         &Mat::default(),
+        //         opencv::core::CV_8U,
+        //     )?;
+        // }
 
         let image_bevy = loop {
+            let mut display_mat = &mut self.display_frame;
+            let color = display_mat.shape()[2] == 3;
+
             if self.stream_state.current_t_ticks as u128
                 > (self.current_frame as u128 * frame_length as u128)
             {
                 self.current_frame += 1;
 
-                let mut image_mat_bgra = Mat::default();
-                imgproc::cvt_color(
-                    &self.display_mat,
-                    &mut image_mat_bgra,
-                    imgproc::COLOR_BGR2BGRA,
-                    4,
-                )?;
-
-                // TODO: refactor
-                let image_bevy = Image::new(
-                    Extent3d {
-                        width: meta.plane.w().into(),
-                        height: meta.plane.h().into(),
-                        depth_or_array_layers: 1,
-                    },
-                    TextureDimension::D2,
-                    Vec::from(image_mat_bgra.data_bytes()?),
-                    TextureFormat::Bgra8UnormSrgb,
-                );
+                let image_bevy =
+                    prep_bevy_image(display_mat.clone(), color, meta.plane.w(), meta.plane.h())?;
                 break Some(image_bevy);
             }
 
@@ -312,18 +295,23 @@ impl AdderPlayer {
                     // }
 
                     if meta.time_mode == TimeMode::AbsoluteT {
-                        if event.delta_t > self.stream_state.current_t_ticks {
-                            self.stream_state.current_t_ticks = event.delta_t;
+                        if event.t > self.stream_state.current_t_ticks {
+                            self.stream_state.current_t_ticks = event.t;
                         }
-                        let dt = event.delta_t
+
+                        let dt = event.t
                             - self.stream_state.last_timestamps
                                 [[y as usize, x as usize, c as usize]];
                         self.stream_state.last_timestamps[[y as usize, x as usize, c as usize]] =
-                            event.delta_t;
-                        if self.stream_state.last_timestamps[[y as usize, x as usize, c as usize]]
-                            % meta.ref_interval
-                            != 0
+                            event.t;
+                        if is_framed(meta.source_camera)
+                            && self.stream_state.last_timestamps
+                                [[y as usize, x as usize, c as usize]]
+                                % meta.ref_interval
+                                != 0
                         {
+                            // If it's a framed source, make the timestamp align to the reference interval
+
                             self.stream_state.last_timestamps
                                 [[y as usize, x as usize, c as usize]] = ((self
                                 .stream_state
@@ -332,10 +320,11 @@ impl AdderPlayer {
                                 + 1)
                                 * meta.ref_interval;
                         }
-                        event.delta_t = dt;
+                        event.t = dt;
                     } else {
+                        panic!("Relative time mode is deprecated.");
                         self.stream_state.last_timestamps[[y as usize, x as usize, c as usize]] +=
-                            event.delta_t;
+                            event.t;
                         if self.stream_state.last_timestamps[[y as usize, x as usize, c as usize]]
                             % meta.ref_interval
                             != 0
@@ -382,10 +371,83 @@ impl AdderPlayer {
                         }
                         * 255.0;
 
-                    let db = display_mat.data_bytes_mut()?;
-                    db[y as usize * meta.plane.area_wc()
-                        + x as usize * meta.plane.c_usize()
-                        + c as usize] = frame_intensity as u8;
+                    unsafe {
+                        *display_mat.uget_mut((
+                            event.coord.y as usize,
+                            event.coord.x as usize,
+                            event.coord.c.unwrap_or(0) as usize,
+                        )) = frame_intensity as u8;
+
+                        if detect_features && event.coord.c.unwrap_or(0) == 0 {
+                            *self.running_intensities.uget_mut((
+                                event.coord.y as usize,
+                                event.coord.x as usize,
+                                0,
+                            )) = frame_intensity as u8;
+
+                            // Test if this is a feature
+                            if is_feature(event.coord, meta.plane, &self.running_intensities)? {
+                                draw_feature_coord(
+                                    event.coord.x,
+                                    event.coord.y,
+                                    &mut display_mat,
+                                    color,
+                                );
+                            } else if !event.coord.is_border(
+                                meta.plane.w_usize(),
+                                meta.plane.h_usize(),
+                                3,
+                            ) {
+                                // Reset the pixels in the cross accordingly...
+                                let radius = 2;
+                                if color {
+                                    for i in -radius..=radius {
+                                        for c in 0..3 as usize {
+                                            *display_mat.uget_mut((
+                                                (event.coord.y as i32 + i) as usize,
+                                                (event.coord.x as i32) as usize,
+                                                c,
+                                            )) = *self.running_intensities.uget((
+                                                (event.coord.y as i32 + i) as usize,
+                                                (event.coord.x as i32) as usize,
+                                                c,
+                                            ));
+                                            *display_mat.uget_mut((
+                                                (event.coord.y as i32) as usize,
+                                                (event.coord.x as i32 + i) as usize,
+                                                c,
+                                            )) = *self.running_intensities.uget((
+                                                (event.coord.y as i32) as usize,
+                                                (event.coord.x as i32 + i) as usize,
+                                                c,
+                                            ));
+                                        }
+                                    }
+                                } else {
+                                    for i in -radius..=radius {
+                                        *display_mat.uget_mut((
+                                            (event.coord.y as i32 + i) as usize,
+                                            (event.coord.x as i32) as usize,
+                                            0,
+                                        )) = *self.running_intensities.uget((
+                                            (event.coord.y as i32 + i) as usize,
+                                            (event.coord.x as i32) as usize,
+                                            0,
+                                        ));
+                                        *display_mat.uget_mut((
+                                            (event.coord.y as i32) as usize,
+                                            (event.coord.x as i32 + i) as usize,
+                                            0,
+                                        )) = *self.running_intensities.uget((
+                                            (event.coord.y as i32) as usize,
+                                            (event.coord.x as i32 + i) as usize,
+                                            0,
+                                        ));
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
                 Err(_e) => {
                     match stream
@@ -399,15 +461,19 @@ impl AdderPlayer {
                     };
                     self.frame_sequence =
                         self.framer_builder.clone().map(|builder| builder.finish());
-                    // if !self.ui_state.looping {
-                    //     self.ui_state.playing = false;
-                    // }
+                    self.stream_state.last_timestamps = Array::zeros((
+                        meta.plane.h_usize(),
+                        meta.plane.w_usize(),
+                        meta.plane.c_usize(),
+                    ));
                     self.stream_state.current_t_ticks = 0;
+                    self.current_frame = 0;
 
                     break None;
                 }
                 _ => {
-                    eprintln!("???");
+                    // Got an event with 0 integration, so don't need to update a pixel value
+                    // eprintln!("???");
                 }
             }
         };
@@ -433,28 +499,29 @@ impl AdderPlayer {
             Some(s) => s,
         };
 
-        let mut display_mat = &mut self.display_mat;
+        let display_mat = &mut self.display_frame;
 
         let image_bevy = if frame_sequence.is_frame_0_filled() {
             let mut idx = 0;
-            let db = display_mat.data_bytes_mut()?;
-            for chunk_num in 0..frame_sequence.get_frame_chunks_num() {
-                match frame_sequence.pop_next_frame_for_chunk(chunk_num) {
-                    Some(arr) => {
-                        for px in arr.iter() {
-                            match px {
-                                Some(event) => {
-                                    db[idx] = *event;
-                                    idx += 1;
-                                }
-                                None => {}
-                            };
+            let db = display_mat.as_slice_mut().unwrap();
+            let new_frame = frame_sequence.pop_next_frame().unwrap();
+            for chunk in new_frame {
+                // match frame_sequence.pop_next_frame_for_chunk(chunk_num) {
+                //     Some(arr) => {
+                for px in chunk.iter() {
+                    match px {
+                        Some(event) => {
+                            db[idx] = *event;
                         }
-                    }
-                    None => {
-                        println!("Couldn't pop chunk {chunk_num}!")
-                    }
+                        None => {}
+                    };
+                    idx += 1;
                 }
+                // }
+                // None => {
+                //     println!("Couldn't pop chunk {chunk_num}!")
+                // }
+                // }
             }
 
             // TODO: temporary, for testing what the running intensities look like
@@ -464,9 +531,9 @@ impl AdderPlayer {
             //     idx += 1;
             // }
 
-            if let Some(features) = frame_sequence.pop_features() {
-                for feature in features {
-                    let db = display_mat.data_bytes_mut()?;
+            if let Some(feature_interval) = frame_sequence.pop_features() {
+                for feature in feature_interval.features {
+                    let db = display_mat.as_slice_mut().unwrap();
 
                     let color: u8 = 255;
                     let radius = 2;
@@ -482,154 +549,25 @@ impl AdderPlayer {
                 }
             }
 
-            if self.view_mode == FramedViewMode::DeltaT {
-                opencv::core::normalize(
-                    &display_mat.clone(),
-                    &mut display_mat,
-                    0.0,
-                    255.0,
-                    opencv::core::NORM_MINMAX,
-                    opencv::core::CV_8U,
-                    &Mat::default(),
-                )?;
-                opencv::core::subtract(
-                    &Scalar::new(255.0, 255.0, 255.0, 0.0),
-                    &display_mat.clone(),
-                    &mut display_mat,
-                    &Mat::default(),
-                    opencv::core::CV_8U,
-                )?;
-            } else if self.view_mode == FramedViewMode::D {
-                // Loop through each element and find all the ones that have neighboring pixels
-                // in two directions that have a different D value. If so, set the pixel to white.
-
-                // let mut corner_mat = Mat::new_rows_cols_with_default(
-                //     meta.plane.h() as i32,
-                //     meta.plane.w() as i32,
-                //     opencv::core::CV_8U,
-                //     Scalar::new(0.0, 0.0, 0.0, 0.0),
-                // )?
-                // .clone();
-                //
-                // let db = display_mat.data_bytes()?;
-                // let corner_db = corner_mat.data_bytes_mut()?;
-                // // Loop through the pixels
-                // for y in 0..meta.plane.h() {
-                //     for x in 0..meta.plane.w() {
-                //         let idx = y as usize * meta.plane.w_usize() + x as usize;
-                //
-                //         let mut neighbors = vec![255; 4];
-                //         let mut neighbors_2 = vec![255; 4];
-                //         let mut neighbors_3 = vec![255; 4];
-                //         let mut neighbors_4 = vec![255; 4];
-                //
-                //         // Left
-                //         if x > 3 {
-                //             neighbors[0] = db[idx - 1];
-                //             neighbors_2[0] = db[idx - 2];
-                //             neighbors_3[0] = db[idx - 3];
-                //             neighbors_4[0] = db[idx - 4];
-                //         }
-                //         // Up
-                //         if y > 3 {
-                //             neighbors[1] = db[idx - meta.plane.w_usize()];
-                //             neighbors_2[1] = db[idx - meta.plane.w_usize() * 2];
-                //             neighbors_3[1] = db[idx - meta.plane.w_usize() * 3];
-                //             neighbors_4[1] = db[idx - meta.plane.w_usize() * 4];
-                //         }
-                //         // Right
-                //         if x < meta.plane.w() - 4 {
-                //             neighbors[2] = db[idx + 1];
-                //             neighbors_2[2] = db[idx + 2];
-                //             neighbors_3[2] = db[idx + 3];
-                //             neighbors_4[2] = db[idx + 4];
-                //         }
-                //
-                //         // Down
-                //         if y < meta.plane.h() - 4 {
-                //             neighbors[3] = db[idx + meta.plane.w_usize()];
-                //             neighbors_2[3] = db[idx + meta.plane.w_usize() * 2];
-                //             neighbors_3[3] = db[idx + meta.plane.w_usize() * 3];
-                //             neighbors_4[3] = db[idx + meta.plane.w_usize() * 4];
-                //         }
-                //
-                //         // Check
-                //         let mut count = 0;
-                //         let mut window_num = 0;
-                //         neighbors.windows(2).enumerate().for_each(|(index, w)| {
-                //             if w[0] == db[idx] && w[1] == db[idx] {
-                //                 // corner_db[idx] = 255;
-                //                 count += 1;
-                //                 window_num = index;
-                //             }
-                //         });
-                //         if neighbors[0] == db[idx] && neighbors[3] == db[idx] {
-                //             // corner_db[idx] = 255;
-                //             count += 1;
-                //             window_num = 3;
-                //         }
-                //
-                //         if count == 1 {
-                //             // corner_db[idx] = 255;
-                //             // Check neighbors_2
-                //             match window_num {
-                //                 0 => {
-                //                     if neighbors_2[0] == db[idx]
-                //                         && neighbors_2[1] == db[idx]
-                //                         && neighbors_3[0] == db[idx]
-                //                         && neighbors_3[1] == db[idx]
-                //                         && neighbors_4[0] == db[idx]
-                //                         && neighbors_4[1] == db[idx]
-                //                     {
-                //                         corner_db[idx] = 255;
-                //                     }
-                //                 }
-                //                 1 => {
-                //                     if neighbors_2[1] == db[idx]
-                //                         && neighbors_2[2] == db[idx]
-                //                         && neighbors_3[1] == db[idx]
-                //                         && neighbors_3[2] == db[idx]
-                //                         && neighbors_4[1] == db[idx]
-                //                         && neighbors_4[2] == db[idx]
-                //                     {
-                //                         corner_db[idx] = 255;
-                //                     }
-                //                 }
-                //                 2 => {
-                //                     if neighbors_2[2] == db[idx]
-                //                         && neighbors_2[3] == db[idx]
-                //                         && neighbors_3[2] == db[idx]
-                //                         && neighbors_3[3] == db[idx]
-                //                         && neighbors_4[2] == db[idx]
-                //                         && neighbors_4[3] == db[idx]
-                //                     {
-                //                         corner_db[idx] = 255;
-                //                     }
-                //                 }
-                //                 3 => {
-                //                     if neighbors_2[3] == db[idx]
-                //                         && neighbors_2[0] == db[idx]
-                //                         && neighbors_3[3] == db[idx]
-                //                         && neighbors_3[0] == db[idx]
-                //                         && neighbors_4[3] == db[idx]
-                //                         && neighbors_4[0] == db[idx]
-                //                     {
-                //                         corner_db[idx] = 255;
-                //                     }
-                //                 }
-                //                 _ => {}
-                //             }
-                //         }
-                //
-                //         // if neighbors.iter().filter(|&x| *x != db[idx]).count() == 2 {
-                //         //     corner_db[idx] = 255;
-                //         // } else {
-                //         //     corner_db[idx] = 0;
-                //         // }
-                //     }
-                // }
-                // show_display_force("cornerss", &corner_mat, 1)?;
-            }
+            // if self.view_mode == FramedViewMode::DeltaT {
+            //     opencv::core::normalize(
+            //         &display_mat.clone(),
+            //         &mut display_mat,
+            //         0.0,
+            //         255.0,
+            //         opencv::core::NORM_MINMAX,
+            //         opencv::core::CV_8U,
+            //         &Mat::default(),
+            //     )?;
+            //     opencv::core::subtract(
+            //         &Scalar::new(255.0, 255.0, 255.0, 0.0),
+            //         &display_mat.clone(),
+            //         &mut display_mat,
+            //         &Mat::default(),
+            //         opencv::core::CV_8U,
+            //     )?;
+            // } else if self.view_mode == FramedViewMode::D {
+            // }
 
             // let mut keypoints = Vector::<KeyPoint>::new();
             // opencv::features2d::fast(display_mat, &mut keypoints, 50, true)?;
@@ -643,23 +581,14 @@ impl AdderPlayer {
             // )?;
             // show_display_force("keypoints", &keypoint_mat, 1)?;
 
-            frame_sequence.state.frames_written += 1;
             self.stream_state.current_t_ticks += frame_sequence.state.tpf;
 
-            let mut image_mat_bgra = Mat::default();
-            imgproc::cvt_color(display_mat, &mut image_mat_bgra, imgproc::COLOR_BGR2BGRA, 4)?;
+            let image_mat = self.display_frame.clone();
+            let color = image_mat.shape()[2] == 3;
 
-            // TODO: refactor
-            Some(Image::new(
-                Extent3d {
-                    width: meta.plane.w().into(),
-                    height: meta.plane.h().into(),
-                    depth_or_array_layers: 1,
-                },
-                TextureDimension::D2,
-                Vec::from(image_mat_bgra.data_bytes()?),
-                TextureFormat::Bgra8UnormSrgb,
-            ))
+            let image_bevy = prep_bevy_image(image_mat, color, meta.plane.w(), meta.plane.h())?;
+
+            Some(image_bevy)
         } else {
             None
         };
@@ -682,18 +611,22 @@ impl AdderPlayer {
                     }
                 }
                 Err(e) => {
-                    eprintln!("{}", e);
+                    eprintln!("Player error: {}", e);
+                    if !frame_sequence.flush_frame_buffer() {
+                        eprintln!("Completely done");
+                        // TODO: Need to reset the UI event count events_ppc count when looping back here
+                        // Loop/restart back to the beginning
+                        stream.decoder.set_input_stream_position(
+                            &mut stream.bitreader,
+                            meta.header_size as u64,
+                        )?;
 
-                    // TODO: Need to reset the UI event count events_ppc count when looping back here
-                    // Loop/restart back to the beginning
-                    stream.decoder.set_input_stream_position(
-                        &mut stream.bitreader,
-                        meta.header_size as u64,
-                    )?;
-
-                    self.frame_sequence =
-                        self.framer_builder.clone().map(|builder| builder.finish());
-                    return Ok((event_count, image_bevy));
+                        self.frame_sequence =
+                            self.framer_builder.clone().map(|builder| builder.finish());
+                        return Ok((event_count, image_bevy));
+                    } else {
+                        return self.consume_source_accurate();
+                    }
                 }
             }
         }

@@ -1,4 +1,4 @@
-use crate::framer::scale_intensity::FrameValue;
+use crate::framer::scale_intensity::{FrameValue, SaeTime};
 use bincode::config::{BigEndian, FixintEncoding, WithOtherEndian, WithOtherIntEncoding};
 use bincode::{DefaultOptions, Options};
 use rayon::iter::ParallelIterator;
@@ -35,7 +35,7 @@ pub enum FramerMode {
 pub struct FramerBuilder {
     plane: PlaneSize,
     tps: DeltaT,
-    output_fps: f64,
+    output_fps: Option<f32>,
     mode: FramerMode,
     view_mode: FramedViewMode,
     source: SourceType,
@@ -45,6 +45,7 @@ pub struct FramerBuilder {
     ref_interval: DeltaT,
     delta_t_max: DeltaT,
     detect_features: bool,
+    buffer_limit: Option<u32>,
 
     /// The number of rows to process in each chunk (thread).
     pub chunk_rows: usize,
@@ -58,7 +59,7 @@ impl FramerBuilder {
             plane,
             chunk_rows,
             tps: 150_000,
-            output_fps: 30.0,
+            output_fps: None,
             mode: FramerMode::INSTANTANEOUS,
             view_mode: FramedViewMode::Intensity,
             source: SourceType::U8,
@@ -68,6 +69,7 @@ impl FramerBuilder {
             ref_interval: 5000,
             delta_t_max: 5000,
             detect_features: false,
+            buffer_limit: None,
         }
     }
 
@@ -78,12 +80,17 @@ impl FramerBuilder {
         tps: DeltaT,
         ref_interval: DeltaT,
         delta_t_max: DeltaT,
-        output_fps: f64,
+        output_fps: Option<f32>,
     ) -> FramerBuilder {
         self.tps = tps;
         self.ref_interval = ref_interval;
         self.delta_t_max = delta_t_max;
         self.output_fps = output_fps;
+        self
+    }
+
+    pub fn buffer_limit(mut self, buffer_limit: Option<u32>) -> FramerBuilder {
+        self.buffer_limit = buffer_limit;
         self
     }
 
@@ -160,6 +167,11 @@ pub trait Framer {
 
     /// Ingest a vector of a vector of ADΔER events.
     fn ingest_events_events(&mut self, events: Vec<Vec<Event>>) -> bool;
+    /// For all frames left that we haven't written out yet, for any None pixels, set them to the
+    /// last recorded intensity for that pixel.
+    ///
+    /// Returns `true` if there are frames now ready to write out
+    fn flush_frame_buffer(&mut self) -> bool;
 }
 
 #[derive(Debug, Clone, Default)]
@@ -212,7 +224,7 @@ impl From<FrameSequenceError> for Box<dyn std::error::Error> {
 /// The state of a [`FrameSequence`]
 pub struct FrameSequenceState {
     /// The number of frames written to the output so far
-    pub frames_written: i64,
+    frames_written: i64,
     plane: PlaneSize,
 
     /// Ticks per output frame
@@ -224,6 +236,17 @@ pub struct FrameSequenceState {
     source_dtm: DeltaT,
     view_mode: FramedViewMode,
     time_mode: TimeMode,
+}
+
+impl FrameSequenceState {
+    pub fn reset(&mut self) {
+        self.frames_written = 0;
+    }
+}
+
+pub struct FeatureInterval {
+    end_ts: BigT,
+    pub features: Vec<Coord>,
 }
 
 /// A sequence of frames, each of which is a 3D array of [`FrameValue`]s
@@ -239,9 +262,10 @@ pub struct FrameSequence<T> {
     chunk_filled_tracker: Vec<bool>,
     pub(crate) mode: FramerMode,
     pub(crate) detect_features: bool,
-    pub(crate) features: VecDeque<Vec<Coord>>,
+    pub(crate) features: VecDeque<FeatureInterval>,
+    buffer_limit: Option<u32>,
 
-    pub(crate) running_intensities: Array3<i32>,
+    pub(crate) running_intensities: Array3<u8>,
 
     /// Number of rows per chunk (per thread)
     pub chunk_rows: usize,
@@ -322,13 +346,19 @@ impl<
             }
         }
 
+        let tpf = if let Some(output_fps) = builder.output_fps {
+            (builder.tps as f32 / output_fps) as u32
+        } else {
+            builder.ref_interval
+        };
+
         // Array3::<Option<T>>::new(num_rows, num_cols, num_channels);
         FrameSequence {
             state: FrameSequenceState {
                 plane: *plane,
                 frames_written: 0,
                 view_mode: builder.view_mode,
-                tpf: builder.tps / builder.output_fps as u32,
+                tpf,
                 source: builder.source,
                 codec_version: builder.codec_version,
                 source_camera: builder.source_camera,
@@ -349,6 +379,7 @@ impl<
                 builder.plane.c_usize(),
             )),
             detect_features: builder.detect_features,
+            buffer_limit: builder.buffer_limit,
             features: VecDeque::with_capacity(
                 (builder.delta_t_max / builder.ref_interval) as usize,
             ),
@@ -374,7 +405,7 @@ impl<
     /// FramerBuilder::new(
     ///             PlaneSize::new(10,10,3).unwrap(), 64)
     ///             .codec_version(1, TimeMode::DeltaT)
-    ///             .time_parameters(50000, 1000, 1000, 50.0)
+    ///             .time_parameters(50000, 1000, 1000, Some(50.0))
     ///             .mode(INSTANTANEOUS)
     ///             .source(U8, FramedU8)
     ///             .finish();
@@ -385,7 +416,7 @@ impl<
     ///             c: Some(1)
     ///         },
     ///         d: 5,
-    ///         delta_t: 1000
+    ///         t: 1000
     ///     };
     /// frame_sequence.ingest_event(&mut event, None);
     /// let elem = frame_sequence.px_at_current(5, 5, 1).unwrap();
@@ -395,7 +426,12 @@ impl<
         let channel = event.coord.c.unwrap_or(0);
         let chunk_num = event.coord.y as usize / self.chunk_rows;
 
-        let time = event.delta_t;
+        // Silently handle malformed event
+        if chunk_num >= self.frames.len() {
+            return false;
+        }
+
+        let time = event.t;
         event.coord.y -= (chunk_num * self.chunk_rows) as u16; // Modify the coordinate here, so it gets ingested at the right place
 
         let frame_chunk = &mut self.frames[chunk_num];
@@ -407,7 +443,7 @@ impl<
         let last_frame_intensity_ref = &mut self.last_frame_intensity_tracker[chunk_num]
             [[event.coord.y.into(), event.coord.x.into(), channel.into()]];
 
-        self.chunk_filled_tracker[chunk_num] = ingest_event_for_chunk(
+        let (filled, grew) = ingest_event_for_chunk(
             event,
             frame_chunk,
             running_ts_ref,
@@ -415,34 +451,86 @@ impl<
             last_filled_frame_ref,
             last_frame_intensity_ref,
             &self.state,
+            self.buffer_limit,
         );
 
+        self.chunk_filled_tracker[chunk_num] = filled;
+
+        if grew {
+            // handle_dtm(
+            //     frame_chunk,
+            //     &mut self.chunk_filled_tracker[chunk_num],
+            //     &mut self.last_filled_tracker[chunk_num],
+            //     &mut self.pixel_ts_tracker[chunk_num],
+            //     &mut self.last_frame_intensity_tracker[chunk_num],
+            //     &self.state,
+            // );
+        }
+
         if self.detect_features {
+            let last_frame_intensity_ref = &mut self.last_frame_intensity_tracker[chunk_num]
+                [[event.coord.y.into(), event.coord.x.into(), channel.into()]];
             // Revert the y coordinate
             event.coord.y += (chunk_num * self.chunk_rows) as u16;
             self.running_intensities
                 [[event.coord.y.into(), event.coord.x.into(), channel.into()]] =
-                <T as Into<f64>>::into(*last_frame_intensity_ref) as i32;
-            if self.running_intensities
-                [[event.coord.y.into(), event.coord.x.into(), channel.into()]]
-                > 255
-            {
-                dbg!(
-                    self.running_intensities
-                        [[event.coord.y.into(), event.coord.x.into(), channel.into()]]
-                );
-            }
+                <T as Into<f64>>::into(*last_frame_intensity_ref) as u8;
 
             if let Some(last) = last_event {
-                if time != last.delta_t {
-                    if is_feature(event, self.state.plane, &self.running_intensities).unwrap() {
-                        let idx =
-                            (time / self.state.tpf - self.state.frames_written as u32) as usize;
+                if time != last.t {
+                    // todo!();
+                    if is_feature(event.coord, self.state.plane, &self.running_intensities).unwrap()
+                    {
+                        debug_assert!(self.state.frames_written >= 0);
+                        let mut idx = if (time / self.state.tpf) as i64 >= self.state.frames_written
+                        {
+                            (time / (self.state.tpf) - self.state.frames_written as u32) as usize
+                        } else {
+                            0
+                        };
+
+                        if time % self.state.tpf == 0 && idx > 0 {
+                            idx -= 1;
+                        }
+                        // dbg!(time);
+                        // dbg!(self.state.frames_written);
+                        // dbg!(idx);
                         if idx >= self.features.len() {
-                            self.features.resize(idx + 1, vec![]);
+                            if self.features.len() == 0 {
+                                // Create the first
+                                self.features.push_back(FeatureInterval {
+                                    end_ts: self.state.tpf as BigT,
+                                    features: vec![],
+                                });
+                                self.features.push_back(FeatureInterval {
+                                    end_ts: self.state.tpf as BigT * 2,
+                                    features: vec![],
+                                });
+                            }
+
+                            let new_end_ts = if time % self.state.tpf == 0 {
+                                time
+                            } else {
+                                (time / self.state.tpf + 1) * self.state.tpf
+                            } as BigT;
+
+                            let mut running_end_ts =
+                                self.features.back().unwrap().end_ts + self.state.tpf as BigT;
+                            // dbg!(new_end_ts);
+                            // dbg!(running_end_ts);
+                            while running_end_ts <= new_end_ts {
+                                self.features.push_back(FeatureInterval {
+                                    end_ts: running_end_ts,
+                                    features: vec![],
+                                });
+                                running_end_ts += self.state.tpf as BigT;
+                            }
                         }
 
-                        self.features[idx].push(event.coord);
+                        // dbg!(self.features.len());
+                        // dbg!(self.features[idx].end_ts);
+                        assert!(self.features[idx].end_ts >= time as BigT);
+                        self.features[idx].features.push(event.coord);
                     }
                 }
             }
@@ -492,7 +580,7 @@ impl<
                         let last_frame_intensity_ref = &mut last_frame_intensity_tracker
                             [[event.coord.y.into(), event.coord.x.into(), channel.into()]];
 
-                        *chunk_filled = ingest_event_for_chunk(
+                        let (filled, _grew) = ingest_event_for_chunk(
                             event,
                             frame_chunk,
                             running_ts_ref,
@@ -500,12 +588,117 @@ impl<
                             last_filled_frame_ref,
                             last_frame_intensity_ref,
                             &self.state,
+                            self.buffer_limit,
                         );
+                        *chunk_filled = filled;
+
+                        // if grew {
+                        //     handle_dtm(
+                        //         frame_chunk,
+                        //         chunk_filled,
+                        //         chunk_last_filled_tracker,
+                        //         chunk_ts_tracker,
+                        //         last_frame_intensity_tracker,
+                        //         &self.state,
+                        //     );
+                        // }
                     }
                 },
             );
 
         self.is_frame_0_filled()
+    }
+
+    /// For all frames left that we haven't written out yet, for any None pixels, set them to the
+    /// last recorded intensity for that pixel.
+    ///
+    /// Returns `true` if there are frames now ready to write out
+    fn flush_frame_buffer(&mut self) -> bool {
+        let _all_filled = true;
+        if self.frames[0].len() > 1 {
+            for (chunk_num, chunk) in self.frames.iter_mut().enumerate() {
+                let frame_chunk = &mut chunk[0];
+                // for frame_chunk in chunk.iter_mut() {
+                for ((y, x, c), px) in frame_chunk.array.indexed_iter_mut() {
+                    if px.is_none() {
+                        // If the pixel is empty, set its intensity to the previous intensity we recorded for it
+                        *px = Some(self.last_frame_intensity_tracker[chunk_num][[y, x, c]]);
+
+                        // Update the fill tracker
+                        frame_chunk.filled_count += 1;
+
+                        // Update the last filled tracker
+                        self.last_filled_tracker[chunk_num][[y, x, c]] += 1;
+
+                        // Update the timestamp tracker
+                        // chunk_ts_tracker[[y, x, c]] += state.ref_interval as BigT;
+                    }
+                }
+
+                // Mark the chunk as filled (ready to write out)
+                self.chunk_filled_tracker[chunk_num] = true;
+            }
+        } else {
+            eprintln!("marking not filled...");
+            self.chunk_filled_tracker[0] = false;
+        }
+
+        self.is_frame_0_filled()
+
+        // for chunk in &self.chunk_filled_tracker {
+        //     if !chunk {
+        //         all_filled = false;
+        //     }
+        // }
+        //
+        // all_filled
+    }
+}
+
+fn handle_dtm<
+    T: Clone
+        + Default
+        + FrameValue<Output = T>
+        + Copy
+        + Serialize
+        + Send
+        + Sync
+        + num_traits::identities::Zero
+        + Into<f64>,
+>(
+    frame_chunk: &mut VecDeque<Frame<Option<T>>>,
+    chunk_filled: &mut bool,
+    chunk_last_filled_tracker: &mut Array3<i64>,
+    _chunk_ts_tracker: &mut Array3<BigT>,
+    last_frame_intensity_tracker: &Array3<T>,
+    state: &FrameSequenceState,
+) {
+    if frame_chunk.len() > ((state.source_dtm / state.ref_interval) + 1) as usize {
+        /* Check the last timestamp for the other pixels in this chunk. If they were so long
+        ago that dtm time has passed, then we can repeat the last frame's intensity for
+        those pixels.
+        */
+        // Iterate the other pixels in the chunk
+        let frame_chunk = &mut frame_chunk[0];
+
+        for ((y, x, c), px) in frame_chunk.array.indexed_iter_mut() {
+            if px.is_none() {
+                // If the pixel is empty, set its intensity to the previous intensity we recorded for it
+                *px = Some(last_frame_intensity_tracker[[y, x, c]]);
+
+                // Update the fill tracker
+                frame_chunk.filled_count += 1;
+
+                // Update the last filled tracker
+                chunk_last_filled_tracker[[y, x, c]] += 1;
+
+                // Update the timestamp tracker
+                // chunk_ts_tracker[[y, x, c]] += state.ref_interval as BigT;
+            }
+        }
+
+        // Mark the chunk as filled (ready to write out)
+        *chunk_filled = true;
     }
 }
 
@@ -620,13 +813,32 @@ impl<T: Clone + Default + FrameValue<Output = T> + Serialize> FrameSequence<T> {
     }
 
     /// Get the instantaneous intensity for each pixel
-    pub fn get_running_intensities(&self) -> &Array3<i32> {
+    pub fn get_running_intensities(&self) -> &Array3<u8> {
         &self.running_intensities
     }
 
     /// Get the features detected for the next frame, and pop that off the feature vec
-    pub fn pop_features(&mut self) -> Option<Vec<Coord>> {
-        self.features.push_back(vec![]);
+    pub fn pop_features(&mut self) -> Option<FeatureInterval> {
+        if self.features.len() == 0 {
+            // Create the first
+            self.features.push_back(FeatureInterval {
+                end_ts: self.state.tpf as BigT,
+                features: vec![],
+            });
+            // Create the first
+            self.features.push_back(FeatureInterval {
+                end_ts: self.state.tpf as BigT * 2,
+                features: vec![],
+            });
+        } else {
+            self.features.push_back(FeatureInterval {
+                end_ts: self.state.tpf as BigT + self.features.back().unwrap().end_ts,
+                features: vec![],
+            });
+        }
+
+        // dbg!("Popping features");
+        // dbg!(self.features.front().unwrap().end_ts);
         self.features.pop_front()
     }
 
@@ -647,6 +859,7 @@ impl<T: Clone + Default + FrameValue<Output = T> + Serialize> FrameSequence<T> {
             }
         }
         self.state.frames_written += 1;
+        // dbg!(self.state.frames_written);
         Some(ret)
     }
 
@@ -713,6 +926,7 @@ impl<T: Clone + Default + FrameValue<Output = T> + Serialize> FrameSequence<T> {
             }
         }
         self.state.frames_written += 1;
+        dbg!(self.state.frames_written);
         Ok(())
     }
 
@@ -747,16 +961,24 @@ fn ingest_event_for_chunk<
     last_filled_frame_ref: &mut i64,
     last_frame_intensity_ref: &mut T,
     state: &FrameSequenceState,
-) -> bool {
+    buffer_limit: Option<u32>,
+) -> (bool, bool) {
     let channel = event.coord.c.unwrap_or(0);
+    let mut grew = false;
 
     let prev_last_filled_frame = *last_filled_frame_ref;
     let prev_running_ts = *running_ts_ref;
 
     if state.codec_version >= 2 && state.time_mode == TimeMode::AbsoluteT {
-        *running_ts_ref = event.delta_t as BigT;
+        if prev_running_ts >= event.t as BigT {
+            return (
+                frame_chunk[0].filled_count == frame_chunk[0].array.len(),
+                false,
+            );
+        }
+        *running_ts_ref = event.t as BigT;
     } else {
-        *running_ts_ref += u64::from(event.delta_t);
+        *running_ts_ref += u64::from(event.t);
     }
 
     if ((running_ts_ref.saturating_sub(1)) as i64 / i64::from(state.tpf)) > *last_filled_frame_ref {
@@ -772,7 +994,7 @@ fn ingest_event_for_chunk<
                 && state.view_mode != FramedViewMode::SAE
             {
                 // event.delta_t -= ((*last_filled_frame_ref + 1) * state.ref_interval as i64) as u32;
-                event.delta_t = event.delta_t.saturating_sub(prev_running_ts as u32);
+                event.t = event.t.saturating_sub(prev_running_ts as u32);
             }
 
             // TODO: Handle SAE view mode
@@ -783,7 +1005,10 @@ fn ingest_event_for_chunk<
                 practical_d_max,
                 state.source_dtm,
                 state.view_mode,
-                0.0, // TODO
+                Some(SaeTime {
+                    running_t: *running_ts_ref as DeltaT,
+                    last_fired_t: prev_running_ts as DeltaT,
+                }), // TODO
             );
         }
         *last_filled_frame_ref = (running_ts_ref.saturating_sub(1)) as i64 / i64::from(state.tpf);
@@ -801,6 +1026,7 @@ fn ingest_event_for_chunk<
                     a as usize
                 ]));
                 *frame_idx_offset += a;
+                grew = true;
             }
             a if a < 0 => {
                 // We can get here if we've forcibly popped a frame before it's ready.
@@ -818,15 +1044,15 @@ fn ingest_event_for_chunk<
             _ => {}
         }
 
-        let mut frame: &mut Option<T>;
+        let mut px: &mut Option<T>;
         for i in prev_last_filled_frame..*last_filled_frame_ref {
             if i - state.frames_written + 1 >= 0 {
-                frame = &mut frame_chunk[(i - state.frames_written + 1) as usize].array
+                px = &mut frame_chunk[(i - state.frames_written + 1) as usize].array
                     [[event.coord.y.into(), event.coord.x.into(), channel.into()]];
-                match frame {
+                match px {
                     Some(_val) => {}
                     None => {
-                        *frame = Some(*last_frame_intensity_ref);
+                        *px = Some(*last_frame_intensity_ref);
                         frame_chunk[(i - state.frames_written + 1) as usize].filled_count += 1;
                     }
                 }
@@ -856,7 +1082,16 @@ fn ingest_event_for_chunk<
             ((*running_ts_ref / u64::from(state.ref_interval)) + 1) * u64::from(state.ref_interval);
     }
 
+    if let Some(buffer_limit) = buffer_limit {
+        if *last_filled_frame_ref > state.frames_written + buffer_limit as i64 {
+            frame_chunk[0].filled_count = frame_chunk[0].array.len();
+        }
+    }
+
     debug_assert!(*last_filled_frame_ref >= 0);
     debug_assert!(frame_chunk[0].filled_count <= frame_chunk[0].array.len());
-    frame_chunk[0].filled_count == frame_chunk[0].array.len()
+    (
+        frame_chunk[0].filled_count == frame_chunk[0].array.len(),
+        grew,
+    )
 }

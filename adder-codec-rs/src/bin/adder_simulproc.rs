@@ -75,11 +75,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
     if !args.output_events_filename.is_empty() {
         let path = Path::new(&args.output_events_filename);
         let file = File::create(path)?;
+        let plane = source.get_video_ref().state.plane;
         source = *source.write_out(
             FramedU8,
             time_mode,
             EncoderType::Raw,
-            EncoderOptions::default(),
+            EncoderOptions::default(plane),
             BufWriter::new(file),
         )?;
     }
@@ -185,7 +186,7 @@ mod tests {
             .frame_start(args.frame_idx_start)?
             .show_display(args.show_display);
 
-        let source_fps = source.source_fps;
+        let source_fps = source.source_fps as f64;
         source = source.time_parameters(
             (args.ref_time as f64 * source_fps) as DeltaT,
             args.ref_time,
@@ -194,12 +195,13 @@ mod tests {
         )?;
         if !args.output_events_filename.is_empty() {
             let file = File::create(args.output_events_filename)?;
+            let plane = source.get_video_ref().state.plane;
             let writer = BufWriter::new(file);
             source = *source.write_out(
                 FramedU8,
                 TimeMode::DeltaT,
                 EncoderType::Raw,
-                EncoderOptions::default(),
+                EncoderOptions::default(plane),
                 writer,
             )?;
         }
@@ -236,7 +238,7 @@ mod tests {
             fs::remove_file(output_path).unwrap();
             return Ok(());
         };
-        // println!("{}", String::from_utf8(output.stdout.clone()).unwrap());
+        println!("{}", String::from_utf8(output.stdout.clone()).unwrap());
 
         // Note the file might be larger than that given in ./tests/samples, if the method for
         // framing generates more frames at the end than the original method used. This assertion

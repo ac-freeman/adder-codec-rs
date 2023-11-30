@@ -199,7 +199,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                             pixels[[y, x, c]] = Some(DvsPixel {
                                 d: event.d,
                                 frame_intensity_ln: event_to_frame_intensity(&event, frame_length),
-                                t: event.delta_t as u128,
+                                t: event.t as u128,
                             });
                         }
                         _ => {
@@ -208,7 +208,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         }
                     },
                     Some(px) => {
-                        px.t += event.delta_t as u128;
+                        px.t += event.t as u128;
                         current_t = max(px.t, current_t);
                         let frame_idx = (px.t / frame_length) as usize;
 
@@ -373,10 +373,9 @@ fn event_to_frame_intensity(event: &Event, frame_length: u128) -> f64 {
     if event.d == D_ZERO_INTEGRATION {
         return 0.0;
     }
-    match event.delta_t {
+    match event.t {
         0 => ((D_SHIFT[event.d as usize] as f64 * frame_length as f64) / 255.0).ln_1p(),
-        _ => (((D_SHIFT[event.d as usize] as f64 / event.delta_t as f64) * frame_length as f64)
-            / 255.0)
+        _ => (((D_SHIFT[event.d as usize] as f64 / event.t as f64) * frame_length as f64) / 255.0)
             .ln_1p(),
     }
 }

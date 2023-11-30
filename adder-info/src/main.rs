@@ -97,7 +97,7 @@ fn adder_info(args: MyArgs, out: impl Write) -> Result<(), Box<dyn error::Error>
                     event.coord.x_usize(),
                     event.coord.c_usize(),
                 ]];
-                let new_t = event.delta_t;
+                let new_t = event.t;
                 if event.coord.x == 343 && event.coord.y == 7 {
                     println!("{} {}", new_t, last_t);
                 } else {
@@ -116,7 +116,7 @@ fn adder_info(args: MyArgs, out: impl Write) -> Result<(), Box<dyn error::Error>
                 }
                 a if a < min_intensity => {
                     if event.d == D_ZERO_INTEGRATION {
-                        min_intensity = 1.0 / event.delta_t as f64;
+                        min_intensity = 1.0 / event.t as f64;
                     } else {
                         min_intensity = a;
                     }
@@ -167,7 +167,7 @@ mod tests {
     #[test]
     fn test_adder_info() -> Result<(), Box<dyn std::error::Error>> {
         let args = MyArgs {
-            input: "tests/test_sample.adder".to_string(),
+            input: "./tests/test_sample.adder".to_string(),
             dynamic_range: true,
         };
 
@@ -179,8 +179,8 @@ mod tests {
         }
 
         let string = String::from_utf8(data)?;
-        assert!(string.contains("Width: 2"));
 
+        assert!(string.contains("Width: 2"));
         assert!(string.contains("Height: 2"));
         assert!(string.contains("Color channels: 1"));
         assert!(string.contains("Source camera: FramedU8"));
@@ -190,8 +190,8 @@ mod tests {
         assert!(string.contains("t_max: 240000"));
         assert!(string.contains("File size: 1307"));
         assert!(string.contains("Header size: 29"));
-        assert!(string.contains("event count: 140"));
-        assert!(string.contains("Events per pixel channel: 35"));
+        assert!(string.contains("event count: 137"));
+        assert!(string.contains("Events per pixel channel: 34"));
 
         Ok(())
     }

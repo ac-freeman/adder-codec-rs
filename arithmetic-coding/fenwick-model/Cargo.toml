@@ -14,7 +14,3 @@ repository = "https://github.com/danieleades/arithmetic-coding"
 arithmetic-coding-core = { path = "../arithmetic-coding-core" }
 fenwick = "2.0.0"
 thiserror = "1.0.30"
-
-[profile.release]
-lto = true
-opt-level = 3

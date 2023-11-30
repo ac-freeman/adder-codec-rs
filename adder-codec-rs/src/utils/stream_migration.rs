@@ -16,7 +16,7 @@ use std::io::{Read, Seek, Write};
 ///
 /// returns: transformed Event
 pub fn absolute_event_to_dt_event(mut event: Event, last_t: DeltaT) -> Event {
-    event.delta_t -= last_t;
+    event.t -= last_t;
     event
 }
 
@@ -56,10 +56,10 @@ pub fn migrate_v2<W: Write + 'static, R: Read + Seek>(
             event.coord.c_usize(),
         ]];
 
-        *t += event.delta_t;
+        *t += event.t;
 
         if output_stream.meta().time_mode == TimeMode::AbsoluteT {
-            event.delta_t = *t;
+            event.t = *t;
 
             // If framed video source, we can take advantage of scheme that reduces event rate by half
             if input_stream.meta().codec_version > 0
@@ -95,7 +95,9 @@ mod tests {
     use adder_codec_core::codec::decoder::Decoder;
     use adder_codec_core::codec::encoder::Encoder;
     use adder_codec_core::codec::raw::stream::{RawInput, RawOutput};
-    use adder_codec_core::codec::{CodecMetadata, ReadCompression, WriteCompression};
+    use adder_codec_core::codec::{
+        CodecMetadata, EncoderOptions, ReadCompression, WriteCompression,
+    };
     use adder_codec_core::SourceCamera::FramedU8;
     use adder_codec_core::TimeMode::AbsoluteT;
     use adder_codec_core::{Coord, Event, PlaneSize, TimeMode};
@@ -128,7 +130,7 @@ mod tests {
             },
             bufwriter,
         );
-        let mut stream = Encoder::new_raw(compression, Default::default());
+        let mut stream = Encoder::new_raw(compression, EncoderOptions::default(plane));
 
         // Encode the events
         let event: Event = Event {
@@ -138,7 +140,7 @@ mod tests {
                 c: None,
             },
             d: 5,
-            delta_t: 600,
+            t: 600,
         };
         stream.ingest_event(event)?;
         stream.ingest_event(event)?;
@@ -150,7 +152,7 @@ mod tests {
                 c: None,
             },
             d: 5,
-            delta_t: 123,
+            t: 123,
         };
         stream.ingest_event(event)?;
 
@@ -178,7 +180,7 @@ mod tests {
             },
             bufwriter,
         );
-        let mut stream = Encoder::new_raw(compression, Default::default());
+        let mut stream = Encoder::new_raw(compression, EncoderOptions::default(plane));
 
         stream = migrate_v2(reader, &mut bitreader, stream)?;
 
@@ -198,18 +200,18 @@ mod tests {
         assert_eq!(event.coord.x as i32, 0);
         assert_eq!(event.coord.y as i32, 0);
         assert_eq!(event.coord.c, None);
-        let dt = event.delta_t;
+        let dt = event.t;
         assert_eq!(dt, 600);
         assert_eq!(event.d, 5);
 
         event = reader.digest_event(&mut bitreader)?;
-        let dt = event.delta_t;
+        let dt = event.t;
         assert_eq!(dt, 1365);
         event = reader.digest_event(&mut bitreader)?;
-        let dt = event.delta_t;
+        let dt = event.t;
         assert_eq!(dt, 2130);
         event = reader.digest_event(&mut bitreader)?;
-        let dt = event.delta_t;
+        let dt = event.t;
         assert_eq!(dt, 2418);
 
         Ok(())
@@ -232,7 +234,7 @@ mod tests {
         meta.codec_version = 2;
         meta.time_mode = AbsoluteT;
         let compression = RawOutput::new(meta, bufwriter);
-        let mut stream = Encoder::new_raw(compression, Default::default());
+        let mut stream = Encoder::new_raw(compression, EncoderOptions::default(meta.plane));
 
         stream = migrate_v2(reader, &mut bitreader, stream)?;
 
@@ -267,8 +269,8 @@ mod tests {
             assert_eq!(event_migrate.coord.x as i32, event_gt.coord.x as i32);
             assert_eq!(event_migrate.coord.y as i32, event_gt.coord.y as i32);
             assert_eq!(event_migrate.coord.c, event_gt.coord.c);
-            let dt = event_migrate.delta_t;
-            let dt_g = event_gt.delta_t;
+            let dt = event_migrate.t;
+            let dt_g = event_gt.t;
             assert_eq!(dt, dt_g);
             assert_eq!(event_migrate.d, event_gt.d);
         }
@@ -295,7 +297,7 @@ mod tests {
                     input_stream_t.meta().tps,
                     input_stream_t.meta().ref_interval,
                     input_stream_t.meta().delta_t_max,
-                    reconstructed_frame_rate,
+                    Some(reconstructed_frame_rate),
                 )
                 .mode(INSTANTANEOUS)
                 .source(
@@ -316,7 +318,7 @@ mod tests {
                     input_stream_dt.meta().tps,
                     input_stream_dt.meta().ref_interval,
                     input_stream_dt.meta().delta_t_max,
-                    reconstructed_frame_rate,
+                    Some(reconstructed_frame_rate),
                 )
                 .mode(INSTANTANEOUS)
                 .source(
@@ -357,7 +359,7 @@ mod tests {
             event_count += 1;
 
             let event_t_dt = absolute_event_to_dt_event(event_t, last_t);
-            last_t = event_t.delta_t;
+            last_t = event_t.t;
 
             // We already know it's a framed source
             last_t = ((last_t / input_stream_dt.meta().ref_interval) + 1)
@@ -366,8 +368,8 @@ mod tests {
             assert_eq!(event_t_dt.coord.x as i32, event_dt.coord.x as i32);
             assert_eq!(event_t_dt.coord.y as i32, event_dt.coord.y as i32);
             assert_eq!(event_t_dt.coord.c, event_dt.coord.c);
-            let dt_mig = event_t_dt.delta_t;
-            let dt_gt = event_dt.delta_t;
+            let dt_mig = event_t_dt.t;
+            let dt_gt = event_dt.t;
             assert_eq!(dt_mig, dt_gt);
             assert_eq!(event_t_dt.d, event_dt.d);
         }
@@ -392,7 +394,7 @@ mod tests {
                     input_stream_t.meta().tps,
                     input_stream_t.meta().ref_interval,
                     input_stream_t.meta().delta_t_max,
-                    reconstructed_frame_rate,
+                    Some(reconstructed_frame_rate),
                 )
                 .mode(INSTANTANEOUS)
                 .source(
@@ -413,7 +415,7 @@ mod tests {
                     input_stream_dt.meta().tps,
                     input_stream_dt.meta().ref_interval,
                     input_stream_dt.meta().delta_t_max,
-                    reconstructed_frame_rate,
+                    Some(reconstructed_frame_rate),
                 )
                 .mode(INSTANTANEOUS)
                 .source(
@@ -491,7 +493,7 @@ mod tests {
             ]];
 
             let event_t_dt = absolute_event_to_dt_event(event_t, *last_t);
-            *last_t = event_t.delta_t;
+            *last_t = event_t.t;
 
             // We already know it's a framed source
             if *last_t % input_stream_dt.meta().ref_interval != 0 {
@@ -502,8 +504,8 @@ mod tests {
             assert_eq!(event_t_dt.coord.x as i32, event_dt.coord.x as i32);
             assert_eq!(event_t_dt.coord.y as i32, event_dt.coord.y as i32);
             assert_eq!(event_t_dt.coord.c, event_dt.coord.c);
-            let dt_mig = event_t_dt.delta_t;
-            let dt_gt = event_dt.delta_t;
+            let dt_mig = event_t_dt.t;
+            let dt_gt = event_dt.t;
             assert_eq!(dt_mig, dt_gt);
             assert_eq!(event_t_dt.d, event_dt.d);
         }

@@ -7,8 +7,6 @@
 /// Expose public API for encoding and decoding
 pub mod codec;
 
-#[cfg(feature = "compression")]
-mod codec_old;
 pub use bitstream_io;
 use bitstream_io::{BigEndian, BitReader};
 use std::cmp::Ordering;
@@ -48,8 +46,20 @@ pub enum SourceCamera {
     Asint,
 }
 
-#[cfg(feature = "compression")]
-use crate::codec::compressed::blocks::{DeltaTResidual, EventResidual};
+pub fn is_framed(source_camera: SourceCamera) -> bool {
+    match source_camera {
+        SourceCamera::FramedU8
+        | SourceCamera::FramedU16
+        | SourceCamera::FramedU32
+        | SourceCamera::FramedU64
+        | SourceCamera::FramedF32
+        | SourceCamera::FramedF64 => true,
+        _ => false,
+    }
+}
+
+// #[cfg(feature = "compression")]
+// use crate::codec::compressed::blocks::{DeltaTResidual, EventResidual};
 #[cfg(feature = "compression")]
 use crate::codec::compressed::stream::CompressedInput;
 use crate::codec::decoder::Decoder;
@@ -179,7 +189,7 @@ pub const D_EMPTY: D = 255;
 pub const D_ZERO_INTEGRATION: D = 254;
 
 /// Special symbol signifying no [`Event`] exists
-// pub const D_NO_EVENT: D = 253;
+pub const D_NO_EVENT: D = 253;
 
 #[derive(Clone, Copy, PartialEq, Default, Debug)]
 pub enum Mode {
@@ -192,6 +202,15 @@ pub enum Mode {
     /// Do not do the above ^
     Continuous,
 }
+
+#[derive(Clone, Copy, PartialEq, Default, Debug)]
+pub enum PixelMultiMode {
+    #[default]
+    Normal,
+
+    Collapse,
+}
+
 /// Precision for maximum intensity representable with allowed [`D`] values
 pub type UDshift = u128;
 
@@ -443,8 +462,7 @@ impl Coord {
     }
 
     /// Is this coordinate at the border of the image?
-    pub fn is_border(&self, width: usize, height: usize, max_scale: usize) -> bool {
-        let cs = max_scale * 4;
+    pub fn is_border(&self, width: usize, height: usize, cs: usize) -> bool {
         self.x_usize() < cs
             || self.x_usize() >= width - cs
             || self.y_usize() < cs
@@ -467,6 +485,15 @@ pub struct CoordSingle {
 pub struct Event {
     pub coord: Coord,
     pub d: D,
+    pub t: AbsoluteT,
+}
+
+#[allow(missing_docs)]
+#[repr(packed)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Default, Hash, Serialize, Deserialize)]
+pub struct EventRelative {
+    pub coord: Coord,
+    pub d: D,
     pub delta_t: DeltaT,
 }
 
@@ -476,7 +503,7 @@ pub struct Event {
 pub struct EventSingle {
     pub coord: CoordSingle,
     pub d: D,
-    pub delta_t: DeltaT,
+    pub t: DeltaT,
 }
 
 impl From<&Event> for EventSingle {
@@ -487,7 +514,7 @@ impl From<&Event> for EventSingle {
                 y: event.coord.y,
             },
             d: event.d,
-            delta_t: event.delta_t,
+            t: event.t,
         }
     }
 }
@@ -501,15 +528,15 @@ impl From<EventSingle> for Event {
                 c: None,
             },
             d: event.d,
-            delta_t: event.delta_t,
+            t: event.t,
         }
     }
 }
 
 impl Ord for Event {
     fn cmp(&self, other: &Self) -> Ordering {
-        let b = other.delta_t;
-        let a = self.delta_t;
+        let b = other.t;
+        let a = self.t;
         b.cmp(&a)
     }
 }
@@ -539,7 +566,7 @@ const EOF_EVENT: Event = Event {
         c: Some(0),
     },
     d: 0,
-    delta_t: 0,
+    t: 0,
 };
 
 /// Helper function for opening a file as a raw or compressed input ADΔER stream
@@ -552,7 +579,7 @@ pub fn open_file_decoder(
     ),
     CodecError,
 > {
-    let bufreader = BufReader::new(File::open(file_path)?);
+    let mut bufreader = BufReader::new(File::open(file_path)?);
     let compression = RawInput::new();
     let mut bitreader = BitReader::endian(bufreader, BigEndian);
 
@@ -584,6 +611,14 @@ pub fn open_file_decoder(
 pub struct EventCoordless {
     pub d: D,
 
+    pub t: AbsoluteT,
+}
+
+#[allow(missing_docs)]
+#[derive(Debug, Copy, Clone, Default, serde::Serialize, serde::Deserialize, PartialEq)]
+pub struct EventCoordlessRelative {
+    pub d: D,
+
     pub delta_t: DeltaT,
 }
 
@@ -597,7 +632,7 @@ impl EventCoordless {
     /// Get the t or dt value
     #[inline(always)]
     pub fn t(&self) -> AbsoluteT {
-        self.delta_t as AbsoluteT
+        self.t as AbsoluteT
     }
 }
 
@@ -605,7 +640,7 @@ impl From<Event> for EventCoordless {
     fn from(event: Event) -> Self {
         Self {
             d: event.d,
-            delta_t: event.delta_t,
+            t: event.t,
         }
     }
 }
@@ -620,10 +655,10 @@ impl Add<EventCoordless> for EventCoordless {
 
 impl num_traits::Zero for EventCoordless {
     fn zero() -> Self {
-        EventCoordless { d: 0, delta_t: 0 }
+        EventCoordless { d: 0, t: 0 }
     }
 
     fn is_zero(&self) -> bool {
-        self.d.is_zero() && self.delta_t.is_zero()
+        self.d.is_zero() && self.t.is_zero()
     }
 }

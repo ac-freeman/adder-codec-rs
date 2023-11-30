@@ -6,7 +6,6 @@ use bitstream_io::{BigEndian, BitReader};
 use enum_dispatch::enum_dispatch;
 use std::io;
 use std::io::{Read, Seek, Sink, Write};
-use std::time::Instant;
 
 /// Different options for what to with the events we're given
 #[enum_dispatch(WriteCompression<W>)]
@@ -18,6 +17,7 @@ pub enum WriteCompressionEnum<W: Write> {
     /// Write the ADΔER stream as raw events
     RawOutput(RawOutput<W>),
 
+    /// An empty output stream. Send all the data into the void.
     EmptyOutput(EmptyOutput<Sink>),
 }
 
@@ -65,6 +65,7 @@ mod header;
 
 /// Raw codec utilities
 pub mod raw;
+pub mod rate_controller;
 
 /// Current latest version of the codec.
 ///
@@ -137,8 +138,8 @@ pub trait WriteCompression<W: Write> {
     /// of the stream (Is it ready to write events? Is it accumulating/reorganizing events? etc.)
     fn ingest_event(&mut self, event: Event) -> Result<(), CodecError>;
 
-    #[cfg(feature = "compression")]
-    fn ingest_event_debug(&mut self, event: Event) -> Result<Option<Adu>, CodecError>;
+    // #[cfg(feature = "compression")]
+    // fn ingest_event_debug(&mut self, event: Event) -> Result<Option<Adu>, CodecError>;
 }
 
 /// A trait for reading ADΔER data from a stream.
@@ -172,11 +173,11 @@ pub trait ReadCompression<R: Read> {
     /// Read the next event from the stream. Returns `None` if the stream is exhausted.
     fn digest_event(&mut self, reader: &mut BitReader<R, BigEndian>) -> Result<Event, CodecError>;
 
-    #[cfg(feature = "compression")]
-    fn digest_event_debug(
-        &mut self,
-        reader: &mut BitReader<R, BigEndian>,
-    ) -> Result<(Option<Adu>, Event), CodecError>;
+    // #[cfg(feature = "compression")]
+    // fn digest_event_debug(
+    //     &mut self,
+    //     reader: &mut BitReader<R, BigEndian>,
+    // ) -> Result<(Option<Adu>, Event), CodecError>;
 
     /// Set the input stream position to the given byte offset.
     fn set_input_stream_position(
@@ -191,13 +192,14 @@ pub trait ReadCompression<R: Read> {
 }
 
 // unsafe impl<R: Read> Send for ReadCompression {}
-#[cfg(feature = "compression")]
-use crate::codec::compressed::adu::frame::Adu;
+// #[cfg(feature = "compression")]
+// use crate::codec::compressed::adu::frame::Adu;
 #[cfg(feature = "compression")]
 use crate::codec::compressed::stream::{CompressedInput, CompressedOutput};
 use crate::codec::empty::stream::EmptyOutput;
 use crate::codec::raw::stream::{RawInput, RawOutput};
 use thiserror::Error;
+use crate::codec::rate_controller::Crf;
 
 #[allow(missing_docs)]
 #[derive(Error, Debug)]
@@ -235,10 +237,9 @@ pub enum CodecError {
     #[error("Plane error")]
     PlaneError(#[from] crate::PlaneError),
 
-    #[cfg(feature = "compression")]
-    #[error("Blocking error")]
-    BlockError(#[from] crate::codec::compressed::blocks::block::BlockError),
-
+    // #[cfg(feature = "compression")]
+    // #[error("Blocking error")]
+    // BlockError(#[from] crate::codec::compressed::blocks::block::BlockError),
     #[cfg(feature = "compression")]
     #[error("Arithmetic coding error")]
     ArithmeticCodingError(#[from] arithmetic_coding::Error),
@@ -246,23 +247,48 @@ pub enum CodecError {
     /// Vision application error
     #[error("Vision application error")]
     VisionError(String),
+
+    #[error("No more events to read")]
+    NoMoreEvents,
 }
 
 /*
 Encoder options below
  */
 
-/// Options for what to do with the events we're given, before encoding them
-#[derive(Default, Copy, Clone, PartialEq, Debug)]
+/// Options related to encoder controls
+#[derive(Copy, Clone, PartialEq, Debug)]
 pub struct EncoderOptions {
+    /// Allow the encoder to randomly drop events before compressing, if the event rate is too high
     pub event_drop: EventDrop,
+
+    /// Reorder the events according to their firing times
     pub event_order: EventOrder,
+
+    pub crf: Crf
 }
 
+impl EncoderOptions {
+    pub fn default(plane: PlaneSize) -> Self {
+        Self {
+            event_drop: Default::default(),
+            event_order: Default::default(),
+            crf: Crf::new(None, plane)
+        }
+    }
+
+
+}
+
+
+/// Allow the encoder to randomly drop events before compressing, if the event rate is too high
 #[derive(Default, Copy, Clone, PartialEq, Debug)]
 pub enum EventDrop {
+    /// Don't drop any events
     #[default]
     None,
+
+    /// Randomly drop events according to this user-provided event rate
     Manual {
         target_event_rate: f64,
 
@@ -275,6 +301,7 @@ pub enum EventDrop {
     Auto,
 }
 
+/// Reorder the events according to their firing times
 #[derive(Default, Copy, Clone, PartialEq, Debug)]
 pub enum EventOrder {
     /// Pass on the events in the order they're received in

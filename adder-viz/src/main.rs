@@ -66,7 +66,7 @@ fn main() {
         .init_resource::<PlayerState>()
         .add_plugins(DefaultPlugins.set(WindowPlugin {
             primary_window: Some(Window {
-                title: "ADΔER Tuner".to_string(),
+                title: "ADΔER Viz".to_string(),
                 resolution: WindowResolution::default(),
                 present_mode: PresentMode::AutoVsync,
                 ..default()
@@ -110,7 +110,6 @@ fn update_ui_scale_factor(
 
         if let Ok(window) = windows.get_single() {
             let scale_factor = if toggle_scale_factor.unwrap_or(true) {
-                eprintln!("using default scale factor");
                 1.0
             } else {
                 eprintln!(
@@ -258,17 +257,18 @@ fn draw_ui(
                             },
                         );
 
-                        let str = format!(
-                            "{number:.prec$} MB/s",
-                            prec = 2,
-                            number = transcoder_state
-                                .ui_info_state
-                                .plot_points_raw_source_bitrate_y
-                                .points
-                                .iter()
-                                .last()
-                                .unwrap_or(&-999.0)
-                        );
+                        let last = transcoder_state
+                            .ui_info_state
+                            .plot_points_raw_source_bitrate_y
+                            .points
+                            .iter()
+                            .last();
+                        let str_num = match last {
+                            None => -999.0,
+                            Some(item) => item.unwrap_or(-999.0),
+                        };
+
+                        let str = format!("{number:.prec$} MB/s", prec = 2, number = str_num);
                         job.append(
                             &str,
                             0.0,
@@ -326,28 +326,29 @@ fn draw_ui(
 
                         let (bitrate, percentage_str, color) = match main_ui_state.view {
                             Tabs::Transcoder => {
-                                let bitrate = transcoder_state
+                                let last = transcoder_state
                                     .ui_info_state
                                     .plot_points_raw_adder_bitrate_y
                                     .points
                                     .iter()
-                                    .last()
-                                    .unwrap_or(&-999.0);
-                                let percentage = transcoder_state
+                                    .last();
+                                let adder_bitrate = match last {
+                                    None => -999.0,
+                                    Some(item) => item.unwrap_or(-999.0),
+                                };
+
+                                let last = transcoder_state
                                     .ui_info_state
-                                    .plot_points_raw_adder_bitrate_y
+                                    .plot_points_raw_source_bitrate_y
                                     .points
                                     .iter()
-                                    .last()
-                                    .unwrap_or(&-999.0)
-                                    / transcoder_state
-                                        .ui_info_state
-                                        .plot_points_raw_source_bitrate_y
-                                        .points
-                                        .iter()
-                                        .last()
-                                        .unwrap_or(&-999.0)
-                                    * 100.0;
+                                    .last();
+                                let source_bitrate = match last {
+                                    None => -999.0,
+                                    Some(item) => item.unwrap_or(-999.0),
+                                };
+
+                                let percentage = adder_bitrate / source_bitrate * 100.0;
 
                                 let percentage_str =
                                     format!("{number:.prec$}%", prec = 2, number = percentage);
@@ -356,17 +357,20 @@ fn draw_ui(
                                 } else {
                                     Color32::RED
                                 };
-                                (bitrate, percentage_str, color)
+                                (adder_bitrate, percentage_str, color)
                             }
                             Tabs::Player => {
-                                let bitrate = player_state
+                                let last = transcoder_state
                                     .ui_info_state
                                     .plot_points_raw_adder_bitrate_y
                                     .points
                                     .iter()
-                                    .last()
-                                    .unwrap_or(&-999.0);
-                                (bitrate, "".to_string(), Color32::WHITE)
+                                    .last();
+                                let adder_bitrate = match last {
+                                    None => -999.0,
+                                    Some(item) => item.unwrap_or(-999.0),
+                                };
+                                (adder_bitrate, "".to_string(), Color32::WHITE)
                             }
                         };
 
@@ -538,7 +542,6 @@ fn slider_pm<Num: emath::Numeric + Pm>(
                 *instant_value = *drag_value;
             }
             if slider.lost_focus() {
-                eprintln!("lost focus");
                 *instant_value = *drag_value;
             }
 

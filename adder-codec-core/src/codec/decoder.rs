@@ -2,8 +2,8 @@ use crate::codec::{CodecError, CodecMetadata, ReadCompression, ReadCompressionEn
 use crate::SourceType::*;
 use crate::{Event, PlaneSize, SourceCamera, SourceType};
 
-#[cfg(feature = "compression")]
-use crate::codec::compressed::adu::frame::Adu;
+// #[cfg(feature = "compression")]
+// use crate::codec::compressed::adu::frame::Adu;
 #[cfg(feature = "compression")]
 use crate::codec::compressed::stream::CompressedInput;
 #[cfg(feature = "compression")]
@@ -195,15 +195,15 @@ impl<R: Read + Seek> Decoder<R> {
         self.input.digest_event(reader)
     }
 
-    /// Read and decode the next event from the input stream
-    #[cfg(feature = "compression")]
-    #[inline]
-    pub fn digest_event_debug(
-        &mut self,
-        reader: &mut BitReader<R, BigEndian>,
-    ) -> Result<(Option<Adu>, Event), CodecError> {
-        self.input.digest_event_debug(reader)
-    }
+    // Read and decode the next event from the input stream
+    // #[cfg(feature = "compression")]
+    // #[inline]
+    // pub fn digest_event_debug(
+    //     &mut self,
+    //     reader: &mut BitReader<R, BigEndian>,
+    // ) -> Result<(Option<Adu>, Event), CodecError> {
+    //     self.input.digest_event_debug(reader)
+    // }
 
     /// Sets the input stream position to the given absolute byte position
     pub fn set_input_stream_position(
@@ -229,7 +229,10 @@ impl<R: Read + Seek> Decoder<R> {
         reader: &mut BitReader<R, BigEndian>,
     ) -> Result<u64, CodecError> {
         for i in self.input.meta().event_size as i64..10 {
-            reader.seek_bits(SeekFrom::End(i * 8))?;
+            // TODO: Make this work differently on raw vs. compressed stream
+            reader.seek_bits(SeekFrom::End(
+                i * self.input.meta().plane.volume() as i64 * 8,
+            ))?;
             if let Err(CodecError::Eof) = self.digest_event(reader) {
                 break;
             }
@@ -249,6 +252,7 @@ mod tests {
     use crate::codec::{EncoderOptions, EventOrder};
     use crate::Coord;
     use std::io::{BufReader, BufWriter, Cursor, Write};
+    use crate::codec::rate_controller::Crf;
 
     fn stock_event() -> Event {
         Event {
@@ -258,7 +262,7 @@ mod tests {
                 c: None,
             },
             d: 0,
-            delta_t: 0,
+            t: 0,
         }
     }
 
@@ -281,7 +285,11 @@ mod tests {
             bufwriter,
         );
         let mut encoder: Encoder<BufWriter<Vec<u8>>> =
-            Encoder::new_raw(compression, EncoderOptions::default());
+            Encoder::new_raw(compression, EncoderOptions::default(PlaneSize{
+                width: 100,
+                height: 100,
+                channels: 1
+            }));
 
         let event = stock_event();
         encoder.ingest_event(event).unwrap();
@@ -315,6 +323,11 @@ mod tests {
             EncoderOptions {
                 event_drop: Default::default(),
                 event_order: EventOrder::Interleaved,
+                crf: Crf::new(None, PlaneSize{
+                    width: 100,
+                    height: 100,
+                    channels: 1
+                }),
             },
         );
 
@@ -346,7 +359,12 @@ mod tests {
             },
             bufwriter,
         );
-        let encoder: Encoder<BufWriter<Vec<u8>>> = Encoder::new_compressed(compression);
+        let encoder: Encoder<BufWriter<Vec<u8>>> =
+            Encoder::new_compressed(compression, EncoderOptions::default(PlaneSize{
+                width: 100,
+                height: 100,
+                channels: 1
+            }));
 
         // let event = stock_event();
         //
