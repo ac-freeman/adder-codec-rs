@@ -44,7 +44,7 @@ jobs:
         run: cargo build -p adder-info
 
       - name: Test project
-        run: cargo test -p adder-codec-core -p adder-codec-rs -p adder-info -p adder-to-dvs -p adder-viz
+        run: cargo test -p adder-codec-core -p adder-codec-rs -p adder-info -p adder-viz
 
       - name: Test project features
         run: cargo test -p adder-codec-core --features "open-cv feature-logging" -p adder-codec-rs --features "open-cv feature-logging" -p adder-info -p adder-to-dvs -p adder-viz --features "open-cv feature-logging"
