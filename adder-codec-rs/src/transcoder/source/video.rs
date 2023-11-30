@@ -4,10 +4,10 @@ use opencv::core::{Mat, Size};
 use opencv::prelude::*;
 use std::cmp::min;
 use std::collections::HashSet;
+#[cfg(feature = "feature-logging")]
+use std::ffi::c_void;
 use std::io::{sink, Write};
 use std::mem::swap;
-#[cfg(feature = "feature-logging")]
-use std::os::raw::c_void;
 
 use adder_codec_core::codec::empty::stream::EmptyOutput;
 use adder_codec_core::codec::encoder::Encoder;

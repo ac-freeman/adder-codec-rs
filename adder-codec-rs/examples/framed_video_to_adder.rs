@@ -20,18 +20,20 @@ fn main() -> Result<(), Box<dyn Error>> {
         "/media/andrew/ExternalM2/LAS/GH010017.mp4".to_string(),
         false,
         0.5,
-    )?
-    .frame_start(1420)?
-    .write_out(
-        FramedU8,
-        TimeMode::DeltaT,
-        EncoderType::Raw,
-        EncoderOptions::default(),
-        writer,
-    )?
-    .contrast_thresholds(10, 10)
-    .show_display(true)
-    .auto_time_parameters(255, 255 * 30, None)?;
+    )?;
+    let plane = source.get_video_ref().state.plane;
+    source = source
+        .frame_start(1420)?
+        .write_out(
+            FramedU8,
+            TimeMode::DeltaT,
+            EncoderType::Raw,
+            EncoderOptions::default(plane),
+            writer,
+        )?
+        .contrast_thresholds(10, 10)
+        .show_display(true)
+        .auto_time_parameters(255, 255 * 30, None)?;
 
     let pool = rayon::ThreadPoolBuilder::new()
         .num_threads(current_num_threads())

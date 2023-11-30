@@ -37,7 +37,7 @@ fn main() {
             reader.meta().tps,
             reader.meta().ref_interval,
             reader.meta().delta_t_max,
-            reconstructed_frame_rate as f32,
+            Some(reconstructed_frame_rate as f32),
         )
         .mode(INSTANTANEOUS)
         .source(reader.get_source_type(), reader.meta().source_camera)

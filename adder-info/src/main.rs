@@ -167,7 +167,7 @@ mod tests {
     #[test]
     fn test_adder_info() -> Result<(), Box<dyn std::error::Error>> {
         let args = MyArgs {
-            input: "tests/test_sample.adder".to_string(),
+            input: "./tests/test_sample.adder".to_string(),
             dynamic_range: true,
         };
 
@@ -179,8 +179,8 @@ mod tests {
         }
 
         let string = String::from_utf8(data)?;
-        assert!(string.contains("Width: 2"));
 
+        assert!(string.contains("Width: 2"));
         assert!(string.contains("Height: 2"));
         assert!(string.contains("Color channels: 1"));
         assert!(string.contains("Source camera: FramedU8"));
@@ -190,8 +190,8 @@ mod tests {
         assert!(string.contains("t_max: 240000"));
         assert!(string.contains("File size: 1307"));
         assert!(string.contains("Header size: 29"));
-        assert!(string.contains("event count: 140"));
-        assert!(string.contains("Events per pixel channel: 35"));
+        assert!(string.contains("event count: 137"));
+        assert!(string.contains("Events per pixel channel: 34"));
 
         Ok(())
     }

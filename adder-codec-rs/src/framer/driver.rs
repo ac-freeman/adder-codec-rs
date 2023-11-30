@@ -405,7 +405,7 @@ impl<
     /// FramerBuilder::new(
     ///             PlaneSize::new(10,10,3).unwrap(), 64)
     ///             .codec_version(1, TimeMode::DeltaT)
-    ///             .time_parameters(50000, 1000, 1000, 50.0)
+    ///             .time_parameters(50000, 1000, 1000, Some(50.0))
     ///             .mode(INSTANTANEOUS)
     ///             .source(U8, FramedU8)
     ///             .finish();
