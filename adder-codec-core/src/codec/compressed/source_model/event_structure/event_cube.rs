@@ -9,7 +9,7 @@ use crate::codec::CodecError;
 use crate::{
     AbsoluteT, Coord, DeltaT, Event, EventCoordless, PixelAddress, D, D_EMPTY, D_NO_EVENT,
 };
-use arithmetic_coding::{Decoder, Encoder};
+use arithmetic_coding_adder_dep::{Decoder, Encoder};
 use bitstream_io::{BigEndian, BitReader, BitWrite, BitWriter};
 use std::cmp::{max, min};
 use std::collections::{HashMap, VecDeque};
@@ -727,7 +727,7 @@ mod compression_tests {
     use crate::codec::compressed::source_model::{ComponentCompression, HandleEvent};
     use crate::codec::CodecMetadata;
     use crate::{Coord, DeltaT, Event};
-    use arithmetic_coding::Encoder;
+    use arithmetic_coding_adder_dep::Encoder;
     use bitstream_io::{BigEndian, BitReader, BitWrite, BitWriter};
     use rand::prelude::StdRng;
     use rand::{Rng, SeedableRng};
@@ -773,7 +773,7 @@ mod compression_tests {
             255,
             2550,
         );
-        let mut decoder = arithmetic_coding::Decoder::new(source_model);
+        let mut decoder = arithmetic_coding_adder_dep::Decoder::new(source_model);
         let mut stream = BitReader::endian(Cursor::new(stream.into_writer()), BigEndian);
 
         let mut cube2 = cube.clone();
@@ -865,7 +865,7 @@ mod compression_tests {
             255,
             510,
         );
-        let mut decoder = arithmetic_coding::Decoder::new(source_model);
+        let mut decoder = arithmetic_coding_adder_dep::Decoder::new(source_model);
         let mut stream = BitReader::endian(Cursor::new(stream.into_writer()), BigEndian);
 
         let mut cube2 = cube.clone();
@@ -924,7 +924,7 @@ mod compression_tests {
             255,
             2550,
         );
-        let mut decoder = arithmetic_coding::Decoder::new(source_model);
+        let mut decoder = arithmetic_coding_adder_dep::Decoder::new(source_model);
         let mut stream = BitReader::endian(Cursor::new(stream.into_writer()), BigEndian);
 
         let mut cube2 = cube.clone();
@@ -1002,7 +1002,7 @@ mod compression_tests {
             255,
             255 * num_intervals as DeltaT,
         );
-        let mut decoder = arithmetic_coding::Decoder::new(source_model);
+        let mut decoder = arithmetic_coding_adder_dep::Decoder::new(source_model);
         let mut stream = BitReader::endian(Cursor::new(stream.into_writer()), BigEndian);
 
         let mut cube2 = cube.clone();
@@ -1099,7 +1099,7 @@ mod compression_tests {
             255,
             255 * num_intervals as DeltaT,
         );
-        let mut decoder = arithmetic_coding::Decoder::new(source_model);
+        let mut decoder = arithmetic_coding_adder_dep::Decoder::new(source_model);
         let mut stream = BitReader::endian(Cursor::new(stream.into_writer()), BigEndian);
 
         let mut cube2 = cube.clone();

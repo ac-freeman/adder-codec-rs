@@ -3,7 +3,7 @@ use crate::codec::compressed::fenwick::Weights;
 use crate::codec::compressed::TResidual;
 use crate::codec::CodecMetadata;
 use crate::{AbsoluteT, DeltaT, EventCoordless, Intensity, D, D_EMPTY, D_SHIFT};
-use arithmetic_coding::Encoder;
+use arithmetic_coding_adder_dep::Encoder;
 use bitstream_io::{BigEndian, BitWrite, BitWriter};
 
 pub struct Contexts {

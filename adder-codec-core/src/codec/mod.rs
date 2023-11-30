@@ -63,9 +63,9 @@ pub mod empty;
 pub mod encoder;
 mod header;
 
+pub mod rate_controller;
 /// Raw codec utilities
 pub mod raw;
-pub mod rate_controller;
 
 /// Current latest version of the codec.
 ///
@@ -197,9 +197,9 @@ pub trait ReadCompression<R: Read> {
 #[cfg(feature = "compression")]
 use crate::codec::compressed::stream::{CompressedInput, CompressedOutput};
 use crate::codec::empty::stream::EmptyOutput;
+use crate::codec::rate_controller::Crf;
 use crate::codec::raw::stream::{RawInput, RawOutput};
 use thiserror::Error;
-use crate::codec::rate_controller::Crf;
 
 #[allow(missing_docs)]
 #[derive(Error, Debug)]
@@ -242,7 +242,7 @@ pub enum CodecError {
     // BlockError(#[from] crate::codec::compressed::blocks::block::BlockError),
     #[cfg(feature = "compression")]
     #[error("Arithmetic coding error")]
-    ArithmeticCodingError(#[from] arithmetic_coding::Error),
+    ArithmeticCodingError(#[from] arithmetic_coding_adder_dep::Error),
 
     /// Vision application error
     #[error("Vision application error")]
@@ -265,7 +265,7 @@ pub struct EncoderOptions {
     /// Reorder the events according to their firing times
     pub event_order: EventOrder,
 
-    pub crf: Crf
+    pub crf: Crf,
 }
 
 impl EncoderOptions {
@@ -273,13 +273,10 @@ impl EncoderOptions {
         Self {
             event_drop: Default::default(),
             event_order: Default::default(),
-            crf: Crf::new(None, plane)
+            crf: Crf::new(None, plane),
         }
     }
-
-
 }
-
 
 /// Allow the encoder to randomly drop events before compressing, if the event rate is too high
 #[derive(Default, Copy, Clone, PartialEq, Debug)]
