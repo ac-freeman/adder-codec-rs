@@ -5,9 +5,9 @@ members = [
     "adder-info",
     "adder-to-dvs",
     "adder-viz",
-    "arithmetic-coding",
-    "arithmetic-coding/arithmetic-coding-core",
-    "arithmetic-coding/fenwick-model",
+    "arithmetic-coding-adder-dep",
+    "arithmetic-coding-adder-dep/arithmetic-coding-core",
+    "arithmetic-coding-adder-dep/fenwick-model",
 ]
 
 [profile.release]

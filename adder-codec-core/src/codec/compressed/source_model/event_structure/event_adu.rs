@@ -5,7 +5,7 @@ use crate::codec::compressed::source_model::event_structure::BLOCK_SIZE;
 use crate::codec::compressed::source_model::{ComponentCompression, HandleEvent};
 use crate::codec::{CodecError, CodecMetadata};
 use crate::{AbsoluteT, DeltaT, Event, PixelAddress, PlaneSize};
-use arithmetic_coding::{Decoder, Encoder};
+use arithmetic_coding_adder_dep::{Decoder, Encoder};
 use bitstream_io::{BigEndian, BitReader, BitWriter};
 use ndarray::Array2;
 use std::collections::VecDeque;
@@ -305,7 +305,7 @@ mod tests {
     use crate::codec::compressed::source_model::HandleEvent;
     use crate::codec::CodecMetadata;
     use crate::{AbsoluteT, Coord, DeltaT, Event, PlaneSize};
-    use arithmetic_coding::Encoder;
+    use arithmetic_coding_adder_dep::Encoder;
     use bitstream_io::{BigEndian, BitReader, BitWriter};
     use ndarray::Array2;
     use std::cmp::min;

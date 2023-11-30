@@ -1,5 +1,5 @@
 use crate::codec::{CodecError, CodecMetadata, EncoderOptions, ReadCompression, WriteCompression};
-use arithmetic_coding::{Decoder, Encoder};
+use arithmetic_coding_adder_dep::{Decoder, Encoder};
 use bitstream_io::{BigEndian, BitRead, BitReader, BitWrite, BitWriter};
 use std::cmp::min;
 use std::collections::VecDeque;
@@ -33,7 +33,7 @@ pub struct CompressedOutput<W: Write> {
     /// The arithmetic coder used to encode the ADU. We write the ADU to a buffer, then write the
     /// buffer to the stream.
     // pub(crate) arithmetic_coder:
-    //     Option<arithmetic_coding::Encoder<FenwickModel, BitWriter<Vec<u8>, BigEndian>>>,
+    //     Option<arithmetic_coding_adder_dep::Encoder<FenwickModel, BitWriter<Vec<u8>, BigEndian>>>,
     // pub(crate) contexts: Option<Contexts>,
     pub(crate) stream: Option<BitWriter<W, BigEndian>>,
     pub(crate) options: EncoderOptions,
