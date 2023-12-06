@@ -3,7 +3,7 @@
 
 ## Inspect an ADΔER file
 
-Want to quickly view the metadata for an ADΔER file? Just install this program for the current user with `cargo install adder-info`, then run with `adder-info -- -i /path/to/file.adder -d`. This program is analagous to `ffprobe` for framed video.
+Want to quickly view the metadata for an ADΔER file? Just install this program for the current user with `cargo install adder-info`, then run with `adder-info -- -i /path/to/file.adder -d`. This program is analogous to `ffprobe` for framed video.
 
 The `-d` flag enables the calculation of the ADΔER file's dynamic range. This can take a while, since each event must be decoded to find the event with the maximum intensity and the minimum intensity. Example output:
 

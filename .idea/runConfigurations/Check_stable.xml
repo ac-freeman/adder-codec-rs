@@ -1,6 +1,6 @@
 <component name="ProjectRunConfigurationManager">
   <configuration default="false" name="Check stable" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
-    <option name="command" value="check -vv -p adder-codec-core -p adder-codec-rs -p adder-info -p adder-to-dvs -p adder-viz" />
+    <option name="command" value="check -p adder-codec-core -p adder-codec-rs -p adder-info -p adder-to-dvs -p adder-viz" />
     <option name="workingDirectory" value="file://$PROJECT_DIR$" />
     <option name="emulateTerminal" value="false" />
     <option name="channel" value="DEFAULT" />

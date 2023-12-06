@@ -7,7 +7,6 @@
 /// Tools for reconstructing frames from events
 pub mod framer;
 
-#[cfg(feature = "opencv")]
 /// Tools for transcoding video sources to ADΔER
 pub mod transcoder; // Have to enable the 'transcoder' feature. Requires OpenCV to be installed.
 
@@ -15,5 +14,9 @@ pub mod transcoder; // Have to enable the 'transcoder' feature. Requires OpenCV 
 pub mod utils;
 
 pub extern crate adder_codec_core;
+
+#[cfg(feature = "opencv")]
 pub extern crate davis_edi_rs;
+
+#[cfg(feature = "open-cv")]
 pub use davis_edi_rs::aedat;

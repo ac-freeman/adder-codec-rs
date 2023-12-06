@@ -5,9 +5,9 @@ members = [
     "adder-info",
     "adder-to-dvs",
     "adder-viz",
-    "arithmetic-coding",
-    "arithmetic-coding/arithmetic-coding-core",
-    "arithmetic-coding/fenwick-model",
+    "arithmetic-coding-adder-dep",
+    "arithmetic-coding-adder-dep/arithmetic-coding-core",
+    "arithmetic-coding-adder-dep/fenwick-model",
     "prophesee_data"
 ]
 
@@ -17,7 +17,7 @@ opt-level = 3
 panic = "unwind"
 
 [profile.dev.package."adder-codec-rs"]
-opt-level = 3
+opt-level = 2
 overflow-checks = false
 #panic = "abort"
 
@@ -28,16 +28,19 @@ overflow-checks = false
 
 
 [profile.dev.package."*"]
-opt-level = 3
+opt-level = 1
 
 [profile.dev]
-opt-level = 2
+opt-level = 1
 
 
 [profile.test]
-opt-level = 3
+opt-level = 0
 
 [profile.test.package."*"]
-opt-level = 3
+opt-level = 0
+
+[build]
+rustflags = ["-Z", "threads=8"]
 
 

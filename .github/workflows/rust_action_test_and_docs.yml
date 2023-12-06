@@ -20,13 +20,13 @@ jobs:
           sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 3B4FE6ACC0B21F32
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: stable
+          toolchain: nightly
           override: true
 
       - name: Install OpenCV
-        run: sudo apt-get install -y --fix-missing libopencv-dev libopencv-calib3d-dev libopencv-contrib-dev libopencv-features2d-dev libopencv-highgui-dev libopencv-imgcodecs-dev libopencv-objdetect-dev libopencv-shape-dev libopencv-stitching-dev libopencv-superres-dev libopencv-video-dev libopencv-videoio-dev libopencv-videostab-dev libopencv4.2-java libopencv-calib3d4.2 libopencv-contrib4.2 libopencv-features2d4.2 libopencv-highgui4.2 libopencv-imgcodecs4.2 libopencv-videoio4.2 libgdal26 libodbc1
+        run: sudo apt-get install -y --fix-missing libopencv-dev libopencv-calib3d-dev libopencv-contrib-dev libopencv-features2d-dev libopencv-highgui-dev libopencv-imgcodecs-dev libopencv-objdetect-dev libopencv-shape-dev libopencv-stitching-dev libopencv-superres-dev libopencv-video-dev libopencv-videoio-dev libopencv-videostab-dev libopencv4.2-java libopencv-calib3d4.2 libopencv-contrib4.2 libopencv-features2d4.2 libopencv-highgui4.2 libopencv-imgcodecs4.2 libopencv-videoio4.2 libgdal26 libodbc1 libssl-dev alsa-utils libasound2-dev portaudio19-dev build-essential libpulse-dev libdbus-1-dev libudev-dev libatk1.0-dev libgtk-3-dev libavfilter-dev libavdevice-dev
 
       - name: Clang
         run: sudo apt-get install -y clang && sudo ln -s libclang.so.1 /usr/lib/llvm-10/lib/libclang.so
@@ -38,13 +38,16 @@ jobs:
         run: sudo apt-get install -y portaudio19-dev build-essential libpulse-dev libdbus-1-dev pkg-config libx11-dev libatk1.0-dev libgtk-3-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libwayland-dev libxkbcommon-dev
 
       - name: Check project
-        run: cargo check -p adder-codec-core -p adder-codec-rs -p adder-info -p adder-to-dvs -p adder-viz
+        run: cargo check -p adder-codec-core -p adder-codec-rs -p adder-info -p adder-to-dvs -p adder-viz --features "open-cv feature-logging"
 
       - name: Build binaries for testing
         run: cargo build -p adder-info
 
       - name: Test project
-        run: cargo test -vv -p adder-codec-core -p adder-codec-rs -p adder-info -p adder-to-dvs -p adder-viz
+        run: cargo test -p adder-codec-core -p adder-codec-rs -p adder-info -p adder-viz
+
+      - name: Test project features
+        run: cargo test -p adder-codec-core --features "open-cv feature-logging" -p adder-codec-rs --features "open-cv feature-logging" -p adder-info -p adder-to-dvs -p adder-viz --features "open-cv feature-logging"
       
       # - name: Install cargo-llvm-cov
       #   uses: taiki-e/install-action@cargo-llvm-cov
@@ -68,9 +71,9 @@ jobs:
       - uses: actions/checkout@v2
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: stable
+          toolchain: nightly
           override: true
 
       - name: Install LLVM/clang
@@ -100,5 +103,5 @@ jobs:
           export OPENCV_LINK_PATHS="/C/tools/opencv/build/x64/vc15/lib"
           export OPENCV_LINK_LIBS="opencv_world${OPENCV_VERSION//./}"
           export OPENCV_INCLUDE_PATHS="/C/tools/opencv/build/include"
-          cargo test -vv -p adder-codec-core -p adder-codec-rs -p adder-info -p adder-to-dvs -p adder-viz
+          cargo test -vv -p adder-codec-core -p adder-codec-rs -p adder-info -p adder-to-dvs -p adder-viz --features "open-cv feature-logging"
         shell: bash

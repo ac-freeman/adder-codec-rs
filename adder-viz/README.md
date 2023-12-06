@@ -8,11 +8,21 @@ A GUI project to make it easier to tune the parameters of ADΔER transcoding.
 
 # Dependencies
 
-You may need to install the Bevy dependencies described [here](https://bevyengine.org/learn/book/getting-started/setup/) and install OpenCV as described [here](https://github.com/twistedfall/opencv-rust).
+You may need to install the Bevy dependencies described [here](https://bevyengine.org/learn/book/getting-started/setup/).
+
+If you want to transcode from DVS/DAVIS, we depend on [davis-EDI-rs](https://crates.io/crates/davis-edi-rs). For that (for now), you have to install OpenCV as described [here](https://github.com/twistedfall/opencv-rust).
 
 # Installation
 
 `cargo install adder-viz`
+
+Install with DVS/DAVIS support:
+
+`cargo install adder-viz -F "open-cv"`
+
+Install with source-modeled compression support (requires **Rust Nightly**!):
+
+`cargo install adder-viz -F "compression"`
 
 # Usage
 

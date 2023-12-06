@@ -1,28 +1,34 @@
 use std::error::Error;
 
 use adder_codec_core::DeltaT;
+
+#[cfg(feature = "open-cv")]
 use adder_codec_rs::transcoder::source::davis::Davis;
 use adder_codec_rs::transcoder::source::framed::Framed;
-use bevy::prelude::{dbg, Image};
+use bevy::prelude::Image;
 use std::fmt;
 use std::fs::File;
 use std::io::BufWriter;
 use std::path::{Path, PathBuf};
 
+#[cfg(feature = "open-cv")]
 use adder_codec_rs::transcoder::source::davis::TranscoderMode;
 
+#[cfg(feature = "open-cv")]
 use adder_codec_rs::davis_edi_rs::util::reconstructor::Reconstructor;
 
 use crate::transcoder::ui::{ParamsUiState, TranscoderState};
+use adder_codec_core::codec::rate_controller::DEFAULT_CRF_QUALITY;
 use adder_codec_core::SourceCamera::{DavisU8, FramedU8};
 use adder_codec_rs::transcoder::source::video::VideoBuilder;
-use adder_codec_rs::transcoder::source::DEFAULT_CRF_QUALITY;
 use bevy_egui::egui::{Color32, RichText};
+#[cfg(feature = "open-cv")]
 use opencv::Result;
 
 #[derive(Default)]
 pub struct AdderTranscoder {
     pub(crate) framed_source: Option<Framed<BufWriter<File>>>,
+    #[cfg(feature = "open-cv")]
     pub(crate) davis_source: Option<Davis<BufWriter<File>>>,
     pub(crate) live_image: Image,
 }
@@ -64,6 +70,13 @@ impl AdderTranscoder {
                             ui_state.color,
                             ui_state.scale,
                         )?
+                        .crf(
+                            ui_state
+                                .encoder_options
+                                .crf
+                                .get_quality()
+                                .unwrap_or(DEFAULT_CRF_QUALITY),
+                        )
                         .frame_start(current_frame)?
                         .chunk_rows(64)
                         .auto_time_parameters(
@@ -71,7 +84,6 @@ impl AdderTranscoder {
                             ui_state.delta_t_max_mult * ui_state.delta_t_ref as u32,
                             Some(ui_state.time_mode),
                         )?
-                        .crf(DEFAULT_CRF_QUALITY)
                         .show_display(false);
 
                         // TODO: Change the builder to take in a pathbuf directly, not a string,
@@ -81,6 +93,7 @@ impl AdderTranscoder {
                             Some(output_path) => {
                                 let out_path = output_path.to_str().unwrap();
                                 let writer = BufWriter::new(File::create(out_path)?);
+
                                 framed = *framed.write_out(
                                     FramedU8,
                                     ui_state.time_mode,
@@ -88,20 +101,13 @@ impl AdderTranscoder {
                                     ui_state.encoder_options,
                                     writer,
                                 )?;
-                                //     .output_events_filename(match output_path.to_str() {
-                                //     None => {
-                                //         return Err(Box::new(AdderTranscoderError(
-                                //             "Couldn't get output path string".into(),
-                                //         )))
-                                //     }
-                                //     Some(path) => path.parse()?,
-                                // });
                             }
                         };
 
                         ui_state.delta_t_ref_max = 255.0;
                         Ok(AdderTranscoder {
                             framed_source: Some(framed),
+                            #[cfg(feature = "open-cv")]
                             davis_source: None,
                             live_image: Default::default(),
                         })
@@ -111,6 +117,7 @@ impl AdderTranscoder {
                         // }
                     }
 
+                    #[cfg(feature = "open-cv")]
                     Some(ext) if ext == "aedat4" || ext == "sock" => {
                         let events_only = match &ui_state.davis_mode_radio_state {
                             TranscoderMode::Framed => false,
@@ -181,11 +188,19 @@ impl AdderTranscoder {
                             Davis::new(reconstructor, rt, ui_state.davis_mode_radio_state)?
                                 .optimize_adder_controller(false) // TODO
                                 .mode(ui_state.davis_mode_radio_state)
-                                .crf(DEFAULT_CRF_QUALITY)
+                                .crf(
+                                    ui_state
+                                        .encoder_options
+                                        .crf
+                                        .get_quality()
+                                        .unwrap_or(DEFAULT_CRF_QUALITY),
+                                )
                                 .time_parameters(
                                     1000000_u32,
                                     (1_000_000.0 / ui_state.davis_output_fps) as DeltaT,
-                                    (1_000_000.0 * ui_state.delta_t_max_mult as f32) as u32,
+                                    ((1_000_000.0 / ui_state.davis_output_fps)
+                                        * ui_state.delta_t_max_mult as f64)
+                                        as u32,
                                     Some(ui_state.time_mode),
                                 )?;
 
@@ -231,12 +246,14 @@ pub(crate) fn replace_adder_transcoder(
     output_path_opt: Option<PathBuf>,
     current_frame: u32,
 ) {
+    dbg!("Looping video");
+
     let ui_info_state = &mut transcoder_state.ui_info_state;
     ui_info_state.events_per_sec = 0.0;
     ui_info_state.events_ppc_total = 0.0;
     ui_info_state.events_total = 0;
     ui_info_state.events_ppc_per_sec = 0.0;
-    ui_info_state.davis_latency = 0;
+    ui_info_state.davis_latency = None;
     if let Some(input_path) = input_path_buf_0 {
         match AdderTranscoder::new(
             &input_path,
