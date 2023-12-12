@@ -6,7 +6,7 @@
 [![Downloads](https://img.shields.io/crates/dr/adder-codec-rs)](https://crates.io/crates/adder-codec-rs)
 
 
-Encoder/transcoder/decoder for ADΔER (Address, Decimation, Δt Event Representation) video streams. Includes a transcoder for casting framed video into an ADΔER representation in a manner which preserves the temporal synchronicity of the source, but enables many-frame intensity averaging on a per-pixel basis and extremely high dynamic range.
+A unified framework for event-based video. Encoder/transcoder/decoder for ADΔER (Address, Decimation, Δt Event Representation) video streams. Includes a transcoder for casting framed video into an ADΔER representation in a manner which preserves the temporal synchronicity of the source, but enables many-frame intensity averaging on a per-pixel basis and extremely high dynamic range.
 
 To enable the use of _source-modeled lossy compression_ (the only such scheme for event-based video, as far as I'm aware), install/import the relevant crates below with the `compression` feature enabled.
 
