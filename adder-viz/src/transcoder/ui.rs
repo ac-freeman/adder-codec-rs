@@ -15,10 +15,10 @@ use std::collections::VecDeque;
 use std::error::Error;
 
 use crate::utils::PlotY;
-use adder_codec_core::codec::rate_controller::{Crf, CRF, DEFAULT_CRF_QUALITY};
-use adder_codec_core::codec::{EncoderOptions, EncoderType, EventDrop, EventOrder};
-use adder_codec_core::PlaneSize;
-use adder_codec_core::TimeMode;
+use adder_codec_rs::adder_codec_core::codec::rate_controller::{Crf, CRF, DEFAULT_CRF_QUALITY};
+use adder_codec_rs::adder_codec_core::codec::{EncoderOptions, EncoderType, EventDrop, EventOrder};
+use adder_codec_rs::adder_codec_core::PlaneSize;
+use adder_codec_rs::adder_codec_core::TimeMode;
 #[cfg(feature = "open-cv")]
 use adder_codec_rs::transcoder::source::davis::TranscoderMode::RawDvs;
 use adder_codec_rs::utils::cv::{calculate_quality_metrics, QualityMetrics};

@@ -17,7 +17,7 @@ use crate::{add_checkbox_row, add_radio_row, add_slider_row, Images};
 use bevy_egui::egui;
 
 use crate::utils::PlotY;
-use adder_codec_core::PlaneSize;
+use adder_codec_rs::adder_codec_core::PlaneSize;
 use rayon::current_num_threads;
 
 #[derive(PartialEq)]

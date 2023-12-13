@@ -6,7 +6,7 @@ members = [
     "adder-to-dvs",
     "adder-viz",
     "arithmetic-coding-adder-dep",
-    "arithmetic-coding-adder-dep/arithmetic-coding-core",
+    "arithmetic-coding-adder-dep/arithmetic-coding-core-adder-dep",
     "arithmetic-coding-adder-dep/fenwick-model",
 ]
 

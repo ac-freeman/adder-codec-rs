@@ -1,6 +1,6 @@
 use std::error::Error;
 
-use adder_codec_core::DeltaT;
+use adder_codec_rs::adder_codec_core::DeltaT;
 
 #[cfg(feature = "open-cv")]
 use adder_codec_rs::transcoder::source::davis::Davis;
@@ -18,8 +18,8 @@ use adder_codec_rs::transcoder::source::davis::TranscoderMode;
 use adder_codec_rs::davis_edi_rs::util::reconstructor::Reconstructor;
 
 use crate::transcoder::ui::{ParamsUiState, TranscoderState};
-use adder_codec_core::codec::rate_controller::DEFAULT_CRF_QUALITY;
-use adder_codec_core::SourceCamera::{DavisU8, FramedU8};
+use adder_codec_rs::adder_codec_core::codec::rate_controller::DEFAULT_CRF_QUALITY;
+use adder_codec_rs::adder_codec_core::SourceCamera::{DavisU8, FramedU8};
 use adder_codec_rs::transcoder::source::video::VideoBuilder;
 use bevy_egui::egui::{Color32, RichText};
 #[cfg(feature = "open-cv")]
