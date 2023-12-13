@@ -98,11 +98,7 @@ fn adder_info(args: MyArgs, out: impl Write) -> Result<(), Box<dyn error::Error>
                     event.coord.c_usize(),
                 ]];
                 let new_t = event.t;
-                if event.coord.x == 343 && event.coord.y == 7 {
-                    println!("{} {}", new_t, last_t);
-                } else {
-                    event = absolute_event_to_dt_event(event, *last_t);
-                }
+                event = absolute_event_to_dt_event(event, *last_t);
                 *last_t = new_t;
             }
 
