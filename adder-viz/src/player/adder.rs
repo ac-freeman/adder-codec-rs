@@ -538,13 +538,26 @@ impl AdderPlayer {
                     let color: u8 = 255;
                     let radius = 2;
                     for i in -radius..=radius {
-                        let idx = ((feature.y as i32 + i) * meta.plane.w() as i32
-                            + feature.x as i32) as usize;
+                        let idx =
+                            ((feature.y as i32 + i) * meta.plane.w() as i32 * meta.plane.c() as i32
+                                + (feature.x as i32) * meta.plane.c() as i32)
+                                as usize;
                         db[idx] = color;
 
-                        let idx = (feature.y as i32 * meta.plane.w() as i32
-                            + (feature.x as i32 + i)) as usize;
+                        if meta.plane.c() > 1 {
+                            db[idx + 1] = color;
+                            db[idx + 2] = color;
+                        }
+
+                        let idx = (feature.y as i32 * meta.plane.w() as i32 * meta.plane.c() as i32
+                            + (feature.x as i32 + i) * meta.plane.c() as i32)
+                            as usize;
                         db[idx] = color;
+
+                        if meta.plane.c() > 1 {
+                            db[idx + 1] = color;
+                            db[idx + 2] = color;
+                        }
                     }
                 }
             }

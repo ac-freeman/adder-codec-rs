@@ -54,7 +54,7 @@ pub fn is_feature(
     plane: PlaneSize,
     img: &Array3<u8>,
 ) -> Result<bool, Box<dyn Error>> {
-    if coord.is_border(plane.w_usize(), plane.h_usize(), 3) {
+    if coord.is_border(plane.w_usize(), plane.h_usize(), 3) || coord.c_usize() != 0 {
         return Ok(false);
     }
     unsafe {
