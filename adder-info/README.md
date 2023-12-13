@@ -5,6 +5,8 @@
 
 Want to quickly view the metadata for an ADΔER file? Just install this program for the current user with `cargo install adder-info`, then run with `adder-info -- -i /path/to/file.adder -d`. This program is analogous to `ffprobe` for framed video.
 
+Currently, this only produces accurate data for raw (non-compressed) files. Compressed files will produce accurate header data, but the event counts and dynamic range will be incorrect.
+
 The `-d` flag enables the calculation of the ADΔER file's dynamic range. This can take a while, since each event must be decoded to find the event with the maximum intensity and the minimum intensity. Example output:
 
 ```

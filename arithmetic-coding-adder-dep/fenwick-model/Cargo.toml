@@ -11,6 +11,6 @@ repository = "https://github.com/danieleades/arithmetic-coding"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-arithmetic-coding-core = { path = "../arithmetic-coding-core" }
+arithmetic-coding-core-adder-dep = { path = "../arithmetic-coding-core-adder-dep" }
 fenwick = "2.0.0"
 thiserror = "1.0.30"

@@ -1,7 +1,7 @@
 use crate::player::ui::ReconstructionMethod;
-use adder_codec_core::bitstream_io::{BigEndian, BitReader};
-use adder_codec_core::codec::decoder::Decoder;
-use adder_codec_core::*;
+use adder_codec_rs::adder_codec_core::bitstream_io::{BigEndian, BitReader};
+use adder_codec_rs::adder_codec_core::codec::decoder::Decoder;
+use adder_codec_rs::adder_codec_core::*;
 use adder_codec_rs::framer::driver::FramerMode::INSTANTANEOUS;
 use adder_codec_rs::framer::driver::{FrameSequence, Framer, FramerBuilder};
 use adder_codec_rs::framer::scale_intensity::event_to_intensity;
