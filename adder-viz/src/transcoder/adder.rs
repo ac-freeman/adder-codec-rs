@@ -24,13 +24,29 @@ use adder_codec_rs::transcoder::source::video::VideoBuilder;
 use bevy_egui::egui::{Color32, RichText};
 #[cfg(feature = "open-cv")]
 use opencv::Result;
+use rayon::ThreadPool;
 
-#[derive(Default)]
 pub struct AdderTranscoder {
+    pub(crate) pool: ThreadPool,
     pub(crate) framed_source: Option<Framed<BufWriter<File>>>,
     #[cfg(feature = "open-cv")]
     pub(crate) davis_source: Option<Davis<BufWriter<File>>>,
     pub(crate) live_image: Image,
+}
+
+impl Default for AdderTranscoder {
+    fn default() -> Self {
+        AdderTranscoder {
+            pool: rayon::ThreadPoolBuilder::new()
+                .num_threads(1)
+                .build()
+                .unwrap(),
+            framed_source: None,
+            #[cfg(feature = "open-cv")]
+            davis_source: None,
+            live_image: Default::default(),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -52,6 +68,9 @@ impl AdderTranscoder {
         ui_state: &mut ParamsUiState,
         current_frame: u32,
     ) -> Result<Self, Box<dyn Error>> {
+        let pool = rayon::ThreadPoolBuilder::new()
+            .num_threads(ui_state.thread_count)
+            .build()?;
         match input_path_buf.extension() {
             None => Err(Box::new(AdderTranscoderError("Invalid file type".into()))),
             Some(ext) => {
@@ -106,6 +125,7 @@ impl AdderTranscoder {
 
                         ui_state.delta_t_ref_max = 255.0;
                         Ok(AdderTranscoder {
+                            pool,
                             framed_source: Some(framed),
                             #[cfg(feature = "open-cv")]
                             davis_source: None,
@@ -226,6 +246,7 @@ impl AdderTranscoder {
                         }
 
                         Ok(AdderTranscoder {
+                            pool,
                             framed_source: None,
                             davis_source: Some(davis_source),
                             live_image: Default::default(),
