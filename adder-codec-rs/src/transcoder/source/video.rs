@@ -685,7 +685,6 @@ impl<W: Write + 'static> Video<W> {
         // exactly the same as it is for the framer
         let big_buffer: Vec<Vec<Event>> = self
             .event_pixel_trees
-            // .iter_mut()
             .axis_chunks_iter_mut(Axis(0), 1)
             .into_par_iter()
             .zip(matrix.axis_chunks_iter(Axis(0), 1).into_par_iter())
@@ -699,17 +698,12 @@ impl<W: Write + 'static> Video<W> {
                 let mut buffer: Vec<Event> = Vec::with_capacity(1);
                 let bump = Bump::new();
                 let base_val = bump.alloc(0);
-                // let frame_val = bump.alloc(0);
-                // let frame_val_intensity32 = bump.alloc(0.0);
 
                 for ((px, input), running) in px_chunk
                     .iter_mut()
                     .zip(matrix_chunk.iter())
                     .zip(running_chunk.iter_mut())
                 {
-                    // *frame_val_intensity32 = f32::from(*input) * self.state.ref_time_divisor;
-                    // *frame_val = *frame_val_intensity32 as u8;
-
                     integrate_for_px(
                         px,
                         base_val,
@@ -744,61 +738,6 @@ impl<W: Write + 'static> Video<W> {
             })
             .collect();
 
-        // let db = match self.display_frame.as_slice_mut() {
-        //     Some(v) => v,
-        //     None => {
-        //         return Err(SourceError::VisionError(
-        //             "Could not convert frame to slice".to_string(),
-        //         ));
-        //     }
-        // };
-
-        // self.event_pixel_trees
-        //     .axis_chunks_iter(Axis(0), 1)
-        //     .into_par_iter()
-        //     .zip(
-        //         self.state
-        //             .running_intensities
-        //             .axis_chunks_iter(Axis(0), 1)
-        //             .into_par_iter(),
-        //     )
-        //     .enumerate()
-        //     .for_each(|(idx, (pixel_row, running_row))| {
-        //         // let y = idx / self.state.plane.area_wc();
-        //         // let x = (idx % self.state.plane.area_wc()) / self.state.plane.c_usize();
-        //         // let c = idx % self.state.plane.c_usize();
-        //
-        //         // let _sae_time = self.event_pixel_trees[[y, x, c]].last_fired_t;
-        //
-        //         for (pixel_chunk, running_chunk) in pixel_row.iter().
-        //         // Set the instantaneous frame value to the best queue'd event for the pixel
-        //         *val = match self.event_pixel_trees[[y, x, c]].arena[0].best_event {
-        //             Some(event) => u8::get_frame_value(
-        //                 &event.into(),
-        //                 SourceType::U8,
-        //                 tpf,
-        //                 practical_d_max,
-        //                 self.state.delta_t_max,
-        //                 self.instantaneous_view_mode,
-        //                 if self.instantaneous_view_mode == SAE {
-        //                     Some(SaeTime {
-        //                         running_t: self.event_pixel_trees[[y, x, c]].running_t as DeltaT,
-        //                         last_fired_t: self.event_pixel_trees[[y, x, c]].last_fired_t
-        //                             as DeltaT,
-        //                     })
-        //                 } else {
-        //                     None
-        //                 },
-        //             ),
-        //             None => *val,
-        //         };
-        //
-        //         // Only track the running state of the first channel
-        //         if self.state.feature_detection && c == 0 {
-        //             *running = *val;
-        //         }
-        //     });
-
         self.display_frame = self.state.running_intensities.clone();
 
         for events in &big_buffer {
@@ -819,12 +758,6 @@ impl<W: Write + 'static> Video<W> {
                 for events_vec in &big_buffer {
                     events_per_sec += events_vec.len() as f64;
                 }
-
-                // dbg!(events_per_sec / self.state.plane.volume() as f64);
-
-                // if events_per_sec > self.state.plane.volume() as f64 * 5.0 {
-                //     dbg!(events_per_sec);
-                // }
 
                 events_per_sec *= (self.state.tps as f64 / self.state.ref_time as f64);
 

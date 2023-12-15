@@ -1,5 +1,7 @@
 use adder_codec_core::Mode::{Continuous, FramePerfect};
-use adder_codec_core::{Coord, DeltaT, Event, Mode, PixelMultiMode, TimeMode, D};
+use adder_codec_core::{
+    Coord, DeltaT, Event, Mode, PixelMultiMode, TimeMode, D, D_SHIFT_F32, D_SHIFT_F64,
+};
 use adder_codec_core::{UDshift, D_EMPTY, D_MAX, D_SHIFT, D_ZERO_INTEGRATION};
 use smallvec::{smallvec, SmallVec};
 use std::cmp::min;
@@ -12,14 +14,14 @@ pub type Intensity32 = f32;
 
 #[repr(packed)]
 #[derive(Copy, Clone, Debug)]
-pub(crate) struct Event64 {
+pub(crate) struct Event32 {
     pub coord: Coord,
     pub d: D,
-    pub delta_t: f64,
+    pub delta_t: f32,
 }
 
-impl From<Event64> for Event {
-    fn from(event_64: Event64) -> Self {
+impl From<Event32> for Event {
+    fn from(event_64: Event32) -> Self {
         Event {
             coord: event_64.coord,
             d: event_64.d,
@@ -33,7 +35,7 @@ impl From<Event64> for Event {
 pub(crate) struct PixelState {
     d: D,
     integration: Intensity32,
-    pub(crate) delta_t: f64,
+    pub(crate) delta_t: f32,
 }
 
 #[repr(packed)]
@@ -43,7 +45,7 @@ pub struct PixelNode {
     alt: Option<()>,
 
     pub(crate) state: PixelState,
-    pub(crate) best_event: Option<Event64>,
+    pub(crate) best_event: Option<Event32>,
 }
 
 // Each PixelNode is ~20 bytes. Each PixelArena is at least 20 + (6*20) 140 bytes, but takes at
@@ -51,8 +53,8 @@ pub struct PixelNode {
 pub struct PixelArena {
     pub coord: Coord,
     time_mode: TimeMode,
-    pub last_fired_t: f64,
-    pub(crate) running_t: f64,
+    pub last_fired_t: f32,
+    pub(crate) running_t: f32,
     length: usize,
     pub base_val: u8,
     pub need_to_pop_top: bool,
@@ -91,9 +93,9 @@ impl PixelArena {
     }
 
     /// If the integration is 0, we need to forcefully fire an event where d=254
-    fn get_zero_event(&mut self, idx: usize, next_intensity: Option<Intensity32>) -> Event64 {
+    fn get_zero_event(&mut self, idx: usize, next_intensity: Option<Intensity32>) -> Event32 {
         let node = &mut self.arena[idx];
-        let ret_event = Event64 {
+        let ret_event = Event32 {
             coord: self.coord,
             d: D_ZERO_INTEGRATION, // 254_u8
             delta_t: node.state.delta_t,
@@ -110,7 +112,7 @@ impl PixelArena {
 
     fn delta_t_to_absolute_t(
         &mut self,
-        event: &mut Event64,
+        event: &mut Event32,
         mode: Mode,
         ref_time: DeltaT,
     ) -> Event {
@@ -120,13 +122,13 @@ impl PixelArena {
             self.last_fired_t = event.delta_t;
             if mode == FramePerfect {
                 self.last_fired_t = if self.last_fired_t as DeltaT % ref_time == 0 {
-                    (self.last_fired_t as DeltaT).into()
+                    (self.last_fired_t as DeltaT) as f32
                 } else {
-                    (((self.last_fired_t as DeltaT / ref_time) + 1) * ref_time).into()
+                    (((self.last_fired_t as DeltaT / ref_time) + 1) * ref_time) as f32
                 };
             }
         }
-        debug_assert!(event.delta_t < u32::MAX as f64);
+        debug_assert!(event.delta_t < u32::MAX as f32);
         Event {
             coord: self.coord,
             d: event.d,
@@ -151,7 +153,7 @@ impl PixelArena {
         next_intensity: Intensity32,
         mode: Mode,
         ref_time: DeltaT,
-    ) -> Event64 {
+    ) -> Event32 {
         self.need_to_pop_top = false;
         let root = &mut self.arena[0];
         match root.best_event {
@@ -164,7 +166,7 @@ impl PixelArena {
                     // We can reach here under frame-perfect integration when approaching dtm. The new
                     // node might not have the right D set.
                     // TODO: cover with a unit test
-                    root.best_event = Some(Event64 {
+                    root.best_event = Some(Event32 {
                         coord: self.coord,
                         d:
                         // SAFETY:
@@ -290,12 +292,12 @@ impl PixelArena {
                                                      // let head = &mut self.arena[0];
         let next_d = get_d_from_intensity(next_intensity);
         let ret = if next_d < self.arena[0].state.d && self.arena[0].state.delta_t > 0.0 {
-            let mut ret64 = Event64 {
+            let mut ret32 = Event32 {
                 coord: self.coord,
                 d: D_EMPTY,
                 delta_t: self.arena[0].state.delta_t,
             };
-            let ret = self.delta_t_to_absolute_t(&mut ret64, Mode::Continuous, ref_time);
+            let ret = self.delta_t_to_absolute_t(&mut ret32, Mode::Continuous, ref_time);
             self.arena[0].state.delta_t = 0.0;
             self.arena[0].state.integration = 0.0;
             Some(ret)
@@ -312,7 +314,7 @@ impl PixelArena {
     pub fn integrate(
         &mut self,
         mut intensity: Intensity32,
-        mut time: f64,
+        mut time: f32,
         mode: Mode,
         dtm: DeltaT,
         ref_time: DeltaT,
@@ -353,7 +355,7 @@ impl PixelArena {
                     // If continuous, we need to integrate the remaining intensity for the current
                     // node and the branching nodes
                     Continuous => {
-                        if time > ref_time as f64 {
+                        if time > ref_time as f32 {
                             self.arena[idx].state.d = get_d_from_intensity(intensity);
                         }
                     }
@@ -367,7 +369,7 @@ impl PixelArena {
         debug_assert!(self.length <= self.arena.len());
         assert!(self.length > 0);
 
-        self.dtm_reached = self.arena[0].state.delta_t >= dtm as f64;
+        self.dtm_reached = self.arena[0].state.delta_t >= dtm as f32;
         self.need_to_pop_top =
             self.arena[0].state.d == D_MAX || (self.dtm_reached && !self.popped_dtm);
         // SAFETY:
@@ -393,19 +395,18 @@ impl PixelArena {
         &mut self,
         index: usize,
         intensity: Intensity32,
-        time: f64,
+        time: f32,
         mode: Mode,
-    ) -> Option<(Intensity32, f64)> {
+    ) -> Option<(Intensity32, f32)> {
         let node = &mut self.arena[index];
-        if node.state.integration + intensity >= D_SHIFT[node.state.d as usize] as f32 {
+        if node.state.integration + intensity >= D_SHIFT_F32[node.state.d as usize] {
             // If the new intensity is much bigger, then we need to increase D accordingly, first
             let new_d = get_d_from_intensity(node.state.integration + intensity);
             node.state.d = new_d;
 
-            let prop = (D_SHIFT[node.state.d as usize] as f64 - node.state.integration as f64)
-                / intensity as f64;
+            let prop = (D_SHIFT_F32[node.state.d as usize] - node.state.integration) / intensity;
             assert!(prop > 0.0);
-            node.best_event = Some(Event64 {
+            node.best_event = Some(Event32 {
                 coord: self.coord,
                 d: node.state.d,
                 delta_t: node.state.delta_t + time * prop,
@@ -427,14 +428,14 @@ impl PixelArena {
                 // dbg!(node.state.integration);
             }
 
-            if intensity as f64 - (intensity as f64 * prop) >= 0.0 {
+            if intensity - (intensity * prop) >= 0.0 {
                 // For a framed source, we need to return 0,0 for intensity,time.
                 // This lets us preserve the spatially-coherent intensities, especially for color
                 // transcode.
 
                 return Some(match mode {
                     FramePerfect => (0.0, 0.0),
-                    Continuous => (intensity - (intensity * prop as f32), time - (time * prop)),
+                    Continuous => (intensity - (intensity * prop), time - (time * prop)),
                 });
             }
             Some((0.0, 0.0))
