@@ -113,7 +113,7 @@ impl<W: Write + 'static> Framed<W> {
 
     /// Get the number of ticks each frame is said to span
     pub fn get_ref_time(&self) -> u32 {
-        self.video.state.ref_time
+        self.video.state.params.ref_time
     }
 
     pub fn get_last_input_frame(&self) -> &Frame {
@@ -135,7 +135,7 @@ impl<W: Write + 'static> Source<W> for Framed<W> {
         let res = thread_pool.install(|| {
             self.video.integrate_matrix(
                 self.input_frame.clone(),
-                self.video.state.ref_time as f32,
+                self.video.state.params.ref_time as f32,
                 view_interval,
             )
         });

@@ -1,5 +1,7 @@
 use crate::transcoder::source::video::FramedViewMode;
-use adder_codec_core::{DeltaT, Event, EventCoordless, Intensity, SourceType, D_SHIFT};
+use adder_codec_core::{
+    DeltaT, Event, EventCoordless, Intensity, SourceType, D_SHIFT, D_SHIFT_F64,
+};
 
 /// A trait for types that can be used as the value of a pixel in a `Frame`.
 pub trait FrameValue {
@@ -10,7 +12,7 @@ pub trait FrameValue {
     fn get_frame_value(
         event: &Event,
         source_type: SourceType,
-        delta_t: DeltaT,
+        delta_t: f64,
         practical_d_max: f32,
         delta_t_max: DeltaT,
         view_mode: FramedViewMode,
@@ -31,7 +33,7 @@ impl FrameValue for EventCoordless {
     fn get_frame_value(
         event: &Event,
         _source_type: SourceType,
-        _tpf: DeltaT,
+        _tpf: f64,
         _practical_d_max: f32,
         _delta_t_max: DeltaT,
         _view_mode: FramedViewMode,
@@ -54,7 +56,7 @@ impl FrameValue for u8 {
     fn get_frame_value(
         event: &Event,
         source_type: SourceType,
-        tpf: DeltaT,
+        tpf: f64,
         practical_d_max: f32,
         delta_t_max: DeltaT,
         view_mode: FramedViewMode,
@@ -64,17 +66,15 @@ impl FrameValue for u8 {
             FramedViewMode::Intensity => {
                 let intensity = event_to_intensity(event);
                 match source_type {
-                    SourceType::U8 => (intensity * f64::from(tpf)) as u8,
+                    SourceType::U8 => (intensity * tpf) as u8,
                     SourceType::U16 => {
-                        (intensity / f64::from(u16::MAX) * f64::from(tpf) * f64::from(u8::MAX))
-                            as u8
+                        (intensity / f64::from(u16::MAX) * tpf * f64::from(u8::MAX)) as u8
                     }
                     SourceType::U32 => {
-                        (intensity / f64::from(u32::MAX) * f64::from(tpf) * f64::from(u8::MAX))
-                            as u8
+                        (intensity / f64::from(u32::MAX) * tpf * f64::from(u8::MAX)) as u8
                     }
                     SourceType::U64 => {
-                        (intensity / u64::MAX as f64 * f64::from(tpf) * f64::from(u8::MAX)) as u8
+                        (intensity / u64::MAX as f64 * tpf * f64::from(u8::MAX)) as u8
                     }
                     SourceType::F32 => {
                         todo!()
@@ -112,7 +112,7 @@ impl FrameValue for u16 {
     fn get_frame_value(
         event: &Event,
         source_type: SourceType,
-        tpf: DeltaT,
+        tpf: f64,
         practical_d_max: f32,
         delta_t_max: DeltaT,
         view_mode: FramedViewMode,
@@ -165,7 +165,7 @@ impl FrameValue for u32 {
     fn get_frame_value(
         event: &Event,
         source_type: SourceType,
-        tpf: DeltaT,
+        tpf: f64,
         practical_d_max: f32,
         delta_t_max: DeltaT,
         view_mode: FramedViewMode,
@@ -216,7 +216,7 @@ impl FrameValue for u64 {
     fn get_frame_value(
         event: &Event,
         source_type: SourceType,
-        tpf: DeltaT,
+        tpf: f64,
         practical_d_max: f32,
         delta_t_max: DeltaT,
         view_mode: FramedViewMode,
@@ -265,8 +265,8 @@ pub fn event_to_intensity(event: &Event) -> Intensity {
     match event.d as usize {
         a if a >= D_SHIFT.len() => f64::from(0),
         _ => match event.t {
-            0 => D_SHIFT[event.d as usize] as Intensity, // treat it as dt = 1
-            _ => D_SHIFT[event.d as usize] as Intensity / f64::from(event.t),
+            0 => D_SHIFT_F64[event.d as usize], // treat it as dt = 1
+            _ => D_SHIFT_F64[event.d as usize] / f64::from(event.t),
         },
     }
 }

@@ -1001,7 +1001,7 @@ fn ingest_event_for_chunk<
             *last_frame_intensity_ref = T::get_frame_value(
                 event,
                 state.source,
-                state.ref_interval,
+                state.ref_interval as f64,
                 practical_d_max,
                 state.source_dtm,
                 state.view_mode,

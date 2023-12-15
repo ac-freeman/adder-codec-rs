@@ -1,3 +1,4 @@
+use bytemuck::{Pod, Zeroable};
 #[cfg(feature = "open-cv")]
 use opencv::core::{Mat, Size};
 #[cfg(feature = "opencv")]
@@ -8,6 +9,7 @@ use std::collections::HashSet;
 use std::ffi::c_void;
 use std::io::{sink, Write};
 use std::mem::swap;
+use std::simd::{f32x4, u8x16};
 
 use adder_codec_core::codec::empty::stream::EmptyOutput;
 use adder_codec_core::codec::encoder::Encoder;
@@ -154,14 +156,37 @@ pub enum FramedViewMode {
     SAE,
 }
 
-/// Running state of the video transcode
 #[derive(Debug)]
-pub struct VideoState {
-    /// The size of the imaging plane
-    pub plane: PlaneSize,
+pub struct VideoStateParams {
     pub(crate) pixel_tree_mode: Mode,
 
     pub(crate) pixel_multi_mode: PixelMultiMode,
+
+    /// The maximum time difference between events of the same pixel, in ticks
+    pub delta_t_max: u32,
+
+    /// The reference time in ticks
+    pub ref_time: u32,
+}
+
+impl Default for VideoStateParams {
+    fn default() -> Self {
+        Self {
+            pixel_tree_mode: Continuous,
+            pixel_multi_mode: Default::default(),
+            delta_t_max: 7650,
+            ref_time: 255,
+        }
+    }
+}
+
+/// Running state of the video transcode
+#[derive(Debug)]
+pub struct VideoState {
+    pub params: VideoStateParams,
+
+    /// The size of the imaging plane
+    pub plane: PlaneSize,
 
     /// The number of rows of pixels to process at a time (per thread)
     pub chunk_rows: usize,
@@ -170,12 +195,7 @@ pub struct VideoState {
     pub in_interval_count: u32,
     // pub(crate) c_thresh_pos: u8,
     // pub(crate) c_thresh_neg: u8,
-    /// The maximum time difference between events of the same pixel, in ticks
-    pub delta_t_max: u32,
-
-    /// The reference time in ticks
-    pub ref_time: u32,
-    pub(crate) ref_time_divisor: f64,
+    pub(crate) ref_time_divisor: f32,
     pub tps: DeltaT,
 
     pub(crate) show_display: bool,
@@ -199,12 +219,9 @@ impl Default for VideoState {
     fn default() -> Self {
         let state = VideoState {
             plane: PlaneSize::default(),
-            pixel_tree_mode: Continuous,
-            pixel_multi_mode: Default::default(),
+            params: VideoStateParams::default(),
             chunk_rows: 64,
             in_interval_count: 1,
-            delta_t_max: 7650,
-            ref_time: 255,
             ref_time_divisor: 1.0,
             tps: 7650,
             show_display: false,
@@ -341,7 +358,10 @@ impl<W: Write + 'static> Video<W> {
         writer: Option<W>,
     ) -> Result<Video<W>, SourceError> {
         let mut state = VideoState {
-            pixel_tree_mode,
+            params: VideoStateParams {
+                pixel_tree_mode,
+                ..Default::default()
+            },
             running_intensities: Array::zeros((plane.h_usize(), plane.w_usize(), plane.c_usize())),
             ..Default::default()
         };
@@ -380,8 +400,8 @@ impl<W: Write + 'static> Video<W> {
             time_mode: TimeMode::AbsoluteT,
             plane: state.plane,
             tps: state.tps,
-            ref_interval: state.ref_time,
-            delta_t_max: state.delta_t_max,
+            ref_interval: state.params.ref_time,
+            delta_t_max: state.params.delta_t_max,
             event_size: 0,
             source_camera: SourceCamera::default(), // TODO: Allow for setting this
         };
@@ -490,7 +510,7 @@ impl<W: Write + 'static> Video<W> {
         if ref_time > f32::MAX as u32 {
             eprintln!(
                 "Reference time {} is too large. Keeping current value of {}.",
-                ref_time, self.state.ref_time
+                ref_time, self.state.params.ref_time
             );
             return Ok(self);
         }
@@ -504,19 +524,19 @@ impl<W: Write + 'static> Video<W> {
         if delta_t_max > f32::MAX as u32 {
             eprintln!(
                 "Delta t max {} is too large. Keeping current value of {}.",
-                delta_t_max, self.state.delta_t_max
+                delta_t_max, self.state.params.delta_t_max
             );
             return Ok(self);
         }
         if delta_t_max < ref_time {
             eprintln!(
                 "Delta t max {} is smaller than reference time {}. Keeping current value of {}.",
-                delta_t_max, ref_time, self.state.delta_t_max
+                delta_t_max, ref_time, self.state.params.delta_t_max
             );
             return Ok(self);
         }
-        self.state.delta_t_max = delta_t_max;
-        self.state.ref_time = ref_time;
+        self.state.params.delta_t_max = delta_t_max;
+        self.state.params.ref_time = ref_time;
         self.state.tps = tps;
 
         Ok(self)
@@ -541,7 +561,7 @@ impl<W: Write + 'static> Video<W> {
             EncoderType::Compressed => {
                 #[cfg(feature = "compression")]
                 {
-                    self.state.pixel_multi_mode = PixelMultiMode::Collapse;
+                    self.state.params.pixel_multi_mode = PixelMultiMode::Collapse;
                     let compression = CompressedOutput::new(
                         CodecMetadata {
                             codec_version: LATEST_CODEC_VERSION,
@@ -549,8 +569,8 @@ impl<W: Write + 'static> Video<W> {
                             time_mode: time_mode.unwrap_or_default(),
                             plane: self.state.plane,
                             tps: self.state.tps,
-                            ref_interval: self.state.ref_time,
-                            delta_t_max: self.state.delta_t_max,
+                            ref_interval: self.state.params.ref_time,
+                            delta_t_max: self.state.params.delta_t_max,
                             event_size: 0,
                             source_camera: source_camera.unwrap_or_default(),
                         },
@@ -567,7 +587,7 @@ impl<W: Write + 'static> Video<W> {
                 }
             }
             EncoderType::Raw => {
-                self.state.pixel_multi_mode = PixelMultiMode::Normal;
+                self.state.params.pixel_multi_mode = PixelMultiMode::Normal;
                 let compression = RawOutput::new(
                     CodecMetadata {
                         codec_version: LATEST_CODEC_VERSION,
@@ -575,8 +595,8 @@ impl<W: Write + 'static> Video<W> {
                         time_mode: time_mode.unwrap_or_default(),
                         plane: self.state.plane,
                         tps: self.state.tps,
-                        ref_interval: self.state.ref_time,
-                        delta_t_max: self.state.delta_t_max,
+                        ref_interval: self.state.params.ref_time,
+                        delta_t_max: self.state.params.delta_t_max,
                         event_size: 0,
                         source_camera: source_camera.unwrap_or_default(),
                     },
@@ -585,7 +605,7 @@ impl<W: Write + 'static> Video<W> {
                 Encoder::new_raw(compression, encoder_options)
             }
             EncoderType::Empty => {
-                self.state.pixel_multi_mode = PixelMultiMode::Normal;
+                self.state.params.pixel_multi_mode = PixelMultiMode::Normal;
                 let compression = EmptyOutput::new(
                     CodecMetadata {
                         codec_version: LATEST_CODEC_VERSION,
@@ -593,8 +613,8 @@ impl<W: Write + 'static> Video<W> {
                         time_mode: time_mode.unwrap_or_default(),
                         plane: self.state.plane,
                         tps: self.state.tps,
-                        ref_interval: self.state.ref_time,
-                        delta_t_max: self.state.delta_t_max,
+                        ref_interval: self.state.params.ref_time,
+                        delta_t_max: self.state.params.delta_t_max,
                         event_size: 0,
                         source_camera: source_camera.unwrap_or_default(),
                     },
@@ -650,98 +670,136 @@ impl<W: Write + 'static> Video<W> {
 
         let px_per_chunk: usize = self.state.chunk_rows * self.state.plane.area_wc();
 
+        // let matrix_f32 = convert_u8_to_f32_simd(&matrix.into_raw_vec());
+        let matrix = matrix.mapv(|x| f32::from(x));
+
+        // TODO: When there's full support for various bit-depth sources, modify this accordingly
+        let practical_d_max = fast_math::log2_raw(
+            255.0 * (self.state.params.delta_t_max / self.state.params.ref_time) as f32,
+        );
+
+        let tpf = self.state.params.ref_time as f64;
+
+        let params = &self.state.params;
         // Important: if framing the events simultaneously, then the chunk division must be
         // exactly the same as it is for the framer
         let big_buffer: Vec<Vec<Event>> = self
             .event_pixel_trees
-            .axis_chunks_iter_mut(Axis(0), self.state.chunk_rows)
+            // .iter_mut()
+            .axis_chunks_iter_mut(Axis(0), 1)
             .into_par_iter()
+            .zip(matrix.axis_chunks_iter(Axis(0), 1).into_par_iter())
             .zip(
-                matrix
-                    .axis_chunks_iter(Axis(0), self.state.chunk_rows)
+                self.state
+                    .running_intensities
+                    .axis_chunks_iter_mut(Axis(0), 1)
                     .into_par_iter(),
             )
-            .map(|(mut px_chunk, matrix_chunk)| {
-                let mut buffer: Vec<Event> = Vec::with_capacity(px_per_chunk);
+            .map(|((mut px_chunk, matrix_chunk), mut running_chunk)| {
+                let mut buffer: Vec<Event> = Vec::with_capacity(1);
                 let bump = Bump::new();
                 let base_val = bump.alloc(0);
-                let frame_val = bump.alloc(0);
-                let frame_val_intensity32 = bump.alloc(0.0);
+                // let frame_val = bump.alloc(0);
+                // let frame_val_intensity32 = bump.alloc(0.0);
 
-                for (px, input) in px_chunk.iter_mut().zip(matrix_chunk.iter()) {
-                    *frame_val_intensity32 =
-                        (f64::from(*input) * self.state.ref_time_divisor) as Intensity32;
-                    *frame_val = *frame_val_intensity32 as u8;
+                for ((px, input), running) in px_chunk
+                    .iter_mut()
+                    .zip(matrix_chunk.iter())
+                    .zip(running_chunk.iter_mut())
+                {
+                    // *frame_val_intensity32 = f32::from(*input) * self.state.ref_time_divisor;
+                    // *frame_val = *frame_val_intensity32 as u8;
 
                     integrate_for_px(
                         px,
                         base_val,
-                        frame_val,
-                        *frame_val_intensity32, // In this case, frame val is the same as intensity to integrate
+                        *input as u8,
+                        *input, // In this case, frame val is the same as intensity to integrate
                         time_spanned,
                         &mut buffer,
-                        &self.state,
+                        &params,
                         &parameters,
                     );
+
+                    if let Some(event) = px.arena[0].best_event {
+                        *running = u8::get_frame_value(
+                            &event.into(),
+                            SourceType::U8,
+                            tpf,
+                            practical_d_max,
+                            self.state.params.delta_t_max,
+                            self.instantaneous_view_mode,
+                            if self.instantaneous_view_mode == SAE {
+                                Some(SaeTime {
+                                    running_t: px.running_t as DeltaT,
+                                    last_fired_t: px.last_fired_t as DeltaT,
+                                })
+                            } else {
+                                None
+                            },
+                        );
+                    };
                 }
                 buffer
             })
             .collect();
 
-        let db = match self.display_frame.as_slice_mut() {
-            Some(v) => v,
-            None => {
-                return Err(SourceError::VisionError(
-                    "Could not convert frame to slice".to_string(),
-                ));
-            }
-        };
+        // let db = match self.display_frame.as_slice_mut() {
+        //     Some(v) => v,
+        //     None => {
+        //         return Err(SourceError::VisionError(
+        //             "Could not convert frame to slice".to_string(),
+        //         ));
+        //     }
+        // };
 
-        // TODO: When there's full support for various bit-depth sources, modify this accordingly
-        let practical_d_max =
-            fast_math::log2_raw(255.0 * (self.state.delta_t_max / self.state.ref_time) as f32);
+        // self.event_pixel_trees
+        //     .axis_chunks_iter(Axis(0), 1)
+        //     .into_par_iter()
+        //     .zip(
+        //         self.state
+        //             .running_intensities
+        //             .axis_chunks_iter(Axis(0), 1)
+        //             .into_par_iter(),
+        //     )
+        //     .enumerate()
+        //     .for_each(|(idx, (pixel_row, running_row))| {
+        //         // let y = idx / self.state.plane.area_wc();
+        //         // let x = (idx % self.state.plane.area_wc()) / self.state.plane.c_usize();
+        //         // let c = idx % self.state.plane.c_usize();
+        //
+        //         // let _sae_time = self.event_pixel_trees[[y, x, c]].last_fired_t;
+        //
+        //         for (pixel_chunk, running_chunk) in pixel_row.iter().
+        //         // Set the instantaneous frame value to the best queue'd event for the pixel
+        //         *val = match self.event_pixel_trees[[y, x, c]].arena[0].best_event {
+        //             Some(event) => u8::get_frame_value(
+        //                 &event.into(),
+        //                 SourceType::U8,
+        //                 tpf,
+        //                 practical_d_max,
+        //                 self.state.delta_t_max,
+        //                 self.instantaneous_view_mode,
+        //                 if self.instantaneous_view_mode == SAE {
+        //                     Some(SaeTime {
+        //                         running_t: self.event_pixel_trees[[y, x, c]].running_t as DeltaT,
+        //                         last_fired_t: self.event_pixel_trees[[y, x, c]].last_fired_t
+        //                             as DeltaT,
+        //                     })
+        //                 } else {
+        //                     None
+        //                 },
+        //             ),
+        //             None => *val,
+        //         };
+        //
+        //         // Only track the running state of the first channel
+        //         if self.state.feature_detection && c == 0 {
+        //             *running = *val;
+        //         }
+        //     });
 
-        // Zip::indexed(&self.running_intensities)
-        //     .and(db)
-        //     .par_for_each(|idx, val| {});
-
-        db.iter_mut()
-            .zip(self.state.running_intensities.iter_mut())
-            .enumerate()
-            .for_each(|(idx, (val, running))| {
-                let y = idx / self.state.plane.area_wc();
-                let x = (idx % self.state.plane.area_wc()) / self.state.plane.c_usize();
-                let c = idx % self.state.plane.c_usize();
-
-                let _sae_time = self.event_pixel_trees[[y, x, c]].last_fired_t;
-
-                // Set the instantaneous frame value to the best queue'd event for the pixel
-                *val = match self.event_pixel_trees[[y, x, c]].arena[0].best_event {
-                    Some(event) => u8::get_frame_value(
-                        &event.into(),
-                        SourceType::U8,
-                        self.state.ref_time as DeltaT,
-                        practical_d_max,
-                        self.state.delta_t_max,
-                        self.instantaneous_view_mode,
-                        if self.instantaneous_view_mode == SAE {
-                            Some(SaeTime {
-                                running_t: self.event_pixel_trees[[y, x, c]].running_t as DeltaT,
-                                last_fired_t: self.event_pixel_trees[[y, x, c]].last_fired_t
-                                    as DeltaT,
-                            })
-                        } else {
-                            None
-                        },
-                    ),
-                    None => *val,
-                };
-
-                // Only track the running state of the first channel
-                if self.state.feature_detection && c == 0 {
-                    *running = *val;
-                }
-            });
+        self.display_frame = self.state.running_intensities.clone();
 
         for events in &big_buffer {
             for e1 in events.iter() {
@@ -813,12 +871,12 @@ impl<W: Write + 'static> Video<W> {
 
     /// Get `ref_time`
     pub fn get_ref_time(&self) -> u32 {
-        self.state.ref_time
+        self.state.params.ref_time
     }
 
     /// Get `delta_t_max`
     pub fn get_delta_t_max(&self) -> u32 {
-        self.state.delta_t_max
+        self.state.params.delta_t_max
     }
 
     /// Get `tps`
@@ -829,7 +887,7 @@ impl<W: Write + 'static> Video<W> {
     /// Set a new value for `delta_t_max`
     pub fn update_delta_t_max(&mut self, dtm: u32) {
         // Validate new value
-        self.state.delta_t_max = self.state.ref_time.max(dtm);
+        self.state.params.delta_t_max = self.state.params.ref_time.max(dtm);
     }
 
     /// Set a new bool for `feature_detection`
@@ -1144,7 +1202,7 @@ impl<W: Write + 'static> Video<W> {
             crf.override_c_increase_velocity(c_increase_velocity);
             crf.override_feature_c_radius(feature_c_radius as u16); // The absolute pixel count radius
         }
-        self.state.delta_t_max = delta_t_max_multiplier * self.state.ref_time;
+        self.state.params.delta_t_max = delta_t_max_multiplier * self.state.params.ref_time;
         self.encoder.sync_crf();
 
         for px in self.event_pixel_trees.iter_mut() {
@@ -1176,38 +1234,38 @@ impl<W: Write + 'static> Video<W> {
 pub fn integrate_for_px(
     px: &mut PixelArena,
     base_val: &mut u8,
-    frame_val: &u8,
+    frame_val: u8,
     intensity: Intensity32,
     time_spanned: f32,
     buffer: &mut Vec<Event>,
-    state: &VideoState,
+    params: &VideoStateParams,
     parameters: &CrfParameters,
 ) -> bool {
     let _start_len = buffer.len();
     let mut grew_buffer = false;
     if px.need_to_pop_top {
-        buffer.push(px.pop_top_event(intensity, state.pixel_tree_mode, state.ref_time));
+        buffer.push(px.pop_top_event(intensity, params.pixel_tree_mode, params.ref_time));
         grew_buffer = true;
     }
 
     *base_val = px.base_val;
 
-    if *frame_val < base_val.saturating_sub(px.c_thresh)
-        || *frame_val > base_val.saturating_add(px.c_thresh)
+    if frame_val < base_val.saturating_sub(px.c_thresh)
+        || frame_val > base_val.saturating_add(px.c_thresh)
     {
         let _tmp = buffer.len();
         px.pop_best_events(
             buffer,
-            state.pixel_tree_mode,
-            state.pixel_multi_mode,
-            state.ref_time,
+            params.pixel_tree_mode,
+            params.pixel_multi_mode,
+            params.ref_time,
         );
         grew_buffer = true;
-        px.base_val = *frame_val;
+        px.base_val = frame_val;
 
         // If continuous mode and the D value needs to be different now
-        if let Continuous = state.pixel_tree_mode {
-            match px.set_d_for_continuous(intensity, state.ref_time) {
+        if let Continuous = params.pixel_tree_mode {
+            match px.set_d_for_continuous(intensity, params.ref_time) {
                 None => {}
                 Some(event) => buffer.push(event),
             };
@@ -1217,15 +1275,15 @@ pub fn integrate_for_px(
     px.integrate(
         intensity,
         time_spanned.into(),
-        state.pixel_tree_mode,
-        state.delta_t_max,
-        state.ref_time,
+        params.pixel_tree_mode,
+        params.delta_t_max,
+        params.ref_time,
         parameters.c_thresh_max,
         parameters.c_increase_velocity,
     );
 
     if px.need_to_pop_top {
-        buffer.push(px.pop_top_event(intensity, state.pixel_tree_mode, state.ref_time));
+        buffer.push(px.pop_top_event(intensity, params.pixel_tree_mode, params.ref_time));
         grew_buffer = true;
     }
 
@@ -1315,3 +1373,21 @@ pub trait Source<W: Write> {
     /// Get the last-calculated bitrate of the input (in bits per second)
     fn get_running_input_bitrate(&self) -> f64;
 }
+
+// fn convert_u8_to_f32_simd(input: &[u8]) -> Vec<f32> {
+//     // Ensure that the input length is a multiple of 16
+//     let len = input.len() / 16 * 16;
+//
+//     // Use the simd crate to load u8x16 vectors and convert to f32x4 vectors
+//     let mut result: Vec<f32> = Vec::with_capacity(len / 4);
+//     for i in (0..len).step_by(16) {
+//         let u8_slice = &input[i..i + 16];
+//         let u8x16_vector: u8x16 = u8_slice.load_unaligned().into();
+//         let f32x4_vector: f32x4 = unsafe { std::mem::transmute(u8x16_vector) };
+//         for j in 0..4 {
+//             result.push(f32x4_vector.extract(j));
+//         }
+//     }
+//
+//     result
+// }
