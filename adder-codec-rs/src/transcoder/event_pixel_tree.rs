@@ -399,12 +399,13 @@ impl PixelArena {
         mode: Mode,
     ) -> Option<(Intensity32, f32)> {
         let node = &mut self.arena[index];
-        if node.state.integration + intensity >= D_SHIFT_F32[node.state.d as usize] {
+        let mut d_usize = node.state.d as usize;
+        if node.state.integration + intensity >= D_SHIFT_F32[d_usize] {
             // If the new intensity is much bigger, then we need to increase D accordingly, first
             let new_d = get_d_from_intensity(node.state.integration + intensity);
             node.state.d = new_d;
 
-            let prop = (D_SHIFT_F32[node.state.d as usize] - node.state.integration) / intensity;
+            let prop = (D_SHIFT_F32[d_usize] - node.state.integration) / intensity;
             assert!(prop > 0.0);
             node.best_event = Some(Event32 {
                 coord: self.coord,
@@ -419,11 +420,12 @@ impl PixelArena {
 
                 // TODO: this is slow and dumb
                 loop {
-                    node.state.d += 1;
-                    if D_SHIFT[node.state.d as usize] > node.state.integration as UDshift {
+                    d_usize += 1;
+                    if D_SHIFT[d_usize] > node.state.integration as UDshift {
                         break;
                     }
                 }
+                node.state.d = d_usize as D;
             } else {
                 // dbg!(node.state.integration);
             }

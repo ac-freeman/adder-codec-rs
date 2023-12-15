@@ -53,6 +53,7 @@ impl FrameValue for EventCoordless {
 impl FrameValue for u8 {
     type Output = u8;
 
+    #[inline(always)]
     fn get_frame_value(
         event: &Event,
         source_type: SourceType,

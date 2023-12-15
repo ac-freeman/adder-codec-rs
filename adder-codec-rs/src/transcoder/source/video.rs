@@ -668,8 +668,6 @@ impl<W: Write + 'static> Video<W> {
 
         self.state.show_live = self.state.in_interval_count % view_interval == 0;
 
-        let px_per_chunk: usize = self.state.chunk_rows * self.state.plane.area_wc();
-
         // let matrix_f32 = convert_u8_to_f32_simd(&matrix.into_raw_vec());
         let matrix = matrix.mapv(|x| f32::from(x));
 
