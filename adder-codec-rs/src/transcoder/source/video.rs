@@ -683,17 +683,21 @@ impl<W: Write + 'static> Video<W> {
         // exactly the same as it is for the framer
         let big_buffer: Vec<Vec<Event>> = self
             .event_pixel_trees
-            .axis_chunks_iter_mut(Axis(0), 1)
+            .axis_chunks_iter_mut(Axis(0), self.state.chunk_rows)
             .into_par_iter()
-            .zip(matrix.axis_chunks_iter(Axis(0), 1).into_par_iter())
+            .zip(
+                matrix
+                    .axis_chunks_iter(Axis(0), self.state.chunk_rows)
+                    .into_par_iter(),
+            )
             .zip(
                 self.state
                     .running_intensities
-                    .axis_chunks_iter_mut(Axis(0), 1)
+                    .axis_chunks_iter_mut(Axis(0), self.state.chunk_rows)
                     .into_par_iter(),
             )
             .map(|((mut px_chunk, matrix_chunk), mut running_chunk)| {
-                let mut buffer: Vec<Event> = Vec::with_capacity(1);
+                let mut buffer: Vec<Event> = Vec::with_capacity(10);
                 let bump = Bump::new();
                 let base_val = bump.alloc(0);
 
@@ -736,6 +740,7 @@ impl<W: Write + 'static> Video<W> {
             })
             .collect();
 
+        dbg!(big_buffer.len());
         self.display_frame = self.state.running_intensities.clone();
 
         for events in &big_buffer {

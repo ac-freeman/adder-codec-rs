@@ -78,7 +78,7 @@ impl AdderTranscoder {
                                 .unwrap_or(DEFAULT_CRF_QUALITY),
                         )
                         .frame_start(current_frame)?
-                        .chunk_rows(64)
+                        .chunk_rows(1)
                         .auto_time_parameters(
                             ui_state.delta_t_ref as u32,
                             ui_state.delta_t_max_mult * ui_state.delta_t_ref as u32,
