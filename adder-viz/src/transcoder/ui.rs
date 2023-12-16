@@ -651,13 +651,13 @@ impl TranscoderState {
         };
 
         // Calculate quality metrics on the running intensity frame (not with features drawn on it)
-        let mut image_mat = source.get_video_ref().display_frame.clone();
+        let image_mat = &source.get_video_ref().state.running_intensities;
 
         if let Some(input) = source.get_input() {
             #[rustfmt::skip]
             let metrics = calculate_quality_metrics(
                 input,
-                &mut image_mat,
+                image_mat,
                 QualityMetrics {
                     mse: if self.ui_state.metric_mse {Some(0.0)} else {None},
                     psnr: if self.ui_state.metric_psnr {Some(0.0)} else {None},

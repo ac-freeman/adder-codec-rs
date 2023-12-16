@@ -330,9 +330,6 @@ pub struct Video<W: Write> {
     pub state: VideoState,
     pub(crate) event_pixel_trees: Array3<PixelArena>,
 
-    /// The current instantaneous display frame
-    pub display_frame: Frame,
-
     /// The current instantaneous display frame with the features drawn on it
     pub display_frame_features: Frame,
 
@@ -415,7 +412,6 @@ impl<W: Write + 'static> Video<W> {
                 Ok(Video {
                     state,
                     event_pixel_trees,
-                    display_frame: instantaneous_frame.clone(),
                     display_frame_features: instantaneous_frame,
                     instantaneous_view_mode,
                     event_sender,
@@ -432,7 +428,6 @@ impl<W: Write + 'static> Video<W> {
                 Ok(Video {
                     state,
                     event_pixel_trees,
-                    display_frame: instantaneous_frame.clone(),
                     display_frame_features: instantaneous_frame,
                     instantaneous_view_mode,
                     event_sender,
@@ -740,15 +735,13 @@ impl<W: Write + 'static> Video<W> {
             })
             .collect();
 
-        self.display_frame = self.state.running_intensities.clone();
-
         for events in &big_buffer {
             for e1 in events.iter() {
                 self.encoder.ingest_event(*e1)?;
             }
         }
 
-        self.display_frame_features = self.display_frame.clone();
+        self.display_frame_features = self.state.running_intensities.clone();
 
         self.handle_features(&big_buffer)?;
 
