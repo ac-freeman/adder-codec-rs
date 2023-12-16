@@ -740,7 +740,6 @@ impl<W: Write + 'static> Video<W> {
             })
             .collect();
 
-        dbg!(big_buffer.len());
         self.display_frame = self.state.running_intensities.clone();
 
         for events in &big_buffer {
