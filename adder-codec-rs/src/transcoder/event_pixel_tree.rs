@@ -192,7 +192,7 @@ impl PixelArena {
                 }
             }
             Some(event) => {
-                assert!(self.length > 1);
+                debug_assert!(self.length > 1);
                 for i in 0..self.length - 1 {
                     self.arena[i] = self.arena[i + 1];
                 }
@@ -226,7 +226,7 @@ impl PixelArena {
                     }
                 }
                 Some(mut event) => {
-                    assert_ne!(node_idx, self.length - 1);
+                    debug_assert_ne!(node_idx, self.length - 1);
                     let event = self.delta_t_to_absolute_t(&mut event, mode, ref_time);
                     local_buffer.push(event);
                 }
@@ -267,7 +267,7 @@ impl PixelArena {
 
         // Move the last node to the front
         self.arena.swap(0, self.length - 1);
-        assert!(self.arena[0].alt.is_none());
+        debug_assert!(self.arena[0].alt.is_none());
         self.length = 1;
 
         // match next_intensity {

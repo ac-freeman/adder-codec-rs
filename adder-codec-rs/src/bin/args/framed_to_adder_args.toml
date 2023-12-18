@@ -1,5 +1,5 @@
 args_filename = ""
-scale = 1.0
+scale = 0.25
 input_filename= "/home/andrew/Videos/IMG_1150.mp4"
 output_raw_video_filename = "/home/andrew/Videos/output_recon.mp4"
 output_events_filename = "/home/andrew/Videos/output.adder"
@@ -9,7 +9,7 @@ color_input = true
 show_display = true
 frame_idx_start = 0
 ref_time = 255     # Ticks per input frame
-delta_t_max = 2550
+delta_t_max = 76500
 frame_count_max = 3000
 thread_count = 8
 time_mode = "absolute"
