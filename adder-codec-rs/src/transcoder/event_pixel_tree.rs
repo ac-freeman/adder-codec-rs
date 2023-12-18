@@ -408,7 +408,7 @@ impl PixelArena {
             d_usize = node.state.d as usize;
 
             let prop = (D_SHIFT_F32[d_usize] - node.state.integration) / intensity;
-            assert!(prop > 0.0);
+            debug_assert!(prop > 0.0);
             node.best_event = Some(Event32 {
                 coord: self.coord,
                 d: node.state.d,
@@ -458,7 +458,10 @@ fn get_d_from_intensity(intensity: Intensity32) -> D {
                 // SAFETY:
                 // By design, the integration will not exceed 2^[`D_MAX`], so we can
                 // safely cast it to integer [`D`] type.
-                unsafe { fast_math::log2_raw(intensity).to_int_unchecked::<D>() }
+                unsafe {
+                    (32 - intensity.to_int_unchecked::<u32>().leading_zeros() - 1) as D
+                    // fast_math::log2_raw(intensity).to_int_unchecked::<D>()
+                }
             } else {
                 0
             }

@@ -754,7 +754,7 @@ impl<W: Write + 'static> Video<W> {
                     events_per_sec += events_vec.len() as f64;
                 }
 
-                events_per_sec *= (self.state.tps as f64 / self.state.ref_time as f64);
+                events_per_sec *= (self.state.tps as f64 / self.state.params.ref_time as f64);
 
                 let bitrate =
                     events_per_sec * if self.state.plane.c() == 1 { 9.0 } else { 11.0 } * 8.0;
