@@ -322,7 +322,7 @@ impl<W: Write + 'static> Integration<W> {
 
                             // First, integrate the previous value enough to fill the time since then
                             let first_integration = ((last_val as Intensity32)
-                                / video.state.ref_time as f32
+                                / video.state.params.ref_time as f32
                                 * delta_t_ticks)
                                 .max(0.0);
 
@@ -330,7 +330,7 @@ impl<W: Write + 'static> Integration<W> {
                                 buffer.push(px.pop_top_event(
                                     first_integration,
                                     Continuous,
-                                    video.state.ref_time,
+                                    video.state.params.ref_time,
                                 ));
                             }
 
@@ -339,8 +339,8 @@ impl<W: Write + 'static> Integration<W> {
                                 first_integration,
                                 delta_t_ticks.into(),
                                 Continuous,
-                                video.state.delta_t_max,
-                                video.state.ref_time,
+                                video.state.params.delta_t_max,
+                                video.state.params.ref_time,
                                 video.encoder.options.crf.get_parameters().c_thresh_max,
                                 video
                                     .encoder
@@ -350,23 +350,17 @@ impl<W: Write + 'static> Integration<W> {
                                     .c_increase_velocity,
                             );
                             let running_t_after = px.running_t;
-                            debug_assert_eq!(
-                                running_t_after,
-                                running_t_before + delta_t_ticks as f64
-                            );
+                            debug_assert_eq!(running_t_after, running_t_before + delta_t_ticks);
 
                             if px.need_to_pop_top {
                                 buffer.push(px.pop_top_event(
                                     first_integration,
                                     Continuous,
-                                    video.state.ref_time,
+                                    video.state.params.ref_time,
                                 ));
                             }
                             let running_t_after = px.running_t;
-                            debug_assert_eq!(
-                                running_t_after,
-                                running_t_before + delta_t_ticks as f64
-                            );
+                            debug_assert_eq!(running_t_after, running_t_before + delta_t_ticks);
 
                             ///////////////////////////////////////////////////////
                             // Then, integrate a tiny amount of the next intensity
@@ -385,15 +379,15 @@ impl<W: Write + 'static> Integration<W> {
                                 px.pop_best_events(
                                     &mut buffer,
                                     Continuous,
-                                    video.state.pixel_multi_mode,
-                                    video.state.ref_time,
+                                    video.state.params.pixel_multi_mode,
+                                    video.state.params.ref_time,
                                 );
                                 px.base_val = frame_val_u8;
 
                                 // If continuous mode and the D value needs to be different now
                                 match px.set_d_for_continuous(
                                     frame_val as Intensity32,
-                                    video.state.ref_time,
+                                    video.state.params.ref_time,
                                 ) {
                                     None => {}
                                     Some(event) => buffer.push(event),
@@ -419,15 +413,16 @@ impl<W: Write + 'static> Integration<W> {
             )
             .collect();
 
-        let db: &mut [u8] = match video.display_frame.as_slice_mut() {
+        let db: &mut [u8] = match video.display_frame_features.as_slice_mut() {
             Some(db) => db,
             None => return Err(CodecError::MalformedEncoder), // TODO: Wrong type of error
         };
 
         // TODO: split off into separate function
         // TODO: When there's full support for various bit-depth sources, modify this accordingly
-        let practical_d_max =
-            fast_math::log2_raw(255.0 * (video.state.delta_t_max / video.state.ref_time) as f32);
+        let practical_d_max = fast_math::log2_raw(
+            255.0 * (video.state.params.delta_t_max / video.state.params.ref_time) as f32,
+        );
         db.iter_mut()
             .zip(video.state.running_intensities.iter_mut())
             .enumerate()
@@ -439,9 +434,9 @@ impl<W: Write + 'static> Integration<W> {
                     Some(event) => u8::get_frame_value(
                         &event.into(),
                         SourceType::U8,
-                        video.state.ref_time as DeltaT,
+                        video.state.params.ref_time as f64,
                         practical_d_max,
-                        video.state.delta_t_max,
+                        video.state.params.delta_t_max,
                         video.instantaneous_view_mode,
                         if video.instantaneous_view_mode == SAE {
                             Some(SaeTime {
@@ -532,7 +527,7 @@ impl<W: Write + 'static> Integration<W> {
                     //     (self.video.ref_time as f32 / ticks_per_micro as f32) as i64
                     // );
 
-                    let integration = ((last_val / f64::from(video.state.ref_time))
+                    let integration = ((last_val / f64::from(video.state.params.ref_time))
                         * f64::from(delta_t_ticks))
                     .max(0.0);
                     assert!(integration >= 0.0);
@@ -540,11 +535,11 @@ impl<W: Write + 'static> Integration<W> {
                     integrate_for_px(
                         px,
                         base_val,
-                        frame_val,
+                        *frame_val,
                         integration as f32,
                         delta_t_ticks,
                         &mut buffer,
-                        &video.state,
+                        &video.state.params,
                         video.encoder.options.crf.get_parameters(),
                     );
                 }
@@ -552,7 +547,7 @@ impl<W: Write + 'static> Integration<W> {
             })
             .collect();
 
-        let db = match video.display_frame.as_slice_mut() {
+        let db = match video.display_frame_features.as_slice_mut() {
             Some(db) => db,
             None => {
                 return Err(SourceError::VisionError(
@@ -563,8 +558,9 @@ impl<W: Write + 'static> Integration<W> {
 
         // TODO: split off into separate function
         // TODO: When there's full support for various bit-depth sources, modify this accordingly
-        let practical_d_max =
-            fast_math::log2_raw(255.0 * (video.state.delta_t_max / video.state.ref_time) as f32);
+        let practical_d_max = fast_math::log2_raw(
+            255.0 * (video.state.params.delta_t_max / video.state.params.ref_time) as f32,
+        );
         db.iter_mut()
             .zip(video.state.running_intensities.iter_mut())
             .enumerate()
@@ -576,9 +572,9 @@ impl<W: Write + 'static> Integration<W> {
                     Some(event) => u8::get_frame_value(
                         &event.into(),
                         SourceType::U8,
-                        video.state.ref_time as DeltaT,
+                        video.state.params.ref_time as f64,
                         practical_d_max,
-                        video.state.delta_t_max,
+                        video.state.params.delta_t_max,
                         video.instantaneous_view_mode,
                         if video.instantaneous_view_mode == SAE {
                             Some(SaeTime {
@@ -667,9 +663,9 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Davis<W> {
                             for (_, px) in chunk.iter_mut().enumerate() {
                                 px.pop_best_events(
                                     &mut buffer,
-                                    self.video.state.pixel_tree_mode,
-                                    self.video.state.pixel_multi_mode,
-                                    self.video.state.ref_time,
+                                    self.video.state.params.pixel_tree_mode,
+                                    self.video.state.params.pixel_multi_mode,
+                                    self.video.state.params.ref_time,
                                 );
                             }
                             buffer
@@ -707,8 +703,8 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Davis<W> {
                     self.integration.dvs_events_before = Some(events_before);
                     self.integration.dvs_events_after = Some(events_after);
 
-                    self.video.state.ref_time_divisor =
-                        (img_end_ts - img_start_ts) as f64 / f64::from(self.video.state.ref_time);
+                    self.video.state.ref_time_divisor = (img_end_ts - img_start_ts) as f32
+                        / self.video.state.params.ref_time as f32;
                     if let Some(latency) = opt_latency {
                         self.latency = latency;
                     }
@@ -728,7 +724,7 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Davis<W> {
             let end_of_frame_timestamp = self
                 .integration
                 .end_of_frame_timestamp
-                .unwrap_or(self.video.state.ref_time.into());
+                .unwrap_or(self.video.state.params.ref_time.into());
             if self.integration.temp_first_frame_start_timestamp == 0 {
                 self.integration.temp_first_frame_start_timestamp =
                     self.integration.start_of_frame_timestamp.unwrap_or(0);
@@ -811,7 +807,7 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Davis<W> {
             // https://stackoverflow.com/questions/33665241/is-opencv-matrix-data-guaranteed-to-be-continuous
             let mut tmp = self.image_8u.clone();
             let mat_integration_time = match self.mode {
-                TranscoderMode::Framed => self.video.state.ref_time as f32,
+                TranscoderMode::Framed => self.video.state.params.ref_time as f32,
                 TranscoderMode::RawDavis => {
                     (end_of_frame_timestamp - start_of_frame_timestamp) as f32
                 }
@@ -935,7 +931,8 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Davis<W> {
         match self.mode {
             TranscoderMode::Framed => {
                 let fps = self.video.state.tps as f64
-                    / (self.video.state.ref_time_divisor * self.video.state.ref_time as f64);
+                    / (self.video.state.ref_time_divisor as f64
+                        * self.video.state.params.ref_time as f64);
                 self.video.state.plane.volume() as f64 * 8.0 * fps
             }
             TranscoderMode::RawDavis => {

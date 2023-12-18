@@ -220,7 +220,7 @@ impl Default for VideoState {
         let state = VideoState {
             plane: PlaneSize::default(),
             params: VideoStateParams::default(),
-            chunk_rows: 64,
+            chunk_rows: 1,
             in_interval_count: 1,
             ref_time_divisor: 1.0,
             tps: 7650,
