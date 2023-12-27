@@ -35,7 +35,7 @@ jobs:
         run: sudo apt-get update; sudo apt-get install -y --no-install-recommends libasound2-dev libudev-dev
 
       - name: Install other deps
-        run: sudo apt-get install -y portaudio19-dev build-essential libpulse-dev libdbus-1-dev pkg-config libx11-dev libatk1.0-dev libgtk-3-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libwayland-dev libxkbcommon-dev
+        run: sudo apt-get install -y portaudio19-dev build-essential libpulse-dev libdbus-1-dev pkg-config libx11-dev libatk1.0-dev libgtk-3-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libwayland-dev libxkbcommon-dev ffmpeg
 
       - name: Check project
         run: cargo check -p adder-codec-core -p adder-codec-rs -p adder-info -p adder-to-dvs -p adder-viz --features "compression open-cv"
@@ -84,6 +84,10 @@ jobs:
 
       - name: Install OpenCV
         run: choco install -y opencv --version "$OPENCV_VERSION"
+        shell: bash
+
+      - name: Install ffmpeg
+        run: choco install ffmpeg
         shell: bash
 
       - name: Build binary
