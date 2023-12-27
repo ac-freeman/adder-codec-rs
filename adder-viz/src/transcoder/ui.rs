@@ -1,5 +1,5 @@
 use crate::transcoder::adder::{replace_adder_transcoder, AdderTranscoder};
-use crate::utils::{prep_bevy_image, prep_bevy_image2};
+use crate::utils::prep_bevy_image;
 use crate::{slider_pm, Images};
 #[cfg(feature = "open-cv")]
 use adder_codec_rs::transcoder::source::davis::TranscoderMode;

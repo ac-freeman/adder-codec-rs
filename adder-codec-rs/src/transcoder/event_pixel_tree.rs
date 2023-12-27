@@ -331,7 +331,7 @@ impl PixelArena {
         c_increase_velocity: u8,
         multi_mode: PixelMultiMode,
     ) {
-        if self.arena.capacity() > self.arena.len() - 3 {
+        if self.arena.capacity() > self.arena.len() {
             self.arena.shrink_to_fit();
         }
         let tail = &mut self.arena[self.length - 1];
