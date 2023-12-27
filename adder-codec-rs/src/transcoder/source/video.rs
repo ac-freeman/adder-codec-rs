@@ -1,4 +1,4 @@
-use bytemuck::{Pod, Zeroable};
+
 #[cfg(feature = "open-cv")]
 use opencv::core::{Mat, Size};
 #[cfg(feature = "opencv")]
@@ -9,7 +9,7 @@ use std::collections::HashSet;
 use std::ffi::c_void;
 use std::io::{sink, Write};
 use std::mem::swap;
-use std::simd::{f32x4, u8x16};
+
 
 use adder_codec_core::codec::empty::stream::EmptyOutput;
 use adder_codec_core::codec::encoder::Encoder;
@@ -32,7 +32,7 @@ use adder_codec_core::D;
 #[cfg(feature = "opencv")]
 use davis_edi_rs::util::reconstructor::ReconstructionError;
 #[cfg(feature = "opencv")]
-use opencv::{highgui, imgproc::resize, prelude::*};
+use opencv::{highgui, imgproc::resize};
 
 #[cfg(feature = "compression")]
 use adder_codec_core::codec::compressed::stream::CompressedOutput;
@@ -40,14 +40,13 @@ use adder_codec_core::Mode::Continuous;
 use itertools::Itertools;
 use ndarray::{Array, Array3, Axis, ShapeError};
 use rayon::iter::ParallelIterator;
-use rayon::iter::{IndexedParallelIterator, IntoParallelRefMutIterator};
-use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator};
+use rayon::iter::{IndexedParallelIterator};
+use rayon::iter::{IntoParallelIterator};
 use rayon::ThreadPool;
 
 use crate::transcoder::source::video::FramedViewMode::SAE;
 use crate::utils::cv::is_feature;
-#[cfg(feature = "feature-logging")]
-use crate::utils::logging::{LogFeature, LogFeatureSource};
+
 use crate::utils::viz::{draw_feature_coord, ShowFeatureMode};
 use adder_codec_core::codec::rate_controller::{Crf, CrfParameters};
 use thiserror::Error;
@@ -217,7 +216,8 @@ pub struct VideoState {
 
 impl Default for VideoState {
     fn default() -> Self {
-        let state = VideoState {
+        
+        VideoState {
             plane: PlaneSize::default(),
             params: VideoStateParams::default(),
             chunk_rows: 1,
@@ -231,8 +231,7 @@ impl Default for VideoState {
             show_features: ShowFeatureMode::Off,
             features: Default::default(),
             feature_log_handle: None,
-        };
-        state
+        }
     }
 }
 
@@ -640,7 +639,7 @@ impl<W: Write + 'static> Video<W> {
     pub fn end_write_stream(&mut self) -> Result<Option<W>, SourceError> {
         let mut tmp: Encoder<W> = Encoder::new_empty(
             EmptyOutput::new(CodecMetadata::default(), sink()),
-            self.encoder.options.clone(),
+            self.encoder.options,
         );
         swap(&mut self.encoder, &mut tmp);
         Ok(tmp.close_writer()?)
@@ -657,14 +656,14 @@ impl<W: Write + 'static> Video<W> {
             self.set_initial_d(&matrix);
         }
 
-        let parameters = self.encoder.options.crf.get_parameters().clone();
+        let parameters = *self.encoder.options.crf.get_parameters();
 
         self.state.in_interval_count += 1;
 
         self.state.show_live = self.state.in_interval_count % view_interval == 0;
 
         // let matrix_f32 = convert_u8_to_f32_simd(&matrix.into_raw_vec());
-        let matrix = matrix.mapv(|x| f32::from(x));
+        let matrix = matrix.mapv(f32::from);
 
         // TODO: When there's full support for various bit-depth sources, modify this accordingly
         let practical_d_max = fast_math::log2_raw(
@@ -708,7 +707,7 @@ impl<W: Write + 'static> Video<W> {
                         *input, // In this case, frame val is the same as intensity to integrate
                         time_spanned,
                         &mut buffer,
-                        &params,
+                        params,
                         &parameters,
                     );
 
@@ -754,7 +753,7 @@ impl<W: Write + 'static> Video<W> {
                     events_per_sec += events_vec.len() as f64;
                 }
 
-                events_per_sec *= (self.state.tps as f64 / self.state.params.ref_time as f64);
+                events_per_sec *= self.state.tps as f64 / self.state.params.ref_time as f64;
 
                 let bitrate =
                     events_per_sec * if self.state.plane.c() == 1 { 9.0 } else { 11.0 } * 8.0;
@@ -767,7 +766,7 @@ impl<W: Write + 'static> Video<W> {
                     .unwrap();
 
                 handle
-                    .write_all(&serde_pickle::to_vec(&format!("\n"), Default::default()).unwrap())
+                    .write_all(&serde_pickle::to_vec(&"\n".to_string(), Default::default()).unwrap())
                     .unwrap();
             }
         }
@@ -877,25 +876,21 @@ impl<W: Write + 'static> Video<W> {
             .zip(new_features.iter_mut())
             .for_each(|((events, feature_set), new_features)| {
                 for (e1, e2) in events.iter().circular_tuple_windows() {
-                    if e1.coord.c == None || e1.coord.c == Some(0) {
-                        if e1.coord != e2.coord
+                    if (e1.coord.c.is_none() || e1.coord.c == Some(0)) && e1.coord != e2.coord
                             && (!cfg!(feature = "feature-logging-nonmaxsuppression")
-                                || e2.t != e1.t)
-                            && e1.d != D_EMPTY
+                                || e2.t != e1.t) && e1.d != D_EMPTY {
+                        if is_feature(
+                            e1.coord,
+                            self.state.plane,
+                            &self.state.running_intensities,
+                        )
+                        .unwrap()
                         {
-                            if is_feature(
-                                e1.coord,
-                                self.state.plane,
-                                &self.state.running_intensities,
-                            )
-                            .unwrap()
-                            {
-                                if feature_set.insert(e1.coord) {
-                                    new_features.push(e1.coord);
-                                };
-                            } else {
-                                feature_set.remove(&e1.coord);
-                            }
+                            if feature_set.insert(e1.coord) {
+                                new_features.push(e1.coord);
+                            };
+                        } else {
+                            feature_set.remove(&e1.coord);
                         }
                     }
                 }
@@ -941,8 +936,8 @@ impl<W: Write + 'static> Video<W> {
             let mut cv_mat = unsafe {
                 let raw_parts::RawParts {
                     ptr,
-                    length,
-                    capacity,
+                    length: _,
+                    capacity: _,
                 } = raw_parts::RawParts::from_vec(
                     self.display_frame_features.clone().into_raw_vec(),
                 ); // pixels will be move into_raw_parts，and return a manually drop pointer.
@@ -1000,7 +995,7 @@ impl<W: Write + 'static> Video<W> {
                 // Combine self.state.features into one hashset:
                 let mut combined_features = HashSet::new();
                 for feature_set in &self.state.features {
-                    for (coord) in feature_set {
+                    for coord in feature_set {
                         combined_features.insert(*coord);
                     }
                 }
@@ -1010,7 +1005,7 @@ impl<W: Write + 'static> Video<W> {
                         &combined_features,
                         self.state.plane,
                     );
-                let out = format!("\nFeature results: \n");
+                let out = "\nFeature results: \n".to_string();
                 handle
                     .write_all(&serde_pickle::to_vec(&out, Default::default()).unwrap())
                     .unwrap();
@@ -1203,7 +1198,7 @@ pub fn integrate_for_px(
 
     px.integrate(
         intensity,
-        time_spanned.into(),
+        time_spanned,
         params.pixel_tree_mode,
         params.delta_t_max,
         params.ref_time,

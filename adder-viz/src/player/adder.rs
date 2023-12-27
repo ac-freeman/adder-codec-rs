@@ -7,21 +7,15 @@ use adder_codec_rs::framer::driver::{FrameSequence, Framer, FramerBuilder};
 use adder_codec_rs::framer::scale_intensity::event_to_intensity;
 
 use crate::utils::prep_bevy_image;
-#[cfg(feature = "open-cv")]
-use adder_codec_rs::transcoder::source::video::show_display_force;
+
 use adder_codec_rs::transcoder::source::video::FramedViewMode;
 use adder_codec_rs::utils::cv::is_feature;
 use adder_codec_rs::utils::viz::draw_feature_coord;
 use bevy::prelude::Image;
 use ndarray::Array;
 use ndarray::Array3;
-#[cfg(feature = "open-cv")]
-use opencv::core::{
-    create_continuous, KeyPoint, Mat, MatTraitConstManual, MatTraitManual, Scalar, Vector, CV_8UC1,
-    CV_8UC3,
-};
-#[cfg(feature = "open-cv")]
-use opencv::imgproc;
+
+
 use std::error::Error;
 use std::fmt;
 use std::fs::File;
@@ -97,7 +91,7 @@ impl AdderPlayer {
 
                     let mut reconstructed_frame_rate = meta.tps as f32 / meta.ref_interval as f32;
 
-                    reconstructed_frame_rate /= playback_speed as f32;
+                    reconstructed_frame_rate /= playback_speed;
 
                     let framer_builder: FramerBuilder = FramerBuilder::new(meta.plane, 260)
                         .codec_version(meta.codec_version, meta.time_mode)
@@ -271,7 +265,7 @@ impl AdderPlayer {
         // }
 
         let image_bevy = loop {
-            let mut display_mat = &mut self.display_frame;
+            let display_mat = &mut self.display_frame;
             let color = display_mat.shape()[2] == 3;
 
             if self.stream_state.current_t_ticks as u128
@@ -390,7 +384,7 @@ impl AdderPlayer {
                                 draw_feature_coord(
                                     event.coord.x,
                                     event.coord.y,
-                                    &mut display_mat,
+                                    display_mat,
                                     color,
                                 );
                             } else if !event.coord.is_border(
@@ -402,7 +396,7 @@ impl AdderPlayer {
                                 let radius = 2;
                                 if color {
                                     for i in -radius..=radius {
-                                        for c in 0..3 as usize {
+                                        for c in 0..3_usize {
                                             *display_mat.uget_mut((
                                                 (event.coord.y as i32 + i) as usize,
                                                 (event.coord.x as i32) as usize,
@@ -617,7 +611,7 @@ impl AdderPlayer {
                     event_count += 1;
                     let filled = frame_sequence.ingest_event(&mut event, last_event);
 
-                    last_event = Some(event.clone());
+                    last_event = Some(event);
 
                     if filled {
                         return Ok((event_count, image_bevy));

@@ -235,7 +235,7 @@ impl<W: Write + 'static> SimulProcessor<W> {
 
         loop {
             match self.source.consume(1, &self.thread_pool) {
-                Ok(events) => {
+                Ok(_events) => {
                     // match self.events_tx.send(events) {
                     //     Ok(_) => {}
                     //     Err(_) => {

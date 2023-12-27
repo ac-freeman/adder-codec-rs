@@ -389,7 +389,7 @@ impl TranscoderState {
             .auto_bounds_y()
             .legend(Legend::default().position(LeftTop))
             .show(ui, |plot_ui| {
-                let mut metrics = vec![
+                let metrics = vec![
                     (&self.ui_info_state.plot_points_psnr_y, "PSNR dB"),
                     (&self.ui_info_state.plot_points_mse_y, "MSE"),
                     (&self.ui_info_state.plot_points_ssim_y, "SSIM"),
@@ -407,7 +407,7 @@ impl TranscoderState {
             .auto_bounds_y()
             .legend(Legend::default().position(LeftTop))
             .show(ui, |plot_ui| {
-                let mut metrics = vec![
+                let metrics = vec![
                     (
                         &self.ui_info_state.plot_points_raw_adder_bitrate_y,
                         "log10(Raw ADΔER MB/s)",
@@ -518,7 +518,7 @@ impl TranscoderState {
         };
 
         let binding = source.get_video_ref().get_encoder_options();
-        let parameters = binding.crf.get_parameters();
+        let _parameters = binding.crf.get_parameters();
 
         // TODO: Refactor all this garbage code
         if self.ui_state.auto_quality
@@ -544,7 +544,7 @@ impl TranscoderState {
             let binding = video.get_encoder_options();
             let parameters = binding.crf.get_parameters();
 
-            self.ui_state.encoder_options = binding.clone();
+            self.ui_state.encoder_options = binding;
             // Update ui state to match
             self.ui_state.crf_slider = binding.crf.get_quality().unwrap_or(DEFAULT_CRF_QUALITY);
             self.ui_state.adder_tresh_baseline_slider = parameters.c_thresh_baseline;
@@ -673,7 +673,7 @@ impl TranscoderState {
         }
 
         // Display frame
-        let mut image_mat = source.get_video_ref().display_frame_features.clone();
+        let image_mat = source.get_video_ref().display_frame_features.clone();
 
         let color = image_mat.shape()[2] == 3;
 
@@ -799,7 +799,7 @@ fn side_panel_grid_contents(
     );
     ui.end_row();
 
-    let mut parameters = ui_state.encoder_options.crf.get_parameters_mut();
+    let parameters = ui_state.encoder_options.crf.get_parameters_mut();
     ui.label("Threshold baseline:");
     slider_pm(
         !ui_state.auto_quality,

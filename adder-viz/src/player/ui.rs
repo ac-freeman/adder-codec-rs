@@ -446,8 +446,7 @@ impl PlayerState {
             .unwrap()
             .decoder
             .meta()
-            .plane
-            .clone();
+            .plane;
         self.ui_info_state.event_size = if plane.c() == 1 { 9 } else { 11 };
         self.ui_info_state.plane = plane;
 

@@ -8,7 +8,7 @@ use adder_codec_core::Mode::{Continuous, FramePerfect};
 use davis_edi_rs::aedat::events_generated::Event as DvsEvent;
 use davis_edi_rs::util::reconstructor::{IterVal, ReconstructionError, Reconstructor};
 use rayon::iter::ParallelIterator;
-use rayon::iter::{IndexedParallelIterator, IntoParallelRefMutIterator};
+use rayon::iter::{IndexedParallelIterator};
 
 use opencv::core::{Mat, CV_8U};
 use opencv::prelude::*;
@@ -337,7 +337,7 @@ impl<W: Write + 'static> Integration<W> {
                             let running_t_before = px.running_t;
                             px.integrate(
                                 first_integration,
-                                delta_t_ticks.into(),
+                                delta_t_ticks,
                                 Continuous,
                                 video.state.params.delta_t_max,
                                 video.state.params.ref_time,
@@ -832,7 +832,7 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Davis<W> {
                 }
             };
 
-            let mut frame = unsafe {
+            let frame = unsafe {
                 video_rs_adder_dep::Frame::from_shape_vec_unchecked(
                     (
                         self.video.state.plane.h_usize(),
@@ -950,8 +950,8 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Davis<W> {
             TranscoderMode::RawDvs => {
                 let time_mult = 1E6 / self.time_change;
                 let events_per_sec = self.num_dvs_events as f64 * time_mult;
-                let event_bits_per_sec = events_per_sec * 9.0 * 8.0; // Best-case 9 bytes per raw DVS event
-                event_bits_per_sec
+                 // Best-case 9 bytes per raw DVS event
+                events_per_sec * 9.0 * 8.0
             }
         }
     }
@@ -1045,7 +1045,7 @@ impl<W: Write + 'static> VideoBuilder<W> for Davis<W> {
     }
 
     #[cfg(feature = "feature-logging")]
-    fn log_path(self, name: String) -> Self {
+    fn log_path(self, _name: String) -> Self {
         todo!()
     }
 }

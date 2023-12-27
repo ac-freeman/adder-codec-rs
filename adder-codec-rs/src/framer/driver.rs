@@ -496,7 +496,7 @@ impl<
                         // dbg!(self.state.frames_written);
                         // dbg!(idx);
                         if idx >= self.features.len() {
-                            if self.features.len() == 0 {
+                            if self.features.is_empty() {
                                 // Create the first
                                 self.features.push_back(FeatureInterval {
                                     end_ts: self.state.tpf as BigT,
@@ -819,7 +819,7 @@ impl<T: Clone + Default + FrameValue<Output = T> + Serialize> FrameSequence<T> {
 
     /// Get the features detected for the next frame, and pop that off the feature vec
     pub fn pop_features(&mut self) -> Option<FeatureInterval> {
-        if self.features.len() == 0 {
+        if self.features.is_empty() {
             // Create the first
             self.features.push_back(FeatureInterval {
                 end_ts: self.state.tpf as BigT,

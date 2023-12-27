@@ -2,7 +2,7 @@
 #![feature(never_type)]
 
 use arithmetic_coding_adder_dep::{Decoder, Encoder, Model};
-use bitstream_io::{BigEndian, BitRead, BitReader, BitWrite, BitWriter};
+use bitstream_io::{BigEndian, BitRead, BitWrite, BitWriter};
 
 const PRECISION: u32 = 12;
 
@@ -135,7 +135,7 @@ where
 
 /// Encode all symbols, followed by EOF. Doesn't flush the encoder (allowing
 /// more bits to be concatenated)
-fn encode<M, W>(encoder: &mut Encoder<M, W>, input: &[M::Symbol])
+fn encode<M, W>(_encoder: &mut Encoder<M, W>, _input: &[M::Symbol])
 where
     M: Model,
     W: BitWrite,
@@ -148,7 +148,7 @@ where
 }
 
 /// Decode two sets of symbols, in sequence
-fn decode2<M, N>(model1: M, model2: N, buffer: &[u8]) -> (Vec<M::Symbol>, Vec<N::Symbol>)
+fn decode2<M, N>(_model1: M, _model2: N, _buffer: &[u8]) -> (Vec<M::Symbol>, Vec<N::Symbol>)
 where
     M: Model<B = N::B>,
     N: Model,
@@ -166,7 +166,7 @@ where
 }
 
 /// Decode all symbols from a [`Decoder`] until EOF is reached
-fn decode<M, R>(decoder: &mut Decoder<M, R>) -> Vec<M::Symbol>
+fn decode<M, R>(_decoder: &mut Decoder<M, R>) -> Vec<M::Symbol>
 where
     M: Model,
     R: BitRead,

@@ -1,6 +1,6 @@
 use adder_codec_core::Mode::{Continuous, FramePerfect};
 use adder_codec_core::{
-    AbsoluteT, Coord, DeltaT, Event, Mode, PixelMultiMode, TimeMode, D, D_SHIFT_F32, D_SHIFT_F64,
+    AbsoluteT, Coord, DeltaT, Event, Mode, PixelMultiMode, TimeMode, D, D_SHIFT_F32,
 };
 use adder_codec_core::{UDshift, D_EMPTY, D_MAX, D_SHIFT, D_ZERO_INTEGRATION};
 use smallvec::{smallvec, SmallVec};

@@ -1,11 +1,11 @@
-use bevy::asset::{Assets, Handle};
-use bevy::prelude::Color::Rgba;
-use bevy::prelude::{Image, ResMut};
-use bevy::render::render_resource::TextureFormat::Rgba8Uint;
+
+
+use bevy::prelude::{Image};
+
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
 use bevy_egui::egui::plot::{Line, PlotPoints};
 use futures::StreamExt;
-use ndarray::{Array, Axis};
+
 use std::collections::VecDeque;
 use std::error::Error;
 use video_rs_adder_dep::Frame;
@@ -48,7 +48,7 @@ impl PlotY {
 }
 
 pub fn prep_bevy_image(
-    mut image_mat: Frame,
+    image_mat: Frame,
     color: bool,
     width: u16,
     height: u16,
@@ -59,7 +59,7 @@ pub fn prep_bevy_image(
     // Preallocate space for the new vector
     let mut new_image_mat = Vec::with_capacity(width as usize * height as usize * 4);
 
-    let mut image_mat = image_mat.into_owned().into_raw_vec();
+    let image_mat = image_mat.into_owned().into_raw_vec();
     if color {
         // Iterate over chunks of 3 elements and insert the value after each chunk
         for chunk in image_mat.chunks(3) {
@@ -88,7 +88,7 @@ pub fn prep_bevy_image(
 }
 
 pub fn prep_bevy_image_mut(
-    mut image_mat: Frame,
+    image_mat: Frame,
     color: bool,
     new_image: &mut Image,
 ) -> Result<(), Box<dyn Error>> {

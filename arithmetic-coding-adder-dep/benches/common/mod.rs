@@ -1,5 +1,5 @@
-use arithmetic_coding_adder_dep::{Decoder, Encoder, Model};
-use bitstream_io::{BigEndian, BitReader, BitWrite, BitWriter};
+use arithmetic_coding_adder_dep::{Model};
+
 
 pub fn round_trip<M>(model: M, input: &[M::Symbol])
 where
@@ -16,7 +16,7 @@ where
     assert_eq!(input, output.as_slice());
 }
 
-pub fn encode<M, I>(model: M, input: I) -> Vec<u8>
+pub fn encode<M, I>(_model: M, _input: I) -> Vec<u8>
 where
     M: Model,
     I: IntoIterator<Item = M::Symbol>,
@@ -31,7 +31,7 @@ where
     // bitwriter.into_writer()
 }
 
-pub fn decode<M>(model: M, buffer: &[u8]) -> Vec<M::Symbol>
+pub fn decode<M>(_model: M, _buffer: &[u8]) -> Vec<M::Symbol>
 where
     M: Model,
 {
