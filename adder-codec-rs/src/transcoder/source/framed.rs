@@ -143,7 +143,7 @@ impl<W: Write + 'static> Source<W> for Framed<W> {
         {
             if let Some(handle) = &mut self.video.state.feature_log_handle {
                 // Calculate the quality metrics
-                let mut image_mat = self.video.display_frame.clone();
+                let mut image_mat = self.video.state.running_intensities.clone();
 
                 #[rustfmt::skip]
                     let metrics = calculate_quality_metrics(

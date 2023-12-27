@@ -1,6 +1,6 @@
 //! Fenwick tree based context-switching model
 
-use arithmetic_coding_core::Model;
+use arithmetic_coding_core_adder_dep::Model;
 
 use super::Weights;
 use crate::ValueError;

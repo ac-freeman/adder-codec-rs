@@ -109,13 +109,13 @@ where
 {
     let mut bitwriter = BitWriter::endian(Vec::default(), BigEndian);
 
-    let mut encoder1 = Encoder::with_precision(model1, &mut bitwriter, PRECISION);
+    let mut encoder1 = Encoder::with_precision(model1, PRECISION);
     encode(&mut encoder1, input1);
 
     let mut encoder2 = encoder1.chain(model2);
     encode(&mut encoder2, input2);
 
-    encoder2.flush().unwrap();
+    encoder2.flush(&mut bitwriter).unwrap();
 
     bitwriter.byte_align().unwrap();
     bitwriter.into_writer()
@@ -128,10 +128,11 @@ where
     M: Model,
     W: BitWrite,
 {
-    for symbol in input {
-        encoder.encode(Some(symbol)).unwrap();
-    }
-    encoder.encode(None).unwrap();
+    todo!()
+    // for symbol in input {
+    //     encoder.encode(Some(symbol)).unwrap();
+    // }
+    // encoder.encode(None).unwrap();
 }
 
 /// Decode two sets of symbols, in sequence
@@ -140,17 +141,18 @@ where
     M: Model<B = N::B>,
     N: Model,
 {
-    let bitreader = BitReader::endian(buffer, BigEndian);
-
-    let mut decoder1 = Decoder::with_precision(model1, bitreader, PRECISION);
-
-    let output1 = decode(&mut decoder1);
-
-    let mut decoder2 = decoder1.chain(model2);
-
-    let output2 = decode(&mut decoder2);
-
-    (output1, output2)
+    todo!()
+    // let bitreader = BitReader::endian(buffer, BigEndian);
+    //
+    // let mut decoder1 = Decoder::with_precision(model1, PRECISION);
+    //
+    // let output1 = decode(&mut decoder1);
+    //
+    // let mut decoder2 = decoder1.chain(model2);
+    //
+    // let output2 = decode(&mut decoder2);
+    //
+    // (output1, output2)
 }
 
 /// Decode all symbols from a [`Decoder`] until EOF is reached
@@ -159,5 +161,6 @@ where
     M: Model,
     R: BitRead,
 {
-    decoder.decode_all().map(Result::unwrap).collect()
+    todo!()
+    // decoder.decode_all().map(Result::unwrap).collect()
 }

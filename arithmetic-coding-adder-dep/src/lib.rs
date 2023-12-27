@@ -1,11 +1,6 @@
 //! Arithmetic coding library
 
-#![deny(
-    missing_docs,
-    clippy::all,
-    missing_debug_implementations,
-    clippy::cargo
-)]
+#![deny(missing_docs, clippy::all, missing_debug_implementations)]
 #![warn(clippy::pedantic)]
 
 pub use arithmetic_coding_core_adder_dep::{fixed_length, max_length, one_shot, BitStore, Model};

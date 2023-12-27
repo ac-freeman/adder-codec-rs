@@ -21,20 +21,22 @@ where
     M: Model,
     I: IntoIterator<Item = M::Symbol>,
 {
-    let mut bitwriter = BitWriter::endian(Vec::new(), BigEndian);
-    let mut encoder = Encoder::new(model, &mut bitwriter);
-
-    encoder.encode_all(input).unwrap();
-    bitwriter.byte_align().unwrap();
-
-    bitwriter.into_writer()
+    todo!()
+    // let mut bitwriter = BitWriter::endian(Vec::new(), BigEndian);
+    // let mut encoder = Encoder::new(model);
+    //
+    // encoder.encode_all(input).unwrap();
+    // bitwriter.byte_align().unwrap();
+    //
+    // bitwriter.into_writer()
 }
 
 pub fn decode<M>(model: M, buffer: &[u8]) -> Vec<M::Symbol>
 where
     M: Model,
 {
-    let bitreader = BitReader::endian(buffer, BigEndian);
-    let mut decoder = Decoder::new(model, bitreader);
-    decoder.decode_all().map(Result::unwrap).collect()
+    todo!()
+    // let bitreader = BitReader::endian(buffer, BigEndian);
+    // let mut decoder = Decoder::new(model, bitreader);
+    // decoder.decode_all().map(Result::unwrap).collect()
 }

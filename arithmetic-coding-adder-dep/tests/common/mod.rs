@@ -19,7 +19,7 @@ where
     let mut bitwriter = BitWriter::endian(Vec::new(), BigEndian);
     let mut encoder = Encoder::new(model);
 
-    encoder.encode_all(input).unwrap();
+    encoder.encode_all(input, &mut bitwriter).unwrap();
     bitwriter.byte_align().unwrap();
 
     bitwriter.into_writer()
@@ -29,8 +29,11 @@ fn decode<M>(model: M, buffer: &[u8]) -> Vec<M::Symbol>
 where
     M: Model,
 {
-    let bitreader = BitReader::endian(buffer, BigEndian);
-    let mut decoder = Decoder::new(model, bitreader);
+    let mut bitreader = BitReader::endian(buffer, BigEndian);
+    let mut decoder = Decoder::new(model);
 
-    decoder.decode_all().map(Result::unwrap).collect()
+    decoder
+        .decode_all(&mut bitreader)
+        .map(Result::unwrap)
+        .collect()
 }
