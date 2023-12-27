@@ -23,6 +23,12 @@
       <sourceFolder url="file://$MODULE_DIR$/arithmetic-coding/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/arithmetic-coding/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/adder-codec-core/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/arithmetic-coding-adder-dep/arithmetic-coding-core-adder-dep/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/arithmetic-coding-adder-dep/benches" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/arithmetic-coding-adder-dep/examples" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/arithmetic-coding-adder-dep/fenwick-model/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/arithmetic-coding-adder-dep/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/arithmetic-coding-adder-dep/tests" isTestSource="true" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
       <excludeFolder url="file://$MODULE_DIR$/adder-codec-core/target" />
     </content>

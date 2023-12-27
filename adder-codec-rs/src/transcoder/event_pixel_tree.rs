@@ -1,6 +1,6 @@
 use adder_codec_core::Mode::{Continuous, FramePerfect};
 use adder_codec_core::{
-    Coord, DeltaT, Event, Mode, PixelMultiMode, TimeMode, D, D_SHIFT_F32, D_SHIFT_F64,
+    AbsoluteT, Coord, DeltaT, Event, Mode, PixelMultiMode, TimeMode, D, D_SHIFT_F32, D_SHIFT_F64,
 };
 use adder_codec_core::{UDshift, D_EMPTY, D_MAX, D_SHIFT, D_ZERO_INTEGRATION};
 use smallvec::{smallvec, SmallVec};
@@ -143,6 +143,9 @@ impl PixelArena {
         ref_time: DeltaT,
     ) -> Event {
         let mut event = self.pop_top_event_recursive(next_intensity, mode, ref_time);
+        if event.delta_t < 255.0 {
+            assert!(event.d < 8);
+        }
         self.popped_dtm = true;
         self.delta_t_to_absolute_t(&mut event, mode, ref_time)
     }
@@ -226,6 +229,10 @@ impl PixelArena {
                     }
                 }
                 Some(mut event) => {
+                    if event.delta_t < 255.0 {
+                        assert!(event.d < 8);
+                    }
+
                     debug_assert_ne!(node_idx, self.length - 1);
                     let event = self.delta_t_to_absolute_t(&mut event, mode, ref_time);
                     local_buffer.push(event);
@@ -233,8 +240,11 @@ impl PixelArena {
             }
         }
 
-        if multi_mode == PixelMultiMode::Collapse && local_buffer.len() >= 2 && self.popped_dtm {
-            // Then discard all the events except the last two, and mark the first of these as an EMPTY event
+        // dbg!(local_buffer.len());
+        // dbg!(multi_mode);
+        if multi_mode == PixelMultiMode::Collapse && local_buffer.len() >= 2 {
+            // dbg!("doing it");
+            // Then discard all the events except the firs two, and mark the second of these as an EMPTY event
             // (carrying no intensity info)
             let _start_trash_idx = 0;
             let last_idx = local_buffer.len() - 1;
@@ -242,9 +252,18 @@ impl PixelArena {
             //     if buffer[start_trash_idx].t <
             // }
 
-            local_buffer[last_idx - 1].d = D_EMPTY;
-            buffer.push(local_buffer[last_idx - 1]);
-            buffer.push(local_buffer[last_idx]);
+            local_buffer[1].d = D_EMPTY;
+            local_buffer[1].t = self.running_t as AbsoluteT;
+            self.last_fired_t = self.running_t;
+            if mode == FramePerfect {
+                self.last_fired_t = if self.last_fired_t as DeltaT % ref_time == 0 {
+                    (self.last_fired_t as DeltaT) as f32
+                } else {
+                    (((self.last_fired_t as DeltaT / ref_time) + 1) * ref_time) as f32
+                };
+            }
+            buffer.push(local_buffer[0]);
+            buffer.push(local_buffer[1]);
             // debug_assert!(buffer.len() == 2);
         }
         // else if multi_mode == PixelMultiMode::Collapse && local_buffer.len() >= 3 {
@@ -266,7 +285,8 @@ impl PixelArena {
         }
 
         // Move the last node to the front
-        self.arena.swap(0, self.length - 1);
+        // self.arena.swap(0, self.length - 1);
+        self.arena[0] = PixelNode::new(0.0);
         debug_assert!(self.arena[0].alt.is_none());
         self.length = 1;
 
@@ -321,7 +341,11 @@ impl PixelArena {
         ref_time: DeltaT,
         c_thresh_max: u8,
         c_increase_velocity: u8,
+        multi_mode: PixelMultiMode,
     ) {
+        if self.arena.capacity() > self.arena.len() - 3 {
+            self.arena.shrink_to_fit();
+        }
         let tail = &mut self.arena[self.length - 1];
         if tail.state.delta_t == 0.0 && tail.state.integration == 0.0 {
             tail.state.d = get_d_from_intensity(intensity);
@@ -330,6 +354,7 @@ impl PixelArena {
 
         let mut idx = 0;
         loop {
+            // dbg!(self.arena.len());
             let filled = match self.integrate_main(idx, intensity, time, mode) {
                 None => false,
                 Some((next_intensity, next_time)) => {
@@ -346,6 +371,10 @@ impl PixelArena {
                     true
                 }
             };
+
+            if multi_mode == PixelMultiMode::Collapse && idx > 0 {
+                break;
+            }
 
             idx += 1;
 

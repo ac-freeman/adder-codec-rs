@@ -952,7 +952,7 @@ impl<T: Clone + Default + FrameValue<Output = T> + Serialize> FrameSequence<T> {
 
 // TODO: refactor this garbage
 fn ingest_event_for_chunk<
-    T: Clone + Default + FrameValue<Output = T> + Copy + Serialize + Send + Sync,
+    T: Clone + Default + FrameValue<Output = T> + Copy + Serialize + Send + Sync + Into<f64>,
 >(
     event: &mut Event,
     frame_chunk: &mut VecDeque<Frame<Option<T>>>,
@@ -1010,7 +1010,12 @@ fn ingest_event_for_chunk<
                     last_fired_t: prev_running_ts as DeltaT,
                 }), // TODO
             );
+            // let tmp = <T as Into<f64>>::into(*last_frame_intensity_ref) as u8;
+            // if tmp == 255 && event.t < 255 && event.d > 7 {
+            //     dbg!(event.clone());
+            // }
         }
+
         *last_filled_frame_ref = (running_ts_ref.saturating_sub(1)) as i64 / i64::from(state.tpf);
 
         // Grow the frames vec if necessary

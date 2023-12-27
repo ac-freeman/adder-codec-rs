@@ -582,7 +582,7 @@ impl<W: Write + 'static> Video<W> {
                 }
             }
             EncoderType::Raw => {
-                self.state.params.pixel_multi_mode = PixelMultiMode::Normal;
+                self.state.params.pixel_multi_mode = PixelMultiMode::Collapse;
                 let compression = RawOutput::new(
                     CodecMetadata {
                         codec_version: LATEST_CODEC_VERSION,
@@ -600,7 +600,7 @@ impl<W: Write + 'static> Video<W> {
                 Encoder::new_raw(compression, encoder_options)
             }
             EncoderType::Empty => {
-                self.state.params.pixel_multi_mode = PixelMultiMode::Normal;
+                self.state.params.pixel_multi_mode = PixelMultiMode::Collapse;
                 let compression = EmptyOutput::new(
                     CodecMetadata {
                         codec_version: LATEST_CODEC_VERSION,
@@ -1208,6 +1208,7 @@ pub fn integrate_for_px(
         params.ref_time,
         parameters.c_thresh_max,
         parameters.c_increase_velocity,
+        params.pixel_multi_mode,
     );
 
     if px.need_to_pop_top {

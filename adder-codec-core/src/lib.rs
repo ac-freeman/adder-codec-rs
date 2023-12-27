@@ -205,9 +205,9 @@ pub enum Mode {
 
 #[derive(Clone, Copy, PartialEq, Default, Debug)]
 pub enum PixelMultiMode {
-    #[default]
     Normal,
 
+    #[default]
     Collapse,
 }
 

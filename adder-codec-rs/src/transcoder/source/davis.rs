@@ -348,6 +348,7 @@ impl<W: Write + 'static> Integration<W> {
                                     .crf
                                     .get_parameters()
                                     .c_increase_velocity,
+                                video.state.params.pixel_multi_mode,
                             );
                             let running_t_after = px.running_t;
                             debug_assert_eq!(running_t_after, running_t_before + delta_t_ticks);
