@@ -1,8 +1,6 @@
 use crate::codec::compressed::fenwick::context_switching::FenwickModel;
 use crate::codec::compressed::fenwick::Weights;
-use crate::codec::compressed::TResidual;
-use crate::codec::CodecMetadata;
-use crate::{AbsoluteT, DeltaT, EventCoordless, Intensity, D, D_EMPTY, D_SHIFT};
+use crate::{AbsoluteT, DeltaT, EventCoordless, Intensity, D, D_SHIFT};
 use arithmetic_coding_adder_dep::Encoder;
 use bitstream_io::{BigEndian, BitWrite, BitWriter};
 
@@ -154,14 +152,13 @@ impl Contexts {
     }
 }
 
-pub fn t_residual_default_weights(dt_ref: DeltaT) -> Weights {
+pub fn t_residual_default_weights(_dt_ref: DeltaT) -> Weights {
     // t residuals can fit within i16
 
     // After we've indexed into the correct interval, our timestamp residual can span [-dt_ref, dt_ref]
 
     // We have dt_max/dt_ref count of intervals per adu
-    let mut counts: Vec<u64> = vec![1; (u8::MAX as usize + 1)];
-    // let mut counts: Vec<u64> = vec![1; u16::MAX as usize];
+    let mut counts: Vec<u64> = vec![1; u8::MAX as usize + 1];
 
     // Give higher probability to smaller residuals
     // for i in counts.len() / 3..counts.len() * 2 / 3 {

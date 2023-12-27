@@ -1,40 +1,17 @@
 use crate::codec::{CodecError, CodecMetadata, EncoderOptions, ReadCompression, WriteCompression};
-use arithmetic_coding_adder_dep::{Decoder, Encoder};
 use bitstream_io::{BigEndian, BitRead, BitReader, BitWrite, BitWriter};
-use std::cmp::min;
 use std::collections::VecDeque;
 use std::io::{Cursor, Read, Seek, SeekFrom, Write};
 
-// use crate::codec::compressed::adu::cube::AduCube;
-// use crate::codec::compressed::adu::frame::{Adu, AduChannelType};
-// use crate::codec::compressed::adu::interblock::AduInterBlock;
-// use crate::codec::compressed::adu::intrablock::AduIntraBlock;
-// use crate::codec::compressed::adu::AduCompression;
-// use crate::codec::compressed::blocks::block::{Block, Cube, Frame};
-// use crate::codec::compressed::blocks::prediction::{
-//     d_residual_default_weights, dt_residual_default_weights, Contexts,
-// };
-// use crate::codec::compressed::blocks::{BLOCK_SIZE, BLOCK_SIZE_AREA};
-use crate::codec::compressed::fenwick::context_switching::FenwickModel;
-use crate::codec::compressed::fenwick::Weights;
-use crate::codec::compressed::source_model::cabac_contexts::Contexts;
 use crate::codec::compressed::source_model::event_structure::event_adu::EventAdu;
 use crate::codec::compressed::source_model::HandleEvent;
 use crate::codec::header::{Magic, MAGIC_COMPRESSED};
-use crate::Mode::{Continuous, FramePerfect};
-use crate::TimeMode::AbsoluteT;
-use crate::{Coord, DeltaT, Event, EventCoordless, SourceCamera};
+use crate::{DeltaT, Event};
 
 /// Write compressed ADΔER data to a stream.
 pub struct CompressedOutput<W: Write> {
     pub(crate) meta: CodecMetadata,
-    // pub(crate) frame: Frame,
     pub(crate) adu: EventAdu,
-    /// The arithmetic coder used to encode the ADU. We write the ADU to a buffer, then write the
-    /// buffer to the stream.
-    // pub(crate) arithmetic_coder:
-    //     Option<arithmetic_coding_adder_dep::Encoder<FenwickModel, BitWriter<Vec<u8>, BigEndian>>>,
-    // pub(crate) contexts: Option<Contexts>,
     pub(crate) stream: Option<BitWriter<W, BigEndian>>,
     pub(crate) options: EncoderOptions,
 }

@@ -2,17 +2,15 @@ use crate::codec::compressed::fenwick::context_switching::FenwickModel;
 use crate::codec::compressed::source_model::cabac_contexts::{
     Contexts, BITSHIFT_ENCODE_FULL, D_RESIDUAL_OFFSET,
 };
-use crate::codec::compressed::source_model::event_structure::{BLOCK_SIZE, BLOCK_SIZE_AREA};
+use crate::codec::compressed::source_model::event_structure::BLOCK_SIZE;
 use crate::codec::compressed::source_model::{ComponentCompression, HandleEvent};
 use crate::codec::compressed::{DResidual, TResidual, DRESIDUAL_NO_EVENT, DRESIDUAL_SKIP_CUBE};
 use crate::codec::CodecError;
-use crate::{
-    AbsoluteT, Coord, DeltaT, Event, EventCoordless, PixelAddress, D, D_EMPTY, D_NO_EVENT,
-};
+use crate::{AbsoluteT, Coord, DeltaT, Event, EventCoordless, PixelAddress, D, D_EMPTY};
 use arithmetic_coding_adder_dep::{Decoder, Encoder};
-use bitstream_io::{BigEndian, BitReader, BitWrite, BitWriter};
+use bitstream_io::{BigEndian, BitReader, BitWriter};
 use std::cmp::{max, min};
-use std::collections::{HashMap, VecDeque};
+use std::collections::VecDeque;
 use std::io::Cursor;
 use std::mem::size_of;
 
@@ -109,7 +107,7 @@ fn generate_t_prediction(
         max(
             prev_event.t,
             prev_event.t
-                + min(delta_t_prediction, ((num_intervals as u8) as u32 * dt_ref)) as AbsoluteT,
+                + min(delta_t_prediction, (num_intervals as u8) as u32 * dt_ref) as AbsoluteT,
         )
     }
 }
@@ -123,8 +121,6 @@ impl HandleEvent for EventCube {
     fn ingest_event(&mut self, mut event: Event) -> bool {
         event.coord.y -= self.start_y;
         event.coord.x -= self.start_x;
-
-        let index = 0;
 
         let item = EventCoordless::from(event);
         self.raw_event_lists[event.coord.c_usize()][event.coord.y_usize()][event.coord.x_usize()]
@@ -165,8 +161,8 @@ impl HandleEvent for EventCube {
                 for y in 0..BLOCK_SIZE {
                     for x in 0..BLOCK_SIZE {
                         if !self.raw_event_lists[c][y][x].is_empty() {
-                            for (idx, event) in self.raw_event_lists[c][y][x].iter().enumerate() {
-                                let mut event = Event {
+                            for event in self.raw_event_lists[c][y][x].iter() {
+                                let event = Event {
                                     coord: Coord {
                                         x: x as PixelAddress + self.start_x,
                                         y: y as PixelAddress + self.start_y,
@@ -227,7 +223,7 @@ impl HandleEvent for EventCube {
 mod build_tests {
     use super::EventCube;
     use crate::codec::compressed::source_model::HandleEvent;
-    use crate::{Coord, Event, PixelAddress};
+    use crate::{Coord, Event};
 
     /// Create an empty cube
     #[test]
@@ -335,7 +331,7 @@ impl ComponentCompression for EventCube {
                     if !pixel.is_empty() {
                         let event = pixel.first_mut().unwrap();
 
-                        let mut d_residual = 0;
+                        let mut d_residual;
 
                         if let Some(init) = &mut init_event {
                             d_residual = event.d as DResidual - init.d as DResidual;
@@ -363,8 +359,8 @@ impl ComponentCompression for EventCube {
 
                         if let Some(init) = &mut init_event {
                             // Don't do any special prediction here (yet). Just predict the same t as previously found.
-                            let mut t_residual_i64 = (event.t as i64 - init.t as i64);
-                            let (bitshift_amt, mut t_residual) =
+                            let t_residual_i64 = event.t as i64 - init.t as i64;
+                            let (bitshift_amt, t_residual) =
                                 contexts.residual_to_bitshift(t_residual_i64);
                             // contexts.residual_to_bitshift2(
                             //     init.t as i64,
@@ -461,7 +457,7 @@ impl ComponentCompression for EventCube {
 
                                 // encoder.model.set_context(contexts.dtref_context);
                                 let actual_delta_t = event.t - prev_event.t;
-                                let mut t_residual_i64 = (event.t as i64 - t_prediction as i64);
+                                let mut t_residual_i64 = event.t as i64 - t_prediction as i64;
                                 let (bitshift_amt, mut t_residual) = contexts
                                     .residual_to_bitshift2(
                                         t_prediction as i64,
@@ -728,7 +724,7 @@ mod compression_tests {
     use crate::codec::CodecMetadata;
     use crate::{Coord, DeltaT, Event};
     use arithmetic_coding_adder_dep::Encoder;
-    use bitstream_io::{BigEndian, BitReader, BitWrite, BitWriter};
+    use bitstream_io::{BigEndian, BitReader, BitWriter};
     use rand::prelude::StdRng;
     use rand::{Rng, SeedableRng};
     use std::cmp::min;

@@ -3,12 +3,11 @@ use crate::codec::compressed::source_model::cabac_contexts::{eof_context, Contex
 use crate::codec::compressed::source_model::event_structure::event_cube::EventCube;
 use crate::codec::compressed::source_model::event_structure::BLOCK_SIZE;
 use crate::codec::compressed::source_model::{ComponentCompression, HandleEvent};
-use crate::codec::{CodecError, CodecMetadata};
-use crate::{AbsoluteT, DeltaT, Event, PixelAddress, PlaneSize};
+use crate::codec::CodecError;
+use crate::{AbsoluteT, DeltaT, Event, PlaneSize};
 use arithmetic_coding_adder_dep::{Decoder, Encoder};
 use bitstream_io::{BigEndian, BitReader, BitWriter};
 use ndarray::Array2;
-use std::collections::VecDeque;
 use std::io::Cursor;
 use std::mem::size_of;
 
@@ -233,7 +232,7 @@ impl HandleEvent for EventAdu {
     /// Assume that the event does fit within the adu's time frame. This is checked at the caller.
     ///
     /// Returns true if this is the first event that the Adu has ingested
-    fn ingest_event(&mut self, mut event: Event) -> bool {
+    fn ingest_event(&mut self, event: Event) -> bool {
         let idx_y = event.coord.y_usize() / BLOCK_SIZE;
         let idx_x = event.coord.x_usize() / BLOCK_SIZE;
 
@@ -298,16 +297,10 @@ impl HandleEvent for EventAdu {
 
 #[cfg(test)]
 mod tests {
-    use crate::codec::compressed::fenwick::context_switching::FenwickModel;
-    use crate::codec::compressed::source_model::cabac_contexts::eof_context;
     use crate::codec::compressed::source_model::event_structure::event_adu::EventAdu;
-    use crate::codec::compressed::source_model::event_structure::BLOCK_SIZE;
     use crate::codec::compressed::source_model::HandleEvent;
-    use crate::codec::CodecMetadata;
-    use crate::{AbsoluteT, Coord, DeltaT, Event, PlaneSize};
-    use arithmetic_coding_adder_dep::Encoder;
+    use crate::{Coord, Event, PlaneSize};
     use bitstream_io::{BigEndian, BitReader, BitWriter};
-    use ndarray::Array2;
     use std::cmp::min;
     use std::io::Cursor;
 
