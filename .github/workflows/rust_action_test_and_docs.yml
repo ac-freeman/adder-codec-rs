@@ -72,6 +72,11 @@ jobs:
     steps:
       - uses: actions/checkout@v2
 
+      - name: Run vcpkg
+        uses: lukka/run-vcpkg@v11.3
+        with:
+          vcpkgDirectory: '${{ github.workspace }}/vcpkg'
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@master
         with:
