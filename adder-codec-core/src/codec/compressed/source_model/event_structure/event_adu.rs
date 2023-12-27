@@ -184,12 +184,7 @@ impl EventAdu {
                     &mut decoder,
                     &contexts,
                     stream,
-                    block_idx_y,
-                    block_idx_x,
-                    self.plane.c_usize(),
                     self.start_t,
-                    self.dt_ref,
-                    self.num_intervals,
                 );
                 debug_assert_eq!(
                     self.event_cubes[[block_idx_y, block_idx_x]].start_t,
@@ -204,12 +199,6 @@ impl EventAdu {
                     &mut decoder,
                     &contexts,
                     stream,
-                    block_idx_y,
-                    block_idx_x,
-                    self.plane.c_usize(),
-                    self.start_t,
-                    self.dt_ref,
-                    self.num_intervals,
                 );
                 debug_assert_eq!(
                     self.event_cubes[[block_idx_y, block_idx_x]].start_t,
@@ -370,7 +359,6 @@ mod tests {
         adu2.decompress(&mut stream);
 
         assert_eq!(adu.event_cubes.shape(), adu2.event_cubes.shape());
-        let mut pixel_count = 0;
         for (cube1, cube2) in adu.event_cubes.iter().zip(adu2.event_cubes.iter()) {
             for (block1, block2) in cube1
                 .raw_event_lists
@@ -381,7 +369,6 @@ mod tests {
                 for (row1, row2) in block1.iter().zip(block2.iter()) {
                     for (px1, px2) in row1.iter().zip(row2.iter()) {
                         if !px1.is_empty() {
-                            pixel_count += 1;
                             for (elem1, elem2) in px1.iter().zip(px2.iter()) {
                                 assert!(elem1.t == elem2.t || px2.is_empty());
                             }
@@ -452,7 +439,7 @@ mod tests {
                 for (row1, row2) in block1.iter().zip(block2.iter()) {
                     for (px1, px2) in row1.iter().zip(row2.iter()) {
                         if !px1.is_empty() {
-                            for ((idx, elem1), elem2) in px1.iter().enumerate().zip(px2.iter()) {
+                            for (elem1, elem2) in px1.iter().zip(px2.iter()) {
                                 pixel_count += 1;
                                 assert!(elem1.t == elem2.t || px2.is_empty());
                             }

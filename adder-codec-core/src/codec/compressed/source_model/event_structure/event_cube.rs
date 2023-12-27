@@ -321,6 +321,7 @@ impl ComponentCompression for EventCube {
         }
 
         let mut init_event: Option<EventCoordless> = None;
+        let mut d_residual = 0;
 
         // Intra-code the first event (if present) for each pixel in row-major order
         for c in 0..self.num_channels {
@@ -330,8 +331,6 @@ impl ComponentCompression for EventCube {
 
                     if !pixel.is_empty() {
                         let event = pixel.first_mut().unwrap();
-
-                        let mut d_residual;
 
                         if let Some(init) = &mut init_event {
                             d_residual = event.d as DResidual - init.d as DResidual;
@@ -434,12 +433,12 @@ impl ComponentCompression for EventCube {
                             encoder.model.set_context(contexts.d_context);
 
                             if idx < pixel.len() {
-                                let mut prev_event = pixel[idx - 1]; // We can assume for now that this is perfectly decoded, but later we'll corrupt it according to any loss we incur
+                                // TODO: don't copy the below event?
+                                let prev_event = pixel[idx - 1]; // We can assume for now that this is perfectly decoded, but later we'll corrupt it according to any loss we incur
                                 let event = &mut pixel[idx];
 
                                 // Get the D residual
-                                let mut d_residual =
-                                    event.d as DResidual - prev_event.d as DResidual;
+                                let d_residual = event.d as DResidual - prev_event.d as DResidual;
                                 // Write the D residual (relative to the start_d for the first event)
                                 for byte in d_residual.to_be_bytes().iter() {
                                     encoder.encode(Some(&(*byte as usize)), stream).unwrap();
@@ -456,17 +455,15 @@ impl ComponentCompression for EventCube {
                                 );
 
                                 // encoder.model.set_context(contexts.dtref_context);
-                                let actual_delta_t = event.t - prev_event.t;
-                                let mut t_residual_i64 = event.t as i64 - t_prediction as i64;
-                                let (bitshift_amt, mut t_residual) = contexts
-                                    .residual_to_bitshift2(
-                                        t_prediction as i64,
-                                        t_residual_i64,
-                                        event,
-                                        &prev_event,
-                                        self.dt_ref,
-                                        c_thresh_max as f64,
-                                    );
+                                let t_residual_i64 = event.t as i64 - t_prediction as i64;
+                                let (bitshift_amt, t_residual) = contexts.residual_to_bitshift2(
+                                    t_prediction as i64,
+                                    t_residual_i64,
+                                    event,
+                                    &prev_event,
+                                    self.dt_ref,
+                                    c_thresh_max as f64,
+                                );
 
                                 encoder.model.set_context(contexts.bitshift_context);
                                 for byte in bitshift_amt.to_be_bytes().iter() {
@@ -520,25 +517,9 @@ impl ComponentCompression for EventCube {
         decoder: &mut Decoder<FenwickModel, BitReader<Cursor<Vec<u8>>, BigEndian>>,
         contexts: &Contexts,
         stream: &mut BitReader<Cursor<Vec<u8>>, BigEndian>,
-        block_idx_y: usize,
-        block_idx_x: usize,
-        num_channels: usize,
         start_t: AbsoluteT,
-        dt_ref: DeltaT,
-        num_intervals: usize,
     ) {
-        // let mut cube = Self::new(
-        //     block_idx_y as PixelAddress * BLOCK_SIZE as u16,
-        //     block_idx_x as PixelAddress * BLOCK_SIZE as u16,
-        //     num_channels,
-        //     start_t,
-        //     dt_ref,
-        //     num_intervals,
-        // );
-
-        let mut d_residual_buffer = [0u8; size_of::<DResidual>()];
         let mut bitshift_buffer = [0u8; 1];
-        let mut dtref_residual_buffer = [0u8; size_of::<TResidual>()];
         let mut t_residual_buffer = [0u8; size_of::<TResidual>()];
         let mut t_residual_full_buffer = [0u8; size_of::<i64>()];
         let mut init_event: Option<EventCoordless> = None;
@@ -546,16 +527,12 @@ impl ComponentCompression for EventCube {
         for c in 0..self.num_channels {
             for y in 0..BLOCK_SIZE {
                 for x in 0..BLOCK_SIZE {
-                    let mut pixel = &mut self.raw_event_lists[c][y][x];
+                    let pixel = &mut self.raw_event_lists[c][y][x];
 
                     decoder.model.set_context(contexts.d_context);
 
                     let tmp = decoder.decode(stream).unwrap().unwrap() as usize;
                     let d_residual = tmp as i16 - D_RESIDUAL_OFFSET;
-                    // for byte in d_residual_buffer.iter_mut() {
-                    //     *byte = decoder.decode(stream).unwrap().unwrap() as u8;
-                    // }
-                    // let d_residual = DResidual::from_be_bytes(d_residual_buffer);
 
                     if d_residual == DRESIDUAL_SKIP_CUBE {
                         pixel.clear(); // So we can skip it for intra-coding
@@ -597,8 +574,7 @@ impl ComponentCompression for EventCube {
                                 for byte in t_residual_buffer.iter_mut() {
                                     *byte = decoder.decode(stream).unwrap().unwrap() as u8;
                                 }
-                                let mut t_residual =
-                                    TResidual::from_be_bytes(t_residual_buffer) as i64;
+                                let t_residual = TResidual::from_be_bytes(t_residual_buffer) as i64;
                                 (t_residual as i64) << bitshift_amt as i64
                             };
 
@@ -623,26 +599,18 @@ impl ComponentCompression for EventCube {
         decoder: &mut Decoder<FenwickModel, BitReader<Cursor<Vec<u8>>, BigEndian>>,
         contexts: &Contexts,
         stream: &mut BitReader<Cursor<Vec<u8>>, BigEndian>,
-        block_idx_y: usize,
-        block_idx_x: usize,
-        num_channels: usize,
-        start_t: AbsoluteT,
-        dt_ref: DeltaT,
-        num_intervals: usize,
     ) {
         if self.skip_cube {
             return;
         }
         let mut d_residual_buffer = [0u8; size_of::<DResidual>()];
-        let mut dtref_residual_buffer = [0u8; size_of::<TResidual>()];
         let mut t_residual_buffer = [0u8; size_of::<TResidual>()];
         let mut t_residual_full_buffer = [0u8; size_of::<i64>()];
         let mut bitshift_buffer = [0u8; 1];
-        let mut init_event: Option<EventCoordless> = None;
 
         for c in 0..self.num_channels {
             self.raw_event_lists[c].iter_mut().for_each(|row| {
-                row.iter_mut().for_each(|mut pixel| {
+                row.iter_mut().for_each(|pixel| {
                     if !pixel.is_empty() {
                         // Then look for the next events for this pixel
                         let mut idx = 1;
@@ -659,7 +627,7 @@ impl ComponentCompression for EventCube {
                                 break; // We have all the events for this pixel now
                             }
                             debug_assert!(idx - 1 < pixel.len());
-                            let mut prev_event = pixel[idx - 1];
+                            let prev_event = pixel[idx - 1];
 
                             let d = (prev_event.d as DResidual + d_residual) as D;
 
@@ -690,8 +658,7 @@ impl ComponentCompression for EventCube {
                                 for byte in t_residual_buffer.iter_mut() {
                                     *byte = decoder.decode(stream).unwrap().unwrap() as u8;
                                 }
-                                let mut t_residual =
-                                    TResidual::from_be_bytes(t_residual_buffer) as i64;
+                                let t_residual = TResidual::from_be_bytes(t_residual_buffer) as i64;
                                 (t_residual as i64) << bitshift_amt as i64
                             };
 
@@ -721,7 +688,6 @@ mod compression_tests {
     use crate::codec::compressed::source_model::cabac_contexts::eof_context;
     use crate::codec::compressed::source_model::event_structure::event_cube::EventCube;
     use crate::codec::compressed::source_model::{ComponentCompression, HandleEvent};
-    use crate::codec::CodecMetadata;
     use crate::{Coord, DeltaT, Event};
     use arithmetic_coding_adder_dep::Encoder;
     use bitstream_io::{BigEndian, BitReader, BitWriter};
@@ -735,7 +701,7 @@ mod compression_tests {
     fn compress_and_decompress_intra() -> Result<(), Box<dyn Error>> {
         let mut cube = EventCube::new(0, 0, 1, 255, 255, 10);
         let mut counter = 0;
-        for c in 0..3 {
+        for _ in 0..3 {
             for y in 0..16 {
                 for x in 0..15 {
                     cube.ingest_event(Event {
@@ -774,7 +740,7 @@ mod compression_tests {
 
         let mut cube2 = cube.clone();
 
-        cube2.decompress_intra(&mut decoder, &contexts, &mut stream, 0, 0, 1, 255, 255, 10);
+        cube2.decompress_intra(&mut decoder, &contexts, &mut stream, 255);
 
         for c in 0..3 {
             for y in 0..16 {
@@ -804,7 +770,7 @@ mod compression_tests {
     fn compress_and_decompress_inter() -> Result<(), Box<dyn Error>> {
         let mut cube = EventCube::new(0, 0, 1, 255, 255, 2);
         let mut counter = 0;
-        for c in 0..3 {
+        for _ in 0..3 {
             for y in 0..16 {
                 for x in 0..15 {
                     cube.ingest_event(Event {
@@ -824,7 +790,7 @@ mod compression_tests {
 
         for y in 0..16 {
             for x in 0..15 {
-                for i in 0..rng.gen_range(0..3) {
+                for _ in 0..rng.gen_range(0..3) {
                     cube.ingest_event(Event {
                         coord: Coord { x, y, c: None },
                         t: min(
@@ -865,8 +831,8 @@ mod compression_tests {
         let mut stream = BitReader::endian(Cursor::new(stream.into_writer()), BigEndian);
 
         let mut cube2 = cube.clone();
-        cube2.decompress_intra(&mut decoder, &contexts, &mut stream, 0, 0, 1, 255, 255, 10);
-        cube2.decompress_inter(&mut decoder, &contexts, &mut stream, 0, 0, 1, 255, 255, 10);
+        cube2.decompress_intra(&mut decoder, &contexts, &mut stream, 255);
+        cube2.decompress_inter(&mut decoder, &contexts, &mut stream);
 
         for c in 0..3 {
             for y in 0..16 {
@@ -924,8 +890,8 @@ mod compression_tests {
         let mut stream = BitReader::endian(Cursor::new(stream.into_writer()), BigEndian);
 
         let mut cube2 = cube.clone();
-        cube2.decompress_intra(&mut decoder, &contexts, &mut stream, 0, 0, 1, 255, 255, 10);
-        cube2.decompress_inter(&mut decoder, &contexts, &mut stream, 0, 0, 1, 255, 255, 10);
+        cube2.decompress_intra(&mut decoder, &contexts, &mut stream, 255);
+        cube2.decompress_inter(&mut decoder, &contexts, &mut stream);
 
         for c in 0..3 {
             for y in 0..16 {
@@ -954,7 +920,6 @@ mod compression_tests {
     fn compress_and_decompress_intra_huge_tresidual() -> Result<(), Box<dyn Error>> {
         let num_intervals = 2;
         let mut cube = EventCube::new(0, 0, 1, 255000, 255, num_intervals);
-        let mut counter = 0;
 
         cube.ingest_event(Event {
             coord: Coord {
@@ -1002,28 +967,8 @@ mod compression_tests {
         let mut stream = BitReader::endian(Cursor::new(stream.into_writer()), BigEndian);
 
         let mut cube2 = cube.clone();
-        cube2.decompress_intra(
-            &mut decoder,
-            &contexts,
-            &mut stream,
-            0,
-            0,
-            1,
-            255000,
-            255,
-            num_intervals,
-        );
-        cube2.decompress_inter(
-            &mut decoder,
-            &contexts,
-            &mut stream,
-            0,
-            0,
-            1,
-            255000,
-            255,
-            num_intervals,
-        );
+        cube2.decompress_intra(&mut decoder, &contexts, &mut stream, 255000);
+        cube2.decompress_inter(&mut decoder, &contexts, &mut stream);
 
         // Note that these may NOT be the original values we ingested, due to the bit shifting!
         assert_eq!(
@@ -1042,7 +987,6 @@ mod compression_tests {
     fn compress_and_decompress_inter_huge_tresidual() -> Result<(), Box<dyn Error>> {
         let num_intervals = 2;
         let mut cube = EventCube::new(0, 0, 1, 255000, 255, num_intervals);
-        let mut counter = 0;
 
         cube.ingest_event(Event {
             coord: Coord {
@@ -1099,29 +1043,9 @@ mod compression_tests {
         let mut stream = BitReader::endian(Cursor::new(stream.into_writer()), BigEndian);
 
         let mut cube2 = cube.clone();
-        cube2.decompress_intra(
-            &mut decoder,
-            &contexts,
-            &mut stream,
-            0,
-            0,
-            1,
-            255000,
-            255,
-            num_intervals,
-        );
+        cube2.decompress_intra(&mut decoder, &contexts, &mut stream, 255000);
 
-        cube2.decompress_inter(
-            &mut decoder,
-            &contexts,
-            &mut stream,
-            0,
-            0,
-            1,
-            255000,
-            255,
-            num_intervals,
-        );
+        cube2.decompress_inter(&mut decoder, &contexts, &mut stream);
 
         // Note that these may NOT be the original values we ingested, due to the bit shifting!
         assert_eq!(

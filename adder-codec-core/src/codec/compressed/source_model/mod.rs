@@ -1,7 +1,7 @@
 use crate::codec::compressed::fenwick::context_switching::FenwickModel;
 use crate::codec::compressed::source_model::cabac_contexts::Contexts;
 use crate::codec::CodecError;
-use crate::{AbsoluteT, DeltaT, Event};
+use crate::{AbsoluteT, Event};
 use arithmetic_coding_adder_dep::{Decoder, Encoder};
 use bitstream_io::{BigEndian, BitReader, BitWriter};
 use std::io::Cursor;
@@ -28,24 +28,13 @@ trait ComponentCompression {
         decoder: &mut Decoder<FenwickModel, BitReader<Cursor<Vec<u8>>, BigEndian>>,
         contexts: &Contexts,
         stream: &mut BitReader<Cursor<Vec<u8>>, BigEndian>,
-        block_idx_y: usize,
-        block_idx_x: usize,
-        num_channels: usize,
         start_t: AbsoluteT,
-        dt_ref: DeltaT,
-        num_intervals: usize,
     );
     fn decompress_inter(
         &mut self,
         decoder: &mut Decoder<FenwickModel, BitReader<Cursor<Vec<u8>>, BigEndian>>,
         contexts: &Contexts,
         stream: &mut BitReader<Cursor<Vec<u8>>, BigEndian>,
-        block_idx_y: usize,
-        block_idx_x: usize,
-        num_channels: usize,
-        start_t: AbsoluteT,
-        dt_ref: DeltaT,
-        num_intervals: usize,
     );
     fn compress_inter(
         &mut self,

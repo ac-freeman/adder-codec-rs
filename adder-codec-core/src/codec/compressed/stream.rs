@@ -203,7 +203,7 @@ impl<R: Read + Seek> ReadCompression<R> for CompressedInput<R> {
                 let num_bytes = u32::from_be_bytes(buffer);
 
                 // Read the compressed Adu from the stream
-                let mut adu_bytes = reader.read_to_vec(num_bytes as usize)?;
+                let adu_bytes = reader.read_to_vec(num_bytes as usize)?;
 
                 // Create a temporary u8 stream to read the arithmetic-coded data from
                 let mut adu_stream = BitReader::endian(Cursor::new(adu_bytes), BigEndian);
@@ -249,7 +249,7 @@ impl<R: Read + Seek> ReadCompression<R> for CompressedInput<R> {
 #[cfg(test)]
 mod tests {
     use crate::codec::compressed::stream::CompressedInput;
-    use crate::codec::{CodecError, ReadCompression, WriteCompression};
+    use crate::codec::{CodecError, ReadCompression};
     use crate::PlaneSize;
     use bitstream_io::{BigEndian, BitReader};
     use std::cmp::min;
@@ -261,13 +261,11 @@ mod tests {
     #[test]
     fn test_compress_empty() -> Result<(), Box<dyn Error>> {
         use crate::codec::compressed::stream::CompressedOutput;
-        use crate::codec::raw::stream::RawOutput;
         use crate::codec::WriteCompression;
         use crate::Coord;
-        use crate::{Event, EventCoordless, SourceCamera, TimeMode};
+        use crate::{Event, SourceCamera, TimeMode};
         use std::io::Cursor;
 
-        let plane = PlaneSize::new(16, 30, 1)?;
         let start_t = 0;
         let dt_ref = 255;
         let num_intervals = 10;
@@ -315,10 +313,9 @@ mod tests {
     #[test]
     fn test_compress_decompress_barely_full() -> Result<(), Box<dyn Error>> {
         use crate::codec::compressed::stream::CompressedOutput;
-        use crate::codec::raw::stream::RawOutput;
         use crate::codec::WriteCompression;
         use crate::Coord;
-        use crate::{Event, EventCoordless, SourceCamera, TimeMode};
+        use crate::{Event, SourceCamera, TimeMode};
         use std::io::Cursor;
 
         let plane = PlaneSize::new(16, 30, 1)?;
@@ -327,7 +324,7 @@ mod tests {
         let num_intervals = 10;
 
         // A random candidate pixel to check that its events match
-        let mut candidate_px_idx = (7, 12);
+        let candidate_px_idx = (7, 12);
         let mut input_px_events = Vec::new();
         let mut output_px_events = Vec::new();
 
@@ -391,7 +388,7 @@ mod tests {
         let mut compressed_input = CompressedInput::new(dt_ref * num_intervals as u32, dt_ref);
         compressed_input.meta.plane = plane;
         let mut stream = BitReader::endian(Cursor::new(output), BigEndian);
-        for i in 0..counter - 1 {
+        for _ in 0..counter - 1 {
             let event = compressed_input.digest_event(&mut stream)?;
             if event.coord.y == candidate_px_idx.0 && event.coord.x == candidate_px_idx.1 {
                 output_px_events.push(event);
@@ -405,14 +402,12 @@ mod tests {
     #[test]
     fn test_compress_decompress_several() -> Result<(), Box<dyn Error>> {
         use crate::codec::compressed::stream::CompressedOutput;
-        use crate::codec::raw::stream::RawOutput;
         use crate::codec::WriteCompression;
         use crate::Coord;
-        use crate::{Event, EventCoordless, SourceCamera, TimeMode};
+        use crate::{Event, SourceCamera, TimeMode};
         use std::io::Cursor;
 
         let plane = PlaneSize::new(16, 30, 1)?;
-        let start_t = 0;
         let dt_ref = 255;
         let num_intervals = 5;
 
@@ -441,7 +436,7 @@ mod tests {
         );
 
         let mut counter = 0;
-        for i in 0..10 {
+        for _ in 0..10 {
             for y in 0..30 {
                 for x in 0..16 {
                     let event = Event {
@@ -467,7 +462,7 @@ mod tests {
         let mut compressed_input = CompressedInput::new(dt_ref * num_intervals as u32, dt_ref);
         compressed_input.meta.plane = plane;
         let mut stream = BitReader::endian(Cursor::new(output), BigEndian);
-        for i in 0..counter - 1 {
+        for _ in 0..counter - 1 {
             match compressed_input.digest_event(&mut stream) {
                 Ok(event) => {
                     if event.coord.y == candidate_px_idx.0 && event.coord.x == candidate_px_idx.1 {
@@ -494,10 +489,9 @@ mod tests {
     #[test]
     fn test_compress_decompress_several_single() -> Result<(), Box<dyn Error>> {
         use crate::codec::compressed::stream::CompressedOutput;
-        use crate::codec::raw::stream::RawOutput;
         use crate::codec::WriteCompression;
         use crate::Coord;
-        use crate::{Event, EventCoordless, SourceCamera, TimeMode};
+        use crate::{Event, SourceCamera, TimeMode};
         use std::io::Cursor;
 
         let plane = PlaneSize::new(32, 16, 1)?;
@@ -606,10 +600,9 @@ mod tests {
     #[test]
     fn test_compress_decompress_several_with_skip() -> Result<(), Box<dyn Error>> {
         use crate::codec::compressed::stream::CompressedOutput;
-        use crate::codec::raw::stream::RawOutput;
         use crate::codec::WriteCompression;
         use crate::Coord;
-        use crate::{Event, EventCoordless, SourceCamera, TimeMode};
+        use crate::{Event, SourceCamera, TimeMode};
         use std::io::Cursor;
 
         let plane = PlaneSize::new(30, 30, 1)?;
