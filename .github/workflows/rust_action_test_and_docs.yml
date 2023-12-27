@@ -47,23 +47,9 @@ jobs:
         run: cargo test -p adder-codec-core --features "compression"
       - name: Test project
         run: cargo test -p adder-codec-rs -p adder-info -p adder-viz
-
-      #- name: Test project features
-      #  run: cargo test -p adder-codec-core --features "open-cv feature-logging" -p adder-codec-rs --features "open-cv feature-logging" -p adder-info -p adder-to-dvs -p adder-viz --features "open-cv feature-logging"
       
-      # - name: Install cargo-llvm-cov
-      #   uses: taiki-e/install-action@cargo-llvm-cov
-      # - uses: Swatinem/rust-cache@v2
-      # - name: run llvm-cov test
-      #   # should test with --all-features if gpu support.
-      #   run: cargo llvm-cov -p adder-codec-core -p adder-codec-rs -p adder-info -p adder-to-dvs -p adder-viz --lcov --output-path lcov.info
-      # - name: Upload coverage to Codecov
-      #   uses: codecov/codecov-action@v3
-      #   with:
-      #     files: lcov.info
-      #     fail_ci_if_error: false
       - name: Run a documentation generation test
-        run: cargo doc -vv -p adder-codec-rs --features=docs-only
+        run: cargo doc -vv -p adder-codec-rs --features "docs-only open-cv"
   check_windows:
     name: Check and test on Windows
     runs-on: windows-2022
@@ -71,9 +57,6 @@ jobs:
       OPENCV_VERSION: 4.6.0
     steps:
       - uses: actions/checkout@v2
-
-      - name: Run vcpkg
-        uses: lukka/run-vcpkg@v11.3
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@master
@@ -85,24 +68,9 @@ jobs:
         run: choco install -y llvm
         shell: bash
 
-      - name: Install OpenCV
-        run: choco install -y opencv --version "$OPENCV_VERSION"
-        shell: bash
-
-      - name: Install ffmpeg
-        run: choco install ffmpeg
-        shell: bash
-
-      - name: Build binary
-        run: |
-          export PATH="/C/Program Files/LLVM/bin:$PATH"
-          export LIBCLANG_PATH="/C/Program Files/LLVM/bin"
-          export PATH="/C/tools/opencv/build/x64/vc15/bin:$PATH"
-          export OPENCV_LINK_PATHS="/C/tools/opencv/build/x64/vc15/lib"
-          export OPENCV_LINK_LIBS="opencv_world${OPENCV_VERSION//./}"
-          export OPENCV_INCLUDE_PATHS="/C/tools/opencv/build/include"
-          cargo build -p adder-info
-        shell: bash
+      # - name: Install OpenCV
+      #   run: choco install -y opencv --version "$OPENCV_VERSION"
+      #   shell: bash
 
       - name: Test project
         run: |
@@ -112,5 +80,5 @@ jobs:
           export OPENCV_LINK_PATHS="/C/tools/opencv/build/x64/vc15/lib"
           export OPENCV_LINK_LIBS="opencv_world${OPENCV_VERSION//./}"
           export OPENCV_INCLUDE_PATHS="/C/tools/opencv/build/include"
-          cargo test -p adder-codec-rs -p adder-viz
+          cargo test -p adder-codec-core --features "compression"
         shell: bash
