@@ -427,7 +427,7 @@ impl TranscoderState {
             });
     }
 
-    pub fn update_adder_params(&mut self) {
+    pub fn update_adder_params(&mut self, _: Res<Images>, mut images: ResMut<Assets<Image>>) {
         // TODO: do conditionals on the sliders themselves
 
         let source: &mut dyn Source<BufWriter<File>> = {
@@ -465,6 +465,7 @@ impl TranscoderState {
                                     self.ui_info_state.output_path.clone(),
                                     0,
                                 );
+                                images.clear();
                                 return;
                             }
                             let tmp = source.get_reconstructor_mut().as_mut().unwrap();
@@ -501,6 +502,7 @@ impl TranscoderState {
                     {
                         let current_frame =
                             source.get_video_ref().state.in_interval_count + source.frame_idx_start;
+                        images.clear();
                         replace_adder_transcoder(
                             self,
                             self.ui_info_state.input_path_0.clone(),
@@ -675,33 +677,41 @@ impl TranscoderState {
 
         let color = image_mat.shape()[2] == 3;
 
-        let image_bevy = prep_bevy_image(
-            image_mat,
-            color,
-            source.get_video_ref().state.plane.w(),
-            source.get_video_ref().state.plane.h(),
-        )?;
-
-        self.transcoder.live_image = image_bevy;
-
-        handles.last_image_view = handles.image_view.clone();
-        handles.last_input_view = handles.input_view.clone();
-        let handle = images.add(self.transcoder.live_image.clone());
-        handles.image_view = handle;
-
-        // Repeat for the input view
-        if self.ui_state.show_original && source.get_input().is_some() {
-            let image_mat = source.get_input().unwrap();
-            let image_mat = image_mat.clone();
-            let color = image_mat.shape()[2] == 3;
+        if let Some(image) = images.get_mut(&handles.image_view) {
+            crate::utils::prep_bevy_image_mut(image_mat, color, image)?;
+        } else {
             let image_bevy = prep_bevy_image(
                 image_mat,
                 color,
                 source.get_video_ref().state.plane.w(),
                 source.get_video_ref().state.plane.h(),
             )?;
-            let handle = images.add(image_bevy);
-            handles.input_view = handle;
+            self.transcoder.live_image = image_bevy;
+            let handle = images.add(self.transcoder.live_image.clone());
+            handles.image_view = handle;
+        }
+
+        // Repeat for the input view
+        if self.ui_state.show_original && source.get_input().is_some() {
+            let image_mat = source.get_input().unwrap();
+            let image_mat = image_mat.clone();
+            let color = image_mat.shape()[2] == 3;
+
+            if let Some(image) = images.get_mut(&handles.input_view) {
+                crate::utils::prep_bevy_image_mut(image_mat, color, image)?;
+            } else {
+                let image_bevy = prep_bevy_image(
+                    image_mat,
+                    color,
+                    source.get_video_ref().state.plane.w(),
+                    source.get_video_ref().state.plane.h(),
+                )?;
+                let handle = images.add(image_bevy);
+                handles.input_view = handle;
+            }
+        }
+        if !self.ui_state.show_original {
+            handles.input_view = Default::default();
         }
 
         let raw_source_bitrate = source.get_running_input_bitrate() / 8.0 / 1024.0 / 1024.0; // source in megabytes per sec

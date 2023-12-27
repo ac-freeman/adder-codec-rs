@@ -88,7 +88,6 @@ fn main() {
 pub struct Images {
     last_image_view: Handle<Image>,
     image_view: Handle<Image>,
-    last_input_view: Handle<Image>,
     input_view: Handle<Image>,
 }
 
@@ -196,7 +195,6 @@ fn draw_ui(
         });
 
     images.remove(&handles.last_image_view);
-    images.remove(&handles.last_input_view);
 
     let (image, texture_id) = match images.get(&handles.image_view) {
         // texture_id = Some(egui_ctx.add_image(handles.image_view.clone()));
@@ -437,11 +435,13 @@ fn draw_ui(
 
 fn update_adder_params(
     main_ui_state: Res<MainUiState>,
+    handles: Res<Images>,
+    images: ResMut<Assets<Image>>,
     mut transcoder_state: ResMut<TranscoderState>,
 ) {
     match main_ui_state.view {
         Tabs::Transcoder => {
-            transcoder_state.update_adder_params();
+            transcoder_state.update_adder_params(handles, images);
         }
         Tabs::Player => {
             // player_state.update_adder_params(commands);

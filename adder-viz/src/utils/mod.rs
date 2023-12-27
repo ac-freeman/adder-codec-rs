@@ -53,42 +53,6 @@ pub fn prep_bevy_image(
     width: u16,
     height: u16,
 ) -> Result<Image, Box<dyn Error>> {
-    // let image_bgra = if color {
-    //     // Swap the red and blue channels
-    //     // image_mat.swap_axes(2, 0);
-    //     //
-    //     // let temp = image_mat.index_axis_mut(Axis(2), 0).to_owned();
-    //     // let blue_channel = image_mat.index_axis_mut(Axis(2), 2).to_owned();
-    //     // image_mat.index_axis_mut(Axis(2), 0).assign(&blue_channel);
-    //     // // Swap the channels by copying
-    //     // image_mat.index_axis_mut(Axis(2), 2).assign(&temp);
-    //
-    //
-    //
-    //     ndarray::par_azip!((red in &mut image_mat.index_axis_mut(Axis(2), 0), blue in &mut image_mat.index_axis_mut(Axis(2), 2)) {
-    //         std::mem::swap(red, blue);
-    //     });
-    //
-    //     // add alpha channel
-    //     ndarray::concatenate(
-    //         Axis(2),
-    //         &[
-    //             image_mat.clone().view(),
-    //             Array::from_elem((image_mat.shape()[0], image_mat.shape()[1], 1), 255).view(),
-    //         ],
-    //     )?
-    // } else {
-    //     ndarray::concatenate(
-    //         Axis(2),
-    //         &[
-    //             image_mat.clone().view(),
-    //             image_mat.clone().view(),
-    //             image_mat.clone().view(),
-    //             Array::from_elem((image_mat.shape()[0], image_mat.shape()[1], 1), 255).view(),
-    //         ],
-    //     )?
-    // };
-
     // let view = Assets::get_mut(last_view)?;
     let image_mat = image_mat.as_standard_layout();
 
@@ -111,19 +75,6 @@ pub fn prep_bevy_image(
         }
     }
 
-    // image_mat.resize((width as usize * height as usize * 4) as usize, 255); // Add the alpha channel
-    // let mut char_array = vec!['\0'; image_mat.len()];
-    // let src_ptr = arr.as_ptr();
-    // let dest_ptr = char_array.as_mut_ptr();
-    //
-    // // Calculate the number of elements
-    // let num_elements = arr.len();
-    //
-    // // Use unsafe to copy the elements
-    // unsafe {
-    //     std::ptr::copy_nonoverlapping(src_ptr, dest_ptr, num_elements);
-    // }
-
     Ok(Image::new(
         Extent3d {
             width: width.into(),
@@ -134,6 +85,34 @@ pub fn prep_bevy_image(
         new_image_mat,
         TextureFormat::Rgba8UnormSrgb,
     ))
+}
+
+pub fn prep_bevy_image_mut(
+    mut image_mat: Frame,
+    color: bool,
+    new_image: &mut Image,
+) -> Result<(), Box<dyn Error>> {
+    let image_mat = image_mat.as_standard_layout().as_ptr();
+
+    let mut ref_idx = 0;
+    unsafe {
+        for (index, element) in new_image.data.iter_mut().enumerate() {
+            // Skip every 4th element
+            if (index + 1) % 4 == 0 {
+                if !color {
+                    ref_idx += 1;
+                }
+                continue;
+            }
+
+            *element = *image_mat.offset(ref_idx);
+            if color {
+                ref_idx += 1;
+            }
+        }
+    }
+
+    Ok(())
 }
 
 pub fn prep_bevy_image2(
