@@ -1187,6 +1187,7 @@ pub fn integrate_for_px(
             params.pixel_tree_mode,
             params.pixel_multi_mode,
             params.ref_time,
+            intensity,
         );
         grew_buffer = true;
         px.base_val = frame_val;

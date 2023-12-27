@@ -214,6 +214,7 @@ impl PixelArena {
         mode: Mode,
         multi_mode: PixelMultiMode,
         ref_time: DeltaT,
+        intensity: Intensity32,
     ) {
         // let mut events = Vec::new();
 
@@ -242,9 +243,9 @@ impl PixelArena {
 
         // dbg!(local_buffer.len());
         // dbg!(multi_mode);
-        if multi_mode == PixelMultiMode::Collapse && local_buffer.len() >= 2 {
+        if self.popped_dtm && multi_mode == PixelMultiMode::Collapse && local_buffer.len() >= 2 {
             // dbg!("doing it");
-            // Then discard all the events except the firs two, and mark the second of these as an EMPTY event
+            // Then discard all the events except the firs three, and mark the second of these as an EMPTY event
             // (carrying no intensity info)
             let _start_trash_idx = 0;
             let last_idx = local_buffer.len() - 1;
@@ -257,23 +258,23 @@ impl PixelArena {
             local_buffer[1].d = D_EMPTY;
             local_buffer[1].t = self.running_t as AbsoluteT;
             self.last_fired_t = self.running_t;
-            if mode == FramePerfect {
-                self.last_fired_t = if self.last_fired_t as DeltaT % ref_time == 0 {
-                    (self.last_fired_t as DeltaT) as f32
-                } else {
-                    (((self.last_fired_t as DeltaT / ref_time) + 1) * ref_time) as f32
-                };
-            }
+            // if mode == FramePerfect {
+            //     self.last_fired_t = if self.last_fired_t as DeltaT % ref_time == 0 {
+            //         (self.last_fired_t as DeltaT) as f32
+            //     } else {
+            //         (((self.last_fired_t as DeltaT / ref_time) + 1) * ref_time) as f32
+            //     };
+            // }
 
             buffer.push(local_buffer[1]);
             // debug_assert!(buffer.len() == 2);
+            self.arena[0] = PixelNode::new(intensity);
         } else {
             buffer.append(&mut local_buffer);
+            // Move the last node to the front
+            self.arena.swap(0, self.length - 1);
         }
 
-        // Move the last node to the front
-        // self.arena.swap(0, self.length - 1);
-        self.arena[0] = PixelNode::new(0.0);
         debug_assert!(self.arena[0].alt.is_none());
         self.length = 1;
 
@@ -359,7 +360,7 @@ impl PixelArena {
                 }
             };
 
-            if multi_mode == PixelMultiMode::Collapse && idx > 0 {
+            if self.popped_dtm && multi_mode == PixelMultiMode::Collapse && idx > 0 {
                 break;
             }
 

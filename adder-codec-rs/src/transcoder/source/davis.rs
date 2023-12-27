@@ -382,6 +382,7 @@ impl<W: Write + 'static> Integration<W> {
                                     Continuous,
                                     video.state.params.pixel_multi_mode,
                                     video.state.params.ref_time,
+                                    frame_val as Intensity32,
                                 );
                                 px.base_val = frame_val_u8;
 
@@ -667,6 +668,7 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Davis<W> {
                                     self.video.state.params.pixel_tree_mode,
                                     self.video.state.params.pixel_multi_mode,
                                     self.video.state.params.ref_time,
+                                    0.0,
                                 );
                             }
                             buffer
