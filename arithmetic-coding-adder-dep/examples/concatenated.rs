@@ -2,7 +2,7 @@
 #![feature(never_type)]
 
 use arithmetic_coding_adder_dep::{Decoder, Encoder, Model};
-use bitstream_io::{BigEndian, BitRead, BitReader, BitWrite, BitWriter};
+use bitstream_io::{BigEndian, BitRead, BitWrite, BitWriter};
 
 const PRECISION: u32 = 12;
 
@@ -121,13 +121,13 @@ where
 {
     let mut bitwriter = BitWriter::endian(Vec::default(), BigEndian);
 
-    let mut encoder1 = Encoder::with_precision(model1, &mut bitwriter, PRECISION);
+    let mut encoder1 = Encoder::with_precision(model1, PRECISION);
     encode(&mut encoder1, input1);
 
     let mut encoder2 = encoder1.chain(model2);
     encode(&mut encoder2, input2);
 
-    encoder2.flush().unwrap();
+    encoder2.flush(&mut bitwriter).unwrap();
 
     bitwriter.byte_align().unwrap();
     bitwriter.into_writer()
@@ -135,39 +135,42 @@ where
 
 /// Encode all symbols, followed by EOF. Doesn't flush the encoder (allowing
 /// more bits to be concatenated)
-fn encode<M, W>(encoder: &mut Encoder<M, W>, input: &[M::Symbol])
+fn encode<M, W>(_encoder: &mut Encoder<M, W>, _input: &[M::Symbol])
 where
     M: Model,
     W: BitWrite,
 {
-    for symbol in input {
-        encoder.encode(Some(symbol)).unwrap();
-    }
-    encoder.encode(None).unwrap();
+    todo!()
+    // for symbol in input {
+    //     encoder.encode(Some(symbol)).unwrap();
+    // }
+    // encoder.encode(None).unwrap();
 }
 
 /// Decode two sets of symbols, in sequence
-fn decode2<M, N>(model1: M, model2: N, buffer: &[u8]) -> (Vec<M::Symbol>, Vec<N::Symbol>)
+fn decode2<M, N>(_model1: M, _model2: N, _buffer: &[u8]) -> (Vec<M::Symbol>, Vec<N::Symbol>)
 where
     M: Model<B = N::B>,
     N: Model,
 {
-    let bitreader = BitReader::endian(buffer, BigEndian);
-
-    let mut decoder1 = Decoder::with_precision(model1, bitreader, PRECISION);
-    let output1 = decode(&mut decoder1);
-
-    let mut decoder2 = decoder1.chain(model2);
-    let output2 = decode(&mut decoder2);
-
-    (output1, output2)
+    todo!()
+    // let bitreader = BitReader::endian(buffer, BigEndian);
+    //
+    // let mut decoder1 = Decoder::with_precision(model1, PRECISION);
+    // let output1 = decode(&mut decoder1);
+    //
+    // let mut decoder2 = decoder1.chain(model2);
+    // let output2 = decode(&mut decoder2);
+    //
+    // (output1, output2)
 }
 
 /// Decode all symbols from a [`Decoder`] until EOF is reached
-fn decode<M, R>(decoder: &mut Decoder<M, R>) -> Vec<M::Symbol>
+fn decode<M, R>(_decoder: &mut Decoder<M, R>) -> Vec<M::Symbol>
 where
     M: Model,
     R: BitRead,
 {
-    decoder.decode_all().map(Result::unwrap).collect()
+    todo!()
+    // decoder.decode_all().map(Result::unwrap).collect()
 }

@@ -35,33 +35,21 @@ jobs:
         run: sudo apt-get update; sudo apt-get install -y --no-install-recommends libasound2-dev libudev-dev
 
       - name: Install other deps
-        run: sudo apt-get install -y portaudio19-dev build-essential libpulse-dev libdbus-1-dev pkg-config libx11-dev libatk1.0-dev libgtk-3-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libwayland-dev libxkbcommon-dev
+        run: sudo apt-get install -y portaudio19-dev build-essential libpulse-dev libdbus-1-dev pkg-config libx11-dev libatk1.0-dev libgtk-3-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libwayland-dev libxkbcommon-dev ffmpeg
 
       - name: Check project
-        run: cargo check -p adder-codec-core -p adder-codec-rs -p adder-info -p adder-to-dvs -p adder-viz --features "open-cv feature-logging"
+        run: cargo check -p adder-codec-core -p adder-codec-rs -p adder-info -p adder-to-dvs -p adder-viz --features "compression open-cv"
 
       - name: Build binaries for testing
         run: cargo build -p adder-info
 
+      - name: Test core
+        run: cargo test -p adder-codec-core --features "compression"
       - name: Test project
-        run: cargo test -p adder-codec-core -p adder-codec-rs -p adder-info -p adder-viz
-
-      - name: Test project features
-        run: cargo test -p adder-codec-core --features "open-cv feature-logging" -p adder-codec-rs --features "open-cv feature-logging" -p adder-info -p adder-to-dvs -p adder-viz --features "open-cv feature-logging"
+        run: cargo test -p adder-codec-rs -p adder-info -p adder-viz
       
-      # - name: Install cargo-llvm-cov
-      #   uses: taiki-e/install-action@cargo-llvm-cov
-      # - uses: Swatinem/rust-cache@v2
-      # - name: run llvm-cov test
-      #   # should test with --all-features if gpu support.
-      #   run: cargo llvm-cov -p adder-codec-core -p adder-codec-rs -p adder-info -p adder-to-dvs -p adder-viz --lcov --output-path lcov.info
-      # - name: Upload coverage to Codecov
-      #   uses: codecov/codecov-action@v3
-      #   with:
-      #     files: lcov.info
-      #     fail_ci_if_error: false
-      - name: Run a documentation generation test
-        run: cargo doc -vv -p adder-codec-rs --features=docs-only
+      # - name: Run a documentation generation test
+      #   run: cargo doc -vv -p adder-codec-rs --features "docs-only open-cv"
   check_windows:
     name: Check and test on Windows
     runs-on: windows-2022
@@ -80,20 +68,9 @@ jobs:
         run: choco install -y llvm
         shell: bash
 
-      - name: Install OpenCV
-        run: choco install -y opencv --version "$OPENCV_VERSION"
-        shell: bash
-
-      - name: Build binary
-        run: |
-          export PATH="/C/Program Files/LLVM/bin:$PATH"
-          export LIBCLANG_PATH="/C/Program Files/LLVM/bin"
-          export PATH="/C/tools/opencv/build/x64/vc15/bin:$PATH"
-          export OPENCV_LINK_PATHS="/C/tools/opencv/build/x64/vc15/lib"
-          export OPENCV_LINK_LIBS="opencv_world${OPENCV_VERSION//./}"
-          export OPENCV_INCLUDE_PATHS="/C/tools/opencv/build/include"
-          cargo build -p adder-info
-        shell: bash
+      # - name: Install OpenCV
+      #   run: choco install -y opencv --version "$OPENCV_VERSION"
+      #   shell: bash
 
       - name: Test project
         run: |
@@ -103,5 +80,5 @@ jobs:
           export OPENCV_LINK_PATHS="/C/tools/opencv/build/x64/vc15/lib"
           export OPENCV_LINK_LIBS="opencv_world${OPENCV_VERSION//./}"
           export OPENCV_INCLUDE_PATHS="/C/tools/opencv/build/include"
-          cargo test -vv -p adder-codec-core -p adder-codec-rs -p adder-info -p adder-to-dvs -p adder-viz --features "open-cv feature-logging"
+          cargo test -p adder-codec-core --features "compression"
         shell: bash

@@ -1,6 +1,6 @@
 use std::error::Error;
 
-use adder_codec_core::DeltaT;
+use adder_codec_rs::adder_codec_core::DeltaT;
 
 #[cfg(feature = "open-cv")]
 use adder_codec_rs::transcoder::source::davis::Davis;
@@ -18,8 +18,8 @@ use adder_codec_rs::transcoder::source::davis::TranscoderMode;
 use adder_codec_rs::davis_edi_rs::util::reconstructor::Reconstructor;
 
 use crate::transcoder::ui::{ParamsUiState, TranscoderState};
-use adder_codec_core::codec::rate_controller::DEFAULT_CRF_QUALITY;
-use adder_codec_core::SourceCamera::{DavisU8, FramedU8};
+use adder_codec_rs::adder_codec_core::codec::rate_controller::DEFAULT_CRF_QUALITY;
+use adder_codec_rs::adder_codec_core::SourceCamera::{DavisU8, FramedU8};
 use adder_codec_rs::transcoder::source::video::VideoBuilder;
 use bevy_egui::egui::{Color32, RichText};
 #[cfg(feature = "open-cv")]
@@ -78,7 +78,7 @@ impl AdderTranscoder {
                                 .unwrap_or(DEFAULT_CRF_QUALITY),
                         )
                         .frame_start(current_frame)?
-                        .chunk_rows(64)
+                        .chunk_rows(1)
                         .auto_time_parameters(
                             ui_state.delta_t_ref as u32,
                             ui_state.delta_t_max_mult * ui_state.delta_t_ref as u32,
@@ -215,7 +215,7 @@ impl AdderTranscoder {
                         }
 
                         if let Some(output_string) = output_string {
-                            let writer = BufWriter::new(File::create(&output_string)?);
+                            let writer = BufWriter::new(File::create(output_string)?);
                             davis_source = *davis_source.write_out(
                                 DavisU8,
                                 ui_state.time_mode,

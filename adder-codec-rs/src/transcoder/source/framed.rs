@@ -113,7 +113,7 @@ impl<W: Write + 'static> Framed<W> {
 
     /// Get the number of ticks each frame is said to span
     pub fn get_ref_time(&self) -> u32 {
-        self.video.state.ref_time
+        self.video.state.params.ref_time
     }
 
     pub fn get_last_input_frame(&self) -> &Frame {
@@ -135,7 +135,7 @@ impl<W: Write + 'static> Source<W> for Framed<W> {
         let res = thread_pool.install(|| {
             self.video.integrate_matrix(
                 self.input_frame.clone(),
-                self.video.state.ref_time as f32,
+                self.video.state.params.ref_time as f32,
                 view_interval,
             )
         });
@@ -143,12 +143,12 @@ impl<W: Write + 'static> Source<W> for Framed<W> {
         {
             if let Some(handle) = &mut self.video.state.feature_log_handle {
                 // Calculate the quality metrics
-                let mut image_mat = self.video.display_frame.clone();
+                let mut image_mat = self.video.state.running_intensities.clone();
 
                 #[rustfmt::skip]
                     let metrics = calculate_quality_metrics(
                     &self.input_frame,
-                    &mut image_mat,
+                    &image_mat,
                     QualityMetrics {
                         mse: Some(0.0),
                         psnr: Some(0.0),

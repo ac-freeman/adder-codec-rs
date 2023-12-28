@@ -1,14 +1,13 @@
 extern crate adder_codec_rs;
 
-use crate::adder_codec_rs::transcoder::source::video::VideoBuilder;
 use adder_codec_core::codec::decoder::Decoder;
 use adder_codec_core::codec::encoder::Encoder;
 use adder_codec_core::codec::raw::stream::RawInput;
-use adder_codec_core::codec::{EncoderOptions, ReadCompression, WriteCompression};
+use adder_codec_core::codec::EncoderOptions;
 use adder_codec_core::SourceCamera::FramedU8;
 use adder_codec_core::SourceType::*;
 use adder_codec_core::TimeMode::DeltaT;
-use adder_codec_core::{Coord, Event, EventCoordless, EventRelative, PlaneSize, TimeMode};
+use adder_codec_core::{Coord, Event, EventCoordless, PlaneSize, TimeMode};
 use bitstream_io::{BigEndian, BitReader};
 use ndarray::{Array3, Axis};
 use std::fs;
@@ -19,10 +18,8 @@ use std::process::Command;
 
 use adder_codec_rs::framer::driver::FramerMode::INSTANTANEOUS;
 use adder_codec_rs::framer::driver::{FrameSequence, Framer, FramerBuilder};
-use adder_codec_rs::transcoder::source::framed::Framed;
-use adder_codec_rs::transcoder::source::video::Source;
+
 use rand::Rng;
-use rayon::current_num_threads;
 
 #[test]
 fn test_set_stream_position() {

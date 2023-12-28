@@ -1,3 +1,4 @@
+#![feature(portable_simd)]
 #![warn(missing_docs)]
 
 //! # adder-codec-rs

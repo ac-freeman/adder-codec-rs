@@ -1,7 +1,7 @@
 [package]
 name = "arithmetic-coding-adder-dep"
 description = "fast and flexible arithmetic coding library"
-version = "0.3.1"
+version = "0.3.2"
 edition = "2021"
 license = "MIT"
 keywords = ["compression", "encoding", "arithmetic-coding", "lossless"]
@@ -9,7 +9,7 @@ categories = ["compression", "encoding", "parsing"]
 repository = "https://github.com/danieleades/arithmetic-coding"
 
 [dependencies]
-arithmetic-coding-core = { path = "./arithmetic-coding-core", version = "0.3.0" }
+arithmetic-coding-core-adder-dep = { path = "arithmetic-coding-core-adder-dep", version = "0.3.0" }
 bitstream-io = "1.2.0"
 thiserror = "1.0.30"
 

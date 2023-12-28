@@ -3,19 +3,16 @@ use crate::codec::compressed::source_model::cabac_contexts::{eof_context, Contex
 use crate::codec::compressed::source_model::event_structure::event_cube::EventCube;
 use crate::codec::compressed::source_model::event_structure::BLOCK_SIZE;
 use crate::codec::compressed::source_model::{ComponentCompression, HandleEvent};
-use crate::codec::{CodecError, CodecMetadata};
-use crate::{AbsoluteT, DeltaT, Event, PixelAddress, PlaneSize};
+use crate::codec::CodecError;
+use crate::{AbsoluteT, DeltaT, Event, PlaneSize};
 use arithmetic_coding_adder_dep::{Decoder, Encoder};
 use bitstream_io::{BigEndian, BitReader, BitWriter};
 use ndarray::Array2;
-use std::collections::VecDeque;
 use std::io::Cursor;
 use std::mem::size_of;
 
 #[derive(Clone, Debug, Default)]
 pub struct EventAdu {
-    plane: PlaneSize,
-
     /// Contains the sparse events in the cube. The index is the relative interval of dt_ref from the start
     event_cubes: Array2<EventCube>,
 
@@ -59,7 +56,6 @@ impl EventAdu {
         let blocks_x = (plane.w_usize() + BLOCK_SIZE - 1) / BLOCK_SIZE;
 
         Self {
-            plane,
             event_cubes: Array2::from_shape_fn((blocks_y, blocks_x), |(y, x)| {
                 EventCube::new(
                     y as u16 * BLOCK_SIZE as u16,
@@ -89,11 +85,7 @@ impl EventAdu {
     ) -> Result<(), CodecError> {
         // Create a new source model instance
         let mut source_model = FenwickModel::with_symbols(u16::MAX as usize, 1 << 30);
-        let contexts = Contexts::new(
-            &mut source_model,
-            self.dt_ref,
-            self.dt_ref * self.num_intervals as DeltaT,
-        );
+        let contexts = Contexts::new(&mut source_model, self.dt_ref);
 
         let mut encoder = Encoder::new(source_model);
 
@@ -120,42 +112,6 @@ impl EventAdu {
 
         Ok(())
     }
-    pub fn compress_test(
-        &mut self,
-        stream: &mut BitWriter<Vec<u8>, BigEndian>,
-        c_thresh_max: u8,
-    ) -> Result<(), CodecError> {
-        // Create a new source model instance
-        let mut source_model = FenwickModel::with_symbols(u16::MAX as usize, 1 << 30);
-        let contexts = Contexts::new(
-            &mut source_model,
-            self.dt_ref,
-            self.dt_ref * self.num_intervals as DeltaT,
-        );
-
-        let mut encoder = Encoder::new(source_model);
-
-        // Write out the starting timestamp of the Adu
-        encoder.model.set_context(contexts.t_context);
-        for byte in self.start_t.to_be_bytes().iter() {
-            encoder.encode(Some(&(*byte as usize)), stream).unwrap();
-        }
-
-        for cube in self.event_cubes.iter_mut() {
-            debug_assert_eq!(cube.start_t, self.start_t);
-            cube.compress_intra(&mut encoder, &contexts, stream, Some(c_thresh_max))?;
-        }
-
-        for cube in self.event_cubes.iter_mut() {
-            debug_assert_eq!(cube.start_t, self.start_t);
-            cube.compress_inter(&mut encoder, &contexts, stream, Some(c_thresh_max))?;
-        }
-
-        // Flush the encoder
-        eof_context(&contexts, &mut encoder, stream);
-
-        Ok(())
-    }
 
     pub fn decompress(&mut self, stream: &mut BitReader<Cursor<Vec<u8>>, BigEndian>) {
         self.clear_decompression();
@@ -164,11 +120,7 @@ impl EventAdu {
 
         // Create a new source model instance
         let mut source_model = FenwickModel::with_symbols(u16::MAX as usize, 1 << 30);
-        let contexts = Contexts::new(
-            &mut source_model,
-            self.dt_ref,
-            self.dt_ref * self.num_intervals as DeltaT,
-        );
+        let contexts = Contexts::new(&mut source_model, self.dt_ref);
         let mut decoder = Decoder::new(source_model);
 
         // Read the starting timestamp of the Adu
@@ -185,12 +137,7 @@ impl EventAdu {
                     &mut decoder,
                     &contexts,
                     stream,
-                    block_idx_y,
-                    block_idx_x,
-                    self.plane.c_usize(),
                     self.start_t,
-                    self.dt_ref,
-                    self.num_intervals,
                 );
                 debug_assert_eq!(
                     self.event_cubes[[block_idx_y, block_idx_x]].start_t,
@@ -205,12 +152,6 @@ impl EventAdu {
                     &mut decoder,
                     &contexts,
                     stream,
-                    block_idx_y,
-                    block_idx_x,
-                    self.plane.c_usize(),
-                    self.start_t,
-                    self.dt_ref,
-                    self.num_intervals,
                 );
                 debug_assert_eq!(
                     self.event_cubes[[block_idx_y, block_idx_x]].start_t,
@@ -233,7 +174,7 @@ impl HandleEvent for EventAdu {
     /// Assume that the event does fit within the adu's time frame. This is checked at the caller.
     ///
     /// Returns true if this is the first event that the Adu has ingested
-    fn ingest_event(&mut self, mut event: Event) -> bool {
+    fn ingest_event(&mut self, event: Event) -> bool {
         let idx_y = event.coord.y_usize() / BLOCK_SIZE;
         let idx_x = event.coord.x_usize() / BLOCK_SIZE;
 
@@ -241,12 +182,12 @@ impl HandleEvent for EventAdu {
             self.cube_to_write_count += 1;
         };
 
-        return if self.skip_adu {
+        if self.skip_adu {
             self.skip_adu = false;
             true
         } else {
             false
-        };
+        }
     }
 
     fn digest_event(&mut self) -> Result<Event, CodecError> {
@@ -265,10 +206,8 @@ impl HandleEvent for EventAdu {
                 // Call it recursively on the new block idx
                 self.digest_event()
             }
-            Ok(event) => {
-                return Ok(event);
-            }
-            Err(e) => return Err(e),
+            Ok(event) => Ok(event),
+            Err(e) => Err(e),
         }
     }
 
@@ -299,15 +238,13 @@ impl HandleEvent for EventAdu {
 #[cfg(test)]
 mod tests {
     use crate::codec::compressed::fenwick::context_switching::FenwickModel;
-    use crate::codec::compressed::source_model::cabac_contexts::eof_context;
+    use crate::codec::compressed::source_model::cabac_contexts::{eof_context, Contexts};
     use crate::codec::compressed::source_model::event_structure::event_adu::EventAdu;
-    use crate::codec::compressed::source_model::event_structure::BLOCK_SIZE;
-    use crate::codec::compressed::source_model::HandleEvent;
-    use crate::codec::CodecMetadata;
-    use crate::{AbsoluteT, Coord, DeltaT, Event, PlaneSize};
+    use crate::codec::compressed::source_model::{ComponentCompression, HandleEvent};
+    use crate::codec::CodecError;
+    use crate::{Coord, Event, PlaneSize};
     use arithmetic_coding_adder_dep::Encoder;
     use bitstream_io::{BigEndian, BitReader, BitWriter};
-    use ndarray::Array2;
     use std::cmp::min;
     use std::io::Cursor;
 
@@ -370,14 +307,13 @@ mod tests {
         let bufwriter = Vec::new();
         let mut stream = BitWriter::endian(bufwriter, BigEndian);
 
-        adu.compress_test(&mut stream, 0)?;
+        compress_test(&mut adu, &mut stream, 0)?;
 
         let mut stream = BitReader::endian(Cursor::new(stream.into_writer()), BigEndian);
         let mut adu2 = EventAdu::new(plane, start_t, dt_ref, num_intervals);
         adu2.decompress(&mut stream);
 
         assert_eq!(adu.event_cubes.shape(), adu2.event_cubes.shape());
-        let mut pixel_count = 0;
         for (cube1, cube2) in adu.event_cubes.iter().zip(adu2.event_cubes.iter()) {
             for (block1, block2) in cube1
                 .raw_event_lists
@@ -388,7 +324,6 @@ mod tests {
                 for (row1, row2) in block1.iter().zip(block2.iter()) {
                     for (px1, px2) in row1.iter().zip(row2.iter()) {
                         if !px1.is_empty() {
-                            pixel_count += 1;
                             for (elem1, elem2) in px1.iter().zip(px2.iter()) {
                                 assert!(elem1.t == elem2.t || px2.is_empty());
                             }
@@ -399,6 +334,39 @@ mod tests {
                 }
             }
         }
+
+        Ok(())
+    }
+
+    fn compress_test(
+        adu: &mut EventAdu,
+        stream: &mut BitWriter<Vec<u8>, BigEndian>,
+        c_thresh_max: u8,
+    ) -> Result<(), CodecError> {
+        // Create a new source model instance
+        let mut source_model = FenwickModel::with_symbols(u16::MAX as usize, 1 << 30);
+        let contexts = Contexts::new(&mut source_model, adu.dt_ref);
+
+        let mut encoder = Encoder::new(source_model);
+
+        // Write out the starting timestamp of the Adu
+        encoder.model.set_context(contexts.t_context);
+        for byte in adu.start_t.to_be_bytes().iter() {
+            encoder.encode(Some(&(*byte as usize)), stream).unwrap();
+        }
+
+        for cube in adu.event_cubes.iter_mut() {
+            debug_assert_eq!(cube.start_t, adu.start_t);
+            cube.compress_intra(&mut encoder, &contexts, stream, Some(c_thresh_max))?;
+        }
+
+        for cube in adu.event_cubes.iter_mut() {
+            debug_assert_eq!(cube.start_t, adu.start_t);
+            cube.compress_inter(&mut encoder, &contexts, stream, Some(c_thresh_max))?;
+        }
+
+        // Flush the encoder
+        eof_context(&contexts, &mut encoder, stream);
 
         Ok(())
     }
@@ -431,7 +399,6 @@ mod tests {
 
                     if 28 + counter > start_t + dt_ref * num_intervals as u32 {
                         break;
-                    } else {
                     }
                 }
             }
@@ -440,7 +407,7 @@ mod tests {
         let bufwriter = Vec::new();
         let mut stream = BitWriter::endian(bufwriter, BigEndian);
 
-        adu.compress_test(&mut stream, 0)?;
+        compress_test(&mut adu, &mut stream, 0)?;
 
         let encoded_data = stream.into_writer();
         let mut stream = BitReader::endian(Cursor::new(encoded_data.clone()), BigEndian);
@@ -459,7 +426,7 @@ mod tests {
                 for (row1, row2) in block1.iter().zip(block2.iter()) {
                     for (px1, px2) in row1.iter().zip(row2.iter()) {
                         if !px1.is_empty() {
-                            for ((idx, elem1), elem2) in px1.iter().enumerate().zip(px2.iter()) {
+                            for (elem1, elem2) in px1.iter().zip(px2.iter()) {
                                 pixel_count += 1;
                                 assert!(elem1.t == elem2.t || px2.is_empty());
                             }

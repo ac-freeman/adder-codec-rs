@@ -6,8 +6,6 @@ use crate::{Event, PlaneSize, SourceCamera, SourceType};
 // use crate::codec::compressed::adu::frame::Adu;
 #[cfg(feature = "compression")]
 use crate::codec::compressed::stream::CompressedInput;
-#[cfg(feature = "compression")]
-use crate::codec::CompressedOutput;
 
 use crate::codec::header::{
     EventStreamHeader, EventStreamHeaderExtensionV1, EventStreamHeaderExtensionV2,
@@ -249,10 +247,10 @@ mod tests {
     use crate::codec::encoder::Encoder;
     use crate::codec::raw::stream::{RawInput, RawOutput};
 
+    use crate::codec::rate_controller::Crf;
     use crate::codec::{EncoderOptions, EventOrder};
     use crate::Coord;
     use std::io::{BufReader, BufWriter, Cursor, Write};
-    use crate::codec::rate_controller::Crf;
 
     fn stock_event() -> Event {
         Event {
@@ -284,12 +282,14 @@ mod tests {
             },
             bufwriter,
         );
-        let mut encoder: Encoder<BufWriter<Vec<u8>>> =
-            Encoder::new_raw(compression, EncoderOptions::default(PlaneSize{
+        let mut encoder: Encoder<BufWriter<Vec<u8>>> = Encoder::new_raw(
+            compression,
+            EncoderOptions::default(PlaneSize {
                 width: 100,
                 height: 100,
-                channels: 1
-            }));
+                channels: 1,
+            }),
+        );
 
         let event = stock_event();
         encoder.ingest_event(event).unwrap();
@@ -323,11 +323,14 @@ mod tests {
             EncoderOptions {
                 event_drop: Default::default(),
                 event_order: EventOrder::Interleaved,
-                crf: Crf::new(None, PlaneSize{
-                    width: 100,
-                    height: 100,
-                    channels: 1
-                }),
+                crf: Crf::new(
+                    None,
+                    PlaneSize {
+                        width: 100,
+                        height: 100,
+                        channels: 1,
+                    },
+                ),
             },
         );
 
@@ -342,6 +345,8 @@ mod tests {
 
     #[cfg(feature = "compression")]
     fn setup_encoded_compressed(codec_version: u8) -> Vec<u8> {
+        use crate::codec::CompressedOutput;
+
         let output = Vec::new();
 
         let bufwriter = BufWriter::new(output);
@@ -359,12 +364,14 @@ mod tests {
             },
             bufwriter,
         );
-        let encoder: Encoder<BufWriter<Vec<u8>>> =
-            Encoder::new_compressed(compression, EncoderOptions::default(PlaneSize{
+        let encoder: Encoder<BufWriter<Vec<u8>>> = Encoder::new_compressed(
+            compression,
+            EncoderOptions::default(PlaneSize {
                 width: 100,
                 height: 100,
-                channels: 1
-            }));
+                channels: 1,
+            }),
+        );
 
         // let event = stock_event();
         //

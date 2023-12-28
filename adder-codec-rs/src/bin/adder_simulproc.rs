@@ -67,8 +67,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
         Framed::new(args.input_filename, args.color_input, args.scale)?
             // .chunk_rows(64)
             .frame_start(args.frame_idx_start)?
-            .c_thresh_pos(args.c_thresh_pos)
-            .c_thresh_neg(args.c_thresh_neg)
+            .crf(5)
+            // .c_thresh_pos(args.c_thresh_pos)
+            // .c_thresh_neg(args.c_thresh_neg)
             .show_display(args.show_display)
             .auto_time_parameters(args.ref_time, args.delta_t_max, None)?;
 

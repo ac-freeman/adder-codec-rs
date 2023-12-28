@@ -95,9 +95,7 @@ mod tests {
     use adder_codec_core::codec::decoder::Decoder;
     use adder_codec_core::codec::encoder::Encoder;
     use adder_codec_core::codec::raw::stream::{RawInput, RawOutput};
-    use adder_codec_core::codec::{
-        CodecMetadata, EncoderOptions, ReadCompression, WriteCompression,
-    };
+    use adder_codec_core::codec::{CodecMetadata, EncoderOptions};
     use adder_codec_core::SourceCamera::FramedU8;
     use adder_codec_core::TimeMode::AbsoluteT;
     use adder_codec_core::{Coord, Event, PlaneSize, TimeMode};

@@ -1,27 +1,20 @@
 use crate::player::ui::ReconstructionMethod;
-use adder_codec_core::bitstream_io::{BigEndian, BitReader};
-use adder_codec_core::codec::decoder::Decoder;
-use adder_codec_core::*;
+use adder_codec_rs::adder_codec_core::bitstream_io::{BigEndian, BitReader};
+use adder_codec_rs::adder_codec_core::codec::decoder::Decoder;
+use adder_codec_rs::adder_codec_core::*;
 use adder_codec_rs::framer::driver::FramerMode::INSTANTANEOUS;
 use adder_codec_rs::framer::driver::{FrameSequence, Framer, FramerBuilder};
 use adder_codec_rs::framer::scale_intensity::event_to_intensity;
 
 use crate::utils::prep_bevy_image;
-#[cfg(feature = "open-cv")]
-use adder_codec_rs::transcoder::source::video::show_display_force;
+
 use adder_codec_rs::transcoder::source::video::FramedViewMode;
 use adder_codec_rs::utils::cv::is_feature;
 use adder_codec_rs::utils::viz::draw_feature_coord;
 use bevy::prelude::Image;
 use ndarray::Array;
 use ndarray::Array3;
-#[cfg(feature = "open-cv")]
-use opencv::core::{
-    create_continuous, KeyPoint, Mat, MatTraitConstManual, MatTraitManual, Scalar, Vector, CV_8UC1,
-    CV_8UC3,
-};
-#[cfg(feature = "open-cv")]
-use opencv::imgproc;
+
 use std::error::Error;
 use std::fmt;
 use std::fs::File;
@@ -61,7 +54,6 @@ pub struct AdderPlayer {
     reconstruction_method: ReconstructionMethod,
     current_frame: u32,
     stream_state: StreamState,
-    pub(crate) view_mode: FramedViewMode,
 }
 
 unsafe impl Sync for AdderPlayer {}
@@ -97,7 +89,7 @@ impl AdderPlayer {
 
                     let mut reconstructed_frame_rate = meta.tps as f32 / meta.ref_interval as f32;
 
-                    reconstructed_frame_rate /= playback_speed as f32;
+                    reconstructed_frame_rate /= playback_speed;
 
                     let framer_builder: FramerBuilder = FramerBuilder::new(meta.plane, 260)
                         .codec_version(meta.codec_version, meta.time_mode)
@@ -151,7 +143,6 @@ impl AdderPlayer {
                         playback_speed,
                         reconstruction_method: ReconstructionMethod::Accurate,
                         current_frame: 0,
-                        view_mode,
                     })
                 }
                 Some(_) => Err(Box::new(AdderPlayerError("Invalid file type".into()))),
@@ -167,21 +158,15 @@ impl AdderPlayer {
     pub fn stream_pos(mut self, pos: u64) -> Self {
         if let Some(ref mut stream) = self.input_stream {
             if pos > stream.decoder.meta().header_size as u64 {
-                match stream
+                if let Ok(_) = stream
                     .decoder
                     .set_input_stream_position(&mut stream.bitreader, pos)
-                {
-                    Ok(_) => {}
-                    Err(_) => {}
-                }
+                {}
             } else {
-                match stream.decoder.set_input_stream_position(
+                if let Ok(_) = stream.decoder.set_input_stream_position(
                     &mut stream.bitreader,
                     stream.decoder.meta().header_size as u64,
-                ) {
-                    Ok(_) => {}
-                    Err(_) => {}
-                }
+                ) {}
             }
         }
         self
@@ -271,7 +256,7 @@ impl AdderPlayer {
         // }
 
         let image_bevy = loop {
-            let mut display_mat = &mut self.display_frame;
+            let display_mat = &mut self.display_frame;
             let color = display_mat.shape()[2] == 3;
 
             if self.stream_state.current_t_ticks as u128
@@ -390,7 +375,7 @@ impl AdderPlayer {
                                 draw_feature_coord(
                                     event.coord.x,
                                     event.coord.y,
-                                    &mut display_mat,
+                                    display_mat,
                                     color,
                                 );
                             } else if !event.coord.is_border(
@@ -402,7 +387,7 @@ impl AdderPlayer {
                                 let radius = 2;
                                 if color {
                                     for i in -radius..=radius {
-                                        for c in 0..3 as usize {
+                                        for c in 0..3_usize {
                                             *display_mat.uget_mut((
                                                 (event.coord.y as i32 + i) as usize,
                                                 (event.coord.x as i32) as usize,
@@ -538,13 +523,26 @@ impl AdderPlayer {
                     let color: u8 = 255;
                     let radius = 2;
                     for i in -radius..=radius {
-                        let idx = ((feature.y as i32 + i) * meta.plane.w() as i32
-                            + feature.x as i32) as usize;
+                        let idx =
+                            ((feature.y as i32 + i) * meta.plane.w() as i32 * meta.plane.c() as i32
+                                + (feature.x as i32) * meta.plane.c() as i32)
+                                as usize;
                         db[idx] = color;
 
-                        let idx = (feature.y as i32 * meta.plane.w() as i32
-                            + (feature.x as i32 + i)) as usize;
+                        if meta.plane.c() > 1 {
+                            db[idx + 1] = color;
+                            db[idx + 2] = color;
+                        }
+
+                        let idx = (feature.y as i32 * meta.plane.w() as i32 * meta.plane.c() as i32
+                            + (feature.x as i32 + i) * meta.plane.c() as i32)
+                            as usize;
                         db[idx] = color;
+
+                        if meta.plane.c() > 1 {
+                            db[idx + 1] = color;
+                            db[idx + 2] = color;
+                        }
                     }
                 }
             }
@@ -604,7 +602,7 @@ impl AdderPlayer {
                     event_count += 1;
                     let filled = frame_sequence.ingest_event(&mut event, last_event);
 
-                    last_event = Some(event.clone());
+                    last_event = Some(event);
 
                     if filled {
                         return Ok((event_count, image_bevy));

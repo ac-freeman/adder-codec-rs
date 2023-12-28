@@ -76,11 +76,8 @@ fn adder_info(args: MyArgs, out: impl Write) -> Result<(), Box<dyn error::Error>
         let mut event_count: u64 = 0;
 
         // Setup time tracker for AbsoluteT mode
-        let mut data = Vec::new();
-        for _ in 0..meta.plane.volume() {
-            let t = 0_u32;
-            data.push(t);
-        }
+        let data = vec![0_u32; meta.plane.volume()];
+
         let mut t_tree: Array3<DeltaT> = Array3::from_shape_vec(
             (
                 meta.plane.h_usize(),
@@ -98,11 +95,7 @@ fn adder_info(args: MyArgs, out: impl Write) -> Result<(), Box<dyn error::Error>
                     event.coord.c_usize(),
                 ]];
                 let new_t = event.t;
-                if event.coord.x == 343 && event.coord.y == 7 {
-                    println!("{} {}", new_t, last_t);
-                } else {
-                    event = absolute_event_to_dt_event(event, *last_t);
-                }
+                event = absolute_event_to_dt_event(event, *last_t);
                 *last_t = new_t;
             }
 

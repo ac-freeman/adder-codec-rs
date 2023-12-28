@@ -1,8 +1,6 @@
 use crate::codec::compressed::fenwick::context_switching::FenwickModel;
 use crate::codec::compressed::fenwick::Weights;
-use crate::codec::compressed::TResidual;
-use crate::codec::CodecMetadata;
-use crate::{AbsoluteT, DeltaT, EventCoordless, Intensity, D, D_EMPTY, D_SHIFT};
+use crate::{AbsoluteT, DeltaT, EventCoordless, Intensity, D, D_SHIFT};
 use arithmetic_coding_adder_dep::Encoder;
 use bitstream_io::{BigEndian, BitWrite, BitWriter};
 
@@ -10,15 +8,10 @@ pub struct Contexts {
     /// Decimation factor residuals context
     pub(crate) d_context: usize,
 
-    /// Dt_ref interval count residuals context (how many dt_ref intervals away is our predicted interval from the actual)
-    pub(crate) dtref_context: usize,
-
     /// Timestamp residuals context
     pub(crate) t_context: usize,
 
     t_residual_max: i64,
-
-    dt_max: i64,
 
     /// EOF context
     pub(crate) eof_context: usize,
@@ -31,38 +24,30 @@ pub const D_RESIDUAL_OFFSET: i16 = 255;
 pub const BITSHIFT_ENCODE_FULL: u8 = 15;
 
 impl Contexts {
-    pub fn new(source_model: &mut FenwickModel, dt_ref: DeltaT, dt_max: DeltaT) -> Contexts {
+    pub fn new(source_model: &mut FenwickModel, dt_ref: DeltaT) -> Contexts {
         let d_context = source_model.push_context_with_weights(d_residual_default_weights());
-        let dtref_context = source_model.push_context_with_weights(d_residual_default_weights());
 
         // TODO: Configure this based on the delta_t_max parameter!!
         let t_weights = t_residual_default_weights(dt_ref);
         let t_residual_max = (t_weights.len() as i64 - 2) / 2;
         let t_context = source_model.push_context_with_weights(t_weights);
 
-        let eof_context =
-            source_model.push_context_with_weights(Weights::new_with_counts(1, &vec![1]));
+        let eof_context = source_model.push_context_with_weights(Weights::new_with_counts(1, &[1]));
         let bitshift_context =
-            source_model.push_context_with_weights(Weights::new_with_counts(16, &vec![1; 16]));
+            source_model.push_context_with_weights(Weights::new_with_counts(16, &[1; 16]));
 
         Contexts {
             d_context,
-            dtref_context,
             t_context,
             t_residual_max,
-            dt_max: dt_max as i64,
             eof_context,
             bitshift_context,
         }
     }
 
-    pub(crate) fn check_too_far(&self, reference_start_t: AbsoluteT, t: AbsoluteT) -> bool {
-        t < reference_start_t - self.dt_max as AbsoluteT
-    }
-
     /// Find out how much we need to bitshift the t_residual to fit within the range of the model
     pub(crate) fn residual_to_bitshift(&self, t_residual_i64: i64) -> (u8, i64) {
-        if t_residual_i64.abs() < self.t_residual_max as i64 {
+        if t_residual_i64.abs() < self.t_residual_max {
             (0, t_residual_i64)
             // } else if t_residual_i64.abs() > self.dt_max {
         } else {
@@ -104,19 +89,13 @@ impl Contexts {
         dt_ref: DeltaT,
         c_thresh_max: f64,
     ) -> (u8, i64) {
-        if t_residual_i64.abs() < self.t_residual_max as i64 {
+        if t_residual_i64.abs() < self.t_residual_max {
             (0, t_residual_i64)
-            // } else if t_residual_i64.abs() > self.dt_max {
-        }
-        // else if event.d == D_EMPTY {
-        //     // JUST LOSSLESS FOR NOW
-        //     (BITSHIFT_ENCODE_FULL, t_residual_i64)
-        // }
-        else {
+        } else {
             let actual_dt = event.t - prev_event.t;
             let actual_intensity = self.event_to_intensity(event.d, actual_dt, dt_ref);
             let mut recon_intensity = actual_intensity;
-            let mut bitshift = 0;
+            let mut bitshift: u8 = 0;
             let mut t_residual = t_residual_i64.abs();
             loop {
                 if t_residual > self.t_residual_max
@@ -135,12 +114,10 @@ impl Contexts {
                     break;
                 }
             }
-            if bitshift > 0 {
-                bitshift -= 1;
-            }
+            bitshift = bitshift.saturating_sub(1);
             t_residual = t_residual_i64.abs() >> bitshift;
 
-            if t_residual.abs() < self.t_residual_max as i64 {
+            if t_residual.abs() < self.t_residual_max {
                 if t_residual_i64 < 0 {
                     (bitshift, -t_residual)
                 } else {
@@ -154,14 +131,13 @@ impl Contexts {
     }
 }
 
-pub fn t_residual_default_weights(dt_ref: DeltaT) -> Weights {
+pub fn t_residual_default_weights(_dt_ref: DeltaT) -> Weights {
     // t residuals can fit within i16
 
     // After we've indexed into the correct interval, our timestamp residual can span [-dt_ref, dt_ref]
 
     // We have dt_max/dt_ref count of intervals per adu
-    let mut counts: Vec<u64> = vec![1; (u8::MAX as usize + 1)];
-    // let mut counts: Vec<u64> = vec![1; u16::MAX as usize];
+    let mut counts: Vec<u64> = vec![1; u8::MAX as usize + 1];
 
     // Give higher probability to smaller residuals
     // for i in counts.len() / 3..counts.len() * 2 / 3 {
@@ -172,8 +148,8 @@ pub fn t_residual_default_weights(dt_ref: DeltaT) -> Weights {
     // counts[len / 2 - 1] = 10;
     // counts[len / 2 + 1] = 10;
     counts[0] = 100;
-    for i in 0..10 {
-        counts[i] = 10;
+    for item in counts.iter_mut().take(10) {
+        *item = 10;
     }
 
     Weights::new_with_counts(counts.len(), &counts)

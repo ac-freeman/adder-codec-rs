@@ -6,9 +6,15 @@
 [![Downloads](https://img.shields.io/crates/dr/adder-codec-rs)](https://crates.io/crates/adder-codec-rs)
 
 
-Encoder/transcoder/decoder for ADΔER (Address, Decimation, Δt Event Representation) video streams. Includes a transcoder for casting framed video into an ADΔER representation in a manner which preserves the temporal synchronicity of the source, but enables many-frame intensity averaging on a per-pixel basis and extremely high dynamic range.
+A unified framework for event-based video. Encoder/transcoder/decoder for ADΔER (Address, Decimation, Δt Event Representation) video streams. Includes a transcoder for casting framed video into an ADΔER representation in a manner which preserves the temporal synchronicity of the source, but enables many-frame intensity averaging on a per-pixel basis and extremely high dynamic range.
 
-To enable the use of _source-modeled lossy compression_ (the only such scheme for event-based video, as far as I'm aware), install/import the relevant crates below with the `compression` feature enabled.
+![blender_output2_30_mid](https://github.com/ac-freeman/adder-codec-rs/assets/19912588/4d1d9fc2-6a9d-49ab-b4da-07c2bb88a839)
+
+
+To enable the use of _source-modeled lossy compression_ (the only such scheme for event-based video, as far as I'm aware), install/import the relevant crates below with the `compression` feature enabled and the _nightly_ toolchain. For example, install adder-viz as follows:
+```
+cargo +nightly install adder-viz -F "compression open-cv"
+```
 
 Source 8-bit image frame with shadows boosted ([source video](https://www.pexels.com/video/river-between-trees-2126081/))      |  Frame reconstructed from ADΔER events, generated from 48 input frames, with shadows boosted. Note the greater dynamic range and temporal denoising in the shadows.
 :-------------------------:|:-------------------------:
