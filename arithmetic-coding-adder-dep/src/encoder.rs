@@ -1,12 +1,12 @@
 //! The [`Encoder`] half of the arithmetic coding library.
 
-use std::{io, ops::Range};
 use std::marker::PhantomData;
+use std::{io, ops::Range};
 
 use bitstream_io::BitWrite;
 
-use crate::{BitStore, Error, Model};
 use crate::Error::ValueError;
+use crate::{BitStore, Error, Model};
 
 // this algorithm is derived from this article - https://marknelson.us/posts/2014/10/19/data-compression-with-arithmetic-coding.html
 
@@ -15,17 +15,17 @@ use crate::Error::ValueError;
 /// An arithmetic decoder converts a stream of symbols into a stream of bits,
 /// using a predictive [`Model`].
 #[derive(Debug)]
-pub struct Encoder< M, W>
+pub struct Encoder<M, W>
 where
     M: Model,
     W: BitWrite,
 {
     /// The model used for the encoder
     pub model: M,
-    state: State< M::B, W>,
+    state: State<M::B, W>,
 }
 
-impl< M, W> Encoder< M, W>
+impl<M, W> Encoder<M, W>
 where
     M: Model,
     W: BitWrite,
@@ -85,7 +85,7 @@ where
     }
 
     /// todo
-    pub const fn with_state(state: State< M::B, W>, model: M) -> Self {
+    pub const fn with_state(state: State<M::B, W>, model: M) -> Self {
         Self { model, state }
     }
 
@@ -123,10 +123,9 @@ where
     /// This method can fail if the underlying [`BitWrite`] cannot be written
     /// to.
     pub fn encode(&mut self, symbol: Option<&M::Symbol>, output: &mut W) -> Result<(), Error> {
-        let p = match self.model.probability(symbol) {
-            Ok(p) => {p}
-            Err(_) => {return Err(ValueError)}
-        } ;
+        let Ok(p) = self.model.probability(symbol) else {
+            return Err(ValueError);
+        };
         let denominator = self.model.denominator();
         debug_assert!(
             denominator <= self.model.max_denominator(),
@@ -162,7 +161,7 @@ where
     ///
     /// Allows for chaining multiple sequences of symbols into a single stream
     /// of bits
-    pub fn chain<X>(self, model: X) -> Encoder< X, W>
+    pub fn chain<X>(self, model: X) -> Encoder<X, W>
     where
         X: Model<B = M::B>,
     {
@@ -175,7 +174,7 @@ where
 
 /// A convenience struct which stores the internal state of an [`Encoder`].
 #[derive(Debug)]
-pub struct State< B, W>
+pub struct State<B, W>
 where
     B: BitStore,
     W: BitWrite,
@@ -187,13 +186,14 @@ where
     _marker: PhantomData<W>,
 }
 
-impl<B, W> State< B, W>
+impl<B, W> State<B, W>
 where
     B: BitStore,
     W: BitWrite,
 {
     /// todo
-    #[must_use] pub fn new(precision: u32) -> Self {
+    #[must_use]
+    pub fn new(precision: u32) -> Self {
         let low = B::ZERO;
         let high = B::ONE << precision;
         let pending = 0;

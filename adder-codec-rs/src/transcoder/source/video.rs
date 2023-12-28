@@ -30,22 +30,21 @@ use adder_codec_core::D;
 #[cfg(feature = "opencv")]
 use davis_edi_rs::util::reconstructor::ReconstructionError;
 #[cfg(feature = "opencv")]
-use opencv::{highgui, imgproc::resize, prelude::*};
+use opencv::{highgui, imgproc::resize};
 
 #[cfg(feature = "compression")]
 use adder_codec_core::codec::compressed::stream::CompressedOutput;
 use adder_codec_core::Mode::Continuous;
 use itertools::Itertools;
 use ndarray::{Array, Array3, Axis, ShapeError};
+use rayon::iter::IndexedParallelIterator;
+use rayon::iter::IntoParallelIterator;
 use rayon::iter::ParallelIterator;
-use rayon::iter::{IndexedParallelIterator, IntoParallelRefMutIterator};
-use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator};
 use rayon::ThreadPool;
 
 use crate::transcoder::source::video::FramedViewMode::SAE;
 use crate::utils::cv::is_feature;
-#[cfg(feature = "feature-logging")]
-use crate::utils::logging::{LogFeature, LogFeatureSource};
+
 use crate::utils::viz::{draw_feature_coord, ShowFeatureMode};
 use adder_codec_core::codec::rate_controller::{Crf, CrfParameters};
 use thiserror::Error;
@@ -154,14 +153,37 @@ pub enum FramedViewMode {
     SAE,
 }
 
-/// Running state of the video transcode
 #[derive(Debug)]
-pub struct VideoState {
-    /// The size of the imaging plane
-    pub plane: PlaneSize,
+pub struct VideoStateParams {
     pub(crate) pixel_tree_mode: Mode,
 
     pub(crate) pixel_multi_mode: PixelMultiMode,
+
+    /// The maximum time difference between events of the same pixel, in ticks
+    pub delta_t_max: u32,
+
+    /// The reference time in ticks
+    pub ref_time: u32,
+}
+
+impl Default for VideoStateParams {
+    fn default() -> Self {
+        Self {
+            pixel_tree_mode: Continuous,
+            pixel_multi_mode: Default::default(),
+            delta_t_max: 7650,
+            ref_time: 255,
+        }
+    }
+}
+
+/// Running state of the video transcode
+#[derive(Debug)]
+pub struct VideoState {
+    pub params: VideoStateParams,
+
+    /// The size of the imaging plane
+    pub plane: PlaneSize,
 
     /// The number of rows of pixels to process at a time (per thread)
     pub chunk_rows: usize,
@@ -170,12 +192,7 @@ pub struct VideoState {
     pub in_interval_count: u32,
     // pub(crate) c_thresh_pos: u8,
     // pub(crate) c_thresh_neg: u8,
-    /// The maximum time difference between events of the same pixel, in ticks
-    pub delta_t_max: u32,
-
-    /// The reference time in ticks
-    pub ref_time: u32,
-    pub(crate) ref_time_divisor: f64,
+    pub(crate) ref_time_divisor: f32,
     pub tps: DeltaT,
 
     pub(crate) show_display: bool,
@@ -197,14 +214,11 @@ pub struct VideoState {
 
 impl Default for VideoState {
     fn default() -> Self {
-        let state = VideoState {
+        VideoState {
             plane: PlaneSize::default(),
-            pixel_tree_mode: Continuous,
-            pixel_multi_mode: Default::default(),
-            chunk_rows: 64,
+            params: VideoStateParams::default(),
+            chunk_rows: 1,
             in_interval_count: 1,
-            delta_t_max: 7650,
-            ref_time: 255,
             ref_time_divisor: 1.0,
             tps: 7650,
             show_display: false,
@@ -214,8 +228,7 @@ impl Default for VideoState {
             show_features: ShowFeatureMode::Off,
             features: Default::default(),
             feature_log_handle: None,
-        };
-        state
+        }
     }
 }
 
@@ -313,9 +326,6 @@ pub struct Video<W: Write> {
     pub state: VideoState,
     pub(crate) event_pixel_trees: Array3<PixelArena>,
 
-    /// The current instantaneous display frame
-    pub display_frame: Frame,
-
     /// The current instantaneous display frame with the features drawn on it
     pub display_frame_features: Frame,
 
@@ -341,7 +351,10 @@ impl<W: Write + 'static> Video<W> {
         writer: Option<W>,
     ) -> Result<Video<W>, SourceError> {
         let mut state = VideoState {
-            pixel_tree_mode,
+            params: VideoStateParams {
+                pixel_tree_mode,
+                ..Default::default()
+            },
             running_intensities: Array::zeros((plane.h_usize(), plane.w_usize(), plane.c_usize())),
             ..Default::default()
         };
@@ -380,8 +393,8 @@ impl<W: Write + 'static> Video<W> {
             time_mode: TimeMode::AbsoluteT,
             plane: state.plane,
             tps: state.tps,
-            ref_interval: state.ref_time,
-            delta_t_max: state.delta_t_max,
+            ref_interval: state.params.ref_time,
+            delta_t_max: state.params.delta_t_max,
             event_size: 0,
             source_camera: SourceCamera::default(), // TODO: Allow for setting this
         };
@@ -395,7 +408,6 @@ impl<W: Write + 'static> Video<W> {
                 Ok(Video {
                     state,
                     event_pixel_trees,
-                    display_frame: instantaneous_frame.clone(),
                     display_frame_features: instantaneous_frame,
                     instantaneous_view_mode,
                     event_sender,
@@ -412,7 +424,6 @@ impl<W: Write + 'static> Video<W> {
                 Ok(Video {
                     state,
                     event_pixel_trees,
-                    display_frame: instantaneous_frame.clone(),
                     display_frame_features: instantaneous_frame,
                     instantaneous_view_mode,
                     event_sender,
@@ -490,7 +501,7 @@ impl<W: Write + 'static> Video<W> {
         if ref_time > f32::MAX as u32 {
             eprintln!(
                 "Reference time {} is too large. Keeping current value of {}.",
-                ref_time, self.state.ref_time
+                ref_time, self.state.params.ref_time
             );
             return Ok(self);
         }
@@ -504,19 +515,19 @@ impl<W: Write + 'static> Video<W> {
         if delta_t_max > f32::MAX as u32 {
             eprintln!(
                 "Delta t max {} is too large. Keeping current value of {}.",
-                delta_t_max, self.state.delta_t_max
+                delta_t_max, self.state.params.delta_t_max
             );
             return Ok(self);
         }
         if delta_t_max < ref_time {
             eprintln!(
                 "Delta t max {} is smaller than reference time {}. Keeping current value of {}.",
-                delta_t_max, ref_time, self.state.delta_t_max
+                delta_t_max, ref_time, self.state.params.delta_t_max
             );
             return Ok(self);
         }
-        self.state.delta_t_max = delta_t_max;
-        self.state.ref_time = ref_time;
+        self.state.params.delta_t_max = delta_t_max;
+        self.state.params.ref_time = ref_time;
         self.state.tps = tps;
 
         Ok(self)
@@ -541,7 +552,7 @@ impl<W: Write + 'static> Video<W> {
             EncoderType::Compressed => {
                 #[cfg(feature = "compression")]
                 {
-                    self.state.pixel_multi_mode = PixelMultiMode::Collapse;
+                    self.state.params.pixel_multi_mode = PixelMultiMode::Collapse;
                     let compression = CompressedOutput::new(
                         CodecMetadata {
                             codec_version: LATEST_CODEC_VERSION,
@@ -549,8 +560,8 @@ impl<W: Write + 'static> Video<W> {
                             time_mode: time_mode.unwrap_or_default(),
                             plane: self.state.plane,
                             tps: self.state.tps,
-                            ref_interval: self.state.ref_time,
-                            delta_t_max: self.state.delta_t_max,
+                            ref_interval: self.state.params.ref_time,
+                            delta_t_max: self.state.params.delta_t_max,
                             event_size: 0,
                             source_camera: source_camera.unwrap_or_default(),
                         },
@@ -567,7 +578,7 @@ impl<W: Write + 'static> Video<W> {
                 }
             }
             EncoderType::Raw => {
-                self.state.pixel_multi_mode = PixelMultiMode::Normal;
+                self.state.params.pixel_multi_mode = PixelMultiMode::Collapse;
                 let compression = RawOutput::new(
                     CodecMetadata {
                         codec_version: LATEST_CODEC_VERSION,
@@ -575,8 +586,8 @@ impl<W: Write + 'static> Video<W> {
                         time_mode: time_mode.unwrap_or_default(),
                         plane: self.state.plane,
                         tps: self.state.tps,
-                        ref_interval: self.state.ref_time,
-                        delta_t_max: self.state.delta_t_max,
+                        ref_interval: self.state.params.ref_time,
+                        delta_t_max: self.state.params.delta_t_max,
                         event_size: 0,
                         source_camera: source_camera.unwrap_or_default(),
                     },
@@ -585,7 +596,7 @@ impl<W: Write + 'static> Video<W> {
                 Encoder::new_raw(compression, encoder_options)
             }
             EncoderType::Empty => {
-                self.state.pixel_multi_mode = PixelMultiMode::Normal;
+                self.state.params.pixel_multi_mode = PixelMultiMode::Collapse;
                 let compression = EmptyOutput::new(
                     CodecMetadata {
                         codec_version: LATEST_CODEC_VERSION,
@@ -593,8 +604,8 @@ impl<W: Write + 'static> Video<W> {
                         time_mode: time_mode.unwrap_or_default(),
                         plane: self.state.plane,
                         tps: self.state.tps,
-                        ref_interval: self.state.ref_time,
-                        delta_t_max: self.state.delta_t_max,
+                        ref_interval: self.state.params.ref_time,
+                        delta_t_max: self.state.params.delta_t_max,
                         event_size: 0,
                         source_camera: source_camera.unwrap_or_default(),
                     },
@@ -625,7 +636,7 @@ impl<W: Write + 'static> Video<W> {
     pub fn end_write_stream(&mut self) -> Result<Option<W>, SourceError> {
         let mut tmp: Encoder<W> = Encoder::new_empty(
             EmptyOutput::new(CodecMetadata::default(), sink()),
-            self.encoder.options.clone(),
+            self.encoder.options,
         );
         swap(&mut self.encoder, &mut tmp);
         Ok(tmp.close_writer()?)
@@ -642,14 +653,23 @@ impl<W: Write + 'static> Video<W> {
             self.set_initial_d(&matrix);
         }
 
-        let parameters = self.encoder.options.crf.get_parameters().clone();
+        let parameters = *self.encoder.options.crf.get_parameters();
 
         self.state.in_interval_count += 1;
 
         self.state.show_live = self.state.in_interval_count % view_interval == 0;
 
-        let px_per_chunk: usize = self.state.chunk_rows * self.state.plane.area_wc();
+        // let matrix_f32 = convert_u8_to_f32_simd(&matrix.into_raw_vec());
+        let matrix = matrix.mapv(f32::from);
 
+        // TODO: When there's full support for various bit-depth sources, modify this accordingly
+        let practical_d_max = fast_math::log2_raw(
+            255.0 * (self.state.params.delta_t_max / self.state.params.ref_time) as f32,
+        );
+
+        let tpf = self.state.params.ref_time as f64;
+
+        let params = &self.state.params;
         // Important: if framing the events simultaneously, then the chunk division must be
         // exactly the same as it is for the framer
         let big_buffer: Vec<Vec<Event>> = self
@@ -661,87 +681,55 @@ impl<W: Write + 'static> Video<W> {
                     .axis_chunks_iter(Axis(0), self.state.chunk_rows)
                     .into_par_iter(),
             )
-            .map(|(mut px_chunk, matrix_chunk)| {
-                let mut buffer: Vec<Event> = Vec::with_capacity(px_per_chunk);
+            .zip(
+                self.state
+                    .running_intensities
+                    .axis_chunks_iter_mut(Axis(0), self.state.chunk_rows)
+                    .into_par_iter(),
+            )
+            .map(|((mut px_chunk, matrix_chunk), mut running_chunk)| {
+                let mut buffer: Vec<Event> = Vec::with_capacity(10);
                 let bump = Bump::new();
                 let base_val = bump.alloc(0);
-                let frame_val = bump.alloc(0);
-                let frame_val_intensity32 = bump.alloc(0.0);
 
-                for (px, input) in px_chunk.iter_mut().zip(matrix_chunk.iter()) {
-                    *frame_val_intensity32 =
-                        (f64::from(*input) * self.state.ref_time_divisor) as Intensity32;
-                    *frame_val = *frame_val_intensity32 as u8;
-
+                for ((px, input), running) in px_chunk
+                    .iter_mut()
+                    .zip(matrix_chunk.iter())
+                    .zip(running_chunk.iter_mut())
+                {
                     integrate_for_px(
                         px,
                         base_val,
-                        frame_val,
-                        *frame_val_intensity32, // In this case, frame val is the same as intensity to integrate
+                        *input as u8,
+                        *input, // In this case, frame val is the same as intensity to integrate
                         time_spanned,
                         &mut buffer,
-                        &self.state,
+                        params,
                         &parameters,
                     );
+
+                    if let Some(event) = px.arena[0].best_event {
+                        *running = u8::get_frame_value(
+                            &event.into(),
+                            SourceType::U8,
+                            tpf,
+                            practical_d_max,
+                            self.state.params.delta_t_max,
+                            self.instantaneous_view_mode,
+                            if self.instantaneous_view_mode == SAE {
+                                Some(SaeTime {
+                                    running_t: px.running_t as DeltaT,
+                                    last_fired_t: px.last_fired_t as DeltaT,
+                                })
+                            } else {
+                                None
+                            },
+                        );
+                    };
                 }
                 buffer
             })
             .collect();
-
-        let db = match self.display_frame.as_slice_mut() {
-            Some(v) => v,
-            None => {
-                return Err(SourceError::VisionError(
-                    "Could not convert frame to slice".to_string(),
-                ));
-            }
-        };
-
-        // TODO: When there's full support for various bit-depth sources, modify this accordingly
-        let practical_d_max =
-            fast_math::log2_raw(255.0 * (self.state.delta_t_max / self.state.ref_time) as f32);
-
-        // Zip::indexed(&self.running_intensities)
-        //     .and(db)
-        //     .par_for_each(|idx, val| {});
-
-        db.iter_mut()
-            .zip(self.state.running_intensities.iter_mut())
-            .enumerate()
-            .for_each(|(idx, (val, running))| {
-                let y = idx / self.state.plane.area_wc();
-                let x = (idx % self.state.plane.area_wc()) / self.state.plane.c_usize();
-                let c = idx % self.state.plane.c_usize();
-
-                let _sae_time = self.event_pixel_trees[[y, x, c]].last_fired_t;
-
-                // Set the instantaneous frame value to the best queue'd event for the pixel
-                *val = match self.event_pixel_trees[[y, x, c]].arena[0].best_event {
-                    Some(event) => u8::get_frame_value(
-                        &event.into(),
-                        SourceType::U8,
-                        self.state.ref_time as DeltaT,
-                        practical_d_max,
-                        self.state.delta_t_max,
-                        self.instantaneous_view_mode,
-                        if self.instantaneous_view_mode == SAE {
-                            Some(SaeTime {
-                                running_t: self.event_pixel_trees[[y, x, c]].running_t as DeltaT,
-                                last_fired_t: self.event_pixel_trees[[y, x, c]].last_fired_t
-                                    as DeltaT,
-                            })
-                        } else {
-                            None
-                        },
-                    ),
-                    None => *val,
-                };
-
-                // Only track the running state of the first channel
-                if self.state.feature_detection && c == 0 {
-                    *running = *val;
-                }
-            });
 
         for events in &big_buffer {
             for e1 in events.iter() {
@@ -749,7 +737,7 @@ impl<W: Write + 'static> Video<W> {
             }
         }
 
-        self.display_frame_features = self.display_frame.clone();
+        self.display_frame_features = self.state.running_intensities.clone();
 
         self.handle_features(&big_buffer)?;
 
@@ -762,13 +750,7 @@ impl<W: Write + 'static> Video<W> {
                     events_per_sec += events_vec.len() as f64;
                 }
 
-                // dbg!(events_per_sec / self.state.plane.volume() as f64);
-
-                // if events_per_sec > self.state.plane.volume() as f64 * 5.0 {
-                //     dbg!(events_per_sec);
-                // }
-
-                events_per_sec *= (self.state.tps as f64 / self.state.ref_time as f64);
+                events_per_sec *= self.state.tps as f64 / self.state.params.ref_time as f64;
 
                 let bitrate =
                     events_per_sec * if self.state.plane.c() == 1 { 9.0 } else { 11.0 } * 8.0;
@@ -781,7 +763,9 @@ impl<W: Write + 'static> Video<W> {
                     .unwrap();
 
                 handle
-                    .write_all(&serde_pickle::to_vec(&format!("\n"), Default::default()).unwrap())
+                    .write_all(
+                        &serde_pickle::to_vec(&"\n".to_string(), Default::default()).unwrap(),
+                    )
                     .unwrap();
             }
         }
@@ -813,12 +797,12 @@ impl<W: Write + 'static> Video<W> {
 
     /// Get `ref_time`
     pub fn get_ref_time(&self) -> u32 {
-        self.state.ref_time
+        self.state.params.ref_time
     }
 
     /// Get `delta_t_max`
     pub fn get_delta_t_max(&self) -> u32 {
-        self.state.delta_t_max
+        self.state.params.delta_t_max
     }
 
     /// Get `tps`
@@ -829,7 +813,7 @@ impl<W: Write + 'static> Video<W> {
     /// Set a new value for `delta_t_max`
     pub fn update_delta_t_max(&mut self, dtm: u32) {
         // Validate new value
-        self.state.delta_t_max = self.state.ref_time.max(dtm);
+        self.state.params.delta_t_max = self.state.params.ref_time.max(dtm);
     }
 
     /// Set a new bool for `feature_detection`
@@ -869,10 +853,7 @@ impl<W: Write + 'static> Video<W> {
         // self.state.c_thresh_neg = c;
     }
 
-    pub(crate) fn handle_features(
-        &mut self,
-        big_buffer: &Vec<Vec<Event>>,
-    ) -> Result<(), SourceError> {
+    pub(crate) fn handle_features(&mut self, big_buffer: &[Vec<Event>]) -> Result<(), SourceError> {
         // if !cfg!(feature = "feature-logging") && !self.state.feature_detection {
         if !self.state.feature_detection {
             return Ok(()); // Early return
@@ -891,25 +872,19 @@ impl<W: Write + 'static> Video<W> {
             .zip(new_features.iter_mut())
             .for_each(|((events, feature_set), new_features)| {
                 for (e1, e2) in events.iter().circular_tuple_windows() {
-                    if e1.coord.c == None || e1.coord.c == Some(0) {
-                        if e1.coord != e2.coord
-                            && (!cfg!(feature = "feature-logging-nonmaxsuppression")
-                                || e2.t != e1.t)
-                            && e1.d != D_EMPTY
-                        {
-                            if is_feature(
-                                e1.coord,
-                                self.state.plane,
-                                &self.state.running_intensities,
-                            )
+                    if (e1.coord.c.is_none() || e1.coord.c == Some(0))
+                        && e1.coord != e2.coord
+                        && (!cfg!(feature = "feature-logging-nonmaxsuppression") || e2.t != e1.t)
+                        && e1.d != D_EMPTY
+                    {
+                        if is_feature(e1.coord, self.state.plane, &self.state.running_intensities)
                             .unwrap()
-                            {
-                                if feature_set.insert(e1.coord) {
-                                    new_features.push(e1.coord);
-                                };
-                            } else {
-                                feature_set.remove(&e1.coord);
-                            }
+                        {
+                            if feature_set.insert(e1.coord) {
+                                new_features.push(e1.coord);
+                            };
+                        } else {
+                            feature_set.remove(&e1.coord);
                         }
                     }
                 }
@@ -955,8 +930,8 @@ impl<W: Write + 'static> Video<W> {
             let mut cv_mat = unsafe {
                 let raw_parts::RawParts {
                     ptr,
-                    length,
-                    capacity,
+                    length: _,
+                    capacity: _,
                 } = raw_parts::RawParts::from_vec(
                     self.display_frame_features.clone().into_raw_vec(),
                 ); // pixels will be move into_raw_parts，and return a manually drop pointer.
@@ -1014,7 +989,7 @@ impl<W: Write + 'static> Video<W> {
                 // Combine self.state.features into one hashset:
                 let mut combined_features = HashSet::new();
                 for feature_set in &self.state.features {
-                    for (coord) in feature_set {
+                    for coord in feature_set {
                         combined_features.insert(*coord);
                     }
                 }
@@ -1024,7 +999,7 @@ impl<W: Write + 'static> Video<W> {
                         &combined_features,
                         self.state.plane,
                     );
-                let out = format!("\nFeature results: \n");
+                let out = "\nFeature results: \n".to_string();
                 handle
                     .write_all(&serde_pickle::to_vec(&out, Default::default()).unwrap())
                     .unwrap();
@@ -1144,7 +1119,7 @@ impl<W: Write + 'static> Video<W> {
             crf.override_c_increase_velocity(c_increase_velocity);
             crf.override_feature_c_radius(feature_c_radius as u16); // The absolute pixel count radius
         }
-        self.state.delta_t_max = delta_t_max_multiplier * self.state.ref_time;
+        self.state.params.delta_t_max = delta_t_max_multiplier * self.state.params.ref_time;
         self.encoder.sync_crf();
 
         for px in self.event_pixel_trees.iter_mut() {
@@ -1176,38 +1151,39 @@ impl<W: Write + 'static> Video<W> {
 pub fn integrate_for_px(
     px: &mut PixelArena,
     base_val: &mut u8,
-    frame_val: &u8,
+    frame_val: u8,
     intensity: Intensity32,
     time_spanned: f32,
     buffer: &mut Vec<Event>,
-    state: &VideoState,
+    params: &VideoStateParams,
     parameters: &CrfParameters,
 ) -> bool {
     let _start_len = buffer.len();
     let mut grew_buffer = false;
     if px.need_to_pop_top {
-        buffer.push(px.pop_top_event(intensity, state.pixel_tree_mode, state.ref_time));
+        buffer.push(px.pop_top_event(intensity, params.pixel_tree_mode, params.ref_time));
         grew_buffer = true;
     }
 
     *base_val = px.base_val;
 
-    if *frame_val < base_val.saturating_sub(px.c_thresh)
-        || *frame_val > base_val.saturating_add(px.c_thresh)
+    if frame_val < base_val.saturating_sub(px.c_thresh)
+        || frame_val > base_val.saturating_add(px.c_thresh)
     {
         let _tmp = buffer.len();
         px.pop_best_events(
             buffer,
-            state.pixel_tree_mode,
-            state.pixel_multi_mode,
-            state.ref_time,
+            params.pixel_tree_mode,
+            params.pixel_multi_mode,
+            params.ref_time,
+            intensity,
         );
         grew_buffer = true;
-        px.base_val = *frame_val;
+        px.base_val = frame_val;
 
         // If continuous mode and the D value needs to be different now
-        if let Continuous = state.pixel_tree_mode {
-            match px.set_d_for_continuous(intensity, state.ref_time) {
+        if let Continuous = params.pixel_tree_mode {
+            match px.set_d_for_continuous(intensity, params.ref_time) {
                 None => {}
                 Some(event) => buffer.push(event),
             };
@@ -1216,16 +1192,17 @@ pub fn integrate_for_px(
 
     px.integrate(
         intensity,
-        time_spanned.into(),
-        state.pixel_tree_mode,
-        state.delta_t_max,
-        state.ref_time,
+        time_spanned,
+        params.pixel_tree_mode,
+        params.delta_t_max,
+        params.ref_time,
         parameters.c_thresh_max,
         parameters.c_increase_velocity,
+        params.pixel_multi_mode,
     );
 
     if px.need_to_pop_top {
-        buffer.push(px.pop_top_event(intensity, state.pixel_tree_mode, state.ref_time));
+        buffer.push(px.pop_top_event(intensity, params.pixel_tree_mode, params.ref_time));
         grew_buffer = true;
     }
 
@@ -1315,3 +1292,21 @@ pub trait Source<W: Write> {
     /// Get the last-calculated bitrate of the input (in bits per second)
     fn get_running_input_bitrate(&self) -> f64;
 }
+
+// fn convert_u8_to_f32_simd(input: &[u8]) -> Vec<f32> {
+//     // Ensure that the input length is a multiple of 16
+//     let len = input.len() / 16 * 16;
+//
+//     // Use the simd crate to load u8x16 vectors and convert to f32x4 vectors
+//     let mut result: Vec<f32> = Vec::with_capacity(len / 4);
+//     for i in (0..len).step_by(16) {
+//         let u8_slice = &input[i..i + 16];
+//         let u8x16_vector: u8x16 = u8_slice.load_unaligned().into();
+//         let f32x4_vector: f32x4 = unsafe { std::mem::transmute(u8x16_vector) };
+//         for j in 0..4 {
+//             result.push(f32x4_vector.extract(j));
+//         }
+//     }
+//
+//     result
+// }

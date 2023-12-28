@@ -148,7 +148,6 @@ impl PlayerState {
 
             if let Some(image) = image_opt {
                 let handle = images.add(image);
-                handles.last_image_view = handles.image_view.clone();
                 handles.image_view = handle;
             }
             return Ok(());
@@ -447,8 +446,7 @@ impl PlayerState {
             .unwrap()
             .decoder
             .meta()
-            .plane
-            .clone();
+            .plane;
         self.ui_info_state.event_size = if plane.c() == 1 { 9 } else { 11 };
         self.ui_info_state.plane = plane;
 

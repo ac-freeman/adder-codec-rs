@@ -14,7 +14,6 @@ pub type TResidual = i16;
 
 #[cfg(test)]
 mod tests {
-    use crate::codec::compressed::stream;
     use crate::codec::encoder::Encoder;
     use crate::codec::{CodecMetadata, EncoderOptions};
     use crate::{Coord, Event, PlaneSize};
@@ -29,12 +28,15 @@ mod tests {
         };
 
         let output = crate::codec::compressed::stream::CompressedOutput::new(meta, Vec::new());
-        let mut encoder = Encoder::new_compressed(output, EncoderOptions::default(PlaneSize{
-            width: 100,
-            height: 100,
-            channels: 1
-        }));
-        let meta = encoder.meta().clone();
+        let mut encoder = Encoder::new_compressed(
+            output,
+            EncoderOptions::default(PlaneSize {
+                width: 100,
+                height: 100,
+                channels: 1,
+            }),
+        );
+        let meta = *encoder.meta();
         let mut test_event = Event {
             coord: Coord {
                 x: 0,
@@ -54,12 +56,15 @@ mod tests {
         assert_eq!(writer.len(), meta.header_size);
 
         let output = crate::codec::compressed::stream::CompressedOutput::new(meta, Vec::new());
-        let mut encoder = Encoder::new_compressed(output, EncoderOptions::default(PlaneSize{
-            width: 100,
-            height: 100,
-            channels: 1
-        }));
-        let meta = encoder.meta().clone();
+        let mut encoder = Encoder::new_compressed(
+            output,
+            EncoderOptions::default(PlaneSize {
+                width: 100,
+                height: 100,
+                channels: 1,
+            }),
+        );
+        let meta = *encoder.meta();
         encoder.ingest_event(test_event).unwrap();
         test_event.t += 100;
         encoder.ingest_event(test_event).unwrap();

@@ -6,13 +6,15 @@ use perfcnt::linux::PerfCounterBuilderLinux as Builder;
 use adder_codec_rs::utils::simulproc::{SimulProcArgs, SimulProcessor};
 
 use std::fs;
+use std::fs::File;
+use std::io::BufWriter;
 
 use std::path::PathBuf;
 
+use adder_codec_core::TimeMode::DeltaT;
 use adder_codec_rs::transcoder::source::framed::Framed;
 use adder_codec_rs::transcoder::source::video::VideoBuilder;
 use adder_codec_rs::utils::viz::download_file;
-use adder_codec_rs::TimeMode;
 use std::thread::sleep;
 use std::time::Duration;
 
@@ -37,15 +39,16 @@ fn simul_proc(video_path: &str, scale: f64, thread_count: u8, _chunk_rows: usize
         thread_count, // Multithreading causes some issues in testing
         time_mode: "delta_t".to_string(),
     };
-    let source = Framed::new(args.input_filename, args.color_input, args.scale)
-        .unwrap()
-        // TODO: chunk_rows back
-        .frame_start(args.frame_idx_start)
-        .unwrap()
-        .contrast_thresholds(args.c_thresh_pos, args.c_thresh_neg)
-        .show_display(args.show_display)
-        .auto_time_parameters(args.ref_time, args.delta_t_max)
-        .unwrap();
+    let source: Framed<BufWriter<File>> =
+        Framed::new(args.input_filename, args.color_input, args.scale)
+            .unwrap()
+            // TODO: chunk_rows back
+            .frame_start(args.frame_idx_start)
+            .unwrap()
+            .contrast_thresholds(args.c_thresh_pos, args.c_thresh_neg)
+            .show_display(args.show_display)
+            .auto_time_parameters(args.ref_time, args.delta_t_max, Some(DeltaT))
+            .unwrap();
 
     let ref_time = source.get_ref_time();
 
@@ -56,7 +59,7 @@ fn simul_proc(video_path: &str, scale: f64, thread_count: u8, _chunk_rows: usize
         args.frame_count_max as i32,
         thread_count as usize,
         1,
-        TimeMode::DeltaT,
+        DeltaT,
     )
     .unwrap();
 

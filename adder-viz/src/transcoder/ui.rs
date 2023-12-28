@@ -3,9 +3,7 @@ use crate::utils::prep_bevy_image;
 use crate::{slider_pm, Images};
 #[cfg(feature = "open-cv")]
 use adder_codec_rs::transcoder::source::davis::TranscoderMode;
-use adder_codec_rs::transcoder::source::video::{
-    FramedViewMode, Source, SourceError, VideoBuilder,
-};
+use adder_codec_rs::transcoder::source::video::{FramedViewMode, Source, SourceError};
 use bevy::ecs::system::Resource;
 use bevy::prelude::{Assets, Commands, Image, Res, ResMut, Time};
 use bevy_egui::egui;
@@ -224,7 +222,7 @@ impl TranscoderState {
                 if let Some(framed_source) = &mut self.transcoder.framed_source {
                     match framed_source.get_video_mut().end_write_stream() {
                         Ok(Some(mut writer)) => {
-                            writer.flush();
+                            writer.flush().unwrap();
                         }
                         Ok(None) => {}
                         Err(_) => {}
@@ -389,7 +387,7 @@ impl TranscoderState {
             .auto_bounds_y()
             .legend(Legend::default().position(LeftTop))
             .show(ui, |plot_ui| {
-                let mut metrics = vec![
+                let metrics = vec![
                     (&self.ui_info_state.plot_points_psnr_y, "PSNR dB"),
                     (&self.ui_info_state.plot_points_mse_y, "MSE"),
                     (&self.ui_info_state.plot_points_ssim_y, "SSIM"),
@@ -407,7 +405,7 @@ impl TranscoderState {
             .auto_bounds_y()
             .legend(Legend::default().position(LeftTop))
             .show(ui, |plot_ui| {
-                let mut metrics = vec![
+                let metrics = vec![
                     (
                         &self.ui_info_state.plot_points_raw_adder_bitrate_y,
                         "log10(Raw ADΔER MB/s)",
@@ -427,7 +425,7 @@ impl TranscoderState {
             });
     }
 
-    pub fn update_adder_params(&mut self) {
+    pub fn update_adder_params(&mut self, _: Res<Images>, mut images: ResMut<Assets<Image>>) {
         // TODO: do conditionals on the sliders themselves
 
         let source: &mut dyn Source<BufWriter<File>> = {
@@ -465,6 +463,7 @@ impl TranscoderState {
                                     self.ui_info_state.output_path.clone(),
                                     0,
                                 );
+                                images.clear();
                                 return;
                             }
                             let tmp = source.get_reconstructor_mut().as_mut().unwrap();
@@ -501,6 +500,7 @@ impl TranscoderState {
                     {
                         let current_frame =
                             source.get_video_ref().state.in_interval_count + source.frame_idx_start;
+                        images.clear();
                         replace_adder_transcoder(
                             self,
                             self.ui_info_state.input_path_0.clone(),
@@ -516,7 +516,7 @@ impl TranscoderState {
         };
 
         let binding = source.get_video_ref().get_encoder_options();
-        let parameters = binding.crf.get_parameters();
+        let _parameters = binding.crf.get_parameters();
 
         // TODO: Refactor all this garbage code
         if self.ui_state.auto_quality
@@ -542,18 +542,20 @@ impl TranscoderState {
             let binding = video.get_encoder_options();
             let parameters = binding.crf.get_parameters();
 
-            self.ui_state.encoder_options = binding.clone();
+            self.ui_state.encoder_options = binding;
             // Update ui state to match
             self.ui_state.crf_slider = binding.crf.get_quality().unwrap_or(DEFAULT_CRF_QUALITY);
             self.ui_state.adder_tresh_baseline_slider = parameters.c_thresh_baseline;
             self.ui_state.adder_tresh_max_slider = parameters.c_thresh_max;
-            self.ui_state.delta_t_max_mult = video.state.delta_t_max / video.state.ref_time;
+            self.ui_state.delta_t_max_mult =
+                video.state.params.delta_t_max / video.state.params.ref_time;
             self.ui_state.delta_t_max_mult_slider = self.ui_state.delta_t_max_mult;
             self.ui_state.adder_tresh_velocity_slider = parameters.c_increase_velocity;
             self.ui_state.feature_radius_slider = parameters.feature_c_radius;
         } else if !self.ui_state.auto_quality
             && (self.ui_state.delta_t_max_mult
-                != source.get_video_ref().state.delta_t_max / source.get_video_ref().state.ref_time
+                != source.get_video_ref().state.params.delta_t_max
+                    / source.get_video_ref().state.params.ref_time
                 || self.ui_state.encoder_options.crf.get_parameters()
                     != source
                         .get_video_ref()
@@ -649,13 +651,13 @@ impl TranscoderState {
         };
 
         // Calculate quality metrics on the running intensity frame (not with features drawn on it)
-        let mut image_mat = source.get_video_ref().display_frame.clone();
+        let image_mat = &source.get_video_ref().state.running_intensities;
 
         if let Some(input) = source.get_input() {
             #[rustfmt::skip]
             let metrics = calculate_quality_metrics(
                 input,
-                &mut image_mat,
+                image_mat,
                 QualityMetrics {
                     mse: if self.ui_state.metric_mse {Some(0.0)} else {None},
                     psnr: if self.ui_state.metric_psnr {Some(0.0)} else {None},
@@ -669,37 +671,45 @@ impl TranscoderState {
         }
 
         // Display frame
-        let mut image_mat = source.get_video_ref().display_frame_features.clone();
+        let image_mat = source.get_video_ref().display_frame_features.clone();
 
         let color = image_mat.shape()[2] == 3;
 
-        let image_bevy = prep_bevy_image(
-            image_mat,
-            color,
-            source.get_video_ref().state.plane.w(),
-            source.get_video_ref().state.plane.h(),
-        )?;
-
-        self.transcoder.live_image = image_bevy;
-
-        handles.last_image_view = handles.image_view.clone();
-        handles.last_input_view = handles.input_view.clone();
-        let handle = images.add(self.transcoder.live_image.clone());
-        handles.image_view = handle;
-
-        // Repeat for the input view
-        if self.ui_state.show_original && source.get_input().is_some() {
-            let image_mat = source.get_input().unwrap();
-            let image_mat = image_mat.clone();
-            let color = image_mat.shape()[2] == 3;
+        if let Some(image) = images.get_mut(&handles.image_view) {
+            crate::utils::prep_bevy_image_mut(image_mat, color, image)?;
+        } else {
             let image_bevy = prep_bevy_image(
                 image_mat,
                 color,
                 source.get_video_ref().state.plane.w(),
                 source.get_video_ref().state.plane.h(),
             )?;
-            let handle = images.add(image_bevy);
-            handles.input_view = handle;
+            self.transcoder.live_image = image_bevy;
+            let handle = images.add(self.transcoder.live_image.clone());
+            handles.image_view = handle;
+        }
+
+        // Repeat for the input view
+        if self.ui_state.show_original && source.get_input().is_some() {
+            let image_mat = source.get_input().unwrap();
+            let image_mat = image_mat.clone();
+            let color = image_mat.shape()[2] == 3;
+
+            if let Some(image) = images.get_mut(&handles.input_view) {
+                crate::utils::prep_bevy_image_mut(image_mat, color, image)?;
+            } else {
+                let image_bevy = prep_bevy_image(
+                    image_mat,
+                    color,
+                    source.get_video_ref().state.plane.w(),
+                    source.get_video_ref().state.plane.h(),
+                )?;
+                let handle = images.add(image_bevy);
+                handles.input_view = handle;
+            }
+        }
+        if !self.ui_state.show_original {
+            handles.input_view = Default::default();
         }
 
         let raw_source_bitrate = source.get_running_input_bitrate() / 8.0 / 1024.0 / 1024.0; // source in megabytes per sec
@@ -787,7 +797,7 @@ fn side_panel_grid_contents(
     );
     ui.end_row();
 
-    let mut parameters = ui_state.encoder_options.crf.get_parameters_mut();
+    let parameters = ui_state.encoder_options.crf.get_parameters_mut();
     ui.label("Threshold baseline:");
     slider_pm(
         !ui_state.auto_quality,

@@ -157,7 +157,7 @@ impl<W: Write + 'static> SimulProcessor<W> {
                 .time_parameters(
                     source.video.state.tps,
                     ref_time,
-                    source.video.state.delta_t_max,
+                    source.video.state.params.delta_t_max,
                     Some(reconstructed_frame_rate),
                 )
                 .mode(INSTANTANEOUS)
@@ -235,13 +235,13 @@ impl<W: Write + 'static> SimulProcessor<W> {
 
         loop {
             match self.source.consume(1, &self.thread_pool) {
-                Ok(events) => {
-                    match self.events_tx.send(events) {
-                        Ok(_) => {}
-                        Err(_) => {
-                            break;
-                        }
-                    };
+                Ok(_events) => {
+                    // match self.events_tx.send(events) {
+                    //     Ok(_) => {}
+                    //     Err(_) => {
+                    //         break;
+                    //     }
+                    // };
                 }
                 Err(e) => {
                     println!("Err: {e:?}");

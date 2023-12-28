@@ -6,9 +6,7 @@ use crate::{Coord, Event, EventSingle, EOF_PX_ADDRESS};
 use bincode::config::{FixintEncoding, WithOtherEndian, WithOtherIntEncoding};
 use bincode::{DefaultOptions, Options};
 use bitstream_io::{BigEndian, BitRead, BitReader};
-use std::collections::BinaryHeap;
 use std::io::{Read, Seek, SeekFrom, Write};
-use std::time::Instant;
 
 /// Write uncompressed (raw) ADΔER data to a stream.
 pub struct RawOutput<W> {

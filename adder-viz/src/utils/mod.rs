@@ -1,7 +1,8 @@
 use bevy::prelude::Image;
+
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
 use bevy_egui::egui::plot::{Line, PlotPoints};
-use ndarray::{Array, Axis};
+
 use std::collections::VecDeque;
 use std::error::Error;
 use video_rs_adder_dep::Frame;
@@ -44,39 +45,32 @@ impl PlotY {
 }
 
 pub fn prep_bevy_image(
-    mut image_mat: Frame,
+    image_mat: Frame,
     color: bool,
     width: u16,
     height: u16,
 ) -> Result<Image, Box<dyn Error>> {
-    let image_bgra = if color {
-        // Swap the red and blue channels
-        let temp = image_mat.index_axis_mut(Axis(2), 0).to_owned();
-        let blue_channel = image_mat.index_axis_mut(Axis(2), 2).to_owned();
-        image_mat.index_axis_mut(Axis(2), 0).assign(&blue_channel);
-        // Swap the channels by copying
-        image_mat.index_axis_mut(Axis(2), 2).assign(&temp);
+    // let view = Assets::get_mut(last_view)?;
+    let image_mat = image_mat.as_standard_layout();
 
-        // add alpha channel
-        ndarray::concatenate(
-            Axis(2),
-            &[
-                image_mat.clone().view(),
-                Array::from_elem((image_mat.shape()[0], image_mat.shape()[1], 1), 255).view(),
-            ],
-        )?
+    // Preallocate space for the new vector
+    let mut new_image_mat = Vec::with_capacity(width as usize * height as usize * 4);
+
+    let image_mat = image_mat.into_owned().into_raw_vec();
+    if color {
+        // Iterate over chunks of 3 elements and insert the value after each chunk
+        for chunk in image_mat.chunks(3) {
+            new_image_mat.extend(chunk.iter().cloned());
+            new_image_mat.push(255);
+        }
     } else {
-        ndarray::concatenate(
-            Axis(2),
-            &[
-                image_mat.clone().view(),
-                image_mat.clone().view(),
-                image_mat.clone().view(),
-                Array::from_elem((image_mat.shape()[0], image_mat.shape()[1], 1), 255).view(),
-            ],
-        )?
-    };
-    let image_bgra = image_bgra.as_standard_layout();
+        for chunk in image_mat.chunks(1) {
+            new_image_mat.extend(chunk.iter().cloned());
+            new_image_mat.extend(chunk.iter().cloned());
+            new_image_mat.extend(chunk.iter().cloned());
+            new_image_mat.push(255);
+        }
+    }
 
     Ok(Image::new(
         Extent3d {
@@ -85,7 +79,35 @@ pub fn prep_bevy_image(
             depth_or_array_layers: 1,
         },
         TextureDimension::D2,
-        Vec::from(image_bgra.as_slice().unwrap()),
-        TextureFormat::Bgra8UnormSrgb,
+        new_image_mat,
+        TextureFormat::Rgba8UnormSrgb,
     ))
+}
+
+pub fn prep_bevy_image_mut(
+    image_mat: Frame,
+    color: bool,
+    new_image: &mut Image,
+) -> Result<(), Box<dyn Error>> {
+    let image_mat = image_mat.as_standard_layout().as_ptr();
+
+    let mut ref_idx = 0;
+    unsafe {
+        for (index, element) in new_image.data.iter_mut().enumerate() {
+            // Skip every 4th element
+            if (index + 1) % 4 == 0 {
+                if !color {
+                    ref_idx += 1;
+                }
+                continue;
+            }
+
+            *element = *image_mat.offset(ref_idx);
+            if color {
+                ref_idx += 1;
+            }
+        }
+    }
+
+    Ok(())
 }

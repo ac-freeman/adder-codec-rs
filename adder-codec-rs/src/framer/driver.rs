@@ -496,7 +496,7 @@ impl<
                         // dbg!(self.state.frames_written);
                         // dbg!(idx);
                         if idx >= self.features.len() {
-                            if self.features.len() == 0 {
+                            if self.features.is_empty() {
                                 // Create the first
                                 self.features.push_back(FeatureInterval {
                                     end_ts: self.state.tpf as BigT,
@@ -819,7 +819,7 @@ impl<T: Clone + Default + FrameValue<Output = T> + Serialize> FrameSequence<T> {
 
     /// Get the features detected for the next frame, and pop that off the feature vec
     pub fn pop_features(&mut self) -> Option<FeatureInterval> {
-        if self.features.len() == 0 {
+        if self.features.is_empty() {
             // Create the first
             self.features.push_back(FeatureInterval {
                 end_ts: self.state.tpf as BigT,
@@ -952,7 +952,7 @@ impl<T: Clone + Default + FrameValue<Output = T> + Serialize> FrameSequence<T> {
 
 // TODO: refactor this garbage
 fn ingest_event_for_chunk<
-    T: Clone + Default + FrameValue<Output = T> + Copy + Serialize + Send + Sync,
+    T: Clone + Default + FrameValue<Output = T> + Copy + Serialize + Send + Sync + Into<f64>,
 >(
     event: &mut Event,
     frame_chunk: &mut VecDeque<Frame<Option<T>>>,
@@ -1001,7 +1001,7 @@ fn ingest_event_for_chunk<
             *last_frame_intensity_ref = T::get_frame_value(
                 event,
                 state.source,
-                state.ref_interval,
+                state.ref_interval as f64,
                 practical_d_max,
                 state.source_dtm,
                 state.view_mode,
@@ -1011,6 +1011,7 @@ fn ingest_event_for_chunk<
                 }), // TODO
             );
         }
+
         *last_filled_frame_ref = (running_ts_ref.saturating_sub(1)) as i64 / i64::from(state.tpf);
 
         // Grow the frames vec if necessary

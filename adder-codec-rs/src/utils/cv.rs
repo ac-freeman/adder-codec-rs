@@ -259,12 +259,10 @@ pub fn feature_precision_recall_accuracy(
                 } else {
                     fp += 1;
                 }
+            } else if gt_hash.contains(&coord) {
+                fnn += 1;
             } else {
-                if gt_hash.contains(&coord) {
-                    fnn += 1;
-                } else {
-                    tn += 1;
-                }
+                tn += 1;
             }
         }
     }
