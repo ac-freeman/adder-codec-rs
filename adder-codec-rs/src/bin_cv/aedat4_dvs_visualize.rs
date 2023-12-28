@@ -1,6 +1,6 @@
 use adder_codec_rs::aedat::events_generated::Event;
 use adder_codec_rs::transcoder::source::video::show_display_force;
-use adder_codec_rs::utils::viz::{encode_video_ffmpeg, write_frame_to_video};
+use adder_codec_rs::utils::viz::{encode_video_ffmpeg, write_frame_to_video_cv};
 use clap::Parser;
 use davis_edi_rs::util::reconstructor::Reconstructor;
 use opencv::core::{Mat, MatTrait, MatTraitManual, CV_8U};
@@ -159,7 +159,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         if args.show_display {
             show_display_force("DVS", &frame, 1)?;
         }
-        write_frame_to_video(&frame, &mut video_writer)?;
+        write_frame_to_video_cv(&frame, &mut video_writer)?;
     }
     println!("\nDVS event count: {event_count}");
     println!("\n");
