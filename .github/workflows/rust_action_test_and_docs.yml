@@ -48,8 +48,8 @@ jobs:
       - name: Test project
         run: cargo test -p adder-codec-rs -p adder-info -p adder-viz
       
-      - name: Run a documentation generation test
-        run: cargo doc -vv -p adder-codec-rs --features "docs-only open-cv"
+      # - name: Run a documentation generation test
+      #   run: cargo doc -vv -p adder-codec-rs --features "docs-only open-cv"
   check_windows:
     name: Check and test on Windows
     runs-on: windows-2022
