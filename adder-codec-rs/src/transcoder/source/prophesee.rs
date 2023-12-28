@@ -2,8 +2,8 @@ use std::error::Error;
 use std::path::PathBuf;
 use ndarray::Array3;
 use adder_codec_core::Mode::Continuous;
-use adder_codec_core::{DeltaT, Event, PlaneSize, SourceCamera, TimeMode};
-use crate::transcoder::source::video::{Source, SourceError, Video, VideoBuilder};
+use adder_codec_core::{DeltaT, Event, PlaneSize, SourceCamera, SourceType, TimeMode};
+use crate::transcoder::source::video::{integrate_for_px, Source, SourceError, Video, VideoBuilder};
 use serde::Deserialize;
 use std::fs::File;
 use std::io::{self, BufRead, Write, BufReader, Read, Seek, SeekFrom};
@@ -11,14 +11,32 @@ use std::path::Path;
 use rayon::ThreadPool;
 use video_rs_adder_dep::Frame;
 use adder_codec_core::codec::{EncoderOptions, EncoderType};
+use crate::framer::scale_intensity::{FrameValue, SaeTime};
+use crate::transcoder::source::video::FramedViewMode::SAE;
+use crate::utils::cv::clamp_u8;
 use crate::utils::viz::ShowFeatureMode;
 
 /// Attributes of a framed video -> ADΔER transcode
 pub struct Prophesee<W: Write> {
     pub(crate) video: Video<W>,
 
-    time_change: f64,
+    input_reader: BufReader<File>,
+
+    // We scale up the input timestamps by this amount for accuracy under ADDER.
+    // For example, with time_change = 255, a timestamp of 12 in the source becomes 3060
+    // ADDER ticks
+    // time_change: u32,
     num_dvs_events: usize,
+
+    running_t: u32,
+
+    /// The timestamp (in-camera) of the last DVS event integrated for each pixel
+    pub dvs_last_timestamps: Array3<u32>,
+
+    /// The log-space last intensity value for each pixel
+    pub dvs_last_ln_val: Array3<f64>,
+
+    camera_theta: f64,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -34,23 +52,35 @@ unsafe impl<W: Write> Sync for Prophesee<W> {}
 impl<W: Write + 'static> Prophesee<W> {
     /// Create a new `Prophesee` transcoder
     pub fn new(
+        ref_time: u32,
         input_filename: String,
     ) -> Result<Self, Box<dyn Error>> {
         let source = File::open(PathBuf::from(input_filename))?;
-        let mut file = BufReader::new(source);
+        let mut input_reader = BufReader::new(source);
 
         // Parse header
-        let (bod, _, _, size) = parse_header(&mut file).unwrap();
+        let (bod, _, _, size) = parse_header(&mut input_reader).unwrap();
 
         let plane = PlaneSize::new(size.1 as u16, size.0 as u16, 1)?;
 
-        let video = Video::new(
+        let mut video = Video::new(
             plane,
 
                  Continuous,
 
             None,
-        )?.chunk_rows(1);
+        )?.chunk_rows(1)
+            // Override the tps to assume the source has a temporal granularity of 10000/second
+            // The `ref_time` in this case scales up the temporal granularity of the source.
+            // For example, with ref_time = 255, a timestamp of 12 in the source becomes 3060
+            // ADDER ticks
+            .time_parameters(ref_time * 10000, ref_time, ref_time*10000, Some(TimeMode::AbsoluteT))?;
+
+        let start_intensities = vec![128_u8; video.state.plane.volume()];
+        video.state.running_intensities = Array3::from_shape_vec(
+            (plane.h().into(), plane.w().into(), plane.c().into()),
+            start_intensities,
+        )?;
 
         let plane = &video.state.plane;
 
@@ -61,17 +91,21 @@ impl<W: Write + 'static> Prophesee<W> {
             timestamps,
         )?;
 
-        let timestamps = vec![0.0_f64; video.state.plane.volume()];
+        let start_vals = vec![0.5_f64.ln(); video.state.plane.volume()];
 
         let dvs_last_ln_val: Array3<f64> = Array3::from_shape_vec(
             (plane.h() as usize, plane.w() as usize, plane.c() as usize),
-            timestamps,
+            start_vals,
         )?;
 
         let prophesee_source = Prophesee {
             video,
-            time_change: 0.0,
+            input_reader,
             num_dvs_events: 0,
+            running_t: 0,
+            dvs_last_timestamps,
+            dvs_last_ln_val,
+            camera_theta: 0.15, // A fixed assumption
         };
 
         Ok(prophesee_source)
@@ -139,7 +173,117 @@ fn parse_header(file: &mut BufReader<File>) -> io::Result<(u64, u8, u8, (u32, u3
 
 impl<W: Write + 'static + std::marker::Send> Source<W> for Prophesee<W> {
     fn consume(&mut self, view_interval: u32, thread_pool: &ThreadPool) -> Result<Vec<Vec<Event>>, SourceError> {
-        todo!()
+        // Read events from the source file until we find a timestamp that exceeds our `running_t`
+        // by at least `view_interval`
+        let mut dvs_events = Vec::new();
+        let mut dvs_event;
+        loop {
+            // TODO: integrate to fill in the rest of time once the eof is reached
+
+            dvs_event = decode_event(&mut self.input_reader)?;
+            dvs_events.push(dvs_event);
+            if dvs_events.last().unwrap().t > self.running_t + view_interval {
+                self.running_t = dvs_events.last().unwrap().t;
+                break;
+            }
+        }
+
+
+
+
+        let mut events: Vec<Event> = Vec::new();
+        let crf_parameters = *self.video.encoder.options.crf.get_parameters();
+
+        // For every dvs event in our queue, integrate the previously seen intensity for all the
+        // time between the pixel's last input and the current event
+        for dvs_event in dvs_events {
+            let x = dvs_event.x as usize;
+            let y = dvs_event.y as usize;
+            let p = dvs_event.p as usize;
+            let t = dvs_event.t;
+
+            // Get the last timestamp for this pixel
+            let last_t = self.dvs_last_timestamps[[y, x, 0]];
+
+            // Get the last ln intensity for this pixel
+            let mut last_ln_val = self.dvs_last_ln_val[[y, x, 0]];
+
+            // Convert the ln intensity to a linear intensity
+            let mut last_val = (last_ln_val.exp() - 1.0) * 255.0;
+
+            clamp_u8(&mut last_val, &mut last_ln_val);
+
+            let px = &mut self.video.event_pixel_trees[[y, x, 0]];
+
+
+            if t >= last_t + 1 {
+                // Integrate the last intensity for this pixel over the time since the last event
+                let time_spanned = ((t - last_t) * self.video.state.params.ref_time);
+                let intensity_to_integrate = last_val * time_spanned as f64;
+
+                let mut base_val = 0;
+                let _ = integrate_for_px(px, &mut base_val, last_val as u8, intensity_to_integrate as f32,
+                                         time_spanned as f32, &mut events, &self.video.state.params, &crf_parameters);
+            }
+
+
+
+            // Get the new ln intensity
+            let mut new_ln_val = match p {
+                0 => {
+                    last_ln_val - self.camera_theta
+                }
+                1 => {
+                    last_ln_val + self.camera_theta
+                }
+                _ => panic!("Invalid polarity"),
+            };
+
+            let mut new_val = (new_ln_val.exp() - 1.0) * 255.0;
+
+            clamp_u8(&mut new_val, &mut new_ln_val);
+
+            // Update the last intensity for this pixel
+            self.dvs_last_ln_val[[y, x, 0]] = new_ln_val;
+
+            // Update the last timestamp for this pixel
+            self.dvs_last_timestamps[[y, x, 0]] = t;
+
+            if t > last_t {
+
+                // Integrate 1 source time unit of the new intensity
+                let time_spanned = self.video.state.params.ref_time;
+                let intensity_to_integrate = new_val;
+
+                let mut base_val = 0;
+                let _ = integrate_for_px(px, &mut base_val, new_val as u8, intensity_to_integrate as f32,
+                                         time_spanned as f32, &mut events, &self.video.state.params, &crf_parameters);
+            }
+
+            // Update the running intensity for this pixel
+            if let Some(event) = px.arena[0].best_event {
+                self.video.state.running_intensities[[y, x, 0]] = u8::get_frame_value(
+                    &event.into(),
+                    SourceType::U8,
+                    self.video.state.params.ref_time as f64,
+                    32.0,
+                    self.video.state.params.delta_t_max,
+                    self.video.instantaneous_view_mode,
+                    if self.video.instantaneous_view_mode == SAE {
+                        Some(SaeTime {
+                            running_t: px.running_t as DeltaT,
+                            last_fired_t: px.last_fired_t as DeltaT,
+                        })
+                    } else {
+                        None
+                    },
+                );
+            };
+        }
+
+        // It's expected that the function will spatially parallelize the integrations. With sparse
+        // data, though, this could be pretty wasteful. For now, just wrap the vec in another vec.
+        Ok(vec![events])
     }
 
     fn crf(&mut self, crf: u8) {
@@ -165,6 +309,26 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Prophesee<W> {
     fn get_running_input_bitrate(&self) -> f64 {
         todo!()
     }
+}
+
+fn decode_event(
+    reader: &mut BufReader<File>,
+) -> io::Result<(DvsEvent)> {
+
+    // Read one record
+    let mut buffer = [0; 8]; // Adjust this size to match your record size
+    reader.read_exact(&mut buffer)?;
+
+    // Interpret the bytes as 't' and 'data'
+    let t = u32::from_le_bytes([buffer[0], buffer[1], buffer[2], buffer[3]]);
+    let data = i32::from_le_bytes([buffer[4], buffer[5], buffer[6], buffer[7]]);
+
+    // Perform bitwise operations
+    let x = (data & 16383) as u16;
+    let y = ((data & 268419072) >> 14) as u16;
+    let p = ((data & 268435456) >> 28) as u8;
+
+    Ok(DvsEvent { t, x, y, p })
 }
 
 impl<W: Write + 'static> VideoBuilder<W> for Prophesee<W> {
@@ -259,3 +423,4 @@ impl<W: Write + 'static> VideoBuilder<W> for Prophesee<W> {
         todo!()
     }
 }
+

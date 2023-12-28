@@ -33,6 +33,7 @@ use crate::transcoder::event_pixel_tree::Intensity32;
 use crate::utils::viz::ShowFeatureMode;
 use tokio::runtime::Runtime;
 use video_rs_adder_dep::Frame;
+use crate::utils::cv::clamp_u8;
 
 /// The EDI reconstruction mode, determining how intensities are integrated for the ADΔER model
 #[derive(PartialEq, Eq, Clone, Copy)]
@@ -1058,15 +1059,7 @@ fn check_dvs_after(dvs_event_t: i64, timestamp_after: i64) -> bool {
     dvs_event_t > timestamp_after
 }
 
-fn clamp_u8(frame_val: &mut f64, last_val_ln: &mut f64) {
-    if *frame_val <= 0.0 {
-        *frame_val = 0.0;
-        *last_val_ln = 0.0; // = 0.0_f64.ln_1p();
-    } else if *frame_val > 255.0 {
-        *frame_val = 255.0;
-        *last_val_ln = 255.0_f64.ln_1p();
-    }
-}
+
 
 /// Get the next APS image from the video source.
 /// Returns a tuple of the image, the timestamp of the image, the timestamp of the end of the

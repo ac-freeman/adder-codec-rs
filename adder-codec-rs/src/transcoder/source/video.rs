@@ -115,6 +115,10 @@ pub enum SourceError {
     /// Vision application error
     #[error("Vision application error")]
     VisionError(String),
+
+    /// I/O error
+    #[error("I/O error")]
+    IoError(#[from] std::io::Error),
 }
 
 #[cfg(feature = "open-cv")]
