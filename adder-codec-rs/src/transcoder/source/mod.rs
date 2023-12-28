@@ -7,6 +7,6 @@ pub mod framed;
 
 /// Common functions and structs for all transcoder sources
 pub mod video;
-mod prophesee;
+pub mod prophesee;
 
 

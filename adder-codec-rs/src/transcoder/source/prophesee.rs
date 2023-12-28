@@ -16,6 +16,9 @@ use crate::transcoder::source::video::FramedViewMode::SAE;
 use crate::utils::cv::clamp_u8;
 use crate::utils::viz::ShowFeatureMode;
 
+/// The temporal granularity of the source (ticks per second)
+const PROPHESEE_SOURCE_TPS: u32 = 1000000;
+
 /// Attributes of a framed video -> ADΔER transcode
 pub struct Prophesee<W: Write> {
     pub(crate) video: Video<W>,
@@ -59,7 +62,7 @@ impl<W: Write + 'static> Prophesee<W> {
         let mut input_reader = BufReader::new(source);
 
         // Parse header
-        let (bod, _, _, size) = parse_header(&mut input_reader).unwrap();
+        let (_, _, _, size) = parse_header(&mut input_reader).unwrap();
 
         let plane = PlaneSize::new(size.1 as u16, size.0 as u16, 1)?;
 
@@ -70,17 +73,18 @@ impl<W: Write + 'static> Prophesee<W> {
 
             None,
         )?.chunk_rows(1)
-            // Override the tps to assume the source has a temporal granularity of 10000/second
+            // Override the tps to assume the source has a temporal granularity of 1000000/second
             // The `ref_time` in this case scales up the temporal granularity of the source.
-            // For example, with ref_time = 255, a timestamp of 12 in the source becomes 3060
+            // For example, with ref_time = 20, a timestamp of 12 in the source becomes 240
             // ADDER ticks
-            .time_parameters(ref_time * 10000, ref_time, ref_time*10000, Some(TimeMode::AbsoluteT))?;
+            .time_parameters(ref_time * PROPHESEE_SOURCE_TPS, ref_time, ref_time* 2, Some(TimeMode::AbsoluteT))?;
 
         let start_intensities = vec![128_u8; video.state.plane.volume()];
         video.state.running_intensities = Array3::from_shape_vec(
             (plane.h().into(), plane.w().into(), plane.c().into()),
             start_intensities,
         )?;
+        video.display_frame_features = video.state.running_intensities.clone();
 
         let plane = &video.state.plane;
 
@@ -168,11 +172,14 @@ fn parse_header(file: &mut BufReader<File>) -> io::Result<(u64, u8, u8, (u32, u3
         (0, 0) // Placeholder values, replace with actual logic
     };
     bod = file.seek(SeekFrom::Current(0))?;
-    Ok((bod, ev_type, ev_size, (size[0].unwrap_or(320), size[1].unwrap_or(320))))
+    Ok((bod, ev_type, ev_size, (size[0].unwrap_or(80), size[1].unwrap_or(110))))
 }
 
 impl<W: Write + 'static + std::marker::Send> Source<W> for Prophesee<W> {
     fn consume(&mut self, view_interval: u32, thread_pool: &ThreadPool) -> Result<Vec<Vec<Event>>, SourceError> {
+        // TODO hardcoded: scale the view interval to be 60 FPS GUI display
+        let view_interval = (PROPHESEE_SOURCE_TPS / 60);
+
         // Read events from the source file until we find a timestamp that exceeds our `running_t`
         // by at least `view_interval`
         let mut dvs_events = Vec::new();
@@ -278,7 +285,12 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Prophesee<W> {
                         None
                     },
                 );
+                self.video.display_frame_features[[y, x, 0]] = self.video.state.running_intensities[[y, x, 0]];
             };
+        }
+
+        for event in &events {
+            self.video.encoder.ingest_event(*event)?;
         }
 
         // It's expected that the function will spatially parallelize the integrations. With sparse
@@ -307,7 +319,8 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Prophesee<W> {
     }
 
     fn get_running_input_bitrate(&self) -> f64 {
-        todo!()
+        // TODO
+        0.0
     }
 }
 

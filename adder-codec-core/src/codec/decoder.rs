@@ -91,7 +91,7 @@ impl<R: Read + Seek> Decoder<R> {
             SourceCamera::FramedU64 => U64,
             SourceCamera::FramedF32 => F32,
             SourceCamera::FramedF64 => F64,
-            SourceCamera::Dvs => F64,
+            SourceCamera::Dvs => U8,
             SourceCamera::DavisU8 => U8,
             SourceCamera::Atis => U8,
             SourceCamera::Asint => F64,
