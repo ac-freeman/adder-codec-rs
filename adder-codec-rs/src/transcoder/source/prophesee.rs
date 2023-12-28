@@ -86,14 +86,20 @@ impl<W: Write + 'static> Prophesee<W> {
         )?;
         video.display_frame_features = video.state.running_intensities.clone();
 
-        let plane = &video.state.plane;
 
-        let timestamps = vec![0_u32; video.state.plane.volume()];
+
+
+
+        let timestamps = vec![2_u32; video.state.plane.volume()];
 
         let dvs_last_timestamps: Array3<u32> = Array3::from_shape_vec(
             (plane.h().into(), plane.w().into(), plane.c().into()),
             timestamps,
         )?;
+
+        let plane = &video.state.plane;
+
+
 
         let start_vals = vec![0.5_f64.ln(); video.state.plane.volume()];
 
@@ -177,6 +183,14 @@ fn parse_header(file: &mut BufReader<File>) -> io::Result<(u64, u8, u8, (u32, u3
 
 impl<W: Write + 'static + std::marker::Send> Source<W> for Prophesee<W> {
     fn consume(&mut self, view_interval: u32, thread_pool: &ThreadPool) -> Result<Vec<Vec<Event>>, SourceError> {
+        if self.running_t == 0 {
+            self.video.integrate_matrix(self.video.state.running_intensities.clone(), self.video.state.params.ref_time as f32, 1)?;
+            let first_events: Vec<Event> = self.video.integrate_matrix(self.video.state.running_intensities.clone(), self.video.state.params.ref_time as f32, 1)?.into_iter().flatten().collect();
+            dbg!(first_events.len());
+            assert_eq!(first_events.len(), self.video.state.plane.volume());
+            self.running_t = 2;
+        }
+
         // TODO hardcoded: scale the view interval to be 60 FPS GUI display
         let view_interval = (PROPHESEE_SOURCE_TPS / 60);
 
