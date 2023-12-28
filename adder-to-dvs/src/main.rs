@@ -13,7 +13,7 @@ use std::option::Option;
 use std::{error, io};
 
 /// Command line argument parser
-#[derive(Parser, Debug, Default)]
+#[derive(Parser, Debug, Default, Clone)]
 #[clap(author, version, about, long_about = None)]
 pub struct MyArgs {
     /// Input ADΔER video path
@@ -49,6 +49,7 @@ struct DvsPixel {
 #[allow(dead_code)]
 fn main() -> Result<(), Box<dyn error::Error>> {
     let args: MyArgs = MyArgs::parse();
+    dbg!(args.clone());
     let file_path = args.input.as_str();
 
     let output_text_path = args.output_text.as_str();
@@ -185,7 +186,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         }
 
         match stream.digest_event(&mut bitreader) {
-            Ok(event) => {
+            Ok(mut event) => {
                 event_count += 1;
                 let y = event.coord.y as usize;
                 let x = event.coord.x as usize;
@@ -208,7 +209,23 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         }
                     },
                     Some(px) => {
-                        px.t += event.t as u128;
+                        if meta.time_mode == TimeMode::DeltaT {
+                            px.t += event.t as u128;
+                        } else {
+                            let tmp = px.t;
+                            px.t = event.t as u128;
+                            event.t -= tmp as u32;
+                        }
+
+                        if is_framed(meta.source_camera) {
+                            px.t = if px.t % meta.ref_interval as u128 == 0 {
+                                px.t
+                            } else {
+                                (((px.t / meta.ref_interval as u128) + 1)
+                                    * meta.ref_interval as u128)
+                            };
+                        }
+
                         current_t = max(px.t, current_t);
                         let frame_idx = (px.t / frame_length) as usize;
 
@@ -351,20 +368,18 @@ fn set_instant_dvs_pixel(
     }
 
     unsafe {
-        let px: &mut u8 = match event.coord.c {
-            None => frames[frame_idx - frame_count]
-                .at_2d_unchecked_mut(event.coord.y.into(), event.coord.x.into())?,
-            Some(c) => frames[frame_idx - frame_count].at_3d_unchecked_mut(
-                event.coord.y.into(),
-                event.coord.x.into(),
-                c.into(),
-            )?,
-        };
-        *px = value as u8;
-        // match value {
-        //     128 => *px = 128,
-        //     a => *px = (*px as i16 + a) as u8,
-        // }
+        if frame_idx >= frame_count {
+            let px: &mut u8 = match event.coord.c {
+                None => frames[frame_idx - frame_count]
+                    .at_2d_unchecked_mut(event.coord.y.into(), event.coord.x.into())?,
+                Some(c) => frames[frame_idx - frame_count].at_3d_unchecked_mut(
+                    event.coord.y.into(),
+                    event.coord.x.into(),
+                    c.into(),
+                )?,
+            };
+            *px = value as u8;
+        }
     }
     Ok(())
 }

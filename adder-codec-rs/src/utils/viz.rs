@@ -33,10 +33,8 @@ pub fn write_frame_to_video(
     unsafe {
         for idx in 0..len {
             let val: *const u8 = frame.at_unchecked(idx)? as *const u8;
-            assert_eq!(
-                video_writer.write(std::slice::from_raw_parts(val, 1))?,
-                len as usize
-            );
+            let bytes_written = video_writer.write(std::slice::from_raw_parts(val, 1))?;
+            assert_eq!(bytes_written, 1);
         }
     }
     Ok(())
