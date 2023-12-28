@@ -1,10 +1,9 @@
 extern crate adder_codec_rs;
 
-use crate::adder_codec_rs::transcoder::source::video::VideoBuilder;
 use adder_codec_core::codec::decoder::Decoder;
 use adder_codec_core::codec::encoder::Encoder;
 use adder_codec_core::codec::raw::stream::RawInput;
-use adder_codec_core::codec::{EncoderOptions, ReadCompression, WriteCompression};
+use adder_codec_core::codec::EncoderOptions;
 use adder_codec_core::SourceCamera::FramedU8;
 use adder_codec_core::SourceType::*;
 use adder_codec_core::TimeMode::DeltaT;
@@ -20,9 +19,7 @@ use std::process::Command;
 use adder_codec_rs::framer::driver::FramerMode::INSTANTANEOUS;
 use adder_codec_rs::framer::driver::{FrameSequence, Framer, FramerBuilder};
 
-
 use rand::Rng;
-
 
 #[test]
 fn test_set_stream_position() {

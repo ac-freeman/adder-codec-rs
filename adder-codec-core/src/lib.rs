@@ -47,15 +47,15 @@ pub enum SourceCamera {
 }
 
 pub fn is_framed(source_camera: SourceCamera) -> bool {
-    match source_camera {
+    matches!(
+        source_camera,
         SourceCamera::FramedU8
-        | SourceCamera::FramedU16
-        | SourceCamera::FramedU32
-        | SourceCamera::FramedU64
-        | SourceCamera::FramedF32
-        | SourceCamera::FramedF64 => true,
-        _ => false,
-    }
+            | SourceCamera::FramedU16
+            | SourceCamera::FramedU32
+            | SourceCamera::FramedU64
+            | SourceCamera::FramedF32
+            | SourceCamera::FramedF64
+    )
 }
 
 // #[cfg(feature = "compression")]

@@ -1,4 +1,3 @@
-
 #[cfg(feature = "open-cv")]
 use opencv::core::{Mat, Size};
 #[cfg(feature = "opencv")]
@@ -9,7 +8,6 @@ use std::collections::HashSet;
 use std::ffi::c_void;
 use std::io::{sink, Write};
 use std::mem::swap;
-
 
 use adder_codec_core::codec::empty::stream::EmptyOutput;
 use adder_codec_core::codec::encoder::Encoder;
@@ -39,9 +37,9 @@ use adder_codec_core::codec::compressed::stream::CompressedOutput;
 use adder_codec_core::Mode::Continuous;
 use itertools::Itertools;
 use ndarray::{Array, Array3, Axis, ShapeError};
+use rayon::iter::IndexedParallelIterator;
+use rayon::iter::IntoParallelIterator;
 use rayon::iter::ParallelIterator;
-use rayon::iter::{IndexedParallelIterator};
-use rayon::iter::{IntoParallelIterator};
 use rayon::ThreadPool;
 
 use crate::transcoder::source::video::FramedViewMode::SAE;
@@ -216,7 +214,6 @@ pub struct VideoState {
 
 impl Default for VideoState {
     fn default() -> Self {
-        
         VideoState {
             plane: PlaneSize::default(),
             params: VideoStateParams::default(),
@@ -766,7 +763,9 @@ impl<W: Write + 'static> Video<W> {
                     .unwrap();
 
                 handle
-                    .write_all(&serde_pickle::to_vec(&"\n".to_string(), Default::default()).unwrap())
+                    .write_all(
+                        &serde_pickle::to_vec(&"\n".to_string(), Default::default()).unwrap(),
+                    )
                     .unwrap();
             }
         }
@@ -854,10 +853,7 @@ impl<W: Write + 'static> Video<W> {
         // self.state.c_thresh_neg = c;
     }
 
-    pub(crate) fn handle_features(
-        &mut self,
-        big_buffer: &Vec<Vec<Event>>,
-    ) -> Result<(), SourceError> {
+    pub(crate) fn handle_features(&mut self, big_buffer: &[Vec<Event>]) -> Result<(), SourceError> {
         // if !cfg!(feature = "feature-logging") && !self.state.feature_detection {
         if !self.state.feature_detection {
             return Ok(()); // Early return
@@ -876,15 +872,13 @@ impl<W: Write + 'static> Video<W> {
             .zip(new_features.iter_mut())
             .for_each(|((events, feature_set), new_features)| {
                 for (e1, e2) in events.iter().circular_tuple_windows() {
-                    if (e1.coord.c.is_none() || e1.coord.c == Some(0)) && e1.coord != e2.coord
-                            && (!cfg!(feature = "feature-logging-nonmaxsuppression")
-                                || e2.t != e1.t) && e1.d != D_EMPTY {
-                        if is_feature(
-                            e1.coord,
-                            self.state.plane,
-                            &self.state.running_intensities,
-                        )
-                        .unwrap()
+                    if (e1.coord.c.is_none() || e1.coord.c == Some(0))
+                        && e1.coord != e2.coord
+                        && (!cfg!(feature = "feature-logging-nonmaxsuppression") || e2.t != e1.t)
+                        && e1.d != D_EMPTY
+                    {
+                        if is_feature(e1.coord, self.state.plane, &self.state.running_intensities)
+                            .unwrap()
                         {
                             if feature_set.insert(e1.coord) {
                                 new_features.push(e1.coord);

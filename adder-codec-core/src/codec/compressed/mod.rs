@@ -36,7 +36,7 @@ mod tests {
                 channels: 1,
             }),
         );
-        let meta = encoder.meta().clone();
+        let meta = *encoder.meta();
         let mut test_event = Event {
             coord: Coord {
                 x: 0,
@@ -64,7 +64,7 @@ mod tests {
                 channels: 1,
             }),
         );
-        let meta = encoder.meta().clone();
+        let meta = *encoder.meta();
         encoder.ingest_event(test_event).unwrap();
         test_event.t += 100;
         encoder.ingest_event(test_event).unwrap();

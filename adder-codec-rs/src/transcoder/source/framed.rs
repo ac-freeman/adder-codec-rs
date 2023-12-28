@@ -148,7 +148,7 @@ impl<W: Write + 'static> Source<W> for Framed<W> {
                 #[rustfmt::skip]
                     let metrics = calculate_quality_metrics(
                     &self.input_frame,
-                    &mut image_mat,
+                    &image_mat,
                     QualityMetrics {
                         mse: Some(0.0),
                         psnr: Some(0.0),

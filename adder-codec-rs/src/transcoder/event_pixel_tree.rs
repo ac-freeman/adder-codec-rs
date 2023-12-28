@@ -142,18 +142,13 @@ impl PixelArena {
         mode: Mode,
         ref_time: DeltaT,
     ) -> Event {
-        let mut event = self.pop_top_event_recursive(next_intensity, mode, ref_time);
+        let mut event = self.pop_top_event_recursive(next_intensity);
         self.popped_dtm = true;
         self.delta_t_to_absolute_t(&mut event, mode, ref_time)
     }
 
     /// Pop just the topmost event. Should be called only when dtm is reached for main node
-    fn pop_top_event_recursive(
-        &mut self,
-        next_intensity: Intensity32,
-        mode: Mode,
-        ref_time: DeltaT,
-    ) -> Event32 {
+    fn pop_top_event_recursive(&mut self, next_intensity: Intensity32) -> Event32 {
         self.need_to_pop_top = false;
         let root = &mut self.arena[0];
         match root.best_event {
@@ -187,7 +182,7 @@ impl PixelArena {
                         self.length += 1;
                     }
 
-                    self.pop_top_event_recursive(next_intensity, mode, ref_time)
+                    self.pop_top_event_recursive(next_intensity)
                     // panic!("No best event! TODO: handle it")
                 }
             }
@@ -974,7 +969,7 @@ mod tests {
         }
         false
     }
-    fn f64_slack(num0: f64, num1: f64) -> bool {
+    fn _f64_slack(num0: f64, num1: f64) -> bool {
         let slack = f64::EPSILON;
         if num1 - slack <= num0 && num1 + slack >= num0 {
             return true;

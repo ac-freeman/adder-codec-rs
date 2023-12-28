@@ -3,9 +3,7 @@ use crate::utils::prep_bevy_image;
 use crate::{slider_pm, Images};
 #[cfg(feature = "open-cv")]
 use adder_codec_rs::transcoder::source::davis::TranscoderMode;
-use adder_codec_rs::transcoder::source::video::{
-    FramedViewMode, Source, SourceError, VideoBuilder,
-};
+use adder_codec_rs::transcoder::source::video::{FramedViewMode, Source, SourceError};
 use bevy::ecs::system::Resource;
 use bevy::prelude::{Assets, Commands, Image, Res, ResMut, Time};
 use bevy_egui::egui;
@@ -224,7 +222,7 @@ impl TranscoderState {
                 if let Some(framed_source) = &mut self.transcoder.framed_source {
                     match framed_source.get_video_mut().end_write_stream() {
                         Ok(Some(mut writer)) => {
-                            writer.flush();
+                            writer.flush().unwrap();
                         }
                         Ok(None) => {}
                         Err(_) => {}

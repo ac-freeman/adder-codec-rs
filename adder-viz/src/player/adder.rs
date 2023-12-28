@@ -15,7 +15,6 @@ use bevy::prelude::Image;
 use ndarray::Array;
 use ndarray::Array3;
 
-
 use std::error::Error;
 use std::fmt;
 use std::fs::File;
@@ -55,7 +54,6 @@ pub struct AdderPlayer {
     reconstruction_method: ReconstructionMethod,
     current_frame: u32,
     stream_state: StreamState,
-    pub(crate) view_mode: FramedViewMode,
 }
 
 unsafe impl Sync for AdderPlayer {}
@@ -145,7 +143,6 @@ impl AdderPlayer {
                         playback_speed,
                         reconstruction_method: ReconstructionMethod::Accurate,
                         current_frame: 0,
-                        view_mode,
                     })
                 }
                 Some(_) => Err(Box::new(AdderPlayerError("Invalid file type".into()))),
@@ -161,21 +158,15 @@ impl AdderPlayer {
     pub fn stream_pos(mut self, pos: u64) -> Self {
         if let Some(ref mut stream) = self.input_stream {
             if pos > stream.decoder.meta().header_size as u64 {
-                match stream
+                if let Ok(_) = stream
                     .decoder
                     .set_input_stream_position(&mut stream.bitreader, pos)
-                {
-                    Ok(_) => {}
-                    Err(_) => {}
-                }
+                {}
             } else {
-                match stream.decoder.set_input_stream_position(
+                if let Ok(_) = stream.decoder.set_input_stream_position(
                     &mut stream.bitreader,
                     stream.decoder.meta().header_size as u64,
-                ) {
-                    Ok(_) => {}
-                    Err(_) => {}
-                }
+                ) {}
             }
         }
         self

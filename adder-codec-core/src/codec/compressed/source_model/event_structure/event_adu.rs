@@ -13,8 +13,6 @@ use std::mem::size_of;
 
 #[derive(Clone, Debug, Default)]
 pub struct EventAdu {
-    plane: PlaneSize,
-
     /// Contains the sparse events in the cube. The index is the relative interval of dt_ref from the start
     event_cubes: Array2<EventCube>,
 
@@ -58,7 +56,6 @@ impl EventAdu {
         let blocks_x = (plane.w_usize() + BLOCK_SIZE - 1) / BLOCK_SIZE;
 
         Self {
-            plane,
             event_cubes: Array2::from_shape_fn((blocks_y, blocks_x), |(y, x)| {
                 EventCube::new(
                     y as u16 * BLOCK_SIZE as u16,
@@ -88,11 +85,7 @@ impl EventAdu {
     ) -> Result<(), CodecError> {
         // Create a new source model instance
         let mut source_model = FenwickModel::with_symbols(u16::MAX as usize, 1 << 30);
-        let contexts = Contexts::new(
-            &mut source_model,
-            self.dt_ref,
-            self.dt_ref * self.num_intervals as DeltaT,
-        );
+        let contexts = Contexts::new(&mut source_model, self.dt_ref);
 
         let mut encoder = Encoder::new(source_model);
 
@@ -119,42 +112,6 @@ impl EventAdu {
 
         Ok(())
     }
-    pub fn compress_test(
-        &mut self,
-        stream: &mut BitWriter<Vec<u8>, BigEndian>,
-        c_thresh_max: u8,
-    ) -> Result<(), CodecError> {
-        // Create a new source model instance
-        let mut source_model = FenwickModel::with_symbols(u16::MAX as usize, 1 << 30);
-        let contexts = Contexts::new(
-            &mut source_model,
-            self.dt_ref,
-            self.dt_ref * self.num_intervals as DeltaT,
-        );
-
-        let mut encoder = Encoder::new(source_model);
-
-        // Write out the starting timestamp of the Adu
-        encoder.model.set_context(contexts.t_context);
-        for byte in self.start_t.to_be_bytes().iter() {
-            encoder.encode(Some(&(*byte as usize)), stream).unwrap();
-        }
-
-        for cube in self.event_cubes.iter_mut() {
-            debug_assert_eq!(cube.start_t, self.start_t);
-            cube.compress_intra(&mut encoder, &contexts, stream, Some(c_thresh_max))?;
-        }
-
-        for cube in self.event_cubes.iter_mut() {
-            debug_assert_eq!(cube.start_t, self.start_t);
-            cube.compress_inter(&mut encoder, &contexts, stream, Some(c_thresh_max))?;
-        }
-
-        // Flush the encoder
-        eof_context(&contexts, &mut encoder, stream);
-
-        Ok(())
-    }
 
     pub fn decompress(&mut self, stream: &mut BitReader<Cursor<Vec<u8>>, BigEndian>) {
         self.clear_decompression();
@@ -163,11 +120,7 @@ impl EventAdu {
 
         // Create a new source model instance
         let mut source_model = FenwickModel::with_symbols(u16::MAX as usize, 1 << 30);
-        let contexts = Contexts::new(
-            &mut source_model,
-            self.dt_ref,
-            self.dt_ref * self.num_intervals as DeltaT,
-        );
+        let contexts = Contexts::new(&mut source_model, self.dt_ref);
         let mut decoder = Decoder::new(source_model);
 
         // Read the starting timestamp of the Adu
@@ -229,12 +182,12 @@ impl HandleEvent for EventAdu {
             self.cube_to_write_count += 1;
         };
 
-        return if self.skip_adu {
+        if self.skip_adu {
             self.skip_adu = false;
             true
         } else {
             false
-        };
+        }
     }
 
     fn digest_event(&mut self) -> Result<Event, CodecError> {
@@ -253,10 +206,8 @@ impl HandleEvent for EventAdu {
                 // Call it recursively on the new block idx
                 self.digest_event()
             }
-            Ok(event) => {
-                return Ok(event);
-            }
-            Err(e) => return Err(e),
+            Ok(event) => Ok(event),
+            Err(e) => Err(e),
         }
     }
 
@@ -352,7 +303,7 @@ mod tests {
         let bufwriter = Vec::new();
         let mut stream = BitWriter::endian(bufwriter, BigEndian);
 
-        adu.compress_test(&mut stream, 0)?;
+        adu.compress(&mut stream, 0)?;
 
         let mut stream = BitReader::endian(Cursor::new(stream.into_writer()), BigEndian);
         let mut adu2 = EventAdu::new(plane, start_t, dt_ref, num_intervals);
@@ -411,7 +362,6 @@ mod tests {
 
                     if 28 + counter > start_t + dt_ref * num_intervals as u32 {
                         break;
-                    } else {
                     }
                 }
             }
@@ -420,7 +370,7 @@ mod tests {
         let bufwriter = Vec::new();
         let mut stream = BitWriter::endian(bufwriter, BigEndian);
 
-        adu.compress_test(&mut stream, 0)?;
+        adu.compress(&mut stream, 0)?;
 
         let encoded_data = stream.into_writer();
         let mut stream = BitReader::endian(Cursor::new(encoded_data.clone()), BigEndian);

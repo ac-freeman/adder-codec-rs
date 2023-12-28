@@ -141,12 +141,12 @@ impl HandleEvent for EventCube {
         self.raw_event_memory[event.coord.c_usize()][event.coord.y_usize()]
             [event.coord.x_usize()] = EventCoordless::from(event);
 
-        return if self.skip_cube {
+        if self.skip_cube {
             self.skip_cube = false;
             true
         } else {
             false
-        };
+        }
     }
 
     fn digest_event(&mut self) -> Result<Event, CodecError> {
@@ -183,15 +183,14 @@ impl HandleEvent for EventCube {
             }
         }
 
-        return if let Some(event) = self.decompressed_event_queue.pop_front() {
+        if let Some(event) = self.decompressed_event_queue.pop_front() {
             if self.decompressed_event_queue.is_empty() {
                 self.skip_cube = true;
             }
             Ok(event)
         } else {
-            return Err(CodecError::NoMoreEvents);
-            // Err(CodecError::new("No events left in the queue"))
-        };
+            Err(CodecError::NoMoreEvents)
+        }
     }
 
     /// Clear out the cube's events and increment the start time by the cube's duration
@@ -531,7 +530,7 @@ impl ComponentCompression for EventCube {
 
                     decoder.model.set_context(contexts.d_context);
 
-                    let tmp = decoder.decode(stream).unwrap().unwrap() as usize;
+                    let tmp = decoder.decode(stream).unwrap().unwrap();
                     let d_residual = tmp as i16 - D_RESIDUAL_OFFSET;
 
                     if d_residual == DRESIDUAL_SKIP_CUBE {
@@ -561,7 +560,7 @@ impl ComponentCompression for EventCube {
                             for byte in bitshift_buffer.iter_mut() {
                                 *byte = decoder.decode(stream).unwrap().unwrap() as u8;
                             }
-                            let bitshift_amt = bitshift_buffer[0] as u8;
+                            let bitshift_amt = bitshift_buffer[0];
 
                             let t_residual = if bitshift_amt == BITSHIFT_ENCODE_FULL {
                                 decoder.model.set_context(contexts.t_context);
@@ -575,13 +574,13 @@ impl ComponentCompression for EventCube {
                                     *byte = decoder.decode(stream).unwrap().unwrap() as u8;
                                 }
                                 let t_residual = TResidual::from_be_bytes(t_residual_buffer) as i64;
-                                (t_residual as i64) << bitshift_amt as i64
+                                (t_residual) << bitshift_amt as i64
                             };
 
                             init.d = (init.d as DResidual + d_residual) as D;
 
-                            debug_assert!(init.t as i64 + t_residual as i64 >= 0);
-                            init.t = (init.t as i64 + t_residual as i64) as AbsoluteT;
+                            debug_assert!(init.t as i64 + t_residual >= 0);
+                            init.t = (init.t as i64 + t_residual) as AbsoluteT;
 
                             // debug_assert!(init.t < start_t + num_intervals as AbsoluteT * dt_ref);
                             pixel.push(EventCoordless { d, t: init.t });
@@ -645,25 +644,25 @@ impl ComponentCompression for EventCube {
                             for byte in bitshift_buffer.iter_mut() {
                                 *byte = decoder.decode(stream).unwrap().unwrap() as u8;
                             }
-                            let bitshift_amt = bitshift_buffer[0] as u8;
+                            let bitshift_amt = bitshift_buffer[0];
 
                             let t_residual = if bitshift_amt == BITSHIFT_ENCODE_FULL {
                                 decoder.model.set_context(contexts.t_context);
                                 for byte in t_residual_full_buffer.iter_mut() {
                                     *byte = decoder.decode(stream).unwrap().unwrap() as u8;
                                 }
-                                i64::from_be_bytes(t_residual_full_buffer) as i64
+                                i64::from_be_bytes(t_residual_full_buffer)
                             } else {
                                 decoder.model.set_context(contexts.t_context);
                                 for byte in t_residual_buffer.iter_mut() {
                                     *byte = decoder.decode(stream).unwrap().unwrap() as u8;
                                 }
                                 let t_residual = TResidual::from_be_bytes(t_residual_buffer) as i64;
-                                (t_residual as i64) << bitshift_amt as i64
+                                (t_residual) << bitshift_amt as i64
                             };
 
                             let t = max(
-                                (t_prediction as i64 + t_residual as i64) as AbsoluteT,
+                                (t_prediction as i64 + t_residual) as AbsoluteT,
                                 prev_event.t,
                             );
                             debug_assert!(t >= prev_event.t);
@@ -688,7 +687,7 @@ mod compression_tests {
     use crate::codec::compressed::source_model::cabac_contexts::eof_context;
     use crate::codec::compressed::source_model::event_structure::event_cube::EventCube;
     use crate::codec::compressed::source_model::{ComponentCompression, HandleEvent};
-    use crate::{Coord, DeltaT, Event};
+    use crate::{Coord, Event};
     use arithmetic_coding_adder_dep::Encoder;
     use bitstream_io::{BigEndian, BitReader, BitWriter};
     use rand::prelude::StdRng;
@@ -721,7 +720,6 @@ mod compression_tests {
         let contexts = crate::codec::compressed::source_model::cabac_contexts::Contexts::new(
             &mut source_model,
             255,
-            2550,
         );
 
         let mut encoder = Encoder::new(source_model);
@@ -733,7 +731,6 @@ mod compression_tests {
         let contexts = crate::codec::compressed::source_model::cabac_contexts::Contexts::new(
             &mut source_model,
             255,
-            2550,
         );
         let mut decoder = arithmetic_coding_adder_dep::Decoder::new(source_model);
         let mut stream = BitReader::endian(Cursor::new(stream.into_writer()), BigEndian);
@@ -811,7 +808,6 @@ mod compression_tests {
         let contexts = crate::codec::compressed::source_model::cabac_contexts::Contexts::new(
             &mut source_model,
             255,
-            510,
         );
 
         let mut encoder = Encoder::new(source_model);
@@ -825,7 +821,6 @@ mod compression_tests {
         let contexts = crate::codec::compressed::source_model::cabac_contexts::Contexts::new(
             &mut source_model,
             255,
-            510,
         );
         let mut decoder = arithmetic_coding_adder_dep::Decoder::new(source_model);
         let mut stream = BitReader::endian(Cursor::new(stream.into_writer()), BigEndian);
@@ -870,7 +865,6 @@ mod compression_tests {
         let contexts = crate::codec::compressed::source_model::cabac_contexts::Contexts::new(
             &mut source_model,
             255,
-            2550,
         );
 
         let mut encoder = Encoder::new(source_model);
@@ -884,7 +878,6 @@ mod compression_tests {
         let contexts = crate::codec::compressed::source_model::cabac_contexts::Contexts::new(
             &mut source_model,
             255,
-            2550,
         );
         let mut decoder = arithmetic_coding_adder_dep::Decoder::new(source_model);
         let mut stream = BitReader::endian(Cursor::new(stream.into_writer()), BigEndian);
@@ -947,7 +940,6 @@ mod compression_tests {
         let contexts = crate::codec::compressed::source_model::cabac_contexts::Contexts::new(
             &mut source_model,
             255,
-            255 * num_intervals as DeltaT,
         );
 
         let mut encoder = Encoder::new(source_model);
@@ -961,7 +953,6 @@ mod compression_tests {
         let contexts = crate::codec::compressed::source_model::cabac_contexts::Contexts::new(
             &mut source_model,
             255,
-            255 * num_intervals as DeltaT,
         );
         let mut decoder = arithmetic_coding_adder_dep::Decoder::new(source_model);
         let mut stream = BitReader::endian(Cursor::new(stream.into_writer()), BigEndian);
@@ -1023,7 +1014,6 @@ mod compression_tests {
         let contexts = crate::codec::compressed::source_model::cabac_contexts::Contexts::new(
             &mut source_model,
             255,
-            255 * num_intervals as DeltaT,
         );
 
         let mut encoder = Encoder::new(source_model);
@@ -1037,7 +1027,6 @@ mod compression_tests {
         let contexts = crate::codec::compressed::source_model::cabac_contexts::Contexts::new(
             &mut source_model,
             255,
-            255 * num_intervals as DeltaT,
         );
         let mut decoder = arithmetic_coding_adder_dep::Decoder::new(source_model);
         let mut stream = BitReader::endian(Cursor::new(stream.into_writer()), BigEndian);

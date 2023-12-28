@@ -232,7 +232,7 @@ impl<W: Write + 'static> Encoder<W> {
                 let t_diff = now.duration_since(self.state.last_event_ts).as_secs_f64();
                 let new_event_rate = alpha * self.state.current_event_rate + (1.0 - alpha) / t_diff;
                 if new_event_rate > target_event_rate {
-                    self.state.current_event_rate = alpha * self.state.current_event_rate;
+                    self.state.current_event_rate *= alpha;
                     return Ok(()); // skip this event
                 }
                 self.state.last_event_ts = now; // update time
@@ -296,7 +296,7 @@ impl<W: Write + 'static> Encoder<W> {
         match &mut self.output {
             #[cfg(feature = "compression")]
             WriteCompressionEnum::CompressedOutput(compressed_output) => {
-                compressed_output.options = self.options.clone();
+                compressed_output.options = self.options;
             }
             WriteCompressionEnum::RawOutput(_) => {}
             WriteCompressionEnum::EmptyOutput(_) => {}

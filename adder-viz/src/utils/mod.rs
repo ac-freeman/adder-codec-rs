@@ -1,10 +1,7 @@
-
-
-use bevy::prelude::{Image};
+use bevy::prelude::Image;
 
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
 use bevy_egui::egui::plot::{Line, PlotPoints};
-use futures::StreamExt;
 
 use std::collections::VecDeque;
 use std::error::Error;

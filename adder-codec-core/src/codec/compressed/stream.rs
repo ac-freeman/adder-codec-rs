@@ -1,6 +1,5 @@
 use crate::codec::{CodecError, CodecMetadata, EncoderOptions, ReadCompression, WriteCompression};
 use bitstream_io::{BigEndian, BitRead, BitReader, BitWrite, BitWriter};
-use std::collections::VecDeque;
 use std::io::{Cursor, Read, Seek, SeekFrom, Write};
 
 use crate::codec::compressed::source_model::event_structure::event_adu::EventAdu;
@@ -22,9 +21,6 @@ pub struct CompressedInput<R: Read> {
 
     adu: Option<EventAdu>,
 
-    // Stores the decoded events so they can be read one by one. They're put into reverse order
-    // (todo) when the ADU is decoded, so that they can be popped off the end of the vector.
-    decoded_event_queue: VecDeque<Event>,
     _phantom: std::marker::PhantomData<R>,
 }
 
@@ -82,7 +78,8 @@ impl<W: Write> WriteCompression<W> for CompressedOutput<W> {
     }
 
     fn into_writer(&mut self) -> Option<W> {
-        let tmp = std::mem::replace(&mut self.stream, None);
+        let tmp = self.stream.take();
+
         tmp.map(|bitwriter| bitwriter.into_writer())
     }
 
@@ -152,7 +149,6 @@ impl<R: Read> CompressedInput<R> {
                 source_camera: Default::default(),
             },
             adu: None,
-            decoded_event_queue: VecDeque::new(),
             _phantom: std::marker::PhantomData,
         }
     }
@@ -292,11 +288,13 @@ mod tests {
         let mut counter = 0;
         for y in 0..30 {
             for x in 0..16 {
-                compressed_output.ingest_event(Event {
-                    coord: Coord { x, y, c: None },
-                    t: min(280 + counter, start_t + dt_ref * num_intervals as u32),
-                    d: 7,
-                });
+                compressed_output
+                    .ingest_event(Event {
+                        coord: Coord { x, y, c: None },
+                        t: min(280 + counter, start_t + dt_ref * num_intervals as u32),
+                        d: 7,
+                    })
+                    .unwrap();
                 if 280 + counter > start_t + dt_ref * num_intervals as u32 {
                     break;
                 } else {
@@ -358,7 +356,7 @@ mod tests {
                 if y == candidate_px_idx.0 && x == candidate_px_idx.1 {
                     input_px_events.push(event);
                 }
-                compressed_output.ingest_event(event);
+                compressed_output.ingest_event(event).unwrap();
                 if 280 + counter > start_t + dt_ref * num_intervals as u32 {
                     break;
                 } else {
@@ -368,15 +366,17 @@ mod tests {
         }
 
         // Ingest one more event which is in the next Adu time span
-        compressed_output.ingest_event(Event {
-            coord: Coord {
-                x: 0,
-                y: 0,
-                c: None,
-            },
-            t: start_t + dt_ref * num_intervals as u32 + 1,
-            d: 7,
-        });
+        compressed_output
+            .ingest_event(Event {
+                coord: Coord {
+                    x: 0,
+                    y: 0,
+                    c: None,
+                },
+                t: start_t + dt_ref * num_intervals as u32 + 1,
+                d: 7,
+            })
+            .unwrap();
         counter += 1;
 
         let output = compressed_output.into_writer().unwrap().into_inner();
@@ -412,7 +412,7 @@ mod tests {
         let num_intervals = 5;
 
         // A random candidate pixel to check that its events match
-        let mut candidate_px_idx = (7, 12);
+        let candidate_px_idx = (7, 12);
         let mut input_px_events = Vec::new();
         let mut output_px_events = Vec::new();
 
@@ -495,12 +495,11 @@ mod tests {
         use std::io::Cursor;
 
         let plane = PlaneSize::new(32, 16, 1)?;
-        let start_t = 0;
         let dt_ref = 255;
         let num_intervals = 5;
 
         // A random candidate pixel to check that its events match
-        let mut candidate_px_idx = (7, 12);
+        let candidate_px_idx = (7, 12);
         let mut input_px_events = Vec::new();
         let mut output_px_events = Vec::new();
 
@@ -575,7 +574,7 @@ mod tests {
         let mut compressed_input = CompressedInput::new(dt_ref * num_intervals as u32, dt_ref);
         compressed_input.meta.plane = plane;
         let mut stream = BitReader::endian(Cursor::new(output), BigEndian);
-        for i in 0..counter + 1 {
+        for _ in 0..counter + 1 {
             match compressed_input.digest_event(&mut stream) {
                 Ok(event) => {
                     if event.coord.y == candidate_px_idx.0 && event.coord.x == candidate_px_idx.1 {
@@ -606,12 +605,11 @@ mod tests {
         use std::io::Cursor;
 
         let plane = PlaneSize::new(30, 30, 1)?;
-        let start_t = 0;
         let dt_ref = 255;
         let num_intervals = 10;
 
         // A random candidate pixel to check that its events match
-        let mut candidate_px_idx = (7, 12);
+        let candidate_px_idx = (7, 12);
         let mut input_px_events = Vec::new();
         let mut output_px_events = Vec::new();
 
@@ -635,7 +633,7 @@ mod tests {
             for y in 0..30 {
                 for x in 0..30 {
                     // Make the top left cube a skip cube half the time, and skip pixel (14, 14)
-                    if !(i % 3 == 0 && y >= 16 && x < 16) && !(y == 14 && x == 14) {
+                    if !(y == 14 && x == 14 || i % 3 == 0 && y >= 16 && x < 16) {
                         let event = Event {
                             coord: Coord { x, y, c: None },
                             t: 280 + counter,
@@ -668,7 +666,7 @@ mod tests {
             for y in 0..30 {
                 for x in 0..30 {
                     // Make the top left cube a skip cube half the time, and skip pixel (14, 14)
-                    if !(i % 3 == 0 && y >= 16 && x < 16) && !(y == 14 && x == 14) {
+                    if !(y == 14 && x == 14 || i % 3 == 0 && y >= 16 && x < 16) {
                         let event = Event {
                             coord: Coord { x, y, c: None },
                             t: 280 + counter,
