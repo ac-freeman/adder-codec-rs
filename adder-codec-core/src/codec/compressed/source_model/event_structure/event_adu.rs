@@ -242,7 +242,7 @@ mod tests {
     use crate::codec::compressed::source_model::event_structure::event_adu::EventAdu;
     use crate::codec::compressed::source_model::{ComponentCompression, HandleEvent};
     use crate::codec::CodecError;
-    use crate::{Coord, DeltaT, Event, PlaneSize};
+    use crate::{Coord, Event, PlaneSize};
     use arithmetic_coding_adder_dep::Encoder;
     use bitstream_io::{BigEndian, BitReader, BitWriter};
     use std::cmp::min;

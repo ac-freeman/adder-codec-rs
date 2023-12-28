@@ -219,6 +219,7 @@ use seq_macro::seq;
 macro_rules! make_d_shift_array {
     ($name:ident, $type:ty) => {
         seq!(N in 0..=127 {
+            /// Array for computing the intensity to integrate for a given [`D`] value
             pub const $name: [$type; 128] = [
                 #(
                     (1_u128 << N) as $type,
@@ -228,7 +229,6 @@ macro_rules! make_d_shift_array {
     };
 }
 
-/// Array for computing the intensity to integrate for a given [`D`] value
 make_d_shift_array!(D_SHIFT, UDshift);
 make_d_shift_array!(D_SHIFT_F64, f64);
 make_d_shift_array!(D_SHIFT_F32, f32);
@@ -547,5 +547,107 @@ impl num_traits::Zero for EventCoordless {
 
     fn is_zero(&self) -> bool {
         self.d.is_zero() && self.t.is_zero()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_dshift_arrays() {
+        assert_eq!(D_SHIFT[0], 1);
+        assert_eq!(D_SHIFT_F64[0], 1.0);
+        assert_eq!(D_SHIFT_F32[0], 1.0);
+        assert_eq!(D_SHIFT.len(), 128);
+        assert_eq!(D_SHIFT_F64.len(), 128);
+        assert_eq!(D_SHIFT_F32.len(), 128);
+        assert_eq!(D_SHIFT[127], 1_u128 << 127);
+        assert_eq!(D_SHIFT_F64[127], D_SHIFT[127] as f64);
+        assert_eq!(D_SHIFT_F32[127], D_SHIFT[127] as f32);
+    }
+
+    #[test]
+    fn test_plane_size() {
+        let plane_size = PlaneSize::new(1, 1, 1).unwrap();
+        assert_eq!(plane_size.area_wh(), 1);
+        assert_eq!(plane_size.area_wc(), 1);
+        assert_eq!(plane_size.area_hc(), 1);
+        assert_eq!(plane_size.volume(), 1);
+
+        let plane_size = PlaneSize::new(2, 2, 1).unwrap();
+        assert_eq!(plane_size.area_wh(), 4);
+        assert_eq!(plane_size.area_wc(), 2);
+        assert_eq!(plane_size.area_hc(), 2);
+        assert_eq!(plane_size.volume(), 4);
+
+        let plane_size = PlaneSize::new(2, 2, 2).unwrap();
+        assert_eq!(plane_size.area_wh(), 4);
+        assert_eq!(plane_size.area_wc(), 4);
+        assert_eq!(plane_size.area_hc(), 4);
+        assert_eq!(plane_size.volume(), 8);
+    }
+
+    #[test]
+    fn test_coord() {
+        let coord = Coord::new(1, 2, Some(3));
+        assert_eq!(coord.x(), 1);
+        assert_eq!(coord.y(), 2);
+        assert_eq!(coord.c(), Some(3));
+        assert_eq!(coord.x_usize(), 1);
+        assert_eq!(coord.y_usize(), 2);
+        assert_eq!(coord.c_usize(), 3);
+        assert!(coord.is_3d());
+        assert!(!coord.is_2d());
+        assert!(coord.is_valid());
+        assert!(!coord.is_eof());
+
+        let coord = Coord::new(1, 2, None);
+        assert_eq!(coord.x(), 1);
+        assert_eq!(coord.y(), 2);
+        assert_eq!(coord.c(), None);
+        assert_eq!(coord.x_usize(), 1);
+        assert_eq!(coord.y_usize(), 2);
+        assert_eq!(coord.c_usize(), 0);
+        assert!(!coord.is_3d());
+        assert!(coord.is_2d());
+        assert!(coord.is_valid());
+        assert!(!coord.is_eof());
+
+        let coord = Coord::new(EOF_PX_ADDRESS, EOF_PX_ADDRESS, None);
+        assert_eq!(coord.x(), EOF_PX_ADDRESS);
+        assert_eq!(coord.y(), EOF_PX_ADDRESS);
+        assert_eq!(coord.c(), None);
+        assert_eq!(coord.x_usize(), EOF_PX_ADDRESS as usize);
+        assert_eq!(coord.y_usize(), EOF_PX_ADDRESS as usize);
+        assert_eq!(coord.c_usize(), 0);
+        assert!(!coord.is_3d());
+        assert!(coord.is_2d());
+        assert!(!coord.is_valid());
+        assert!(coord.is_eof());
+
+        let coord = Coord::new(EOF_PX_ADDRESS, EOF_PX_ADDRESS, Some(0));
+        assert_eq!(coord.x(), EOF_PX_ADDRESS);
+        assert_eq!(coord.y(), EOF_PX_ADDRESS);
+        assert_eq!(coord.c(), Some(0));
+        assert_eq!(coord.x_usize(), EOF_PX_ADDRESS as usize);
+        assert_eq!(coord.y_usize(), EOF_PX_ADDRESS as usize);
+        assert_eq!(coord.c_usize(), 0);
+        assert!(coord.is_3d());
+        assert!(!coord.is_2d());
+        assert!(!coord.is_valid());
+        assert!(coord.is_eof());
+
+        let coord = Coord::new(EOF_PX_ADDRESS, EOF_PX_ADDRESS, Some(1));
+        assert_eq!(coord.x(), EOF_PX_ADDRESS);
+        assert_eq!(coord.y(), EOF_PX_ADDRESS);
+        assert_eq!(coord.c(), Some(1));
+        assert_eq!(coord.x_usize(), EOF_PX_ADDRESS as usize);
+        assert_eq!(coord.y_usize(), EOF_PX_ADDRESS as usize);
+        assert_eq!(coord.c_usize(), 1);
+        assert!(coord.is_3d());
+        assert!(!coord.is_2d());
+        assert!(!coord.is_valid());
+        assert!(coord.is_eof());
     }
 }
