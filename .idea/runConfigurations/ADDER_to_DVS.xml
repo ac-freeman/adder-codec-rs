@@ -1,6 +1,6 @@
 <component name="ProjectRunConfigurationManager">
   <configuration default="false" name="ADDER to DVS" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
-    <option name="command" value="run -- --input &quot;$USER_HOME$/Downloads/tmpp_4.adder&quot; --output-text &quot;$USER_HOME$/Downloads/adder.dvs&quot; --output-video &quot;$USER_HOME$/Downloads/adder.dvs.mp4&quot; --show-display --fps 30.0" />
+    <option name="command" value="run -- --input &quot;$USER_HOME$/Downloads/tmpp_4_comp.adder&quot; --output-text &quot;$USER_HOME$/Downloads/adder.dvs&quot; --output-video &quot;$USER_HOME$/Downloads/adder.dvs.mp4&quot; --show-display --fps 30.0" />
     <option name="workingDirectory" value="file://$PROJECT_DIR$/adder-to-dvs" />
     <option name="emulateTerminal" value="false" />
     <option name="channel" value="DEFAULT" />
