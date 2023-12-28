@@ -17,15 +17,6 @@ categories = ["multimedia::encoding", "multimedia::video", "science"]
 
 [dependencies]
 adder-codec-core = { version = "0.3.0", path = "../adder-codec-core" }
-adder-codec-rs = { version = "0.4.0", path = "../adder-codec-rs", features = [
-    "transcoder", "open-cv"
-] }
 clap = { version = "4.0.17", features = ["derive"] }
 ndarray = { version = "0.15.6", features = ["rayon", "serde"] }
-
-[dependencies.opencv]
-version = "0.83.0"
-package = 'opencv'
-default-features = false
-features = ['videoio', 'imgproc', 'highgui', 'clang-runtime']
-optional = false
+video-rs = { version = "0.5.0", features = ["ndarray"] }

@@ -1,16 +1,16 @@
+use adder_codec_core::codec::CodecMetadata;
 use adder_codec_core::*;
-use adder_codec_rs::transcoder::source::video::show_display_force;
-use adder_codec_rs::utils::viz::{encode_video_ffmpeg, write_frame_to_video};
 use clap::Parser;
 use ndarray::Array3;
-use opencv::core::{Mat, MatTrait, MatTraitManual, CV_8U, CV_8UC3};
 use std::cmp::max;
 use std::collections::VecDeque;
 use std::error::Error;
 use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::option::Option;
+use std::path::PathBuf;
 use std::{error, io};
+use video_rs::{Encoder, EncoderSettings, Options, PixelFormat};
 
 /// Command line argument parser
 #[derive(Parser, Debug, Default, Clone)]
@@ -54,7 +54,6 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
     let output_text_path = args.output_text.as_str();
     let output_video_path = args.output_video.as_str();
-    let raw_path = "./dvs.gray8";
 
     let (mut stream, mut bitreader) = open_file_decoder(file_path)?;
 
@@ -73,8 +72,23 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
     stream.set_input_stream_position(&mut bitreader, first_event_position)?;
 
-    let mut video_writer: Option<BufWriter<File>> = match File::create(raw_path) {
-        Ok(file) => Some(BufWriter::new(file)),
+    let mut video_writer: Option<Encoder> = match File::create(output_video_path) {
+        Ok(_) => {
+            let mut options = std::collections::HashMap::new();
+            options.insert("crf".to_string(), "0".to_string());
+            options.insert("preset".to_string(), "veryslow".to_string());
+            options.insert("qp".to_string(), "0".to_string());
+            let opts: Options = options.into();
+
+            let settings = EncoderSettings::for_h264_custom(
+                meta.plane.w_usize(),
+                meta.plane.h_usize(),
+                PixelFormat::YUV420P,
+                opts,
+            );
+            let encoder = Encoder::new(&PathBuf::from(output_video_path).into(), settings)?;
+            Some(encoder)
+        }
         Err(_) => None,
     };
     let mut text_writer: BufWriter<File> = BufWriter::new(File::create(output_text_path)?);
@@ -116,44 +130,12 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         meta.plane.c().into(),
     ));
 
-    let mut instantaneous_frame_deque = {
-        let mut instantaneous_frame = Mat::default();
-        match meta.plane.c() {
-            1 => unsafe {
-                instantaneous_frame.create_rows_cols(
-                    meta.plane.h() as i32,
-                    meta.plane.w() as i32,
-                    CV_8U,
-                )?;
-            },
-            _ => unsafe {
-                instantaneous_frame.create_rows_cols(
-                    meta.plane.h() as i32,
-                    meta.plane.w() as i32,
-                    CV_8UC3,
-                )?;
-            },
-        }
-
-        VecDeque::from([instantaneous_frame])
-    };
-
-    match instantaneous_frame_deque
-        .back_mut()
-        .expect("Could not get back of deque")
-        .data_bytes_mut()
-    {
-        Ok(bytes) => {
-            for byte in bytes {
-                *byte = 128;
-            }
-        }
-        Err(e) => {
-            return Err(Box::new(e));
-        }
-    };
+    let mut instantaneous_frame_deque = VecDeque::from([create_blank_dvs_frame(&meta)?]);
 
     let frame_length = (meta.tps as f32 / args.fps) as u128; // length in ticks
+    let frame_duration = 1.0 / args.fps as f64; // length in seconds
+
+    let mut current_frame_time = 0.0;
     let mut frame_count = 0_usize;
     let mut current_t = 0;
     let mut max_px_event_count = 0;
@@ -171,13 +153,18 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             match instantaneous_frame_deque.pop_front() {
                 None => {}
                 Some(frame) => {
-                    if args.show_display {
-                        show_display_force("DVS", &frame, 1)?;
-                    }
+                    // if args.show_display {
+                    //     show_display_force("DVS", &frame, 1)?;
+                    // }
                     match video_writer {
                         None => {}
-                        Some(ref mut writer) => {
-                            write_frame_to_video(&frame, writer)?;
+                        Some(ref mut encoder) => {
+                            write_frame_to_video(
+                                &frame,
+                                encoder,
+                                video_rs::Time::from_secs_f64(current_frame_time),
+                            )?;
+                            current_frame_time += frame_duration;
                         }
                     }
                 }
@@ -245,6 +232,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                                         // Fire a positive polarity event
                                         set_instant_dvs_pixel(
                                             event,
+                                            &meta,
                                             &mut instantaneous_frame_deque,
                                             frame_idx,
                                             frame_count,
@@ -267,6 +255,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                                         // Fire a negative polarity event
                                         set_instant_dvs_pixel(
                                             event,
+                                            &meta,
                                             &mut instantaneous_frame_deque,
                                             frame_idx,
                                             frame_count,
@@ -304,34 +293,39 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
     let mut event_count_mat = instantaneous_frame_deque[0].clone();
     unsafe {
-        for y in 0..meta.plane.h() as i32 {
-            for x in 0..meta.plane.w() as i32 {
-                for c in 0..meta.plane.c() as i32 {
-                    *event_count_mat.at_3d_unchecked_mut(y, x, c)? =
-                        ((event_counts[[y as usize, x as usize, c as usize]] as f32
-                            / max_px_event_count as f32)
-                            * 255.0) as u8;
+        for y in 0..meta.plane.h_usize() {
+            for x in 0..meta.plane.w_usize() {
+                for c in 0..meta.plane.c_usize() {
+                    event_count_mat[[y, x, c]] = ((event_counts[[y, x, c]] as f32
+                        / max_px_event_count as f32)
+                        * 255.0) as u8;
                 }
             }
         }
     }
 
     for frame in instantaneous_frame_deque {
-        if args.show_display {
-            show_display_force("DVS", &frame, 1)?;
-        }
+        // if args.show_display {
+        //     show_display_force("DVS", &frame, 1)?;
+        // }
         match video_writer {
             None => {}
-            Some(ref mut writer) => {
-                write_frame_to_video(&frame, writer)?;
+            Some(ref mut encoder) => {
+                write_frame_to_video(
+                    &frame,
+                    encoder,
+                    video_rs::Time::from_secs_f64(current_frame_time),
+                )?;
+                current_frame_time += frame_duration;
             }
         }
     }
     println!("\n");
-    if args.show_display {
-        show_display_force("Event counts", &event_count_mat, 0)?;
-    }
-    encode_video_ffmpeg(raw_path, output_video_path)?;
+
+    // TODO: restore this functionality
+    // if args.show_display {
+    //     show_display_force("Event counts", &event_count_mat, 0)?;
+    // }
 
     handle.flush()?;
     println!("Finished!");
@@ -340,7 +334,8 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
 fn set_instant_dvs_pixel(
     event: Event,
-    frames: &mut VecDeque<Mat>,
+    meta: &CodecMetadata,
+    frames: &mut VecDeque<Array3<u8>>,
     frame_idx: usize,
     frame_count: usize,
     value: u128,
@@ -349,36 +344,17 @@ fn set_instant_dvs_pixel(
     let grow_len = frame_idx as i32 - frame_count as i32 - frames.len() as i32 + 1;
 
     for _ in 0..grow_len {
-        frames.push_back(frames[0].clone());
-        // Clear the instantaneous frame
-        match frames
-            .back_mut()
-            .expect("Could not get back of deque")
-            .data_bytes_mut()
-        {
-            Ok(bytes) => {
-                for byte in bytes {
-                    *byte = 128;
-                }
-            }
-            Err(e) => {
-                return Err(e.into());
-            }
-        };
+        frames.push_back(create_blank_dvs_frame(&meta)?);
     }
 
     unsafe {
         if frame_idx >= frame_count {
-            let px: &mut u8 = match event.coord.c {
-                None => frames[frame_idx - frame_count]
-                    .at_2d_unchecked_mut(event.coord.y.into(), event.coord.x.into())?,
-                Some(c) => frames[frame_idx - frame_count].at_3d_unchecked_mut(
-                    event.coord.y.into(),
-                    event.coord.x.into(),
-                    c.into(),
-                )?,
-            };
-            *px = value as u8;
+            frames[frame_idx - frame_count][[event.coord.y.into(), event.coord.x.into(), 0]] =
+                value as u8;
+            frames[frame_idx - frame_count][[event.coord.y.into(), event.coord.x.into(), 1]] =
+                value as u8;
+            frames[frame_idx - frame_count][[event.coord.y.into(), event.coord.x.into(), 2]] =
+                value as u8;
         }
     }
     Ok(())
@@ -393,4 +369,20 @@ fn event_to_frame_intensity(event: &Event, frame_length: u128) -> f64 {
         _ => (((D_SHIFT[event.d as usize] as f64 / event.t as f64) * frame_length as f64) / 255.0)
             .ln_1p(),
     }
+}
+
+fn create_blank_dvs_frame(meta: &CodecMetadata) -> Result<Array3<u8>, Box<dyn Error>> {
+    let instantaneous_frame: Array3<u8> = Array3::from_shape_vec(
+        (meta.plane.h_usize(), meta.plane.w_usize(), 3),
+        vec![128_u8; meta.plane.h_usize() * meta.plane.w_usize() * 3],
+    )?;
+    Ok(instantaneous_frame)
+}
+
+pub fn write_frame_to_video(
+    frame: &video_rs::Frame,
+    encoder: &mut video_rs::Encoder,
+    timestamp: video_rs::Time,
+) -> Result<(), Box<dyn Error>> {
+    encoder.encode(&frame, &timestamp).map_err(|e| e.into())
 }

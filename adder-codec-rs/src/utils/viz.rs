@@ -9,7 +9,7 @@ use std::io::BufWriter;
 use std::io::{Cursor, Write};
 use std::path::Path;
 use std::process::{Command, Output};
-use video_rs_adder_dep::Frame;
+use video_rs_adder_dep::{Frame, Time};
 
 #[cfg(feature = "open-cv")]
 /// Writes a given [`Mat`] to a file
@@ -21,7 +21,7 @@ use video_rs_adder_dep::Frame;
 /// # Panics
 /// This function panics if the amount data written to the file is not equal to the amount of data
 /// in the [`Mat`].
-pub fn write_frame_to_video(
+pub fn write_frame_to_video_cv(
     frame: &Mat,
     video_writer: &mut BufWriter<File>,
 ) -> Result<(), Box<dyn Error>> {
