@@ -68,15 +68,8 @@ pub struct SimulProcArgs {
     #[clap(short('z'), long, default_value_t = 1.0)]
     pub scale: f64,
 
-    /// Positive contrast threshold, in intensity units. How much an intensity must increase
-    /// to create a frame division. Only used when look_ahead = 1 and framed input
-    #[clap(long, default_value_t = 5)]
-    pub c_thresh_pos: u8,
-
-    /// Negative contrast threshold, in intensity units. How much an intensity must decrease
-    /// to create a frame division.  Only used when look_ahead = 1 and framed input
-    #[clap(long, default_value_t = 5)]
-    pub c_thresh_neg: u8,
+    #[clap(long, default_value_t = 3)]
+    pub crf: u8,
 
     /// Number of threads to use. If not provided, will default to the number of cores on the
     /// system.
@@ -86,6 +79,9 @@ pub struct SimulProcArgs {
     /// Time mode for the v2 file
     #[clap(long, default_value = "")]
     pub time_mode: String,
+
+    #[clap(long, default_value = "")]
+    pub integration_mode: String,
 }
 
 /// A struct for simultaneously transcoding a video source to ADΔER and reconstructing a framed
@@ -140,7 +136,7 @@ impl<W: Write + 'static> SimulProcessor<W> {
             .num_threads(max(num_threads / 2, 1))
             .build()?;
         let thread_pool_transcoder = rayon::ThreadPoolBuilder::new()
-            .num_threads(max(num_threads / 2, 1))
+            .num_threads(max(num_threads, 1))
             .build()?;
         let reconstructed_frame_rate = source.source_fps;
         // For instantaneous reconstruction, make sure the frame rate matches the source video rate
@@ -230,7 +226,7 @@ impl<W: Write + 'static> SimulProcessor<W> {
 
     /// Run the processor
     /// This will run until the source is exhausted
-    pub fn run(&mut self) -> Result<(), Box<dyn Error>> {
+    pub fn run(&mut self, frame_max: u32) -> Result<(), Box<dyn Error>> {
         let mut now = Instant::now();
 
         loop {
@@ -262,6 +258,10 @@ impl<W: Write + 'static> SimulProcessor<W> {
                     break;
                 };
                 now = Instant::now();
+            }
+            if video.state.in_interval_count >= frame_max && frame_max > 0 {
+                eprintln!("Wrote max frames. Exiting channel.");
+                break;
             }
             // // TODO: temp
             // if video.state.in_interval_count == 30 {

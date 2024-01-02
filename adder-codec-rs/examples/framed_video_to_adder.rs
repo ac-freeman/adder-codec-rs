@@ -2,7 +2,7 @@ extern crate core;
 
 use adder_codec_core::codec::{EncoderOptions, EncoderType};
 use adder_codec_core::SourceCamera::FramedU8;
-use adder_codec_core::TimeMode;
+use adder_codec_core::{PixelMultiMode, TimeMode};
 use adder_codec_rs::transcoder::source::framed::Framed;
 use adder_codec_rs::transcoder::source::video::{Source, VideoBuilder};
 use rayon::current_num_threads;
@@ -27,6 +27,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         .write_out(
             FramedU8,
             TimeMode::DeltaT,
+            PixelMultiMode::Normal,
             EncoderType::Raw,
             EncoderOptions::default(plane),
             writer,
