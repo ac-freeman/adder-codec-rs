@@ -16,6 +16,7 @@ use bevy::prelude::Image;
 use ndarray::Array;
 use ndarray::Array3;
 
+use adder_codec_rs::adder_codec_core::codec::EncoderType;
 use std::error::Error;
 use std::fmt;
 use std::fs::File;
@@ -436,15 +437,16 @@ impl AdderPlayer {
                     }
                 }
                 Err(_e) => {
-                    match stream
-                        .decoder
-                        .set_input_stream_position(&mut stream.bitreader, 1)
-                    {
-                        Ok(_) => {}
-                        Err(ee) => {
-                            eprintln!("{ee}")
-                        }
-                    };
+                    if stream.decoder.get_compression_type() == EncoderType::Raw {
+                        stream.decoder.set_input_stream_position(
+                            &mut stream.bitreader,
+                            meta.header_size as u64,
+                        )?;
+                    } else {
+                        stream
+                            .decoder
+                            .set_input_stream_position(&mut stream.bitreader, 1)?;
+                    }
                     self.frame_sequence =
                         self.framer_builder.clone().map(|builder| builder.finish());
                     self.stream_state.last_timestamps = Array::zeros((
@@ -615,9 +617,16 @@ impl AdderPlayer {
                         eprintln!("Completely done");
                         // TODO: Need to reset the UI event count events_ppc count when looping back here
                         // Loop/restart back to the beginning
-                        stream
-                            .decoder
-                            .set_input_stream_position(&mut stream.bitreader, 1)?;
+                        if stream.decoder.get_compression_type() == EncoderType::Raw {
+                            stream.decoder.set_input_stream_position(
+                                &mut stream.bitreader,
+                                meta.header_size as u64,
+                            )?;
+                        } else {
+                            stream
+                                .decoder
+                                .set_input_stream_position(&mut stream.bitreader, 1)?;
+                        }
 
                         self.frame_sequence =
                             self.framer_builder.clone().map(|builder| builder.finish());
