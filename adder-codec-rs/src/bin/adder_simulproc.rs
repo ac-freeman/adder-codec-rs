@@ -84,7 +84,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             FramedU8,
             time_mode,
             integration_mode,
-            EncoderType::Raw,
+            EncoderType::Compressed,
             EncoderOptions::default(plane),
             BufWriter::new(file),
         )?;
@@ -228,7 +228,7 @@ mod tests {
             TimeMode::default(),
         )?;
 
-        simul_processor.run().unwrap();
+        simul_processor.run(0).unwrap();
         sleep(Duration::from_secs(5));
 
         let output_path = "./tests/samples/TEST_lake_scaled_hd_crop";
