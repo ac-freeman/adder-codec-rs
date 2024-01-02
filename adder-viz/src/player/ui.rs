@@ -149,6 +149,11 @@ impl PlayerState {
             if let Some(image) = image_opt {
                 let handle = images.add(image);
                 handles.image_view = handle;
+            } else if self.ui_info_state.stream_state.file_pos == 1 {
+                dbg!("Looping...");
+                self.reset_update_adder_params(true);
+
+                return Ok(());
             }
             return Ok(());
         }
@@ -440,13 +445,7 @@ impl PlayerState {
         // TODO: Restore
         player = player.stream_pos(0);
 
-        let plane = player
-            .input_stream
-            .as_ref()
-            .unwrap()
-            .decoder
-            .meta()
-            .plane;
+        let plane = player.input_stream.as_ref().unwrap().decoder.meta().plane;
         self.ui_info_state.event_size = if plane.c() == 1 { 9 } else { 11 };
         self.ui_info_state.plane = plane;
 

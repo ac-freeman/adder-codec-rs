@@ -1,3 +1,4 @@
+use crate::player::adder::codec::CodecError;
 use crate::player::ui::ReconstructionMethod;
 use adder_codec_rs::adder_codec_core::bitstream_io::{BigEndian, BitReader};
 use adder_codec_rs::adder_codec_core::codec::decoder::Decoder;
@@ -15,6 +16,7 @@ use bevy::prelude::Image;
 use ndarray::Array;
 use ndarray::Array3;
 
+use adder_codec_rs::adder_codec_core::codec::EncoderType;
 use std::error::Error;
 use std::fmt;
 use std::fs::File;
@@ -435,15 +437,16 @@ impl AdderPlayer {
                     }
                 }
                 Err(_e) => {
-                    match stream
-                        .decoder
-                        .set_input_stream_position(&mut stream.bitreader, meta.header_size as u64)
-                    {
-                        Ok(_) => {}
-                        Err(ee) => {
-                            eprintln!("{ee}")
-                        }
-                    };
+                    if stream.decoder.get_compression_type() == EncoderType::Raw {
+                        stream.decoder.set_input_stream_position(
+                            &mut stream.bitreader,
+                            meta.header_size as u64,
+                        )?;
+                    } else {
+                        stream
+                            .decoder
+                            .set_input_stream_position(&mut stream.bitreader, 1)?;
+                    }
                     self.frame_sequence =
                         self.framer_builder.clone().map(|builder| builder.finish());
                     self.stream_state.last_timestamps = Array::zeros((
@@ -609,19 +612,33 @@ impl AdderPlayer {
                     }
                 }
                 Err(e) => {
-                    eprintln!("Player error: {}", e);
                     if !frame_sequence.flush_frame_buffer() {
+                        eprintln!("Player error: {}", e);
                         eprintln!("Completely done");
                         // TODO: Need to reset the UI event count events_ppc count when looping back here
                         // Loop/restart back to the beginning
-                        stream.decoder.set_input_stream_position(
-                            &mut stream.bitreader,
-                            meta.header_size as u64,
-                        )?;
+                        if stream.decoder.get_compression_type() == EncoderType::Raw {
+                            stream.decoder.set_input_stream_position(
+                                &mut stream.bitreader,
+                                meta.header_size as u64,
+                            )?;
+                        } else {
+                            stream
+                                .decoder
+                                .set_input_stream_position(&mut stream.bitreader, 1)?;
+                        }
 
                         self.frame_sequence =
                             self.framer_builder.clone().map(|builder| builder.finish());
-                        return Ok((event_count, image_bevy));
+                        self.stream_state.last_timestamps = Array::zeros((
+                            meta.plane.h_usize(),
+                            meta.plane.w_usize(),
+                            meta.plane.c_usize(),
+                        ));
+                        self.stream_state.current_t_ticks = 0;
+                        self.current_frame = 0;
+
+                        return Err(Box::try_from(CodecError::Eof).unwrap());
                     } else {
                         return self.consume_source_accurate();
                     }
