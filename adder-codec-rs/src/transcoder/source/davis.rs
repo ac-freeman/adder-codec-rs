@@ -3,12 +3,12 @@ use crate::transcoder::source::video::SourceError::BufferEmpty;
 use crate::transcoder::source::video::{
     integrate_for_px, Source, SourceError, Video, VideoBuilder,
 };
-use adder_codec_core::DeltaT;
 use adder_codec_core::Mode::{Continuous, FramePerfect};
+use adder_codec_core::{DeltaT, PixelMultiMode};
 use davis_edi_rs::aedat::events_generated::Event as DvsEvent;
 use davis_edi_rs::util::reconstructor::{IterVal, ReconstructionError, Reconstructor};
+use rayon::iter::IndexedParallelIterator;
 use rayon::iter::ParallelIterator;
-use rayon::iter::{IndexedParallelIterator};
 
 use opencv::core::{Mat, CV_8U};
 use opencv::prelude::*;
@@ -950,7 +950,7 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Davis<W> {
             TranscoderMode::RawDvs => {
                 let time_mult = 1E6 / self.time_change;
                 let events_per_sec = self.num_dvs_events as f64 * time_mult;
-                 // Best-case 9 bytes per raw DVS event
+                // Best-case 9 bytes per raw DVS event
                 events_per_sec * 9.0 * 8.0
             }
         }
@@ -1020,6 +1020,7 @@ impl<W: Write + 'static> VideoBuilder<W> for Davis<W> {
         mut self,
         source_camera: SourceCamera,
         time_mode: TimeMode,
+        pixel_multi_mode: PixelMultiMode,
         encoder_type: EncoderType,
         encoder_options: EncoderOptions,
         write: W,
@@ -1027,6 +1028,7 @@ impl<W: Write + 'static> VideoBuilder<W> for Davis<W> {
         self.video = self.video.write_out(
             Some(source_camera),
             Some(time_mode),
+            Some(pixel_multi_mode),
             encoder_type,
             encoder_options,
             write,
