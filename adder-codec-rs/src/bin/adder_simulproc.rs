@@ -11,7 +11,7 @@ use std::fs::File;
 
 use adder_codec_core::codec::{EncoderOptions, EncoderType};
 use adder_codec_core::SourceCamera::FramedU8;
-use adder_codec_core::TimeMode;
+use adder_codec_core::{PixelMultiMode, TimeMode};
 use adder_codec_rs::transcoder::source::framed::Framed;
 use std::io::{BufWriter, Cursor};
 use std::path::Path;
@@ -53,7 +53,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
         "mixed" => TimeMode::Mixed,
         _ => panic!("Invalid time mode"),
     };
-    println!("c_pos: {}, c_neg: {}", args.c_thresh_pos, args.c_thresh_neg);
+
+    let integration_mode = match args.integration_mode.to_lowercase().as_str() {
+        "collapse" => PixelMultiMode::Collapse,
+        _ => PixelMultiMode::Normal,
+    };
+    println!("crf: {}", args.crf);
 
     //////////////////////////////////////////////////////
     // Overriding the default args for this particular video example.
@@ -67,9 +72,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         Framed::new(args.input_filename, args.color_input, args.scale)?
             // .chunk_rows(64)
             .frame_start(args.frame_idx_start)?
-            .crf(5)
-            // .c_thresh_pos(args.c_thresh_pos)
-            // .c_thresh_neg(args.c_thresh_neg)
+            .crf(args.crf)
             .show_display(args.show_display)
             .auto_time_parameters(args.ref_time, args.delta_t_max, None)?;
 
@@ -80,6 +83,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         source = *source.write_out(
             FramedU8,
             time_mode,
+            integration_mode,
             EncoderType::Raw,
             EncoderOptions::default(plane),
             BufWriter::new(file),
@@ -95,6 +99,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         num => num as usize,
     };
 
+    dbg!(args.frame_count_max);
     let mut simul_processor = SimulProcessor::new::<u8>(
         source,
         ref_time,
@@ -106,8 +111,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
     )?;
 
     let now = std::time::Instant::now();
-    simul_processor.run()?;
+    simul_processor.run(args.frame_count_max)?;
     println!("\n\n{} ms elapsed\n\n", now.elapsed().as_millis());
+    let fps = 1000.0
+        / (now.elapsed().as_millis() as f64
+            / args.frame_count_max.saturating_sub(args.frame_idx_start) as f64);
+    println!("{:.1} average frames transcoded per second", fps);
 
     // Use ffmpeg to encode the raw frame data as an mp4
     let color_str = match args.color_input {
@@ -141,9 +150,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
 #[cfg(test)]
 mod tests {
     use adder_codec_core::codec::{EncoderOptions, EncoderType};
-    use adder_codec_core::DeltaT;
     use adder_codec_core::SourceCamera::FramedU8;
     use adder_codec_core::TimeMode;
+    use adder_codec_core::{DeltaT, PixelMultiMode};
     use adder_codec_rs::transcoder::source::framed::Framed;
     use adder_codec_rs::transcoder::source::video::{Source, VideoBuilder};
     use adder_codec_rs::utils::simulproc::{SimulProcArgs, SimulProcessor};
@@ -175,10 +184,10 @@ mod tests {
             output_raw_video_filename: manifest_path_str
                 + "/tests/samples/TEST_lake_scaled_hd_crop",
             scale: 1.0,
-            c_thresh_pos: 0,
-            c_thresh_neg: 0,
             thread_count: 1, // Multithreading causes some issues in testing
             time_mode: "delta_t".to_string(),
+            crf: 0,
+            integration_mode: "".to_string(),
         };
         let mut source = Framed::new(args.input_filename, args.color_input, args.scale)?
             // .chunk_rows(64)
@@ -201,6 +210,7 @@ mod tests {
             source = *source.write_out(
                 FramedU8,
                 TimeMode::DeltaT,
+                PixelMultiMode::Normal,
                 EncoderType::Raw,
                 EncoderOptions::default(plane),
                 writer,
