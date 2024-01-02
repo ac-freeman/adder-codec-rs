@@ -157,7 +157,7 @@ pub enum FramedViewMode {
 pub struct VideoStateParams {
     pub(crate) pixel_tree_mode: Mode,
 
-    pub(crate) pixel_multi_mode: PixelMultiMode,
+    pub pixel_multi_mode: PixelMultiMode,
 
     /// The maximum time difference between events of the same pixel, in ticks
     pub delta_t_max: u32,
@@ -303,6 +303,7 @@ pub trait VideoBuilder<W> {
         self,
         source_camera: SourceCamera,
         time_mode: TimeMode,
+        pixel_multi_mode: PixelMultiMode,
         encoder_type: EncoderType,
         encoder_options: EncoderOptions,
         write: W,
@@ -544,6 +545,7 @@ impl<W: Write + 'static> Video<W> {
         mut self,
         source_camera: Option<SourceCamera>,
         time_mode: Option<TimeMode>,
+        pixel_multi_mode: Option<PixelMultiMode>,
         encoder_type: EncoderType,
         encoder_options: EncoderOptions,
         write: W,
@@ -552,7 +554,8 @@ impl<W: Write + 'static> Video<W> {
             EncoderType::Compressed => {
                 #[cfg(feature = "compression")]
                 {
-                    self.state.params.pixel_multi_mode = PixelMultiMode::Collapse;
+                    self.state.params.pixel_multi_mode =
+                        pixel_multi_mode.unwrap_or(PixelMultiMode::Collapse);
                     let compression = CompressedOutput::new(
                         CodecMetadata {
                             codec_version: LATEST_CODEC_VERSION,
@@ -578,7 +581,8 @@ impl<W: Write + 'static> Video<W> {
                 }
             }
             EncoderType::Raw => {
-                self.state.params.pixel_multi_mode = PixelMultiMode::Collapse;
+                self.state.params.pixel_multi_mode =
+                    pixel_multi_mode.unwrap_or(PixelMultiMode::Collapse);
                 let compression = RawOutput::new(
                     CodecMetadata {
                         codec_version: LATEST_CODEC_VERSION,
@@ -596,7 +600,8 @@ impl<W: Write + 'static> Video<W> {
                 Encoder::new_raw(compression, encoder_options)
             }
             EncoderType::Empty => {
-                self.state.params.pixel_multi_mode = PixelMultiMode::Collapse;
+                self.state.params.pixel_multi_mode =
+                    pixel_multi_mode.unwrap_or(PixelMultiMode::Collapse);
                 let compression = EmptyOutput::new(
                     CodecMetadata {
                         codec_version: LATEST_CODEC_VERSION,
