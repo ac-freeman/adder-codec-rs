@@ -189,6 +189,11 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Prophesee<W> {
             // Get the last timestamp for this pixel
             let last_t = self.dvs_last_timestamps[[y, x, 0]];
 
+            if t <= last_t {
+                dbg!("skipping event");
+                continue;
+            }
+
             // Get the last ln intensity for this pixel
             let mut last_ln_val = self.dvs_last_ln_val[[y, x, 0]];
 

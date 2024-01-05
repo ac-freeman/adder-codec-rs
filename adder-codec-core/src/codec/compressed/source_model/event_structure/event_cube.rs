@@ -123,8 +123,6 @@ impl HandleEvent for EventCube {
         event.coord.x -= self.start_x;
 
         let item = EventCoordless::from(event);
-        self.raw_event_lists[event.coord.c_usize()][event.coord.y_usize()][event.coord.x_usize()]
-            .push(item);
 
         if self.raw_event_lists[event.coord.c_usize()][event.coord.y_usize()][event.coord.x_usize()]
             .len()
@@ -134,9 +132,16 @@ impl HandleEvent for EventCube {
                 [event.coord.x_usize()][self.raw_event_lists[event.coord.c_usize()]
                 [event.coord.y_usize()][event.coord.x_usize()]
             .len()
-                - 2];
+                - 1];
+            if event.t <= last.t {
+                // dbg!(event.t, last.t);
+                return false;
+            }
             debug_assert!(event.t >= last.t);
         }
+
+        self.raw_event_lists[event.coord.c_usize()][event.coord.y_usize()][event.coord.x_usize()]
+            .push(item);
 
         self.raw_event_memory[event.coord.c_usize()][event.coord.y_usize()]
             [event.coord.x_usize()] = EventCoordless::from(event);
