@@ -229,17 +229,21 @@ impl PixelArena {
             }
         }
 
-        if self.popped_dtm && multi_mode == PixelMultiMode::Collapse && local_buffer.len() >= 2 {
+        if self.popped_dtm && multi_mode == PixelMultiMode::Collapse && local_buffer.len() >= 1 {
             // Then discard all the events except the first two, and mark the second of these as an EMPTY event
             // (carrying no intensity info)
 
             buffer.push(local_buffer[0]);
 
-            local_buffer[1].d = D_EMPTY;
-            local_buffer[1].t = self.running_t as AbsoluteT;
+            // local_buffer[1].d = D_EMPTY;
+            // local_buffer[1].t = self.running_t as AbsoluteT;
             self.last_fired_t = self.running_t;
 
-            buffer.push(local_buffer[1]);
+            buffer.push(Event {
+                coord: self.coord,
+                d: D_EMPTY,
+                t: self.running_t as AbsoluteT,
+            });
             // debug_assert!(buffer.len() == 2);
             self.arena[0] = PixelNode::new(intensity);
         } else {
@@ -332,11 +336,11 @@ impl PixelArena {
                 }
             };
 
+            idx += 1;
+
             if self.popped_dtm && multi_mode == PixelMultiMode::Collapse && idx > 0 {
                 break;
             }
-
-            idx += 1;
 
             if filled {
                 match mode {

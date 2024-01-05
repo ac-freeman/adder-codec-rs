@@ -2,7 +2,7 @@ use crate::transcoder::source::video::SourceError;
 use crate::transcoder::source::video::Video;
 use crate::transcoder::source::video::{Source, VideoBuilder};
 use adder_codec_core::Mode::FramePerfect;
-use adder_codec_core::{DeltaT, Event, PlaneSize, SourceCamera, TimeMode};
+use adder_codec_core::{DeltaT, Event, PixelMultiMode, PlaneSize, SourceCamera, TimeMode};
 
 use crate::utils::viz::ShowFeatureMode;
 use adder_codec_core::codec::{EncoderOptions, EncoderType};
@@ -257,6 +257,7 @@ impl<W: Write + 'static> VideoBuilder<W> for Framed<W> {
         mut self,
         source_camera: SourceCamera,
         time_mode: TimeMode,
+        pixel_multi_mode: PixelMultiMode,
         encoder_type: EncoderType,
         encoder_options: EncoderOptions,
         write: W,
@@ -264,6 +265,7 @@ impl<W: Write + 'static> VideoBuilder<W> for Framed<W> {
         self.video = self.video.write_out(
             Some(source_camera),
             Some(time_mode),
+            Some(pixel_multi_mode),
             encoder_type,
             encoder_options,
             write,

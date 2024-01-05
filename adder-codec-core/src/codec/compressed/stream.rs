@@ -230,7 +230,7 @@ impl<R: Read + Seek> ReadCompression<R> for CompressedInput<R> {
         reader: &mut BitReader<R, BigEndian>,
         pos: u64,
     ) -> Result<(), CodecError> {
-        if (pos - self.meta.header_size as u64) % u64::from(self.meta.event_size) != 0 {
+        if pos.saturating_sub(self.meta.header_size as u64) % u64::from(self.meta.event_size) != 0 {
             eprintln!("Attempted to seek to bad position in stream: {pos}");
             return Err(CodecError::Seek);
         }

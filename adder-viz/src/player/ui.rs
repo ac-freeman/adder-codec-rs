@@ -150,6 +150,11 @@ impl PlayerState {
                 images.remove(&handles.image_view);
                 let handle = images.add(image);
                 handles.image_view = handle;
+            } else if self.ui_info_state.stream_state.file_pos == 1 {
+                dbg!("Looping...");
+                self.reset_update_adder_params(true);
+
+                return Ok(());
             }
             return Ok(());
         }

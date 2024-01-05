@@ -1,4 +1,5 @@
-use crate::codec::{CodecError, CodecMetadata, ReadCompression, ReadCompressionEnum};
+use crate::codec::Magic;
+use crate::codec::{CodecError, CodecMetadata, EncoderType, ReadCompression, ReadCompressionEnum};
 use crate::SourceType::*;
 use crate::{Event, PlaneSize, SourceCamera, SourceType};
 
@@ -7,8 +8,9 @@ use crate::{Event, PlaneSize, SourceCamera, SourceType};
 #[cfg(feature = "compression")]
 use crate::codec::compressed::stream::CompressedInput;
 
+use crate::codec::encoder::Encoder;
 use crate::codec::header::{
-    EventStreamHeader, EventStreamHeaderExtensionV1, EventStreamHeaderExtensionV2,
+    EventStreamHeader, EventStreamHeaderExtensionV1, EventStreamHeaderExtensionV2, MAGIC_COMPRESSED,
 };
 use crate::codec::raw::stream::RawInput;
 use crate::codec::CodecError::Deserialize;
@@ -237,6 +239,14 @@ impl<R: Read + Seek> Decoder<R> {
         }
 
         Ok(self.get_input_stream_position(reader)? - self.input.meta().event_size as u64)
+    }
+
+    pub fn get_compression_type(&self) -> EncoderType {
+        #[cfg(feature = "compression")]
+        if self.input.magic() == MAGIC_COMPRESSED {
+            return EncoderType::Compressed;
+        }
+        EncoderType::Raw
     }
 }
 

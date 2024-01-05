@@ -99,6 +99,7 @@ impl AdderTranscoder {
                                 framed = *framed.write_out(
                                     FramedU8,
                                     ui_state.time_mode,
+                                    ui_state.integration_mode_radio_state,
                                     ui_state.encoder_type,
                                     ui_state.encoder_options,
                                     writer,
@@ -222,6 +223,7 @@ impl AdderTranscoder {
                             davis_source = *davis_source.write_out(
                                 DavisU8,
                                 ui_state.time_mode,
+                                ui_state.integration_mode_radio_state,
                                 ui_state.encoder_type,
                                 ui_state.encoder_options,
                                 writer,

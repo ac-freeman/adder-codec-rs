@@ -152,6 +152,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     .write_out(
         DavisU8,
         TimeMode::AbsoluteT,
+        PixelMultiMode::Collapse,
         EncoderType::Raw,
         EncoderOptions::default(PlaneSize::new(346, 260, 1)?),
         writer,

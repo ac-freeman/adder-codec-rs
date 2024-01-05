@@ -15,8 +15,8 @@ use std::error::Error;
 use crate::utils::PlotY;
 use adder_codec_rs::adder_codec_core::codec::rate_controller::{Crf, CRF, DEFAULT_CRF_QUALITY};
 use adder_codec_rs::adder_codec_core::codec::{EncoderOptions, EncoderType, EventDrop, EventOrder};
-use adder_codec_rs::adder_codec_core::PlaneSize;
 use adder_codec_rs::adder_codec_core::TimeMode;
+use adder_codec_rs::adder_codec_core::{PixelMultiMode, PlaneSize};
 #[cfg(feature = "open-cv")]
 use adder_codec_rs::transcoder::source::davis::TranscoderMode::RawDvs;
 use adder_codec_rs::utils::cv::{calculate_quality_metrics, QualityMetrics};
@@ -69,6 +69,7 @@ pub struct ParamsUiState {
     metric_mse: bool,
     metric_psnr: bool,
     metric_ssim: bool,
+    pub(crate) integration_mode_radio_state: PixelMultiMode,
 }
 
 impl Default for ParamsUiState {
@@ -113,6 +114,7 @@ impl Default for ParamsUiState {
             metric_mse: true,
             metric_psnr: true,
             metric_ssim: false,
+            integration_mode_radio_state: Default::default(),
         }
     }
 }
@@ -449,7 +451,9 @@ impl TranscoderState {
                                     || source.get_video_ref().get_encoder_options().event_drop
                                         != self.ui_state.encoder_options.event_drop
                                     || source.get_video_ref().get_encoder_options().event_order
-                                        != self.ui_state.encoder_options.event_order)
+                                        != self.ui_state.encoder_options.event_order
+                                    || source.get_video_ref().state.params.pixel_multi_mode
+                                        != self.ui_state.integration_mode_radio_state)
                                     && self.ui_info_state.output_path.is_some())
                             {
                                 if self.ui_state.davis_mode_radio_state == RawDvs {
@@ -885,6 +889,21 @@ fn side_panel_grid_contents(
 
     ui.label("Channels:");
     ui.add_enabled(enabled, egui::Checkbox::new(&mut ui_state.color, "Color?"));
+    ui.end_row();
+
+    ui.label("Integration mode:");
+    ui.horizontal(|ui| {
+        ui.radio_value(
+            &mut ui_state.integration_mode_radio_state,
+            PixelMultiMode::Normal,
+            "Normal",
+        );
+        ui.radio_value(
+            &mut ui_state.integration_mode_radio_state,
+            PixelMultiMode::Collapse,
+            "Collapse",
+        );
+    });
     ui.end_row();
 
     ui.label("View mode:");
