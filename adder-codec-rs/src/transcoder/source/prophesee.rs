@@ -197,10 +197,10 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Prophesee<W> {
 
             let px = &mut self.video.event_pixel_trees[[y, x, 0]];
 
-            if t >= last_t + 1 {
+            if t > last_t + 1 {
                 // Integrate the last intensity for this pixel over the time since the last event
-                let time_spanned = ((t - last_t) * self.video.state.params.ref_time);
-                let intensity_to_integrate = last_val * time_spanned as f64;
+                let time_spanned = ((t - last_t - 1) * self.video.state.params.ref_time);
+                let intensity_to_integrate = last_val * (t - last_t - 1) as f64;
 
                 let mut base_val = 0;
                 let _ = integrate_for_px(
