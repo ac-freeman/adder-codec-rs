@@ -7,7 +7,9 @@ use crate::utils::cv::clamp_u8;
 use crate::utils::viz::ShowFeatureMode;
 use adder_codec_core::codec::{EncoderOptions, EncoderType};
 use adder_codec_core::Mode::Continuous;
-use adder_codec_core::{DeltaT, Event, PlaneSize, SourceCamera, SourceType, TimeMode};
+use adder_codec_core::{
+    DeltaT, Event, PixelMultiMode, PlaneSize, SourceCamera, SourceType, TimeMode,
+};
 use ndarray::Array3;
 use rayon::ThreadPool;
 use serde::Deserialize;
@@ -494,6 +496,7 @@ impl<W: Write + 'static> VideoBuilder<W> for Prophesee<W> {
         mut self,
         source_camera: SourceCamera,
         time_mode: TimeMode,
+        pixel_multi_mode: PixelMultiMode,
         encoder_type: EncoderType,
         encoder_options: EncoderOptions,
         write: W,
@@ -501,6 +504,7 @@ impl<W: Write + 'static> VideoBuilder<W> for Prophesee<W> {
         self.video = self.video.write_out(
             Some(source_camera),
             Some(time_mode),
+            Some(pixel_multi_mode),
             encoder_type,
             encoder_options,
             write,

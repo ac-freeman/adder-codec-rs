@@ -20,11 +20,11 @@ use adder_codec_rs::davis_edi_rs::util::reconstructor::Reconstructor;
 use crate::transcoder::ui::{ParamsUiState, TranscoderState};
 use adder_codec_rs::adder_codec_core::codec::rate_controller::DEFAULT_CRF_QUALITY;
 use adder_codec_rs::adder_codec_core::SourceCamera::{DavisU8, Dvs, FramedU8};
+use adder_codec_rs::transcoder::source::prophesee::Prophesee;
 use adder_codec_rs::transcoder::source::video::VideoBuilder;
 use bevy_egui::egui::{Color32, RichText};
 #[cfg(feature = "open-cv")]
 use opencv::Result;
-use adder_codec_rs::transcoder::source::prophesee::Prophesee;
 
 #[derive(Default)]
 pub struct AdderTranscoder {
@@ -239,25 +239,28 @@ impl AdderTranscoder {
                     }
 
                     // Prophesee .dat files
-                    Some(ext) if ext == "dat"=> {
+                    Some(ext) if ext == "dat" => {
                         let output_string = output_path_opt
                             .map(|output_path| output_path.to_str().expect("Bad path").to_string());
 
-                        let mut prophesee_source: Prophesee<BufWriter<File>> =
-                            Prophesee::new(ui_state.delta_t_ref as u32, input_path_buf.to_str().unwrap().to_string())?
-                                .crf(
-                                    ui_state
-                                        .encoder_options
-                                        .crf
-                                        .get_quality()
-                                        .unwrap_or(DEFAULT_CRF_QUALITY),
-                                );
+                        let mut prophesee_source: Prophesee<BufWriter<File>> = Prophesee::new(
+                            ui_state.delta_t_ref as u32,
+                            input_path_buf.to_str().unwrap().to_string(),
+                        )?
+                        .crf(
+                            ui_state
+                                .encoder_options
+                                .crf
+                                .get_quality()
+                                .unwrap_or(DEFAULT_CRF_QUALITY),
+                        );
 
                         if let Some(output_string) = output_string {
                             let writer = BufWriter::new(File::create(output_string)?);
                             prophesee_source = *prophesee_source.write_out(
                                 Dvs,
                                 ui_state.time_mode,
+                                ui_state.integration_mode_radio_state,
                                 ui_state.encoder_type,
                                 ui_state.encoder_options,
                                 writer,
