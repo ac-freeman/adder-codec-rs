@@ -147,6 +147,7 @@ impl PlayerState {
             self.ui_info_state.stream_state = stream_state;
 
             if let Some(image) = image_opt {
+                images.remove(&handles.image_view);
                 let handle = images.add(image);
                 handles.image_view = handle;
             }
@@ -440,13 +441,7 @@ impl PlayerState {
         // TODO: Restore
         player = player.stream_pos(0);
 
-        let plane = player
-            .input_stream
-            .as_ref()
-            .unwrap()
-            .decoder
-            .meta()
-            .plane;
+        let plane = player.input_stream.as_ref().unwrap().decoder.meta().plane;
         self.ui_info_state.event_size = if plane.c() == 1 { 9 } else { 11 };
         self.ui_info_state.plane = plane;
 

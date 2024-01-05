@@ -601,27 +601,23 @@ impl TranscoderState {
         // TODO: The below code is absolutely horrible.
         let source: &mut dyn Source<BufWriter<File>> = {
             match &mut self.transcoder.framed_source {
-                None => {
-                    match &mut self.transcoder.prophesee_source {
-                        None => {
-                            #[cfg(feature = "open-cv")]
-                            match &mut self.transcoder.davis_source {
-                                None => {
-                                    return Ok(());
-                                }
-                                Some(source) => {
-                                    ui_info_state.davis_latency = Some(source.get_latency() as f64);
-                                    source
-                                }
+                None => match &mut self.transcoder.prophesee_source {
+                    None => {
+                        #[cfg(feature = "open-cv")]
+                        match &mut self.transcoder.davis_source {
+                            None => {
+                                return Ok(());
                             }
-                            #[cfg(not(feature = "open-cv"))]
-                            return Ok(());
+                            Some(source) => {
+                                ui_info_state.davis_latency = Some(source.get_latency() as f64);
+                                source
+                            }
                         }
-                        Some(source) => {
-                            source
-                        }
+                        #[cfg(not(feature = "open-cv"))]
+                        return Ok(());
                     }
-                }
+                    Some(source) => source,
+                },
                 Some(source) => source,
             }
         };
@@ -687,6 +683,7 @@ impl TranscoderState {
         if let Some(image) = images.get_mut(&handles.image_view) {
             crate::utils::prep_bevy_image_mut(image_mat, color, image)?;
         } else {
+            dbg!("else");
             let image_bevy = prep_bevy_image(
                 image_mat,
                 color,
@@ -697,6 +694,7 @@ impl TranscoderState {
             let handle = images.add(self.transcoder.live_image.clone());
             handles.image_view = handle;
         }
+        dbg!(images.len());
 
         // Repeat for the input view
         if self.ui_state.show_original && source.get_input().is_some() {
