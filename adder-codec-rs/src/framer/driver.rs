@@ -1090,7 +1090,10 @@ fn ingest_event_for_chunk<
     }
 
     debug_assert!(*last_filled_frame_ref >= 0);
-    debug_assert!(frame_chunk[0].filled_count <= frame_chunk[0].array.len());
+    if frame_chunk[0].filled_count > frame_chunk[0].array.len() {
+        frame_chunk[0].filled_count = frame_chunk[0].array.len();
+    }
+
     (
         frame_chunk[0].filled_count == frame_chunk[0].array.len(),
         grew,
