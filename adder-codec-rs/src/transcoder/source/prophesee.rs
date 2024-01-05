@@ -197,27 +197,12 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Prophesee<W> {
 
             let px = &mut self.video.event_pixel_trees[[y, x, 0]];
 
-            let tmp_best_event = px.arena[0].best_event;
-            let mut tmp_best_frame_val = 0;
-            if tmp_best_event.is_some() {
-                tmp_best_frame_val = u8::get_frame_value(
-                    &tmp_best_event.unwrap().into(),
-                    SourceType::U8,
-                    self.video.state.params.ref_time as f64,
-                    32.0,
-                    self.video.state.params.delta_t_max,
-                    self.video.instantaneous_view_mode,
-                    None,
-                );
-            }
-            let tmp_events_len = events.len();
-
-            let mut base_val = 0;
             if t > last_t + 1 {
                 // Integrate the last intensity for this pixel over the time since the last event
                 let time_spanned = ((t - last_t - 1) * self.video.state.params.ref_time);
                 let intensity_to_integrate = last_val * (t - last_t - 1) as f64;
 
+                let mut base_val = 0;
                 let _ = integrate_for_px(
                     px,
                     &mut base_val,
@@ -228,36 +213,6 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Prophesee<W> {
                     &self.video.state.params,
                     &crf_parameters,
                 );
-            }
-
-            if events.len() > tmp_events_len {
-                let mut tmp_new_event = events.last().unwrap().clone();
-                // dbg!(tmp_new_event);
-                tmp_new_event.t -=
-                    self.dvs_last_timestamps[[y, x, 0]] * self.video.state.params.ref_time;
-                let tmp_new_frame_val = u8::get_frame_value(
-                    &tmp_new_event,
-                    SourceType::U8,
-                    self.video.state.params.ref_time as f64,
-                    32.0,
-                    self.video.state.params.delta_t_max,
-                    self.video.instantaneous_view_mode,
-                    None,
-                );
-                // dbg!(tmp_new_event);
-                if tmp_best_frame_val != tmp_new_frame_val {
-                    // dbg!(tmp_best_event, tmp_new_event);
-                    // dbg!(tmp_best_frame_val, tmp_new_frame_val);
-                    // dbg!(last_val);
-                    // dbg!(base_val);
-                    //
-                    // let time_spanned = ((t - last_t - 1) * self.video.state.params.ref_time);
-                    // let intensity_to_integrate = last_val * (t - last_t - 1) as f64;
-                    // dbg!(time_spanned, intensity_to_integrate);
-                    //
-                    // assert!(tmp_new_frame_val >= tmp_best_frame_val.saturating_sub(2));
-                    // assert!(tmp_new_frame_val <= tmp_best_frame_val.saturating_add(2));
-                }
             }
 
             // Get the new ln intensity
