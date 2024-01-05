@@ -52,6 +52,12 @@ fn parse_header(file: &mut BufReader<File>) -> io::Result<(u64, u8, u8, Option<(
         }
     }
 
+
+    // Manually set this size if it's not present in the header
+    if [None, None] == size {
+        size = [Some(320), Some(320)];
+    }
+
     // Parse data
     file.seek(SeekFrom::Start(bod))?; // Seek back to the position after the header
     let (ev_type, ev_size) = if num_comment_line > 0 {
@@ -123,7 +129,7 @@ fn count_events(filename: &str) -> io::Result<usize> {
 
 
 fn main() {
-    let file_path: &str = "/home/argha/Documents/github/prophesee_data/obj_010369_td.dat";
+    let file_path: &str = "/home/andrew/Downloads/obj_010369_td.dat";
     let mut file = BufReader::new(File::open(file_path).unwrap());
 
     // Parse header

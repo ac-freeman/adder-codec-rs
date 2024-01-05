@@ -254,6 +254,7 @@ impl TranscoderState {
                 if let Some(path) = rfd::FileDialog::new()
                     .add_filter("framed video", &["mp4"])
                     .add_filter("DVS/DAVIS video", &["aedat4"])
+                    .add_filter("Prophesee video", &["dat"])
                     .pick_file()
                 {
                     self.ui_info_state.input_path_0 = Some(path.clone());
@@ -268,7 +269,7 @@ impl TranscoderState {
                 }
             }
 
-            ui.label("OR drag and drop your source file here (.mp4, .aedat4)");
+            ui.label("OR drag and drop your source file here (.mp4, .aedat4, .dat)");
         });
 
         ui.horizontal(|ui| {
@@ -597,22 +598,26 @@ impl TranscoderState {
         let ui_info_state = &mut self.ui_info_state;
         ui_info_state.events_per_sec = 0.;
 
+        // TODO: The below code is absolutely horrible.
         let source: &mut dyn Source<BufWriter<File>> = {
             match &mut self.transcoder.framed_source {
-                None => {
-                    #[cfg(feature = "open-cv")]
-                    match &mut self.transcoder.davis_source {
-                        None => {
-                            return Ok(());
+                None => match &mut self.transcoder.prophesee_source {
+                    None => {
+                        #[cfg(feature = "open-cv")]
+                        match &mut self.transcoder.davis_source {
+                            None => {
+                                return Ok(());
+                            }
+                            Some(source) => {
+                                ui_info_state.davis_latency = Some(source.get_latency() as f64);
+                                source
+                            }
                         }
-                        Some(source) => {
-                            ui_info_state.davis_latency = Some(source.get_latency() as f64);
-                            source
-                        }
+                        #[cfg(not(feature = "open-cv"))]
+                        return Ok(());
                     }
-                    #[cfg(not(feature = "open-cv"))]
-                    return Ok(());
-                }
+                    Some(source) => source,
+                },
                 Some(source) => source,
             }
         };
@@ -678,6 +683,7 @@ impl TranscoderState {
         if let Some(image) = images.get_mut(&handles.image_view) {
             crate::utils::prep_bevy_image_mut(image_mat, color, image)?;
         } else {
+            dbg!("else");
             let image_bevy = prep_bevy_image(
                 image_mat,
                 color,
@@ -688,6 +694,7 @@ impl TranscoderState {
             let handle = images.add(self.transcoder.live_image.clone());
             handles.image_view = handle;
         }
+        dbg!(images.len());
 
         // Repeat for the input view
         if self.ui_state.show_original && source.get_input().is_some() {

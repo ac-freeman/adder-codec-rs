@@ -31,7 +31,7 @@ impl<W: Write> CompressedOutput<W> {
             meta.plane,
             0,
             meta.ref_interval,
-            (meta.delta_t_max / meta.ref_interval) as usize,
+            (meta.tps / meta.ref_interval) as usize, // TODO: Make the num_intervals a user-configurable parameter
         );
 
         Self {
@@ -186,7 +186,7 @@ impl<R: Read + Seek> ReadCompression<R> for CompressedInput<R> {
                 self.meta.plane,
                 0,
                 self.meta.ref_interval,
-                (self.meta.delta_t_max / self.meta.ref_interval) as usize,
+                (self.meta.tps / self.meta.ref_interval) as usize,
             ));
         }
 

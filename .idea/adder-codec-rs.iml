@@ -29,6 +29,7 @@
       <sourceFolder url="file://$MODULE_DIR$/arithmetic-coding-adder-dep/fenwick-model/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/arithmetic-coding-adder-dep/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/arithmetic-coding-adder-dep/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/prophesee_data/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
       <excludeFolder url="file://$MODULE_DIR$/adder-codec-core/target" />
     </content>
