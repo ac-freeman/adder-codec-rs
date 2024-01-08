@@ -272,6 +272,10 @@ impl AdderTranscoder {
                             )?;
                         }
 
+                        ui_state.delta_t_max_mult =
+                            prophesee_source.get_video_ref().get_delta_t_max()
+                                / prophesee_source.get_video_ref().state.params.ref_time as u32;
+                        ui_state.delta_t_max_mult_slider = ui_state.delta_t_max_mult;
                         Ok(AdderTranscoder {
                             framed_source: None,
                             #[cfg(feature = "open-cv")]

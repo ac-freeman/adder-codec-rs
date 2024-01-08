@@ -280,13 +280,19 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Prophesee<W> {
             };
         }
 
-        for event in &events {
-            self.video.encoder.ingest_event(*event)?;
-        }
-
         // It's expected that the function will spatially parallelize the integrations. With sparse
         // data, though, this could be pretty wasteful. For now, just wrap the vec in another vec.
-        Ok(vec![events])
+        let events_nested: Vec<Vec<Event>> = vec![events];
+
+        self.video.handle_features(&events_nested)?;
+
+        for events in &events_nested {
+            for event in events {
+                self.video.encoder.ingest_event(*event)?;
+            }
+        }
+
+        Ok(events_nested)
     }
 
     fn crf(&mut self, crf: u8) {
