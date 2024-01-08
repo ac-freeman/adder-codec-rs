@@ -225,6 +225,7 @@ impl AdderTranscoder {
                                 DavisU8,
                                 ui_state.time_mode,
                                 ui_state.integration_mode_radio_state,
+                                Some(ui_state.delta_t_max_mult as usize),
                                 ui_state.encoder_type,
                                 ui_state.encoder_options,
                                 writer,
