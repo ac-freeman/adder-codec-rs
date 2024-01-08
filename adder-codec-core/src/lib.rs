@@ -477,7 +477,7 @@ pub fn open_file_decoder(
             #[cfg(feature = "compression")]
             {
                 bufreader = BufReader::new(File::open(file_path)?);
-                let compression = CompressedInput::new(0, 0); // TODO: temporary args. Need to refactor.
+                let compression = CompressedInput::new(0, 0, 0); // TODO: temporary args. Need to refactor.
                 bitreader = BitReader::endian(bufreader, BigEndian);
                 Decoder::new_compressed(compression, &mut bitreader)?
             }

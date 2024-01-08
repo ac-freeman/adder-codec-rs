@@ -10,7 +10,8 @@ use crate::codec::compressed::stream::CompressedInput;
 
 use crate::codec::encoder::Encoder;
 use crate::codec::header::{
-    EventStreamHeader, EventStreamHeaderExtensionV1, EventStreamHeaderExtensionV2, MAGIC_COMPRESSED,
+    EventStreamHeader, EventStreamHeaderExtensionV1, EventStreamHeaderExtensionV2,
+    EventStreamHeaderExtensionV3, MAGIC_COMPRESSED,
 };
 use crate::codec::raw::stream::RawInput;
 use crate::codec::CodecError::Deserialize;
@@ -128,7 +129,8 @@ impl<R: Read + Seek> Decoder<R> {
                 ref_interval: header.ref_interval,
                 delta_t_max: header.delta_t_max,
                 event_size: header.event_size,
-                source_camera: Default::default(),
+                source_camera: Default::default(), // Gets filled by decoding the V2 header extension
+                adu_interval: Default::default(), // Gets filled by decoding the V3 header extension
             };
 
             // Manual fix for malformed files with old software
@@ -180,6 +182,23 @@ impl<R: Read + Seek> Decoder<R> {
         self.input.meta_mut().header_size += extension_size as usize;
 
         if codec_version == 2 {
+            return Ok(());
+        }
+
+        extension_size = bincode::serialized_size(&EventStreamHeaderExtensionV3::default())?;
+        buffer = vec![0; extension_size as usize];
+        reader.read_bytes(&mut buffer)?;
+        let extension_v3 = match self
+            .bincode
+            .deserialize_from::<_, EventStreamHeaderExtensionV3>(&*buffer)
+        {
+            Ok(header) => header,
+            Err(_) => return Err(Deserialize),
+        };
+        self.input.meta_mut().adu_interval = extension_v3.adu_interval as usize;
+        self.input.meta_mut().header_size += extension_size as usize;
+
+        if codec_version == 3 {
             return Ok(());
         }
 
@@ -289,6 +308,7 @@ mod tests {
                 delta_t_max: 255,
                 event_size: 0,
                 source_camera: Default::default(),
+                adu_interval: 1,
             },
             bufwriter,
         );
@@ -325,6 +345,7 @@ mod tests {
                 delta_t_max: 255,
                 event_size: 0,
                 source_camera: Default::default(),
+                adu_interval: 1,
             },
             bufwriter,
         );
@@ -371,6 +392,7 @@ mod tests {
                 delta_t_max: 255,
                 event_size: 0,
                 source_camera: Default::default(),
+                adu_interval: 1,
             },
             bufwriter,
         );
@@ -436,7 +458,7 @@ mod tests {
         let output = setup_encoded_compressed(0);
         let tmp = Cursor::new(&*output);
         let bufreader = BufReader::new(tmp);
-        let compression = CompressedInput::new(255, 255);
+        let compression = CompressedInput::new(255, 255, 1);
 
         let mut bitreader = BitReader::endian(bufreader, BigEndian);
         let reader = Decoder::new_compressed(compression, &mut bitreader).unwrap();
@@ -449,7 +471,7 @@ mod tests {
         let output = setup_encoded_compressed(1);
         let tmp = Cursor::new(&*output);
         let bufreader = BufReader::new(tmp);
-        let compression = CompressedInput::new(255, 255);
+        let compression = CompressedInput::new(255, 255, 1);
 
         let mut bitreader = BitReader::endian(bufreader, BigEndian);
         let reader = Decoder::new_compressed(compression, &mut bitreader).unwrap();
@@ -462,7 +484,7 @@ mod tests {
         let output = setup_encoded_compressed(2);
         let tmp = Cursor::new(&*output);
         let bufreader = BufReader::new(tmp);
-        let compression = CompressedInput::new(255, 255);
+        let compression = CompressedInput::new(255, 255, 1);
 
         let mut bitreader = BitReader::endian(bufreader, BigEndian);
         let reader = Decoder::new_compressed(compression, &mut bitreader).unwrap();

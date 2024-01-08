@@ -18,7 +18,7 @@ use crate::codec::compressed::stream::CompressedOutput;
 use crate::codec::empty::stream::EmptyOutput;
 use crate::codec::header::{
     EventStreamHeader, EventStreamHeaderExtensionV0, EventStreamHeaderExtensionV1,
-    EventStreamHeaderExtensionV2,
+    EventStreamHeaderExtensionV2, EventStreamHeaderExtensionV3,
 };
 
 use crate::codec::raw::stream::RawOutput;
@@ -216,6 +216,16 @@ impl<W: Write + 'static> Encoder<W> {
         if meta.codec_version == 2 {
             return Ok(buffer);
         }
+
+        self.bincode.serialize_into(
+            &mut buffer,
+            &EventStreamHeaderExtensionV3 {
+                adu_interval: meta.adu_interval as u32,
+            },
+        )?;
+        if meta.codec_version == 3 {
+            return Ok(buffer);
+        }
         Err(CodecError::BadFile)
     }
 
@@ -328,6 +338,7 @@ mod tests {
                 delta_t_max: 0,
                 event_size: 0,
                 source_camera: Default::default(),
+                adu_interval: 1,
             },
             bincode: DefaultOptions::new()
                 .with_fixint_encoding()
@@ -366,6 +377,7 @@ mod tests {
                 delta_t_max: 0,
                 event_size: 0,
                 source_camera: Default::default(),
+                adu_interval: 1,
             },
             bufwriter,
         );
@@ -405,6 +417,7 @@ mod tests {
                 delta_t_max: 255,
                 event_size: 0,
                 source_camera: Default::default(),
+                adu_interval: 1,
             },
             bufwriter,
         );
@@ -431,7 +444,7 @@ mod tests {
         let mut writer = encoder.close_writer().unwrap().unwrap();
         writer.flush().unwrap();
         let output = writer.into_inner().unwrap();
-        assert_eq!(output.len(), 33 + 22); // 33 bytes for the header, 22 bytes for the 2 events
+        assert_eq!(output.len(), 37 + 22); // 37 bytes for the header, 22 bytes for the 2 events
     }
 
     #[test]
@@ -450,6 +463,7 @@ mod tests {
                 delta_t_max: 0,
                 event_size: 0,
                 source_camera: Default::default(),
+                adu_interval: 1,
             },
             // frame: Default::default(),
             // adu: Adu::new(),
@@ -484,6 +498,7 @@ mod tests {
                 delta_t_max: 255,
                 event_size: 0,
                 source_camera: Default::default(),
+                adu_interval: Default::default(),
             },
             bufwriter,
         );
@@ -513,6 +528,7 @@ mod tests {
                 delta_t_max: 255,
                 event_size: 0,
                 source_camera: Default::default(),
+                adu_interval: Default::default(),
             },
             bufwriter,
         );

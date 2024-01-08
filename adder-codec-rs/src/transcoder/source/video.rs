@@ -573,6 +573,7 @@ impl<W: Write + 'static> Video<W> {
                             source_camera: source_camera.unwrap_or_default(),
                         },
                         write,
+                        ,
                     );
                     Encoder::new_compressed(compression, encoder_options)
                 }
