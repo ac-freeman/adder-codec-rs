@@ -76,7 +76,7 @@ impl Default for PlayerUiState {
             ui_sliders: Default::default(),
             ui_sliders_drag: Default::default(),
             detect_features: false,
-            buffer_limit: None,
+            buffer_limit: Some(60),
         }
     }
 }
@@ -310,7 +310,7 @@ impl PlayerState {
 
         let mut buffer_limit = self.ui_state.buffer_limit.unwrap_or(100);
         let mut buffer_limit_tmp = buffer_limit;
-        add_slider_row(
+        need_to_update |= add_slider_row(
             limit_frame_buffer_bool,
             false,
             "Buffer limit:",
@@ -327,6 +327,7 @@ impl PlayerState {
                 || self.ui_state.buffer_limit != Some(buffer_limit_tmp))
         {
             self.ui_state.buffer_limit = Some(buffer_limit_tmp);
+            need_to_update = true;
         }
 
         ui.label("Processing:");
@@ -452,6 +453,9 @@ impl PlayerState {
 
         self.ui_state.current_frame = 1;
 
+        if let Some(current_rx) = &self.player_rx {
+            drop(current_rx);
+        }
         let (player_tx, player_rx) = bounded(60);
         let detect_features = self.ui_state.detect_features;
 

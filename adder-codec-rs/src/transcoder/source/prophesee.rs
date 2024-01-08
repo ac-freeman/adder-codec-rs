@@ -112,7 +112,7 @@ impl<W: Write + 'static> Prophesee<W> {
             running_t: 0,
             dvs_last_timestamps,
             dvs_last_ln_val,
-            camera_theta: 0.15, // A fixed assumption
+            camera_theta: 0.05, // A fixed assumption
         };
 
         Ok(prophesee_source)
@@ -141,7 +141,6 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Prophesee<W> {
                 .into_iter()
                 .flatten()
                 .collect();
-            dbg!(first_events.len());
             assert_eq!(first_events.len(), self.video.state.plane.volume());
             self.running_t = 2;
         }
@@ -188,6 +187,11 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Prophesee<W> {
 
             // Get the last timestamp for this pixel
             let last_t = self.dvs_last_timestamps[[y, x, 0]];
+
+            if t < last_t {
+                // dbg!("skipping event");
+                continue;
+            }
 
             // Get the last ln intensity for this pixel
             let mut last_ln_val = self.dvs_last_ln_val[[y, x, 0]];
@@ -275,13 +279,23 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Prophesee<W> {
             };
         }
 
-        for event in &events {
-            self.video.encoder.ingest_event(*event)?;
+        if self.video.state.feature_detection {
+            self.video.display_frame_features = self.video.state.running_intensities.clone();
         }
 
         // It's expected that the function will spatially parallelize the integrations. With sparse
         // data, though, this could be pretty wasteful. For now, just wrap the vec in another vec.
-        Ok(vec![events])
+        let events_nested: Vec<Vec<Event>> = vec![events];
+
+        self.video.handle_features(&events_nested)?;
+
+        for events in &events_nested {
+            for event in events {
+                self.video.encoder.ingest_event(*event)?;
+            }
+        }
+
+        Ok(events_nested)
     }
 
     fn crf(&mut self, crf: u8) {
@@ -497,6 +511,7 @@ impl<W: Write + 'static> VideoBuilder<W> for Prophesee<W> {
         source_camera: SourceCamera,
         time_mode: TimeMode,
         pixel_multi_mode: PixelMultiMode,
+        adu_interval: Option<usize>,
         encoder_type: EncoderType,
         encoder_options: EncoderOptions,
         write: W,
@@ -505,6 +520,7 @@ impl<W: Write + 'static> VideoBuilder<W> for Prophesee<W> {
             Some(source_camera),
             Some(time_mode),
             Some(pixel_multi_mode),
+            adu_interval,
             encoder_type,
             encoder_options,
             write,

@@ -28,6 +28,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             FramedU8,
             TimeMode::DeltaT,
             PixelMultiMode::Normal,
+            Some(30),
             EncoderType::Raw,
             EncoderOptions::default(plane),
             writer,

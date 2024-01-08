@@ -92,7 +92,11 @@ impl Contexts {
         if t_residual_i64.abs() < self.t_residual_max {
             (0, t_residual_i64)
         } else {
-            let actual_dt = event.t - prev_event.t;
+            if event.t < prev_event.t {
+                // dbg!(event.clone(), prev_event.clone());
+            }
+
+            let actual_dt = event.t.saturating_sub(prev_event.t);
             let actual_intensity = self.event_to_intensity(event.d, actual_dt, dt_ref);
             let mut recon_intensity = actual_intensity;
             let mut bitshift: u8 = 0;

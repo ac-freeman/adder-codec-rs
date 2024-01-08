@@ -34,7 +34,7 @@ pub struct ParamsUiState {
     pub(crate) delta_t_ref_max: f32,
     pub(crate) delta_t_max_mult: u32,
     delta_t_ref_slider: f32,
-    delta_t_max_mult_slider: u32,
+    pub(crate) delta_t_max_mult_slider: u32,
     pub(crate) scale: f64,
     scale_slider: f64,
     pub(crate) thread_count: usize,
@@ -434,53 +434,68 @@ impl TranscoderState {
         let source: &mut dyn Source<BufWriter<File>> = {
             match &mut self.transcoder.framed_source {
                 None => {
-                    #[cfg(feature = "open-cv")]
-                    match &mut self.transcoder.davis_source {
+                    match &mut self.transcoder.prophesee_source {
                         None => {
+                            #[cfg(feature = "open-cv")]
+                            match &mut self.transcoder.davis_source {
+                                None => {
+                                    return;
+                                }
+
+                                Some(source) => {
+                                    if source.mode != self.ui_state.davis_mode_radio_state
+                                        || source.get_reconstructor().as_ref().unwrap().output_fps
+                                            != self.ui_state.davis_output_fps
+                                        || ((source.get_video_ref().get_time_mode()
+                                            != self.ui_state.time_mode
+                                            || source.get_video_ref().encoder_type
+                                                != self.ui_state.encoder_type
+                                            || source
+                                                .get_video_ref()
+                                                .get_encoder_options()
+                                                .event_drop
+                                                != self.ui_state.encoder_options.event_drop
+                                            || source
+                                                .get_video_ref()
+                                                .get_encoder_options()
+                                                .event_order
+                                                != self.ui_state.encoder_options.event_order
+                                            || source
+                                                .get_video_ref()
+                                                .state
+                                                .params
+                                                .pixel_multi_mode
+                                                != self.ui_state.integration_mode_radio_state)
+                                            && self.ui_info_state.output_path.is_some())
+                                    {
+                                        if self.ui_state.davis_mode_radio_state == RawDvs {
+                                            // self.ui_state.davis_output_fps = 1000000.0;
+                                            // self.ui_state.davis_output_fps_slider = 1000000.0;
+                                            self.ui_state.optimize_c = false;
+                                        }
+                                        replace_adder_transcoder(
+                                            self,
+                                            self.ui_info_state.input_path_0.clone(),
+                                            self.ui_info_state.input_path_1.clone(),
+                                            self.ui_info_state.output_path.clone(),
+                                            0,
+                                        );
+                                        images.clear();
+                                        return;
+                                    }
+                                    let tmp = source.get_reconstructor_mut().as_mut().unwrap();
+                                    tmp.set_optimize_c(
+                                        self.ui_state.optimize_c,
+                                        self.ui_state.optimize_c_frequency,
+                                    );
+                                    source
+                                }
+                            }
+                            #[cfg(not(feature = "open-cv"))]
                             return;
                         }
-
-                        Some(source) => {
-                            if source.mode != self.ui_state.davis_mode_radio_state
-                                || source.get_reconstructor().as_ref().unwrap().output_fps
-                                    != self.ui_state.davis_output_fps
-                                || ((source.get_video_ref().get_time_mode()
-                                    != self.ui_state.time_mode
-                                    || source.get_video_ref().encoder_type
-                                        != self.ui_state.encoder_type
-                                    || source.get_video_ref().get_encoder_options().event_drop
-                                        != self.ui_state.encoder_options.event_drop
-                                    || source.get_video_ref().get_encoder_options().event_order
-                                        != self.ui_state.encoder_options.event_order
-                                    || source.get_video_ref().state.params.pixel_multi_mode
-                                        != self.ui_state.integration_mode_radio_state)
-                                    && self.ui_info_state.output_path.is_some())
-                            {
-                                if self.ui_state.davis_mode_radio_state == RawDvs {
-                                    // self.ui_state.davis_output_fps = 1000000.0;
-                                    // self.ui_state.davis_output_fps_slider = 1000000.0;
-                                    self.ui_state.optimize_c = false;
-                                }
-                                replace_adder_transcoder(
-                                    self,
-                                    self.ui_info_state.input_path_0.clone(),
-                                    self.ui_info_state.input_path_1.clone(),
-                                    self.ui_info_state.output_path.clone(),
-                                    0,
-                                );
-                                images.clear();
-                                return;
-                            }
-                            let tmp = source.get_reconstructor_mut().as_mut().unwrap();
-                            tmp.set_optimize_c(
-                                self.ui_state.optimize_c,
-                                self.ui_state.optimize_c_frequency,
-                            );
-                            source
-                        }
+                        Some(source) => source,
                     }
-                    #[cfg(not(feature = "open-cv"))]
-                    return;
                 }
                 Some(source) => {
                     if source.scale != self.ui_state.scale
@@ -687,7 +702,7 @@ impl TranscoderState {
         if let Some(image) = images.get_mut(&handles.image_view) {
             crate::utils::prep_bevy_image_mut(image_mat, color, image)?;
         } else {
-            dbg!("else");
+            // dbg!("else");
             let image_bevy = prep_bevy_image(
                 image_mat,
                 color,
@@ -698,7 +713,6 @@ impl TranscoderState {
             let handle = images.add(self.transcoder.live_image.clone());
             handles.image_view = handle;
         }
-        dbg!(images.len());
 
         // Repeat for the input view
         if self.ui_state.show_original && source.get_input().is_some() {

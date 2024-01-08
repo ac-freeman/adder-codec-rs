@@ -804,6 +804,14 @@ impl<T: Clone + Default + FrameValue<Output = T> + Serialize> FrameSequence<T> {
     /// Get whether or not the next frame is "filled" (i.e., all pixels have been written to)
     #[must_use]
     pub fn is_frame_0_filled(&self) -> bool {
+        if let Some(buffer_limit) = self.buffer_limit {
+            for chunk in self.frames.iter() {
+                if chunk.len() > buffer_limit as usize {
+                    return true;
+                }
+            }
+        }
+
         for chunk in self.chunk_filled_tracker.iter() {
             if !chunk {
                 return false;
@@ -1084,13 +1092,18 @@ fn ingest_event_for_chunk<
     }
 
     if let Some(buffer_limit) = buffer_limit {
+        // dbg!("buffer filled");
         if *last_filled_frame_ref > state.frames_written + buffer_limit as i64 {
+            // dbg!("buffer filled 2");
             frame_chunk[0].filled_count = frame_chunk[0].array.len();
         }
     }
 
     debug_assert!(*last_filled_frame_ref >= 0);
-    debug_assert!(frame_chunk[0].filled_count <= frame_chunk[0].array.len());
+    if frame_chunk[0].filled_count > frame_chunk[0].array.len() {
+        frame_chunk[0].filled_count = frame_chunk[0].array.len();
+    }
+
     (
         frame_chunk[0].filled_count == frame_chunk[0].array.len(),
         grew,
