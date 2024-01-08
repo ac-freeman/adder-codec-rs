@@ -141,7 +141,6 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Prophesee<W> {
                 .into_iter()
                 .flatten()
                 .collect();
-            dbg!(first_events.len());
             assert_eq!(first_events.len(), self.video.state.plane.volume());
             self.running_t = 2;
         }
@@ -278,6 +277,10 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Prophesee<W> {
                 self.video.display_frame_features[[y, x, 0]] =
                     self.video.state.running_intensities[[y, x, 0]];
             };
+        }
+
+        if self.video.state.feature_detection {
+            self.video.display_frame_features = self.video.state.running_intensities.clone();
         }
 
         // It's expected that the function will spatially parallelize the integrations. With sparse
