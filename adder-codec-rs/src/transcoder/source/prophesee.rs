@@ -190,7 +190,7 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Prophesee<W> {
             let last_t = self.dvs_last_timestamps[[y, x, 0]];
 
             if t < last_t {
-                dbg!("skipping event");
+                // dbg!("skipping event");
                 continue;
             }
 

@@ -93,7 +93,7 @@ impl Contexts {
             (0, t_residual_i64)
         } else {
             if event.t < prev_event.t {
-                dbg!(event.clone(), prev_event.clone());
+                // dbg!(event.clone(), prev_event.clone());
             }
 
             let actual_dt = event.t.saturating_sub(prev_event.t);
