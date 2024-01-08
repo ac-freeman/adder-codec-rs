@@ -8,7 +8,6 @@ members = [
     "arithmetic-coding-adder-dep",
     "arithmetic-coding-adder-dep/arithmetic-coding-core-adder-dep",
     "arithmetic-coding-adder-dep/fenwick-model",
-    "prophesee_data"
 ]
 
 [profile.release]
