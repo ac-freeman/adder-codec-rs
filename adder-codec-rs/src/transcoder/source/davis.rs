@@ -30,10 +30,10 @@ use adder_codec_core::{Event, PlaneSize, SourceCamera, SourceType, TimeMode};
 
 use crate::framer::scale_intensity::{FrameValue, SaeTime};
 use crate::transcoder::event_pixel_tree::Intensity32;
+use crate::utils::cv::clamp_u8;
 use crate::utils::viz::ShowFeatureMode;
 use tokio::runtime::Runtime;
 use video_rs_adder_dep::Frame;
-use crate::utils::cv::clamp_u8;
 
 /// The EDI reconstruction mode, determining how intensities are integrated for the ADΔER model
 #[derive(PartialEq, Eq, Clone, Copy)]
@@ -1022,6 +1022,7 @@ impl<W: Write + 'static> VideoBuilder<W> for Davis<W> {
         source_camera: SourceCamera,
         time_mode: TimeMode,
         pixel_multi_mode: PixelMultiMode,
+        adu_interval: Option<usize>,
         encoder_type: EncoderType,
         encoder_options: EncoderOptions,
         write: W,
@@ -1030,6 +1031,7 @@ impl<W: Write + 'static> VideoBuilder<W> for Davis<W> {
             Some(source_camera),
             Some(time_mode),
             Some(pixel_multi_mode),
+            adu_interval,
             encoder_type,
             encoder_options,
             write,
@@ -1060,8 +1062,6 @@ fn check_dvs_before(dvs_event_t: i64, timestamp_before: i64) -> bool {
 fn check_dvs_after(dvs_event_t: i64, timestamp_after: i64) -> bool {
     dvs_event_t > timestamp_after
 }
-
-
 
 /// Get the next APS image from the video source.
 /// Returns a tuple of the image, the timestamp of the image, the timestamp of the end of the
