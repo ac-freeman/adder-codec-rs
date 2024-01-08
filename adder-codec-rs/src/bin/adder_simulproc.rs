@@ -212,6 +212,7 @@ mod tests {
                 FramedU8,
                 TimeMode::DeltaT,
                 PixelMultiMode::Normal,
+                None,
                 EncoderType::Raw,
                 EncoderOptions::default(plane),
                 writer,
