@@ -417,3 +417,13 @@ fn mean(window: &ArrayView<u8, Ix2>) -> f64 {
 
     sum / window.len() as f64
 }
+
+pub fn clamp_u8(frame_val: &mut f64, last_val_ln: &mut f64) {
+    if *frame_val <= 0.0 {
+        *frame_val = 0.0;
+        *last_val_ln = 0.0; // = 0.0_f64.ln_1p();
+    } else if *frame_val > 255.0 {
+        *frame_val = 255.0;
+        *last_val_ln = 1.0_f64.ln_1p();
+    }
+}

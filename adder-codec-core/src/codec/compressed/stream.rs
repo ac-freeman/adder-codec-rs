@@ -1,6 +1,6 @@
 use crate::codec::{CodecError, CodecMetadata, EncoderOptions, ReadCompression, WriteCompression};
 use bitstream_io::{BigEndian, BitRead, BitReader, BitWrite, BitWriter};
-use std::io::{Cursor, Read, Seek, SeekFrom, Write};
+use std::io::{BufWriter, Cursor, Read, Seek, SeekFrom, Write};
 
 use crate::codec::compressed::source_model::event_structure::event_adu::EventAdu;
 use crate::codec::compressed::source_model::HandleEvent;
@@ -27,12 +27,7 @@ pub struct CompressedInput<R: Read> {
 impl<W: Write> CompressedOutput<W> {
     /// Create a new compressed output stream.
     pub fn new(meta: CodecMetadata, writer: W) -> Self {
-        let adu = EventAdu::new(
-            meta.plane,
-            0,
-            meta.ref_interval,
-            (meta.delta_t_max / meta.ref_interval) as usize,
-        );
+        let adu = EventAdu::new(meta.plane, 0, meta.ref_interval, meta.adu_interval as usize);
 
         Self {
             meta,
@@ -132,7 +127,7 @@ impl<W: Write> WriteCompression<W> for CompressedOutput<W> {
 
 impl<R: Read> CompressedInput<R> {
     /// Create a new compressed input stream.
-    pub fn new(delta_t_max: DeltaT, ref_interval: DeltaT) -> Self
+    pub fn new(delta_t_max: DeltaT, ref_interval: DeltaT, adu_interval: usize) -> Self
     where
         Self: Sized,
     {
@@ -147,6 +142,7 @@ impl<R: Read> CompressedInput<R> {
                 delta_t_max,
                 event_size: 0,
                 source_camera: Default::default(),
+                adu_interval,
             },
             adu: None,
             _phantom: std::marker::PhantomData,
@@ -186,7 +182,7 @@ impl<R: Read + Seek> ReadCompression<R> for CompressedInput<R> {
                 self.meta.plane,
                 0,
                 self.meta.ref_interval,
-                (self.meta.delta_t_max / self.meta.ref_interval) as usize,
+                self.meta.adu_interval,
             ));
         }
 
@@ -278,9 +274,10 @@ mod tests {
                 },
                 tps: 7650,
                 ref_interval: dt_ref,
-                delta_t_max: dt_ref * num_intervals as u32,
+                delta_t_max: dt_ref * num_intervals,
                 event_size: 0,
                 source_camera: SourceCamera::FramedU8,
+                adu_interval: num_intervals as usize,
             },
             Cursor::new(Vec::new()),
         );
@@ -338,9 +335,10 @@ mod tests {
                 },
                 tps: 7650,
                 ref_interval: dt_ref,
-                delta_t_max: dt_ref * num_intervals as u32,
+                delta_t_max: dt_ref * num_intervals,
                 event_size: 0,
                 source_camera: SourceCamera::FramedU8,
+                adu_interval: num_intervals as usize,
             },
             Cursor::new(Vec::new()),
         );
@@ -385,7 +383,11 @@ mod tests {
         // Check that the size is less than the raw events
         assert!((output.len() as u32) < counter * 9);
 
-        let mut compressed_input = CompressedInput::new(dt_ref * num_intervals as u32, dt_ref);
+        let mut compressed_input = CompressedInput::new(
+            dt_ref * num_intervals as u32,
+            dt_ref,
+            num_intervals as usize,
+        );
         compressed_input.meta.plane = plane;
         let mut stream = BitReader::endian(Cursor::new(output), BigEndian);
         for _ in 0..counter - 1 {
@@ -431,6 +433,7 @@ mod tests {
                 delta_t_max: dt_ref * num_intervals as u32,
                 event_size: 0,
                 source_camera: SourceCamera::FramedU8,
+                adu_interval: num_intervals as usize,
             },
             Cursor::new(Vec::new()),
         );
@@ -459,7 +462,11 @@ mod tests {
         // Check that the size is less than the raw events
         assert!((output.len() as u32) < counter * 9);
 
-        let mut compressed_input = CompressedInput::new(dt_ref * num_intervals as u32, dt_ref);
+        let mut compressed_input = CompressedInput::new(
+            dt_ref * num_intervals as u32,
+            dt_ref,
+            num_intervals as usize,
+        );
         compressed_input.meta.plane = plane;
         let mut stream = BitReader::endian(Cursor::new(output), BigEndian);
         for _ in 0..counter - 1 {
@@ -514,6 +521,7 @@ mod tests {
                 delta_t_max: dt_ref * num_intervals as u32,
                 event_size: 0,
                 source_camera: SourceCamera::FramedU8,
+                adu_interval: num_intervals as usize,
             },
             Cursor::new(Vec::new()),
         );
@@ -571,7 +579,11 @@ mod tests {
         assert!(!output.is_empty());
         // Check that the size is less than the raw events
 
-        let mut compressed_input = CompressedInput::new(dt_ref * num_intervals as u32, dt_ref);
+        let mut compressed_input = CompressedInput::new(
+            dt_ref * num_intervals as u32,
+            dt_ref,
+            num_intervals as usize,
+        );
         compressed_input.meta.plane = plane;
         let mut stream = BitReader::endian(Cursor::new(output), BigEndian);
         for _ in 0..counter + 1 {
@@ -624,6 +636,7 @@ mod tests {
                 delta_t_max: dt_ref * num_intervals as u32,
                 event_size: 0,
                 source_camera: SourceCamera::FramedU8,
+                adu_interval: num_intervals as usize,
             },
             Cursor::new(Vec::new()),
         );
@@ -688,7 +701,11 @@ mod tests {
         // Check that the size is less than the raw events
         assert!((output.len() as u32) < counter * 9);
 
-        let mut compressed_input = CompressedInput::new(dt_ref * num_intervals as u32, dt_ref);
+        let mut compressed_input = CompressedInput::new(
+            dt_ref * num_intervals as u32,
+            dt_ref,
+            num_intervals as usize,
+        );
         compressed_input.meta.plane = plane;
         let mut stream = BitReader::endian(Cursor::new(output), BigEndian);
         loop {

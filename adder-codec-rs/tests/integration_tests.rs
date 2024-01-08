@@ -261,6 +261,7 @@ fn setup_raw_writer_v0(rand_num: u32) -> Encoder<BufWriter<File>> {
             delta_t_max: 50000,
             event_size: 0,
             source_camera: Default::default(),
+            adu_interval: 1,
         },
         bufwriter,
     );
@@ -286,6 +287,7 @@ fn setup_raw_writer_v1(rand_num: u32) -> Encoder<BufWriter<File>> {
             delta_t_max: 50000,
             event_size: 0,
             source_camera: FramedU8,
+            adu_interval: 1,
         },
         bufwriter,
     );
@@ -311,6 +313,7 @@ fn setup_raw_writer_v2(rand_num: u32) -> Encoder<BufWriter<File>> {
             delta_t_max: 50000,
             event_size: 0,
             source_camera: FramedU8,
+            adu_interval: 1,
         },
         bufwriter,
     );

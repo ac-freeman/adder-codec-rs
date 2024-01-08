@@ -19,8 +19,9 @@ use adder_codec_rs::davis_edi_rs::util::reconstructor::Reconstructor;
 
 use crate::transcoder::ui::{ParamsUiState, TranscoderState};
 use adder_codec_rs::adder_codec_core::codec::rate_controller::DEFAULT_CRF_QUALITY;
-use adder_codec_rs::adder_codec_core::SourceCamera::{DavisU8, FramedU8};
-use adder_codec_rs::transcoder::source::video::VideoBuilder;
+use adder_codec_rs::adder_codec_core::SourceCamera::{DavisU8, Dvs, FramedU8};
+use adder_codec_rs::transcoder::source::prophesee::Prophesee;
+use adder_codec_rs::transcoder::source::video::{Source, VideoBuilder};
 use bevy_egui::egui::{Color32, RichText};
 #[cfg(feature = "open-cv")]
 use opencv::Result;
@@ -30,6 +31,7 @@ pub struct AdderTranscoder {
     pub(crate) framed_source: Option<Framed<BufWriter<File>>>,
     #[cfg(feature = "open-cv")]
     pub(crate) davis_source: Option<Davis<BufWriter<File>>>,
+    pub(crate) prophesee_source: Option<Prophesee<BufWriter<File>>>,
     pub(crate) live_image: Image,
 }
 
@@ -98,6 +100,7 @@ impl AdderTranscoder {
                                     FramedU8,
                                     ui_state.time_mode,
                                     ui_state.integration_mode_radio_state,
+                                    Some(ui_state.delta_t_max_mult as usize),
                                     ui_state.encoder_type,
                                     ui_state.encoder_options,
                                     writer,
@@ -110,6 +113,7 @@ impl AdderTranscoder {
                             framed_source: Some(framed),
                             #[cfg(feature = "open-cv")]
                             davis_source: None,
+                            prophesee_source: None,
                             live_image: Default::default(),
                         })
                         // }
@@ -221,6 +225,7 @@ impl AdderTranscoder {
                                 DavisU8,
                                 ui_state.time_mode,
                                 ui_state.integration_mode_radio_state,
+                                Some(ui_state.delta_t_max_mult as usize),
                                 ui_state.encoder_type,
                                 ui_state.encoder_options,
                                 writer,
@@ -230,6 +235,53 @@ impl AdderTranscoder {
                         Ok(AdderTranscoder {
                             framed_source: None,
                             davis_source: Some(davis_source),
+                            prophesee_source: None,
+                            live_image: Default::default(),
+                        })
+                    }
+
+                    // Prophesee .dat files
+                    Some(ext) if ext == "dat" => {
+                        let output_string = output_path_opt
+                            .map(|output_path| output_path.to_str().expect("Bad path").to_string());
+
+                        let mut prophesee_source: Prophesee<BufWriter<File>> = Prophesee::new(
+                            ui_state.delta_t_ref as u32,
+                            input_path_buf.to_str().unwrap().to_string(),
+                        )?
+                        .crf(
+                            ui_state
+                                .encoder_options
+                                .crf
+                                .get_quality()
+                                .unwrap_or(DEFAULT_CRF_QUALITY),
+                        );
+                        let adu_interval = (prophesee_source.get_video_ref().state.tps as f32
+                            / ui_state.delta_t_ref)
+                            as usize;
+
+                        if let Some(output_string) = output_string {
+                            let writer = BufWriter::new(File::create(output_string)?);
+                            prophesee_source = *prophesee_source.write_out(
+                                Dvs,
+                                ui_state.time_mode,
+                                ui_state.integration_mode_radio_state,
+                                Some(adu_interval),
+                                ui_state.encoder_type,
+                                ui_state.encoder_options,
+                                writer,
+                            )?;
+                        }
+
+                        ui_state.delta_t_max_mult =
+                            prophesee_source.get_video_ref().get_delta_t_max()
+                                / prophesee_source.get_video_ref().state.params.ref_time as u32;
+                        ui_state.delta_t_max_mult_slider = ui_state.delta_t_max_mult;
+                        Ok(AdderTranscoder {
+                            framed_source: None,
+                            #[cfg(feature = "open-cv")]
+                            davis_source: None,
+                            prophesee_source: Some(prophesee_source),
                             live_image: Default::default(),
                         })
                     }

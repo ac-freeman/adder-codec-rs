@@ -115,6 +115,10 @@ pub enum SourceError {
     /// Vision application error
     #[error("Vision application error")]
     VisionError(String),
+
+    /// I/O error
+    #[error("I/O error")]
+    IoError(#[from] std::io::Error),
 }
 
 #[cfg(feature = "open-cv")]
@@ -304,6 +308,7 @@ pub trait VideoBuilder<W> {
         source_camera: SourceCamera,
         time_mode: TimeMode,
         pixel_multi_mode: PixelMultiMode,
+        adu_interval: Option<usize>,
         encoder_type: EncoderType,
         encoder_options: EncoderOptions,
         write: W,
@@ -398,6 +403,7 @@ impl<W: Write + 'static> Video<W> {
             delta_t_max: state.params.delta_t_max,
             event_size: 0,
             source_camera: SourceCamera::default(), // TODO: Allow for setting this
+            adu_interval: Default::default(),
         };
 
         match writer {
@@ -546,6 +552,7 @@ impl<W: Write + 'static> Video<W> {
         source_camera: Option<SourceCamera>,
         time_mode: Option<TimeMode>,
         pixel_multi_mode: Option<PixelMultiMode>,
+        adu_interval: Option<usize>,
         encoder_type: EncoderType,
         encoder_options: EncoderOptions,
         write: W,
@@ -567,6 +574,7 @@ impl<W: Write + 'static> Video<W> {
                             delta_t_max: self.state.params.delta_t_max,
                             event_size: 0,
                             source_camera: source_camera.unwrap_or_default(),
+                            adu_interval: adu_interval.unwrap_or_default(),
                         },
                         write,
                     );
@@ -594,6 +602,7 @@ impl<W: Write + 'static> Video<W> {
                         delta_t_max: self.state.params.delta_t_max,
                         event_size: 0,
                         source_camera: source_camera.unwrap_or_default(),
+                        adu_interval: Default::default(),
                     },
                     write,
                 );
@@ -613,6 +622,7 @@ impl<W: Write + 'static> Video<W> {
                         delta_t_max: self.state.params.delta_t_max,
                         event_size: 0,
                         source_camera: source_camera.unwrap_or_default(),
+                        adu_interval: Default::default(),
                     },
                     sink(),
                 );

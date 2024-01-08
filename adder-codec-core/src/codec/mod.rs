@@ -70,11 +70,11 @@ pub mod raw;
 /// Current latest version of the codec.
 ///
 /// This is the version which will be written to the header.
-pub const LATEST_CODEC_VERSION: u8 = 2;
+pub const LATEST_CODEC_VERSION: u8 = 3;
 
 /// The metadata which stays the same over the course of an ADΔER stream
 #[allow(missing_docs)]
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct CodecMetadata {
     pub codec_version: u8,
     pub header_size: usize,
@@ -85,6 +85,7 @@ pub struct CodecMetadata {
     pub delta_t_max: DeltaT,
     pub event_size: u8,
     pub source_camera: SourceCamera,
+    pub adu_interval: usize, // TODO: Allow the adu_interval to be non-constant. Each ADU will encode its own size at its beginning
 }
 
 impl Default for CodecMetadata {
@@ -99,6 +100,7 @@ impl Default for CodecMetadata {
             delta_t_max: 255,
             event_size: 9,
             source_camera: Default::default(),
+            adu_interval: 1,
         }
     }
 }
@@ -256,7 +258,8 @@ pub enum CodecError {
 Encoder options below
  */
 
-/// Options related to encoder controls
+/// Options related to encoder controls (what gets encoded and how)
+/// TODO: Move adu_interval into this, rather than be fixed for the whole compressed file
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub struct EncoderOptions {
     /// Allow the encoder to randomly drop events before compressing, if the event rate is too high

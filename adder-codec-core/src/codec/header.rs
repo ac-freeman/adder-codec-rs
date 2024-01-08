@@ -39,7 +39,14 @@ impl HeaderExtension for EventStreamHeaderExtensionV1 {}
 pub(crate) struct EventStreamHeaderExtensionV2 {
     pub(crate) time_mode: TimeMode,
 }
+
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub(crate) struct EventStreamHeaderExtensionV3 {
+    pub(crate) adu_interval: u32,
+}
+
 impl HeaderExtension for EventStreamHeaderExtensionV2 {}
+impl HeaderExtension for EventStreamHeaderExtensionV3 {}
 
 impl EventStreamHeader {
     pub(crate) fn new(

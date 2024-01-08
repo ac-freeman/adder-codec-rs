@@ -22,10 +22,13 @@ fn test_read_adder_raw() -> Result<(), Box<dyn Error>> {
 fn test_build_first_frame() -> Result<(), Box<dyn Error>> {
     // Open the virat_small_gray.adder sample file as a RawInput
     let (mut stream, mut bitreader) = open_file_decoder("tests/samples/virat_small_gray.adder")?;
+    stream.meta_mut().adu_interval =
+        (stream.meta().delta_t_max / stream.meta().ref_interval) as usize; // This is a fix since we're reading a v2-encoded file
 
     // Create the compressed encoder
     let bufwriter = BufWriter::new(vec![]);
     let compression = CompressedOutput::new(*stream.meta(), bufwriter);
+
     let mut encoder: Encoder<BufWriter<Vec<u8>>> =
         Encoder::new_compressed(compression, EncoderOptions::default((stream.meta()).plane));
 
@@ -42,6 +45,8 @@ fn test_build_first_frame() -> Result<(), Box<dyn Error>> {
 fn test_build_many_frames() -> Result<(), Box<dyn Error>> {
     // Open the virat_small_gray.adder sample file as a RawInput
     let (mut stream, mut bitreader) = open_file_decoder("tests/samples/virat_small_gray.adder")?;
+    stream.meta_mut().adu_interval =
+        (stream.meta().delta_t_max / stream.meta().ref_interval) as usize; // This is a fix since we're reading a v2-encoded file
 
     // Create the compressed encoder
     let bufwriter = BufWriter::new(vec![]);

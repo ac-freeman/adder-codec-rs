@@ -90,10 +90,13 @@ impl AdderPlayer {
                     let meta = *stream.meta();
 
                     let mut reconstructed_frame_rate = meta.tps as f32 / meta.ref_interval as f32;
+                    if !is_framed(meta.source_camera) {
+                        reconstructed_frame_rate = 60.0;
+                    }
 
                     reconstructed_frame_rate /= playback_speed;
 
-                    let framer_builder: FramerBuilder = FramerBuilder::new(meta.plane, 260)
+                    let framer_builder: FramerBuilder = FramerBuilder::new(meta.plane, 1)
                         .codec_version(meta.codec_version, meta.time_mode)
                         .time_parameters(
                             meta.tps,
@@ -236,7 +239,10 @@ impl AdderPlayer {
 
         let meta = *stream.decoder.meta();
 
-        let frame_length = meta.ref_interval as f64 * self.playback_speed as f64; //TODO: temp
+        let mut frame_length = meta.ref_interval as f64 * self.playback_speed as f64; //TODO: temp
+        if !is_framed(meta.source_camera) {
+            frame_length = meta.tps as f64 / 60.0 * self.playback_speed as f64;
+        }
 
         // if self.view_mode == FramedViewMode::DeltaT {
         //     opencv::core::normalize(

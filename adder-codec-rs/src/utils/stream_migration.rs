@@ -125,6 +125,7 @@ mod tests {
                 delta_t_max: 2550,
                 event_size: 0,
                 source_camera: FramedU8,
+                adu_interval: 1,
             },
             bufwriter,
         );
@@ -175,6 +176,7 @@ mod tests {
                 delta_t_max: 2550,
                 event_size: 0,
                 source_camera: FramedU8,
+                adu_interval: 1,
             },
             bufwriter,
         );
