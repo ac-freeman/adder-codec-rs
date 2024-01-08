@@ -239,7 +239,10 @@ impl AdderPlayer {
 
         let meta = *stream.decoder.meta();
 
-        let frame_length = meta.ref_interval as f64 * self.playback_speed as f64; //TODO: temp
+        let mut frame_length = meta.ref_interval as f64 * self.playback_speed as f64; //TODO: temp
+        if !is_framed(meta.source_camera) {
+            frame_length = meta.tps as f64 / 60.0 * self.playback_speed as f64;
+        }
 
         // if self.view_mode == FramedViewMode::DeltaT {
         //     opencv::core::normalize(
