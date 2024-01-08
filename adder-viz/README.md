@@ -1,4 +1,4 @@
-# adder-viz
+"# adder-viz
 [![Crates.io](https://img.shields.io/crates/v/adder-viz)](https://crates.io/crates/adder-viz)
 [![Downloads](https://img.shields.io/crates/dr/adder-viz)](https://crates.io/crates/adder-viz)
 
