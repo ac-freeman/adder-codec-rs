@@ -258,7 +258,8 @@ pub enum CodecError {
 Encoder options below
  */
 
-/// Options related to encoder controls
+/// Options related to encoder controls (what gets encoded and how)
+/// TODO: Move adu_interval into this, rather than be fixed for the whole compressed file
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub struct EncoderOptions {
     /// Allow the encoder to randomly drop events before compressing, if the event rate is too high

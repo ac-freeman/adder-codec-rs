@@ -21,7 +21,7 @@ use crate::transcoder::ui::{ParamsUiState, TranscoderState};
 use adder_codec_rs::adder_codec_core::codec::rate_controller::DEFAULT_CRF_QUALITY;
 use adder_codec_rs::adder_codec_core::SourceCamera::{DavisU8, Dvs, FramedU8};
 use adder_codec_rs::transcoder::source::prophesee::Prophesee;
-use adder_codec_rs::transcoder::source::video::VideoBuilder;
+use adder_codec_rs::transcoder::source::video::{Source, VideoBuilder};
 use bevy_egui::egui::{Color32, RichText};
 #[cfg(feature = "open-cv")]
 use opencv::Result;
@@ -100,6 +100,7 @@ impl AdderTranscoder {
                                     FramedU8,
                                     ui_state.time_mode,
                                     ui_state.integration_mode_radio_state,
+                                    Some(ui_state.delta_t_max_mult as usize),
                                     ui_state.encoder_type,
                                     ui_state.encoder_options,
                                     writer,
@@ -254,6 +255,9 @@ impl AdderTranscoder {
                                 .get_quality()
                                 .unwrap_or(DEFAULT_CRF_QUALITY),
                         );
+                        let adu_interval = (prophesee_source.get_video_ref().state.tps as f32
+                            / ui_state.delta_t_ref)
+                            as usize;
 
                         if let Some(output_string) = output_string {
                             let writer = BufWriter::new(File::create(output_string)?);
@@ -261,6 +265,7 @@ impl AdderTranscoder {
                                 Dvs,
                                 ui_state.time_mode,
                                 ui_state.integration_mode_radio_state,
+                                Some(adu_interval),
                                 ui_state.encoder_type,
                                 ui_state.encoder_options,
                                 writer,

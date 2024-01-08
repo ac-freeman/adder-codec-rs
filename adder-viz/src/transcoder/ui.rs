@@ -698,7 +698,6 @@ impl TranscoderState {
             let handle = images.add(self.transcoder.live_image.clone());
             handles.image_view = handle;
         }
-        dbg!(images.len());
 
         // Repeat for the input view
         if self.ui_state.show_original && source.get_input().is_some() {

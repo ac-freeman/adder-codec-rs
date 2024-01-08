@@ -112,7 +112,7 @@ impl<W: Write + 'static> Prophesee<W> {
             running_t: 0,
             dvs_last_timestamps,
             dvs_last_ln_val,
-            camera_theta: 0.15, // A fixed assumption
+            camera_theta: 0.05, // A fixed assumption
         };
 
         Ok(prophesee_source)
@@ -189,7 +189,7 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Prophesee<W> {
             // Get the last timestamp for this pixel
             let last_t = self.dvs_last_timestamps[[y, x, 0]];
 
-            if t <= last_t {
+            if t < last_t {
                 dbg!("skipping event");
                 continue;
             }
@@ -502,6 +502,7 @@ impl<W: Write + 'static> VideoBuilder<W> for Prophesee<W> {
         source_camera: SourceCamera,
         time_mode: TimeMode,
         pixel_multi_mode: PixelMultiMode,
+        adu_interval: Option<usize>,
         encoder_type: EncoderType,
         encoder_options: EncoderOptions,
         write: W,
@@ -510,6 +511,7 @@ impl<W: Write + 'static> VideoBuilder<W> for Prophesee<W> {
             Some(source_camera),
             Some(time_mode),
             Some(pixel_multi_mode),
+            adu_interval,
             encoder_type,
             encoder_options,
             write,
