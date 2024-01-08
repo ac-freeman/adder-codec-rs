@@ -84,6 +84,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             FramedU8,
             time_mode,
             integration_mode,
+            Some((args.delta_t_max / args.ref_time) as usize),
             EncoderType::Compressed,
             EncoderOptions::default(plane),
             BufWriter::new(file),
