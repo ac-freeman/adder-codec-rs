@@ -494,7 +494,32 @@ impl TranscoderState {
                             #[cfg(not(feature = "open-cv"))]
                             return;
                         }
-                        Some(source) => source,
+                        Some(source) => {
+                            if source.get_video_ref().get_ref_time()
+                                != self.ui_state.delta_t_ref as u32
+                                || ((source.get_video_ref().get_time_mode()
+                                    != self.ui_state.time_mode
+                                    || source.get_video_ref().encoder_type
+                                        != self.ui_state.encoder_type
+                                    || source.get_video_ref().get_encoder_options().event_drop
+                                        != self.ui_state.encoder_options.event_drop
+                                    || source.get_video_ref().get_encoder_options().event_order
+                                        != self.ui_state.encoder_options.event_order)
+                                    && self.ui_info_state.output_path.is_some())
+                            {
+                                images.clear();
+                                replace_adder_transcoder(
+                                    self,
+                                    self.ui_info_state.input_path_0.clone(),
+                                    self.ui_info_state.input_path_1.clone(),
+                                    self.ui_info_state.output_path.clone(),
+                                    0,
+                                );
+                                return;
+                            }
+
+                            source
+                        }
                     }
                 }
                 Some(source) => {
@@ -598,6 +623,11 @@ impl TranscoderState {
             self.ui_state.auto_quality_mirror = false;
         }
         let video = source.get_video_mut();
+
+        if video.state.params.pixel_multi_mode != self.ui_state.integration_mode_radio_state {
+            video.state.params.pixel_multi_mode = self.ui_state.integration_mode_radio_state;
+        }
+
         self.ui_info_state.event_size = video.get_event_size();
         self.ui_info_state.plane = video.state.plane;
 
