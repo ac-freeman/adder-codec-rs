@@ -208,8 +208,6 @@ impl PixelArena {
         ref_time: DeltaT,
         intensity: Intensity32,
     ) {
-        // let mut events = Vec::new();
-
         let mut local_buffer = Vec::with_capacity(self.length);
         for node_idx in 0..self.length {
             match self.arena[node_idx].best_event {
