@@ -38,6 +38,20 @@ Read the [wiki](https://github.com/ac-freeman/adder-codec-rs/wiki/) for backgrou
 
 If you write a paper which references this software, we ask that you reference the following papers on which it is based. Citations are given in the BibTeX format.
 
+[Accelerated Event-Based Feature Detection and Compression for Surveillance Video Systems](https://arxiv.org/abs/2312.08213)
+
+**Note:** The code associated with this paper was released in [version 0.4.1](https://github.com/ac-freeman/adder-codec-rs/releases/tag/v0.4.1)
+```bibtext
+@misc{freeman2023accelerated,
+      title={Accelerated Event-Based Feature Detection and Compression for Surveillance Video Systems}, 
+      author={Andrew C. Freeman and Ketan Mayer-Patel and Montek Singh},
+      year={2023},
+      eprint={2312.08213},
+      archivePrefix={arXiv},
+      primaryClass={cs.MM}
+}
+```
+
 [An Asynchronous Intensity Representation for Framed and Event Video Sources](https://arxiv.org/abs/2301.08783)
 
 **Note:** The code associated with this paper was released in [version 0.2.0](https://github.com/ac-freeman/adder-codec-rs/releases/tag/v0.2.0)
