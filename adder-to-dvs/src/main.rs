@@ -31,6 +31,10 @@ pub struct MyArgs {
     #[clap(long, default_value_t = 100.0)]
     pub fps: f32,
 
+    /// Size of the frame buffer in seconds
+    #[clap(long, default_value_t = 5.0)]
+    pub buffer_secs: f32,
+
     #[clap(short, long, action)]
     pub show_display: bool,
 }
@@ -149,7 +153,9 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             )?;
             handle.flush()?;
         }
-        if current_t > (frame_count as u128 * frame_length) + meta.delta_t_max as u128 * 4 {
+        if current_t
+            > (frame_count as u128 * frame_length) + (meta.tps as f32 * args.buffer_secs) as u128
+        {
             match instantaneous_frame_deque.pop_front() {
                 None => {}
                 Some(frame) => {
@@ -186,7 +192,10 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         d if d <= D_ZERO_INTEGRATION => {
                             pixels[[y, x, c]] = Some(DvsPixel {
                                 d: event.d,
-                                frame_intensity_ln: event_to_frame_intensity(&event, frame_length),
+                                frame_intensity_ln: event_to_frame_intensity(
+                                    &event,
+                                    meta.ref_interval as u128,
+                                ),
                                 t: event.t as u128,
                             });
                         }
@@ -201,7 +210,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         } else {
                             let tmp = px.t;
                             px.t = event.t as u128;
-                            event.t -= tmp as u32;
+                            event.t = event.t.saturating_sub(tmp as u32);
                         }
 
                         if is_framed(meta.source_camera) {
@@ -225,7 +234,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                                 let x = event.coord.x;
                                 let y = event.coord.y;
                                 let new_intensity_ln =
-                                    event_to_frame_intensity(&event, frame_length);
+                                    event_to_frame_intensity(&event, meta.ref_interval as u128);
                                 let c = 0.15;
                                 match (new_intensity_ln, px.frame_intensity_ln) {
                                     (a, b) if a >= b + c => {
@@ -290,6 +299,10 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
     text_writer.flush().expect("Could not flush");
     drop(text_writer);
+
+    if instantaneous_frame_deque.is_empty() {
+        instantaneous_frame_deque.push_back(create_blank_dvs_frame(&meta)?);
+    }
 
     let mut event_count_mat = instantaneous_frame_deque[0].clone();
     unsafe {
@@ -364,6 +377,7 @@ fn event_to_frame_intensity(event: &Event, frame_length: u128) -> f64 {
     if event.d == D_ZERO_INTEGRATION {
         return 0.0;
     }
+    let tmp = (D_SHIFT[event.d as usize] as f64 * frame_length as f64);
     match event.t {
         0 => ((D_SHIFT[event.d as usize] as f64 * frame_length as f64) / 255.0).ln_1p(),
         _ => (((D_SHIFT[event.d as usize] as f64 / event.t as f64) * frame_length as f64) / 255.0)
