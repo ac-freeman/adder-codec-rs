@@ -112,7 +112,7 @@ impl<W: Write + 'static> Prophesee<W> {
             running_t: 0,
             dvs_last_timestamps,
             dvs_last_ln_val,
-            camera_theta: 0.05, // A fixed assumption
+            camera_theta: 0.01, // A fixed assumption
         };
 
         Ok(prophesee_source)

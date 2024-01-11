@@ -32,11 +32,19 @@ pub struct MyArgs {
     pub fps: f32,
 
     /// Size of the frame buffer in seconds
-    #[clap(long, default_value_t = 5.0)]
+    #[clap(long, default_value_t = 10.0)]
     pub buffer_secs: f32,
+
+    /// DVS contrast threshold for inferring events
+    #[clap(long, default_value_t = 0.01)]
+    pub theta: f64,
 
     #[clap(short, long, action)]
     pub show_display: bool,
+
+    /// For the framed video, scale the playback speed by this factor (<1 is slower, >1 is faster)
+    #[clap(long, default_value_t = 1.0)]
+    pub playback_slowdown: f64,
 }
 
 struct DvsPixel {
@@ -168,7 +176,9 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                             write_frame_to_video(
                                 &frame,
                                 encoder,
-                                video_rs::Time::from_secs_f64(current_frame_time),
+                                video_rs::Time::from_secs_f64(
+                                    current_frame_time / args.playback_slowdown,
+                                ),
                             )?;
                             current_frame_time += frame_duration;
                         }
@@ -205,12 +215,12 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         }
                     },
                     Some(px) => {
+                        let old_t = px.t;
                         if meta.time_mode == TimeMode::DeltaT {
                             px.t += event.t as u128;
                         } else {
-                            let tmp = px.t;
                             px.t = event.t as u128;
-                            event.t = event.t.saturating_sub(tmp as u32);
+                            event.t = event.t.saturating_sub(old_t as u32);
                         }
 
                         if is_framed(meta.source_camera) {
@@ -223,7 +233,10 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         }
 
                         current_t = max(px.t, current_t);
-                        let frame_idx = (px.t / frame_length) as usize;
+
+                        // Base the frame idx on the START of the ADDER event, so we just have the
+                        // instantaneous moment that the intensity change happened
+                        let frame_idx = ((old_t + 1) / frame_length) as usize;
 
                         match event.d {
                             255 => {
@@ -235,9 +248,8 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                                 let y = event.coord.y;
                                 let new_intensity_ln =
                                     event_to_frame_intensity(&event, meta.ref_interval as u128);
-                                let c = 0.15;
                                 match (new_intensity_ln, px.frame_intensity_ln) {
-                                    (a, b) if a >= b + c => {
+                                    (a, b) if a >= b + args.theta => {
                                         // Fire a positive polarity event
                                         set_instant_dvs_pixel(
                                             event,
@@ -260,7 +272,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                                         debug_assert_eq!(amt, dvs_string.len());
                                         px.frame_intensity_ln = new_intensity_ln;
                                     }
-                                    (a, b) if a <= b - c => {
+                                    (a, b) if a <= b - args.theta => {
                                         // Fire a negative polarity event
                                         set_instant_dvs_pixel(
                                             event,
@@ -327,7 +339,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 write_frame_to_video(
                     &frame,
                     encoder,
-                    video_rs::Time::from_secs_f64(current_frame_time),
+                    video_rs::Time::from_secs_f64(current_frame_time / args.playback_slowdown),
                 )?;
                 current_frame_time += frame_duration;
             }
