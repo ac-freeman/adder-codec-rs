@@ -1,6 +1,6 @@
 <component name="ProjectRunConfigurationManager">
   <configuration default="false" name="ADDER to DVS" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
-    <option name="command" value="run --release -- --input &quot;$USER_HOME$/Downloads/spinner_compressed.adder&quot; --output-events &quot;$USER_HOME$/Downloads/adder_backto.dat&quot; --output-video &quot;$USER_HOME$/Downloads/adder_compressed.dvs.mp4&quot; --show-display --fps 1000.0 --playback-slowdown 0.01" />
+    <option name="command" value="run --release -- --input &quot;$USER_HOME$/Downloads/spinner_compressed.adder&quot; --output-events &quot;$USER_HOME$/Downloads/adder_backto.dat&quot; --output-video &quot;$USER_HOME$/Downloads/adder_compressed.dvs.mp4&quot; --show-display --fps 1000.0 --playback-slowdown 0.01 --reorder" />
     <option name="workingDirectory" value="file://$PROJECT_DIR$/adder-to-dvs" />
     <option name="emulateTerminal" value="false" />
     <option name="channel" value="DEFAULT" />

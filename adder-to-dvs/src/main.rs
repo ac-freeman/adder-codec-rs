@@ -3,6 +3,7 @@ use adder_codec_core::*;
 use chrono::{DateTime, Local};
 use clap::{Parser, ValueEnum};
 use ndarray::Array3;
+use serde::{Deserialize, Serialize};
 use std::cmp::max;
 use std::collections::VecDeque;
 use std::error::Error;
@@ -51,12 +52,29 @@ pub struct MyArgs {
     /// For the framed video, scale the playback speed by this factor (<1 is slower, >1 is faster)
     #[clap(long, default_value_t = 1.0)]
     pub playback_slowdown: f64,
+
+    #[clap(short, long, action)]
+    pub reorder: bool,
 }
 
 struct DvsPixel {
     d: u8,
     frame_intensity_ln: f64,
     t: u128,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub struct DvsEvent {
+    t: u32,
+    x: u16,
+    y: u16,
+    p: u8,
+}
+
+impl PartialOrd for DvsEvent {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.t.cmp(&other.t))
+    }
 }
 
 #[derive(Clone, ValueEnum, Debug, Default, Copy, PartialEq)]
@@ -97,6 +115,12 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let mut handle = io::BufWriter::new(stdout.lock());
 
     stream.set_input_stream_position(&mut bitreader, first_event_position)?;
+
+    let mut ordered_event_queue: Option<VecDeque<DvsEvent>> = if args.reorder {
+        Some(VecDeque::new())
+    } else {
+        None
+    };
 
     let mut video_writer: Option<Encoder> = match File::create(output_video_path) {
         Ok(_) => {
@@ -283,6 +307,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                                         y,
                                         px.t,
                                         &mut output_events_writer,
+                                        &mut ordered_event_queue,
                                         args.output_mode,
                                     )?;
                                     px.frame_intensity_ln = new_intensity_ln;
@@ -293,6 +318,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                                         y,
                                         px.t,
                                         &mut output_events_writer,
+                                        &mut ordered_event_queue,
                                         args.output_mode,
                                     )?;
                                     px.frame_intensity_ln = new_intensity_ln;
@@ -306,6 +332,12 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             Err(_e) => {
                 break;
             }
+        }
+    }
+
+    if let Some(queue) = &mut ordered_event_queue {
+        while let Some(event) = queue.pop_front() {
+            write_event_binary(&event, &mut output_events_writer)?;
         }
     }
 
@@ -413,6 +445,7 @@ fn fire_dvs_event(
     y: PixelAddress,
     t: u128,
     writer: &mut BufWriter<File>,
+    ordered_event_queue: &mut Option<VecDeque<DvsEvent>>,
     write_mode: WriteMode,
 ) -> io::Result<()> {
     match write_mode {
@@ -431,27 +464,56 @@ fn fire_dvs_event(
             debug_assert_eq!(amt, dvs_string.len());
         }
         WriteMode::Binary => {
-            // Write in the .dat spec according to https://docs.prophesee.ai/stable/data/file_formats/dat.html
-            let mut buffer = [0; 8];
+            let event = DvsEvent {
+                t: t as u32,
+                x: x as u16,
+                y: y as u16,
+                p: if polarity { 1 } else { 0 },
+            };
 
-            // t as u32 into the first four bytes of the buffer
-            buffer[0..4].copy_from_slice(&(t as u32).to_le_bytes());
-
-            let mut data: u32 = 0;
-
-            // polarity as the 4th bit
-            data |= (polarity as u32) << 28; // polarity ending at 4th bit from left
-
-            data |= (y as u32) << 14; // y ending at 18th bit from left
-
-            data |= x as u32; // x ending at 32nd bit from left
-
-            buffer[4..8].copy_from_slice(&data.to_le_bytes());
-
-            let amt = writer.write(&buffer).expect("Could not write");
-            debug_assert_eq!(amt, 8);
+            match ordered_event_queue {
+                None => {
+                    write_event_binary(&event, writer)?;
+                }
+                Some(queue) => {
+                    let index = queue
+                        .binary_search_by_key(&event.t, |item| item.t)
+                        .unwrap_or_else(|i| i);
+                    if index > 0 && index < queue.len() {
+                        debug_assert!(event.t <= queue[index].t);
+                        // dbg!(queue[index].t, event.t);
+                    }
+                    queue.insert(index, event);
+                    // queue.push_back(event);
+                }
+            }
         }
     }
+
+    Ok(())
+}
+
+fn write_event_binary(event: &DvsEvent, writer: &mut BufWriter<File>) -> io::Result<()> {
+    // Write in the .dat spec according to https://docs.prophesee.ai/stable/data/file_formats/dat.html
+
+    let mut buffer = [0; 8];
+
+    // t as u32 into the first four bytes of the buffer
+    buffer[0..4].copy_from_slice(&(event.t as u32).to_le_bytes());
+
+    let mut data: u32 = 0;
+
+    // polarity as the 4th bit
+    data |= (event.p as u32) << 28; // polarity ending at 4th bit from left
+
+    data |= (event.y as u32) << 14; // y ending at 18th bit from left
+
+    data |= event.x as u32; // x ending at 32nd bit from left
+
+    buffer[4..8].copy_from_slice(&data.to_le_bytes());
+
+    let amt = writer.write(&buffer).expect("Could not write");
+    debug_assert_eq!(amt, 8);
 
     Ok(())
 }

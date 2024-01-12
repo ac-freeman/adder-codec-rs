@@ -4,7 +4,7 @@ version = "0.2.6"
 edition = "2021"
 authors = ["Andrew C. Freeman"]
 description = """
-This program transcodes an ADΔER file to DVS events in a human-readable text representation.
+This program transcodes an ADΔER file to DVS events in a text or binary representation.
 Performance is fast. The resulting DVS stream is visualized during the transcode and written
 out as an mp4 file.
  """
