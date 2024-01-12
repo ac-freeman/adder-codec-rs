@@ -59,7 +59,7 @@ struct DvsPixel {
     t: u128,
 }
 
-#[derive(Clone, ValueEnum, Debug, Default, Copy)]
+#[derive(Clone, ValueEnum, Debug, Default, Copy, PartialEq)]
 enum WriteMode {
     Text,
 
