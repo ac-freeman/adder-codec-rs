@@ -1,11 +1,11 @@
 [package]
 name = "adder-to-dvs"
-version = "0.2.4"
+version = "0.2.7"
 edition = "2021"
 authors = ["Andrew C. Freeman"]
 description = """
-This program transcodes an ADΔER file to DVS events in a human-readable text representation.
-Performance is fast. The resulting DVS stream is visualized during the transcode and written
+This program transcodes an ADΔER file to DVS events in a text or binary representation.
+Performance is fast. The resulting DVS stream is written
 out as an mp4 file.
  """
 homepage = "https://github.com/ac-freeman/adder-codec-rs/wiki"
@@ -20,3 +20,5 @@ adder-codec-core = { version = "0.3.2", path = "../adder-codec-core" }
 clap = { version = "4.0.17", features = ["derive"] }
 ndarray = { version = "0.15.6", features = ["rayon", "serde"] }
 video-rs = { version = "0.5.0", features = ["ndarray"] }
+serde = { version = "1.0.190", features = ["derive"] }
+chrono = "0.4.31"

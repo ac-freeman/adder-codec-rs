@@ -1,7 +1,9 @@
 use adder_codec_core::codec::CodecMetadata;
 use adder_codec_core::*;
-use clap::Parser;
+use chrono::{DateTime, Local};
+use clap::{Parser, ValueEnum};
 use ndarray::Array3;
+use serde::{Deserialize, Serialize};
 use std::cmp::max;
 use std::collections::VecDeque;
 use std::error::Error;
@@ -9,6 +11,7 @@ use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::option::Option;
 use std::path::PathBuf;
+use std::time::Instant;
 use std::{error, io};
 use video_rs::{Encoder, EncoderSettings, Options, PixelFormat};
 
@@ -20,9 +23,13 @@ pub struct MyArgs {
     #[clap(short, long)]
     pub(crate) input: String,
 
-    /// Output DVS event text file path
+    /// Output DVS event file path
     #[clap(long)]
-    pub(crate) output_text: String,
+    pub(crate) output_events: String,
+
+    /// Format for output DVS events ('Binary' or 'Text')
+    #[clap(long, value_enum, default_value_t = WriteMode::Binary)]
+    pub(crate) output_mode: WriteMode,
 
     /// Output DVS event video file path
     #[clap(long)]
@@ -31,14 +38,51 @@ pub struct MyArgs {
     #[clap(long, default_value_t = 100.0)]
     pub fps: f32,
 
+    /// Size of the frame buffer in seconds
+    #[clap(long, default_value_t = 10.0)]
+    pub buffer_secs: f32,
+
+    /// DVS contrast threshold for inferring events
+    #[clap(long, default_value_t = 0.01)]
+    pub theta: f64,
+
     #[clap(short, long, action)]
     pub show_display: bool,
+
+    /// For the framed video, scale the playback speed by this factor (<1 is slower, >1 is faster)
+    #[clap(long, default_value_t = 1.0)]
+    pub playback_slowdown: f64,
+
+    #[clap(short, long, action)]
+    pub reorder: bool,
 }
 
 struct DvsPixel {
     d: u8,
     frame_intensity_ln: f64,
     t: u128,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub struct DvsEvent {
+    t: u32,
+    x: u16,
+    y: u16,
+    p: u8,
+}
+
+impl PartialOrd for DvsEvent {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.t.cmp(&other.t))
+    }
+}
+
+#[derive(Clone, ValueEnum, Debug, Default, Copy, PartialEq)]
+enum WriteMode {
+    Text,
+
+    #[default]
+    Binary,
 }
 
 ///
@@ -52,7 +96,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     dbg!(args.clone());
     let file_path = args.input.as_str();
 
-    let output_text_path = args.output_text.as_str();
+    let output_events_path = args.output_events.as_str();
     let output_video_path = args.output_video.as_str();
 
     let (mut stream, mut bitreader) = open_file_decoder(file_path)?;
@@ -71,6 +115,12 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let mut handle = io::BufWriter::new(stdout.lock());
 
     stream.set_input_stream_position(&mut bitreader, first_event_position)?;
+
+    let mut ordered_event_queue: Option<VecDeque<DvsEvent>> = if args.reorder {
+        Some(VecDeque::new())
+    } else {
+        None
+    };
 
     let mut video_writer: Option<Encoder> = match File::create(output_video_path) {
         Ok(_) => {
@@ -91,14 +141,28 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         }
         Err(_) => None,
     };
-    let mut text_writer: BufWriter<File> = BufWriter::new(File::create(output_text_path)?);
+    let mut output_events_writer: BufWriter<File> =
+        BufWriter::new(File::create(output_events_path)?);
     {
-        // Write the width and height as first line header
-        let dims_str = meta.plane.w().to_string() + " " + &*meta.plane.h().to_string() + "\n";
-        let amt = text_writer
-            .write(dims_str.as_ref())
-            .expect("Could not write");
-        debug_assert_eq!(amt, dims_str.len());
+        // Write the width and height as first lines of header
+        // let dims_str = "Width " + meta.plane.w().to_string() + "\n";
+        // let amt = output_events_writer
+        //     .write(dims_str.as_ref())
+        //     .expect("Could not write");
+
+        write!(output_events_writer, "% Height {}\n", meta.plane.h())?;
+        write!(output_events_writer, "% Width {}\n", meta.plane.w())?;
+        write!(output_events_writer, "% Version 2\n")?;
+        // Write the date and time
+        let now = Local::now();
+        let date_time_str = now.format("%Y-%m-%d %H:%M:%S").to_string();
+        write!(output_events_writer, "% Date {}\n", date_time_str)?;
+        write!(output_events_writer, "% end\n")?;
+
+        if args.output_mode == WriteMode::Binary {
+            let event_type_size: [u8; 2] = [0, 8];
+            output_events_writer.write(&event_type_size)?;
+        }
     }
 
     let mut event_count: u64 = 0;
@@ -149,7 +213,9 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             )?;
             handle.flush()?;
         }
-        if current_t > (frame_count as u128 * frame_length) + meta.delta_t_max as u128 * 4 {
+        if current_t
+            > (frame_count as u128 * frame_length) + (meta.tps as f32 * args.buffer_secs) as u128
+        {
             match instantaneous_frame_deque.pop_front() {
                 None => {}
                 Some(frame) => {
@@ -162,7 +228,9 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                             write_frame_to_video(
                                 &frame,
                                 encoder,
-                                video_rs::Time::from_secs_f64(current_frame_time),
+                                video_rs::Time::from_secs_f64(
+                                    current_frame_time / args.playback_slowdown,
+                                ),
                             )?;
                             current_frame_time += frame_duration;
                         }
@@ -186,7 +254,10 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         d if d <= D_ZERO_INTEGRATION => {
                             pixels[[y, x, c]] = Some(DvsPixel {
                                 d: event.d,
-                                frame_intensity_ln: event_to_frame_intensity(&event, frame_length),
+                                frame_intensity_ln: event_to_frame_intensity(
+                                    &event,
+                                    meta.ref_interval as u128,
+                                ),
                                 t: event.t as u128,
                             });
                         }
@@ -196,25 +267,27 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         }
                     },
                     Some(px) => {
+                        let old_t = px.t;
                         if meta.time_mode == TimeMode::DeltaT {
                             px.t += event.t as u128;
                         } else {
-                            let tmp = px.t;
                             px.t = event.t as u128;
-                            event.t -= tmp as u32;
+                            event.t = event.t.saturating_sub(old_t as u32);
                         }
 
                         if is_framed(meta.source_camera) {
                             px.t = if px.t % meta.ref_interval as u128 == 0 {
                                 px.t
                             } else {
-                                (((px.t / meta.ref_interval as u128) + 1)
-                                    * meta.ref_interval as u128)
+                                ((px.t / meta.ref_interval as u128) + 1) * meta.ref_interval as u128
                             };
                         }
 
                         current_t = max(px.t, current_t);
-                        let frame_idx = (px.t / frame_length) as usize;
+
+                        // Base the frame idx on the START of the ADDER event, so we just have the
+                        // instantaneous moment that the intensity change happened
+                        let frame_idx = ((old_t + 1) / frame_length) as usize;
 
                         match event.d {
                             255 => {
@@ -225,56 +298,30 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                                 let x = event.coord.x;
                                 let y = event.coord.y;
                                 let new_intensity_ln =
-                                    event_to_frame_intensity(&event, frame_length);
-                                let c = 0.15;
-                                match (new_intensity_ln, px.frame_intensity_ln) {
-                                    (a, b) if a >= b + c => {
-                                        // Fire a positive polarity event
-                                        set_instant_dvs_pixel(
-                                            event,
-                                            &meta,
-                                            &mut instantaneous_frame_deque,
-                                            frame_idx,
-                                            frame_count,
-                                            255,
-                                        )?;
-                                        let dvs_string = px.t.to_string()
-                                            + " "
-                                            + x.to_string().as_str()
-                                            + " "
-                                            + y.to_string().as_str()
-                                            + " "
-                                            + "1\n";
-                                        let amt = text_writer
-                                            .write(dvs_string.as_ref())
-                                            .expect("Could not write");
-                                        debug_assert_eq!(amt, dvs_string.len());
-                                        px.frame_intensity_ln = new_intensity_ln;
-                                    }
-                                    (a, b) if a <= b - c => {
-                                        // Fire a negative polarity event
-                                        set_instant_dvs_pixel(
-                                            event,
-                                            &meta,
-                                            &mut instantaneous_frame_deque,
-                                            frame_idx,
-                                            frame_count,
-                                            0,
-                                        )?;
-                                        let dvs_string = px.t.to_string()
-                                            + " "
-                                            + x.to_string().as_str()
-                                            + " "
-                                            + y.to_string().as_str()
-                                            + " "
-                                            + "-1\n";
-                                        let amt = text_writer
-                                            .write(dvs_string.as_ref())
-                                            .expect("Could not write");
-                                        debug_assert_eq!(amt, dvs_string.len());
-                                        px.frame_intensity_ln = new_intensity_ln;
-                                    }
-                                    (_, _) => {}
+                                    event_to_frame_intensity(&event, meta.ref_interval as u128);
+
+                                if new_intensity_ln >= px.frame_intensity_ln + args.theta {
+                                    fire_dvs_event(
+                                        true,
+                                        x,
+                                        y,
+                                        px.t,
+                                        &mut output_events_writer,
+                                        &mut ordered_event_queue,
+                                        args.output_mode,
+                                    )?;
+                                    px.frame_intensity_ln = new_intensity_ln;
+                                } else if new_intensity_ln <= px.frame_intensity_ln - args.theta {
+                                    fire_dvs_event(
+                                        false,
+                                        x,
+                                        y,
+                                        px.t,
+                                        &mut output_events_writer,
+                                        &mut ordered_event_queue,
+                                        args.output_mode,
+                                    )?;
+                                    px.frame_intensity_ln = new_intensity_ln;
                                 }
                             }
                         }
@@ -288,18 +335,25 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         }
     }
 
-    text_writer.flush().expect("Could not flush");
-    drop(text_writer);
+    if let Some(queue) = &mut ordered_event_queue {
+        while let Some(event) = queue.pop_front() {
+            write_event_binary(&event, &mut output_events_writer)?;
+        }
+    }
+
+    output_events_writer.flush().expect("Could not flush");
+    drop(output_events_writer);
+
+    if instantaneous_frame_deque.is_empty() {
+        instantaneous_frame_deque.push_back(create_blank_dvs_frame(&meta)?);
+    }
 
     let mut event_count_mat = instantaneous_frame_deque[0].clone();
-    unsafe {
-        for y in 0..meta.plane.h_usize() {
-            for x in 0..meta.plane.w_usize() {
-                for c in 0..meta.plane.c_usize() {
-                    event_count_mat[[y, x, c]] = ((event_counts[[y, x, c]] as f32
-                        / max_px_event_count as f32)
-                        * 255.0) as u8;
-                }
+    for y in 0..meta.plane.h_usize() {
+        for x in 0..meta.plane.w_usize() {
+            for c in 0..meta.plane.c_usize() {
+                event_count_mat[[y, x, c]] =
+                    ((event_counts[[y, x, c]] as f32 / max_px_event_count as f32) * 255.0) as u8;
             }
         }
     }
@@ -314,7 +368,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 write_frame_to_video(
                     &frame,
                     encoder,
-                    video_rs::Time::from_secs_f64(current_frame_time),
+                    video_rs::Time::from_secs_f64(current_frame_time / args.playback_slowdown),
                 )?;
                 current_frame_time += frame_duration;
             }
@@ -347,15 +401,13 @@ fn set_instant_dvs_pixel(
         frames.push_back(create_blank_dvs_frame(&meta)?);
     }
 
-    unsafe {
-        if frame_idx >= frame_count {
-            frames[frame_idx - frame_count][[event.coord.y.into(), event.coord.x.into(), 0]] =
-                value as u8;
-            frames[frame_idx - frame_count][[event.coord.y.into(), event.coord.x.into(), 1]] =
-                value as u8;
-            frames[frame_idx - frame_count][[event.coord.y.into(), event.coord.x.into(), 2]] =
-                value as u8;
-        }
+    if frame_idx >= frame_count {
+        frames[frame_idx - frame_count][[event.coord.y.into(), event.coord.x.into(), 0]] =
+            value as u8;
+        frames[frame_idx - frame_count][[event.coord.y.into(), event.coord.x.into(), 1]] =
+            value as u8;
+        frames[frame_idx - frame_count][[event.coord.y.into(), event.coord.x.into(), 2]] =
+            value as u8;
     }
     Ok(())
 }
@@ -385,4 +437,83 @@ pub fn write_frame_to_video(
     timestamp: video_rs::Time,
 ) -> Result<(), Box<dyn Error>> {
     encoder.encode(&frame, &timestamp).map_err(|e| e.into())
+}
+
+fn fire_dvs_event(
+    polarity: bool,
+    x: PixelAddress,
+    y: PixelAddress,
+    t: u128,
+    writer: &mut BufWriter<File>,
+    ordered_event_queue: &mut Option<VecDeque<DvsEvent>>,
+    write_mode: WriteMode,
+) -> io::Result<()> {
+    match write_mode {
+        WriteMode::Text => {
+            let polarity_string = if polarity { "1" } else { "0" };
+
+            let dvs_string = t.to_string()
+                + " "
+                + x.to_string().as_str()
+                + " "
+                + y.to_string().as_str()
+                + " "
+                + polarity_string
+                + "\n";
+            let amt = writer.write(dvs_string.as_ref()).expect("Could not write");
+            debug_assert_eq!(amt, dvs_string.len());
+        }
+        WriteMode::Binary => {
+            let event = DvsEvent {
+                t: t as u32,
+                x: x as u16,
+                y: y as u16,
+                p: if polarity { 1 } else { 0 },
+            };
+
+            match ordered_event_queue {
+                None => {
+                    write_event_binary(&event, writer)?;
+                }
+                Some(queue) => {
+                    let index = queue
+                        .binary_search_by_key(&event.t, |item| item.t)
+                        .unwrap_or_else(|i| i);
+                    if index > 0 && index < queue.len() {
+                        debug_assert!(event.t <= queue[index].t);
+                        // dbg!(queue[index].t, event.t);
+                    }
+                    queue.insert(index, event);
+                    // queue.push_back(event);
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn write_event_binary(event: &DvsEvent, writer: &mut BufWriter<File>) -> io::Result<()> {
+    // Write in the .dat spec according to https://docs.prophesee.ai/stable/data/file_formats/dat.html
+
+    let mut buffer = [0; 8];
+
+    // t as u32 into the first four bytes of the buffer
+    buffer[0..4].copy_from_slice(&(event.t as u32).to_le_bytes());
+
+    let mut data: u32 = 0;
+
+    // polarity as the 4th bit
+    data |= (event.p as u32) << 28; // polarity ending at 4th bit from left
+
+    data |= (event.y as u32) << 14; // y ending at 18th bit from left
+
+    data |= event.x as u32; // x ending at 32nd bit from left
+
+    buffer[4..8].copy_from_slice(&data.to_le_bytes());
+
+    let amt = writer.write(&buffer).expect("Could not write");
+    debug_assert_eq!(amt, 8);
+
+    Ok(())
 }

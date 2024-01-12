@@ -12,7 +12,7 @@ use adder_codec_core::{
 };
 use ndarray::Array3;
 use rayon::ThreadPool;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::fs::File;
 use std::io::{self, BufRead, BufReader, Read, Seek, SeekFrom, Write};
@@ -48,8 +48,8 @@ pub struct Prophesee<W: Write> {
     camera_theta: f64,
 }
 
-#[derive(Debug, Deserialize, Clone)]
-struct DvsEvent {
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct DvsEvent {
     t: u32,
     x: u16,
     y: u16,
@@ -112,7 +112,7 @@ impl<W: Write + 'static> Prophesee<W> {
             running_t: 0,
             dvs_last_timestamps,
             dvs_last_ln_val,
-            camera_theta: 0.05, // A fixed assumption
+            camera_theta: 0.01, // A fixed assumption
         };
 
         Ok(prophesee_source)
@@ -440,9 +440,9 @@ fn decode_event(reader: &mut BufReader<File>) -> io::Result<(DvsEvent)> {
     let data = i32::from_le_bytes([buffer[4], buffer[5], buffer[6], buffer[7]]);
 
     // Perform bitwise operations
-    let x = (data & 16383) as u16;
-    let y = ((data & 268419072) >> 14) as u16;
-    let p = ((data & 268435456) >> 28) as u8;
+    let x = (data & 0x3FF) as u16; // All but last 14 bits
+    let y = ((data & 0xFFFC000) >> 14) as u16; // All but second-to-last grouping of 14 bits
+    let p = ((data & 0x10000000) >> 28) as u8; // Just the 4th bit
 
     Ok(DvsEvent { t, x, y, p })
 }
