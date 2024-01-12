@@ -20,3 +20,5 @@ adder-codec-core = { version = "0.3.2", path = "../adder-codec-core" }
 clap = { version = "4.0.17", features = ["derive"] }
 ndarray = { version = "0.15.6", features = ["rayon", "serde"] }
 video-rs = { version = "0.5.0", features = ["ndarray"] }
+serde = { version = "1.0.190", features = ["derive"] }
+chrono = "0.4.31"

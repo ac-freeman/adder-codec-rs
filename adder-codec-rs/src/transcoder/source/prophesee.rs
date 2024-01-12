@@ -440,9 +440,9 @@ fn decode_event(reader: &mut BufReader<File>) -> io::Result<(DvsEvent)> {
     let data = i32::from_le_bytes([buffer[4], buffer[5], buffer[6], buffer[7]]);
 
     // Perform bitwise operations
-    let x = (data & 16383) as u16;
-    let y = ((data & 268419072) >> 14) as u16;
-    let p = ((data & 268435456) >> 28) as u8;
+    let x = (data & 0x3FF) as u16; // All but last 14 bits
+    let y = ((data & 0xFFFC000) >> 14) as u16; // All but second-to-last grouping of 14 bits
+    let p = ((data & 0x10000000) >> 28) as u8; // Just the 4th bit
 
     Ok(DvsEvent { t, x, y, p })
 }

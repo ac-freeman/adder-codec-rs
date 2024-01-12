@@ -1,5 +1,6 @@
 use adder_codec_core::codec::CodecMetadata;
 use adder_codec_core::*;
+use chrono::{DateTime, Local};
 use clap::{Parser, ValueEnum};
 use ndarray::Array3;
 use std::cmp::max;
@@ -9,6 +10,7 @@ use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::option::Option;
 use std::path::PathBuf;
+use std::time::Instant;
 use std::{error, io};
 use video_rs::{Encoder, EncoderSettings, Options, PixelFormat};
 
@@ -24,8 +26,8 @@ pub struct MyArgs {
     #[clap(long)]
     pub(crate) output_events: String,
 
-    /// Format for output DVS events ('dat' or 'txt'/'text')
-    #[clap(long, value_enum)]
+    /// Format for output DVS events ('Binary' or 'Text')
+    #[clap(long, value_enum, default_value_t = WriteMode::Binary)]
     pub(crate) output_mode: WriteMode,
 
     /// Output DVS event video file path
@@ -118,12 +120,23 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let mut output_events_writer: BufWriter<File> =
         BufWriter::new(File::create(output_events_path)?);
     {
-        // Write the width and height as first line header
-        let dims_str = meta.plane.w().to_string() + " " + &*meta.plane.h().to_string() + "\n";
-        let amt = output_events_writer
-            .write(dims_str.as_ref())
-            .expect("Could not write");
-        debug_assert_eq!(amt, dims_str.len());
+        // Write the width and height as first lines of header
+        // let dims_str = "Width " + meta.plane.w().to_string() + "\n";
+        // let amt = output_events_writer
+        //     .write(dims_str.as_ref())
+        //     .expect("Could not write");
+
+        write!(output_events_writer, "% Height {}\n", meta.plane.h())?;
+        write!(output_events_writer, "% Width {}\n", meta.plane.w())?;
+        write!(output_events_writer, "% Version 2\n")?;
+        // Write the date and time
+        let now = Local::now();
+        let date_time_str = now.format("%Y-%m-%d %H:%M:%S").to_string();
+        write!(output_events_writer, "% Date {}\n", date_time_str)?;
+        write!(output_events_writer, "% end\n")?;
+
+        let event_type_size: [u8; 2] = [0, 8];
+        output_events_writer.write(&event_type_size)?;
     }
 
     let mut event_count: u64 = 0;
@@ -415,7 +428,27 @@ fn fire_dvs_event(
             let amt = writer.write(dvs_string.as_ref()).expect("Could not write");
             debug_assert_eq!(amt, dvs_string.len());
         }
-        WriteMode::Binary => {}
+        WriteMode::Binary => {
+            // Write in the .dat spec according to https://docs.prophesee.ai/stable/data/file_formats/dat.html
+            let mut buffer = [0; 8];
+
+            // t as u32 into the first four bytes of the buffer
+            buffer[0..4].copy_from_slice(&(t as u32).to_le_bytes());
+
+            let mut data: u32 = 0;
+
+            // polarity as the 4th bit
+            data |= (polarity as u32) << 28; // polarity ending at 4th bit from left
+
+            data |= (y as u32) << 14; // y ending at 18th bit from left
+
+            data |= x as u32; // x ending at 32nd bit from left
+
+            buffer[4..8].copy_from_slice(&data.to_le_bytes());
+
+            let amt = writer.write(&buffer).expect("Could not write");
+            debug_assert_eq!(amt, 8);
+        }
     }
 
     Ok(())
