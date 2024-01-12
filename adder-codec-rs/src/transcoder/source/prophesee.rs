@@ -12,7 +12,7 @@ use adder_codec_core::{
 };
 use ndarray::Array3;
 use rayon::ThreadPool;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::fs::File;
 use std::io::{self, BufRead, BufReader, Read, Seek, SeekFrom, Write};
@@ -48,8 +48,8 @@ pub struct Prophesee<W: Write> {
     camera_theta: f64,
 }
 
-#[derive(Debug, Deserialize, Clone)]
-struct DvsEvent {
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct DvsEvent {
     t: u32,
     x: u16,
     y: u16,
