@@ -135,8 +135,10 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         write!(output_events_writer, "% Date {}\n", date_time_str)?;
         write!(output_events_writer, "% end\n")?;
 
-        let event_type_size: [u8; 2] = [0, 8];
-        output_events_writer.write(&event_type_size)?;
+        if args.output_mode == WriteMode::Binary {
+            let event_type_size: [u8; 2] = [0, 8];
+            output_events_writer.write(&event_type_size)?;
+        }
     }
 
     let mut event_count: u64 = 0;
