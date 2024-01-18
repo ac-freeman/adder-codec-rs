@@ -19,7 +19,7 @@ exclude = [
 default-run = "adder_simulproc"
 
 [features]
-default = ["transcoder"]
+default = ["compression"]
 transcoder = ["dep:fast-math", "adder-codec-core"]
 compression = ["dep:fast-math", "adder-codec-core/compression"]
 open-cv = ["opencv", "davis-edi-rs"]

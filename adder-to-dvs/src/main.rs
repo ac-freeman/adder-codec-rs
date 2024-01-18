@@ -32,7 +32,7 @@ pub struct MyArgs {
     pub(crate) output_mode: WriteMode,
 
     /// Output DVS event video file path
-    #[clap(long)]
+    #[clap(long, default_value = "")]
     pub(crate) output_video: String,
 
     #[clap(long, default_value_t = 100.0)]
