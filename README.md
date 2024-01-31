@@ -38,9 +38,24 @@ Read the [wiki](https://github.com/ac-freeman/adder-codec-rs/wiki/) for backgrou
 
 If you write a paper which references this software, we ask that you reference the following papers on which it is based. Citations are given in the BibTeX format.
 
+[An Open Software Suite for Event-Based Video](https://arxiv.org/abs/2401.17151)
+
+**Note:** The code associated with this paper was released in [version 0.4.3](https://github.com/ac-freeman/adder-codec-rs/releases/tag/v0.4.3).
+
+```bibtext
+@misc{freeman2024open,
+      title={An Open Software Suite for Event-Based Video}, 
+      author={Andrew C. Freeman},
+      year={2024},
+      eprint={2401.17151},
+      archivePrefix={arXiv},
+      primaryClass={cs.MM}
+}
+```
+
 [Accelerated Event-Based Feature Detection and Compression for Surveillance Video Systems](https://arxiv.org/abs/2312.08213)
 
-**Note:** The code associated with this paper was released in [version 0.4.1](https://github.com/ac-freeman/adder-codec-rs/releases/tag/v0.4.1)
+**Note:** The code associated with this paper was released in [version 0.4.1](https://github.com/ac-freeman/adder-codec-rs/releases/tag/v0.4.1). This paper has been accepted for publication at MMSys '24.
 ```bibtext
 @misc{freeman2023accelerated,
       title={Accelerated Event-Based Feature Detection and Compression for Surveillance Video Systems}, 
