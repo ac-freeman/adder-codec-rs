@@ -3,7 +3,7 @@ use crate::transcoder::source::video::FramedViewMode::SAE;
 use crate::transcoder::source::video::{
     integrate_for_px, Source, SourceError, Video, VideoBuilder,
 };
-use crate::utils::cv::clamp_u8;
+use crate::utils::cv::{clamp_u8, mid_clamp_u8};
 use crate::utils::viz::ShowFeatureMode;
 use adder_codec_core::codec::{EncoderOptions, EncoderType};
 use adder_codec_core::Mode::Continuous;
@@ -199,7 +199,7 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Prophesee<W> {
             // Convert the ln intensity to a linear intensity
             let mut last_val = (last_ln_val.exp() - 1.0) * 255.0;
 
-            clamp_u8(&mut last_val, &mut last_ln_val);
+            mid_clamp_u8(&mut last_val, &mut last_ln_val);
 
             let px = &mut self.video.event_pixel_trees[[y, x, 0]];
 
@@ -230,7 +230,7 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Prophesee<W> {
 
             let mut new_val = (new_ln_val.exp() - 1.0) * 255.0;
 
-            clamp_u8(&mut new_val, &mut new_ln_val);
+            mid_clamp_u8(&mut new_val, &mut new_ln_val);
 
             // Update the last intensity for this pixel
             self.dvs_last_ln_val[[y, x, 0]] = new_ln_val;
