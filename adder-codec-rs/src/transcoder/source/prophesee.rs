@@ -164,6 +164,7 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Prophesee<W> {
                     dvs_event
                 }
                 Err(e) => {
+                    dbg!("End of input file");
                     end_events(self);
                     return Err(e.into());
                 }

@@ -72,7 +72,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             Ok(_) => {}
             Err(SourceError::Open) => return Ok(()),
             Err(e) => {
-                eprintln!("Error: {:?}", e);
+                eprintln!("Consume Error: {:?}", e);
                 prophesee_source.get_video_mut().end_write_stream()?;
                 return Ok(());
             }

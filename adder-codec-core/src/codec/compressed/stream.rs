@@ -73,6 +73,30 @@ impl<W: Write> WriteCompression<W> for CompressedOutput<W> {
     }
 
     fn into_writer(&mut self) -> Option<W> {
+        if !self.adu.skip_adu {
+            if let Some(stream) = &mut self.stream {
+                dbg!("compressing partial last adu");
+                let mut temp_stream = BitWriter::endian(Vec::new(), BigEndian);
+
+                let parameters = self.options.crf.get_parameters();
+
+                // Compress the Adu. This also writes the EOF symbol and flushes the encoder
+                self.adu
+                    .compress(&mut temp_stream, parameters.c_thresh_max)
+                    .ok()?;
+
+                let written_data = temp_stream.into_writer();
+
+                // Write the number of bytes in the compressed Adu as the 32-bit header for this Adu
+                stream
+                    .write_bytes(&(written_data.len() as u32).to_be_bytes())
+                    .ok()?;
+
+                // Write the temporary stream to the actual stream
+                stream.write_bytes(&written_data).ok()?;
+            }
+        }
+
         let tmp = self.stream.take();
 
         tmp.map(|bitwriter| bitwriter.into_writer())
