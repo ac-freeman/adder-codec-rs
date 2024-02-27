@@ -396,7 +396,7 @@ impl ComponentCompression for EventCube {
                                     + ((t_residual as i64) << bitshift_amt as i64))
                                     as AbsoluteT;
                             }
-                            debug_assert!(event.t < 2_u32.pow(29));
+                            debug_assert!(event.t < 2_u32.pow(31));
 
                             *init = *event;
                         } else {

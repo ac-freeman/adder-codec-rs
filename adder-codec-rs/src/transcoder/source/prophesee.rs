@@ -112,7 +112,7 @@ impl<W: Write + 'static> Prophesee<W> {
             running_t: 0,
             dvs_last_timestamps,
             dvs_last_ln_val,
-            camera_theta: 0.01, // A fixed assumption
+            camera_theta: 0.02, // A fixed assumption
         };
 
         Ok(prophesee_source)
@@ -189,22 +189,26 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Prophesee<W> {
             // Get the last timestamp for this pixel
             let last_t = self.dvs_last_timestamps[[y, x, 0]];
 
+            // if t == last_t {
+            //     dbg!("same");
+            // }
+
             if t < last_t {
-                // dbg!("skipping event");
+                dbg!("skipping event");
                 continue;
             }
 
             // Get the last ln intensity for this pixel
             let mut last_ln_val = self.dvs_last_ln_val[[y, x, 0]];
 
-            // Convert the ln intensity to a linear intensity
-            let mut last_val = (last_ln_val.exp() - 1.0) * 255.0;
-
-            mid_clamp_u8(&mut last_val, &mut last_ln_val);
-
             let px = &mut self.video.event_pixel_trees[[y, x, 0]];
 
             if t > last_t + 1 {
+                // Convert the ln intensity to a linear intensity
+                let mut last_val = (last_ln_val.exp() - 1.0) * 255.0;
+
+                mid_clamp_u8(&mut last_val, &mut last_ln_val);
+
                 // Integrate the last intensity for this pixel over the time since the last event
                 let time_spanned = ((t - last_t - 1) * self.video.state.params.ref_time);
                 let intensity_to_integrate = last_val * (t - last_t - 1) as f64;
@@ -229,10 +233,6 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Prophesee<W> {
                 _ => panic!("Invalid polarity"),
             };
 
-            let mut new_val = (new_ln_val.exp() - 1.0) * 255.0;
-
-            mid_clamp_u8(&mut new_val, &mut new_ln_val);
-
             // Update the last intensity for this pixel
             self.dvs_last_ln_val[[y, x, 0]] = new_ln_val;
 
@@ -240,6 +240,13 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Prophesee<W> {
             self.dvs_last_timestamps[[y, x, 0]] = t;
 
             if t > last_t {
+                let mut new_val = (new_ln_val.exp() - 1.0) * 255.0;
+
+                mid_clamp_u8(&mut new_val, &mut new_ln_val);
+
+                // Update the last intensity for this pixel
+                self.dvs_last_ln_val[[y, x, 0]] = new_ln_val;
+
                 // Integrate 1 source time unit of the new intensity
                 let time_spanned = self.video.state.params.ref_time;
                 let intensity_to_integrate = new_val;

@@ -300,7 +300,11 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                                 let new_intensity_ln =
                                     event_to_frame_intensity(&event, meta.ref_interval as u128);
 
-                                if new_intensity_ln >= px.frame_intensity_ln + args.theta {
+                                if new_intensity_ln > 0.405
+                                    && new_intensity_ln < 0.406
+                                    && ((px.frame_intensity_ln > 1.0_f64.ln_1p() - args.theta)
+                                        || (px.t == old_t && px.frame_intensity_ln > 0.6))
+                                {
                                     fire_dvs_event(
                                         true,
                                         x,
@@ -311,7 +315,26 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                                         args.output_mode,
                                     )?;
                                     px.frame_intensity_ln = new_intensity_ln;
-                                } else if new_intensity_ln <= px.frame_intensity_ln - args.theta {
+                                } else if new_intensity_ln >= px.frame_intensity_ln + args.theta {
+                                    let mult =
+                                        (new_intensity_ln - px.frame_intensity_ln) / args.theta;
+                                    for i in 0..mult as u32 {
+                                        fire_dvs_event(
+                                            true,
+                                            x,
+                                            y,
+                                            px.t,
+                                            &mut output_events_writer,
+                                            &mut ordered_event_queue,
+                                            args.output_mode,
+                                        )?;
+                                    }
+                                    px.frame_intensity_ln = new_intensity_ln;
+                                } else if new_intensity_ln > 0.405
+                                    && new_intensity_ln < 0.406
+                                    && ((px.frame_intensity_ln < 0.0_f64.ln_1p() + args.theta)
+                                        || (px.t == old_t && px.frame_intensity_ln < 0.3))
+                                {
                                     fire_dvs_event(
                                         false,
                                         x,
@@ -321,6 +344,21 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                                         &mut ordered_event_queue,
                                         args.output_mode,
                                     )?;
+                                    px.frame_intensity_ln = new_intensity_ln;
+                                } else if new_intensity_ln <= px.frame_intensity_ln - args.theta {
+                                    let mult =
+                                        (px.frame_intensity_ln - new_intensity_ln) / args.theta;
+                                    for i in 0..mult as u32 {
+                                        fire_dvs_event(
+                                            false,
+                                            x,
+                                            y,
+                                            px.t,
+                                            &mut output_events_writer,
+                                            &mut ordered_event_queue,
+                                            args.output_mode,
+                                        )?;
+                                    }
                                     px.frame_intensity_ln = new_intensity_ln;
                                 }
                             }
@@ -426,7 +464,7 @@ fn event_to_frame_intensity(event: &Event, frame_length: u128) -> f64 {
 fn create_blank_dvs_frame(meta: &CodecMetadata) -> Result<Array3<u8>, Box<dyn Error>> {
     let instantaneous_frame: Array3<u8> = Array3::from_shape_vec(
         (meta.plane.h_usize(), meta.plane.w_usize(), 3),
-        vec![128_u8; meta.plane.h_usize() * meta.plane.w_usize() * 3],
+        vec![127_u8; meta.plane.h_usize() * meta.plane.w_usize() * 3],
     )?;
     Ok(instantaneous_frame)
 }
@@ -465,7 +503,7 @@ fn fire_dvs_event(
         }
         WriteMode::Binary => {
             let event = DvsEvent {
-                t: t as u32,
+                t: (t) as u32,
                 x: x as u16,
                 y: y as u16,
                 p: if polarity { 1 } else { 0 },

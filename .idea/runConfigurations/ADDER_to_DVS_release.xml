@@ -1,15 +1,15 @@
 <component name="ProjectRunConfigurationManager">
   <configuration default="false" name="ADDER to DVS release" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
-    <option name="command" value="run --bin adder_to_dvs --release -- --input &quot;$USER_HOME$/Downloads/davis.adder&quot; --output-text &quot;$USER_HOME$/Downloads/adder.dvs.txt&quot; --output-video &quot;$USER_HOME$/Downloads/adder.dvs.mp4&quot; " />
+    <option name="command" value="run -p adder-to-dvs --release -- --input &quot;$USER_HOME$/Downloads/tmp_proph.adder&quot; --output-events &quot;$USER_HOME$/Downloads/adder.dat&quot; --theta 0.02" />
     <option name="workingDirectory" value="file://$PROJECT_DIR$" />
+    <envs />
+    <option name="emulateTerminal" value="false" />
     <option name="channel" value="DEFAULT" />
     <option name="requiredFeatures" value="true" />
     <option name="allFeatures" value="false" />
-    <option name="emulateTerminal" value="false" />
     <option name="withSudo" value="false" />
     <option name="buildTarget" value="REMOTE" />
     <option name="backtrace" value="SHORT" />
-    <envs />
     <option name="isRedirectInput" value="false" />
     <option name="redirectInputPath" value="" />
     <method v="2">
