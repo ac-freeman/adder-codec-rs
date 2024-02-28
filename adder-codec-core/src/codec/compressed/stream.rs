@@ -113,7 +113,7 @@ impl<W: Write> WriteCompression<W> for CompressedOutput<W> {
     fn ingest_event(&mut self, event: Event) -> Result<(), CodecError> {
         // Check that the event fits within the Adu's time range
         if event.t > self.adu.start_t + (self.adu.dt_ref * self.adu.num_intervals as DeltaT) {
-            dbg!("compressing adu");
+            // dbg!("compressing adu");
             // If it doesn't, compress the events and reset the Adu
             if let Some(stream) = &mut self.stream {
                 // Create a temporary u8 stream to write the arithmetic-coded data to
@@ -229,7 +229,7 @@ impl<R: Read + Seek> ReadCompression<R> for CompressedInput<R> {
                 adu.decompress(&mut adu_stream);
 
                 let duration = start.elapsed();
-                println!("Decompressed Adu in {:?} ns", duration.as_nanos());
+                // println!("Decompressed Adu in {:?} ns", duration.as_nanos());
             }
             // Then return the next event from the queue
             match adu.digest_event() {

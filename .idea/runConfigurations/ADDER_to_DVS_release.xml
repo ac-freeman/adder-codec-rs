@@ -1,6 +1,6 @@
 <component name="ProjectRunConfigurationManager">
   <configuration default="false" name="ADDER to DVS release" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
-    <option name="command" value="run -p adder-to-dvs --release -- --input &quot;$USER_HOME$/Downloads/tmp_proph.adder&quot; --output-events &quot;$USER_HOME$/Downloads/adder.dat&quot; --theta 0.02" />
+    <option name="command" value="run -p adder-to-dvs -- --input &quot;$USER_HOME$/Downloads/tmp_proph.adder&quot; --output-events &quot;$USER_HOME$/Downloads/adder.dat&quot; --theta 0.02" />
     <option name="workingDirectory" value="file://$PROJECT_DIR$" />
     <envs />
     <option name="emulateTerminal" value="false" />
