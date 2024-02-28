@@ -300,8 +300,8 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                                 let new_intensity_ln =
                                     event_to_frame_intensity(&event, meta.ref_interval as u128);
 
-                                if new_intensity_ln > 0.405
-                                    && new_intensity_ln < 0.406
+                                if new_intensity_ln > 0.406
+                                    && new_intensity_ln < 0.407
                                     && ((px.frame_intensity_ln > 1.0_f64.ln_1p() - args.theta)
                                         || (px.t == old_t && px.frame_intensity_ln > 0.6))
                                 {
@@ -330,8 +330,8 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                                         )?;
                                     }
                                     px.frame_intensity_ln = new_intensity_ln;
-                                } else if new_intensity_ln > 0.405
-                                    && new_intensity_ln < 0.406
+                                } else if new_intensity_ln > 0.406
+                                    && new_intensity_ln < 0.407
                                     && ((px.frame_intensity_ln < 0.0_f64.ln_1p() + args.theta)
                                         || (px.t == old_t && px.frame_intensity_ln < 0.3))
                                 {
@@ -464,7 +464,7 @@ fn event_to_frame_intensity(event: &Event, frame_length: u128) -> f64 {
 fn create_blank_dvs_frame(meta: &CodecMetadata) -> Result<Array3<u8>, Box<dyn Error>> {
     let instantaneous_frame: Array3<u8> = Array3::from_shape_vec(
         (meta.plane.h_usize(), meta.plane.w_usize(), 3),
-        vec![127_u8; meta.plane.h_usize() * meta.plane.w_usize() * 3],
+        vec![128_u8; meta.plane.h_usize() * meta.plane.w_usize() * 3],
     )?;
     Ok(instantaneous_frame)
 }

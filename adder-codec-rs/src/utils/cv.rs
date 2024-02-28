@@ -430,7 +430,7 @@ pub fn clamp_u8(frame_val: &mut f64, last_val_ln: &mut f64) {
 
 pub fn mid_clamp_u8(frame_val: &mut f64, last_val_ln: &mut f64) {
     if *frame_val < 0.0 || *frame_val > 255.0 {
-        *frame_val = 127.0;
-        *last_val_ln = (127.0_f64 / 255.0_f64).ln_1p();
+        *frame_val = 128.0;
+        *last_val_ln = (128.0_f64 / 255.0_f64).ln_1p();
     }
 }

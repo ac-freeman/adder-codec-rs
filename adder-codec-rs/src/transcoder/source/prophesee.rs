@@ -98,7 +98,7 @@ impl<W: Write + 'static> Prophesee<W> {
 
         let plane = &video.state.plane;
 
-        let start_vals = vec![0.5_f64.ln(); video.state.plane.volume()];
+        let start_vals = vec![(128.0_f64 / 255.0_f64).ln_1p(); video.state.plane.volume()];
 
         let dvs_last_ln_val: Array3<f64> = Array3::from_shape_vec(
             (plane.h() as usize, plane.w() as usize, plane.c() as usize),
