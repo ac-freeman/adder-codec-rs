@@ -189,12 +189,8 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Prophesee<W> {
             // Get the last timestamp for this pixel
             let last_t = self.dvs_last_timestamps[[y, x, 0]];
 
-            // if t == last_t {
-            //     dbg!("same");
-            // }
-
             if t < last_t {
-                dbg!("skipping event");
+                // dbg!("skipping event");
                 continue;
             }
 
@@ -451,10 +447,6 @@ fn decode_event(reader: &mut BufReader<File>) -> io::Result<(DvsEvent)> {
     let x = (data & 0x3FF) as u16; // All but last 14 bits
     let y = ((data & 0xFFFC000) >> 14) as u16; // All but second-to-last grouping of 14 bits
     let p = ((data & 0x10000000) >> 28) as u8; // Just the 4th bit
-
-    // if x == 100 && y == 100 {
-    //     dbg!((t, p));
-    // }
 
     Ok(DvsEvent { t, x, y, p })
 }

@@ -93,7 +93,6 @@ enum WriteMode {
 #[allow(dead_code)]
 fn main() -> Result<(), Box<dyn error::Error>> {
     let args: MyArgs = MyArgs::parse();
-    dbg!(args.clone());
     let file_path = args.input.as_str();
 
     let output_events_path = args.output_events.as_str();
@@ -242,18 +241,11 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
         match stream.digest_event(&mut bitreader) {
             Ok(mut event) => {
-                // if event.coord.x == 100 && event.coord.y == 100 {
-                //     dbg!((event.t, event.d));
-                //     if event.t == 20433028 {
-                //         dbg!(event);
-                //     }
-                // }
-
                 event_count += 1;
                 let y = event.coord.y as usize;
                 let x = event.coord.x as usize;
                 let c = event.coord.c.unwrap_or(0) as usize;
-                // event_counts[[y, x, c]] += 1;
+                event_counts[[y, x, c]] += 1;
                 max_px_event_count = max(max_px_event_count, event_counts[[y, x, c]]);
 
                 match &mut pixels[[y, x, c]] {
@@ -274,12 +266,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         }
                     },
                     Some(px) => {
-                        // if event.coord.x == 100 && event.coord.y == 100 {
-                        //     dbg!(px.frame_intensity_ln);
-                        // }
-
                         let old_t = px.t;
-                        let old_d = px.d;
                         if meta.time_mode == TimeMode::DeltaT {
                             px.t += event.t as u128;
                         } else {
@@ -314,25 +301,11 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                                 let new_intensity_ln =
                                     event_to_frame_intensity(&event, meta.ref_interval as u128);
 
-                                // if event.coord.x == 100 && event.coord.y == 100 {
-                                //     dbg!(new_intensity_ln);
-                                // }
-
-                                // if old_d == 255
-                                // // || ((D_SHIFT[event.d as usize] as f64
-                                // //     * meta.ref_interval as f64)
-                                // //     / event.t as f64)
-                                // //     .fract()
-                                // //     == 0.0
-                                // {
                                 if new_intensity_ln > 0.406
                                     && new_intensity_ln < 0.407
                                     && ((px.frame_intensity_ln > 1.0_f64.ln_1p() - args.theta)
                                         || (px.t == old_t && px.frame_intensity_ln > 0.6))
                                 {
-                                    // if event.coord.x == 100 && event.coord.y == 100 {
-                                    //     dbg!("A");
-                                    // }
                                     fire_dvs_event(
                                         true,
                                         x,
@@ -348,9 +321,6 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                                     && ((px.frame_intensity_ln < 0.0_f64.ln_1p() + args.theta)
                                         || (px.t == old_t && px.frame_intensity_ln < 0.3))
                                 {
-                                    // if event.coord.x == 100 && event.coord.y == 100 {
-                                    //     dbg!("B");
-                                    // }
                                     fire_dvs_event(
                                         false,
                                         x,
@@ -364,50 +334,33 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                                 } else if new_intensity_ln
                                     > px.frame_intensity_ln + args.theta / 2.0
                                 {
-                                    let mut mult = ((new_intensity_ln - px.frame_intensity_ln)
-                                        / args.theta)
-                                        as u32;
-                                    // if mult == 0 {
-                                    mult = 1;
-                                    // }
-
-                                    for i in 0..mult as u32 {
-                                        fire_dvs_event(
-                                            true,
-                                            x,
-                                            y,
-                                            old_t + 1,
-                                            &mut output_events_writer,
-                                            &mut ordered_event_queue,
-                                            args.output_mode,
-                                        )?;
-                                    }
+                                    fire_dvs_event(
+                                        true,
+                                        x,
+                                        y,
+                                        old_t + 1,
+                                        &mut output_events_writer,
+                                        &mut ordered_event_queue,
+                                        args.output_mode,
+                                    )?;
                                     px.frame_intensity_ln = new_intensity_ln;
                                 } else if new_intensity_ln
                                     < px.frame_intensity_ln - args.theta / 2.0
                                 {
-                                    let mut mult = ((px.frame_intensity_ln - new_intensity_ln)
-                                        / args.theta)
-                                        as u32;
-                                    // if mult == 0 {
-                                    mult = 1;
-                                    // }
-                                    for i in 0..mult {
-                                        fire_dvs_event(
-                                            false,
-                                            x,
-                                            y,
-                                            old_t + 1,
-                                            &mut output_events_writer,
-                                            &mut ordered_event_queue,
-                                            args.output_mode,
-                                        )?;
-                                    }
+                                    fire_dvs_event(
+                                        false,
+                                        x,
+                                        y,
+                                        old_t + 1,
+                                        &mut output_events_writer,
+                                        &mut ordered_event_queue,
+                                        args.output_mode,
+                                    )?;
+
                                     px.frame_intensity_ln = new_intensity_ln;
                                 }
-                            } // }
+                            }
                         }
-
                         px.d = event.d;
                     }
                 }
@@ -553,10 +506,6 @@ fn fire_dvs_event(
                 y: y as u16,
                 p: if polarity { 1 } else { 0 },
             };
-
-            // if x == 100 && y == 100 {
-            //     dbg!((event.t, event.p));
-            // }
 
             match ordered_event_queue {
                 None => {
