@@ -330,9 +330,9 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                                     && ((px.frame_intensity_ln > 1.0_f64.ln_1p() - args.theta)
                                         || (px.t == old_t && px.frame_intensity_ln > 0.6))
                                 {
-                                    if event.coord.x == 100 && event.coord.y == 100 {
-                                        dbg!("A");
-                                    }
+                                    // if event.coord.x == 100 && event.coord.y == 100 {
+                                    //     dbg!("A");
+                                    // }
                                     fire_dvs_event(
                                         true,
                                         x,
@@ -348,9 +348,9 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                                     && ((px.frame_intensity_ln < 0.0_f64.ln_1p() + args.theta)
                                         || (px.t == old_t && px.frame_intensity_ln < 0.3))
                                 {
-                                    if event.coord.x == 100 && event.coord.y == 100 {
-                                        dbg!("B");
-                                    }
+                                    // if event.coord.x == 100 && event.coord.y == 100 {
+                                    //     dbg!("B");
+                                    // }
                                     fire_dvs_event(
                                         false,
                                         x,
@@ -554,9 +554,9 @@ fn fire_dvs_event(
                 p: if polarity { 1 } else { 0 },
             };
 
-            if x == 100 && y == 100 {
-                dbg!((event.t, event.p));
-            }
+            // if x == 100 && y == 100 {
+            //     dbg!((event.t, event.p));
+            // }
 
             match ordered_event_queue {
                 None => {
