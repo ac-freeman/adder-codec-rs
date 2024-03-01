@@ -408,6 +408,9 @@ fn parse_header(file: &mut BufReader<File>) -> io::Result<(u64, u8, u8, (u32, u3
         file.read_exact(&mut buf)?;
         let ev_type = buf[0];
         let ev_size = buf[1];
+        if ev_size != 8 || ev_type != 0 || ev_type != 12 {
+            panic!("Invalid Prophesee event size");
+        }
 
         (ev_type, ev_size)
     } else {
