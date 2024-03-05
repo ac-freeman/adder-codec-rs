@@ -1,6 +1,6 @@
 <component name="ProjectRunConfigurationManager">
   <configuration default="false" name="ADDER to DVS release" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
-    <option name="command" value="run -p adder-to-dvs --release -- --input &quot;/media/andrew/One Touch/HMNET_ADDER_data/gen9/17-04-21_06-54-28_2623500000_2683500000_td.adder&quot; --output-events &quot;$USER_HOME$/Downloads/17-04-21_06-54-28_2623500000_2683500000_td.dat&quot; --theta 0.02 --reorder" />
+    <option name="command" value="run -p adder-to-dvs --release -- --input &quot;$USER_HOME$/Downloads/tmp_proph.adder&quot; --output-events &quot;$USER_HOME$/Downloads/tmp_proph.dat&quot; --theta 0.02" />
     <option name="workingDirectory" value="file://$PROJECT_DIR$" />
     <envs />
     <option name="emulateTerminal" value="false" />

@@ -39,6 +39,8 @@ pub struct Prophesee<W: Write> {
 
     running_t: u32,
 
+    t_subtract: u32,
+
     /// The timestamp (in-camera) of the last DVS event integrated for each pixel
     pub dvs_last_timestamps: Array3<u32>,
 
@@ -110,6 +112,7 @@ impl<W: Write + 'static> Prophesee<W> {
             input_reader,
             num_dvs_events: 0,
             running_t: 0,
+            t_subtract: 0,
             dvs_last_timestamps,
             dvs_last_ln_val,
             camera_theta: 0.02, // A fixed assumption
@@ -157,7 +160,14 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Prophesee<W> {
             // TODO: integrate to fill in the rest of time once the eof is reached
 
             dvs_event = match decode_event(&mut self.input_reader) {
-                Ok(dvs_event) => {
+                Ok(mut dvs_event) => {
+                    // if self.running_t == 2 && dvs_events.is_empty() {
+                    //     self.t_subtract = dvs_event.t;
+                    //     eprintln!("t_subtract: {}", self.t_subtract);
+                    // }
+
+                    dvs_event.t -= self.t_subtract;
+
                     if dvs_event.t > self.running_t {
                         self.running_t = dvs_event.t;
                     }
@@ -408,7 +418,7 @@ fn parse_header(file: &mut BufReader<File>) -> io::Result<(u64, u8, u8, (u32, u3
         file.read_exact(&mut buf)?;
         let ev_type = buf[0];
         let ev_size = buf[1];
-        if ev_size != 8 || ev_type != 0 || ev_type != 12 {
+        if ev_size != 8 || (ev_type != 0 && ev_type != 12) {
             panic!("Invalid Prophesee event size");
         }
 

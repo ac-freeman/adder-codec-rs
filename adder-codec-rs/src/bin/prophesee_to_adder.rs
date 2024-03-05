@@ -5,6 +5,7 @@ use adder_codec_core::{PixelMultiMode, PlaneSize, TimeMode};
 use adder_codec_rs::transcoder::source::prophesee::Prophesee;
 use adder_codec_rs::transcoder::source::video::{Source, SourceError, VideoBuilder};
 use adder_codec_rs::utils::simulproc::SimulProcArgs;
+use adder_codec_rs::utils::viz::ShowFeatureMode;
 use clap::Parser;
 use rayon::current_num_threads;
 use std::fs::File;
@@ -36,6 +37,9 @@ pub struct MyArgs {
     /// system.
     #[clap(long, default_value_t = 8)]
     pub thread_count: u8,
+
+    #[clap(short, long, action)]
+    pub features: bool,
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -61,6 +65,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         },
         writer,
     )?;
+    prophesee_source
+        .get_video_mut()
+        .update_detect_features(args.features, ShowFeatureMode::Off);
+    // prophesee_source
+    //     .get_video_mut()
+    //     .encoder
+    //     .options
+    //     .crf
+    //     .override_feature_c_radius(2);
 
     let pool = rayon::ThreadPoolBuilder::new()
         .num_threads(args.thread_count.into())
