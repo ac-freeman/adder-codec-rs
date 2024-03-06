@@ -88,25 +88,34 @@ pub enum ShowFeatureMode {
 
 /// Assuming the given event is a feature, draw it on the given `img` as a white cross
 pub fn draw_feature_event(e: &Event, img: &mut Frame) {
-    draw_feature_coord(e.coord.x, e.coord.y, img, false)
+    draw_feature_coord(e.coord.x, e.coord.y, img, false, None)
 }
 
-pub fn draw_feature_coord(x: PixelAddress, y: PixelAddress, img: &mut Frame, color: bool) {
-    let draw_color: u8 = 255;
+pub fn draw_feature_coord(
+    x: PixelAddress,
+    y: PixelAddress,
+    img: &mut Frame,
+    three_color: bool,
+    color: Option<[u8; 3]>,
+) {
+    let draw_color: [u8; 3] = color.unwrap_or_else(|| [255, 255, 255]);
+
     let radius = 2;
 
     unsafe {
-        if color {
+        if three_color {
             for i in -radius..=radius {
                 for c in 0..3 {
-                    *img.uget_mut(((y as i32 + i) as usize, (x as i32) as usize, c)) = draw_color;
-                    *img.uget_mut(((y as i32) as usize, (x as i32 + i) as usize, c)) = draw_color;
+                    *img.uget_mut(((y as i32 + i) as usize, (x as i32) as usize, c)) =
+                        draw_color[c];
+                    *img.uget_mut(((y as i32) as usize, (x as i32 + i) as usize, c)) =
+                        draw_color[c];
                 }
             }
         } else {
             for i in -radius..=radius {
-                *img.uget_mut(((y as i32 + i) as usize, (x as i32) as usize, 0)) = draw_color;
-                *img.uget_mut(((y as i32) as usize, (x as i32 + i) as usize, 0)) = draw_color;
+                *img.uget_mut(((y as i32 + i) as usize, (x as i32) as usize, 0)) = draw_color[0];
+                *img.uget_mut(((y as i32) as usize, (x as i32 + i) as usize, 0)) = draw_color[0];
             }
         }
     }

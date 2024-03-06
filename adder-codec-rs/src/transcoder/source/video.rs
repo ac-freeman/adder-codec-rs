@@ -16,8 +16,8 @@ use adder_codec_core::codec::{
     CodecError, CodecMetadata, EncoderOptions, EncoderType, LATEST_CODEC_VERSION,
 };
 use adder_codec_core::{
-    Coord, DeltaT, Event, Mode, PixelMultiMode, PlaneError, PlaneSize, SourceCamera, SourceType,
-    TimeMode, D_EMPTY,
+    Coord, DeltaT, Event, Mode, PixelAddress, PixelMultiMode, PlaneError, PlaneSize, SourceCamera,
+    SourceType, TimeMode, D_EMPTY,
 };
 use bumpalo::Bump;
 
@@ -1051,6 +1051,7 @@ impl<W: Write + 'static> Video<W> {
                         coord.y,
                         &mut self.display_frame_features,
                         self.state.plane.c() != 1,
+                        None,
                     );
                 }
             }
@@ -1067,6 +1068,7 @@ impl<W: Write + 'static> Video<W> {
                             coord.y,
                             &mut self.display_frame_features,
                             self.state.plane.c() != 1,
+                            None,
                         );
                     }
                     let radius = parameters.feature_c_radius as i32;
@@ -1095,12 +1097,12 @@ impl<W: Write + 'static> Video<W> {
             })
             .collect();
 
-        Self::cluster(&flattened_features);
+        self.cluster(&flattened_features);
 
         Ok(())
     }
 
-    fn cluster(points: &Vec<[f32; 2]>) {
+    fn cluster(&mut self, points: &Vec<[f32; 2]>) {
         let mut tree: KdTree<f32, 2> = (points).into();
 
         if points.len() < 3 {
@@ -1109,7 +1111,7 @@ impl<W: Write + 'static> Video<W> {
 
         // DBSCAN algorithm to cluster the features
 
-        let eps = 20.0;
+        let eps = 100.0;
         let min_pts = 3;
 
         let mut visited = vec![false; points.len()];
@@ -1159,6 +1161,35 @@ impl<W: Write + 'static> Video<W> {
             }
 
             clusters.push(cluster);
+        }
+
+        for cluster in clusters {
+            if self.state.show_features == ShowFeatureMode::Off {
+                break;
+            }
+
+            let random_color = [
+                rand::random::<u8>(),
+                rand::random::<u8>(),
+                rand::random::<u8>(),
+            ];
+
+            for i in cluster {
+                draw_feature_coord(
+                    points[i as usize][0] as PixelAddress,
+                    points[i as usize][1] as PixelAddress,
+                    &mut self.display_frame_features,
+                    self.state.plane.c() != 1,
+                    Some(random_color),
+                );
+            }
+
+            // draw_feature_coord(
+            //     coord.x,
+            //     coord.y,
+            //     &mut self.display_frame_features,
+            //     self.state.plane.c() != 1,
+            // );
         }
     }
 

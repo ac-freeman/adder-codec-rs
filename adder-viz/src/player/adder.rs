@@ -385,6 +385,7 @@ impl AdderPlayer {
                                     event.coord.y,
                                     display_mat,
                                     color,
+                                    None,
                                 );
                             } else if !event.coord.is_border(
                                 meta.plane.w_usize(),
