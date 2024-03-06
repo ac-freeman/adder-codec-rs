@@ -44,10 +44,13 @@ davis-edi-rs = { version = "0.2.4", optional = true }
 duplicate = "0.4.1"
 fast-math = { version = "0.1", optional = true }
 fenwick = "2.0.1"
+fixed = "1.25.1"
 float-cmp = "0.9.0"
 futures = "0.3.26"
 generational-arena = "0.2"
 itertools = "0.10.3"
+kdtree = "0.7.0"
+kiddo = "4.2.0"
 ndarray = { version = "0.15.6", features = ["rayon", "serde"] }
 num = "0.4"
 num-traits = "0.2.15"

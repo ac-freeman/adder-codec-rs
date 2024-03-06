@@ -47,6 +47,7 @@ use crate::utils::cv::is_feature;
 
 use crate::utils::viz::{draw_feature_coord, ShowFeatureMode};
 use adder_codec_core::codec::rate_controller::{Crf, CrfParameters};
+use kiddo::{KdTree, SquaredEuclidean};
 use thiserror::Error;
 use tokio::task::JoinError;
 use video_rs_adder_dep::Frame;
@@ -1057,33 +1058,108 @@ impl<W: Write + 'static> Video<W> {
 
         let parameters = self.encoder.options.crf.get_parameters();
 
-        for feature_set in new_features {
-            for coord in feature_set {
-                if self.state.show_features == ShowFeatureMode::Instant {
-                    draw_feature_coord(
-                        coord.x,
-                        coord.y,
-                        &mut self.display_frame_features,
-                        self.state.plane.c() != 1,
-                    );
-                }
-                let radius = parameters.feature_c_radius as i32;
-                for row in (coord.y() as i32 - radius).max(0)
-                    ..(coord.y() as i32 + radius).min(self.state.plane.h() as i32)
-                {
-                    for col in (coord.x() as i32 - radius).max(0)
-                        ..(coord.x() as i32 + radius).min(self.state.plane.w() as i32)
+        if parameters.feature_c_radius > 0 {
+            for feature_set in &new_features {
+                for coord in feature_set {
+                    if self.state.show_features == ShowFeatureMode::Instant {
+                        draw_feature_coord(
+                            coord.x,
+                            coord.y,
+                            &mut self.display_frame_features,
+                            self.state.plane.c() != 1,
+                        );
+                    }
+                    let radius = parameters.feature_c_radius as i32;
+                    for row in (coord.y() as i32 - radius).max(0)
+                        ..=(coord.y() as i32 + radius).min(self.state.plane.h() as i32 - 1)
                     {
-                        for c in 0..self.state.plane.c() {
-                            self.event_pixel_trees[[row as usize, col as usize, c as usize]]
-                                .c_thresh = min(parameters.c_thresh_baseline, 2);
+                        for col in (coord.x() as i32 - radius).max(0)
+                            ..=(coord.x() as i32 + radius).min(self.state.plane.w() as i32 - 1)
+                        {
+                            for c in 0..self.state.plane.c() {
+                                self.event_pixel_trees[[row as usize, col as usize, c as usize]]
+                                    .c_thresh = min(parameters.c_thresh_baseline, 2);
+                            }
                         }
                     }
                 }
             }
         }
 
+        let flattened_features: &Vec<[f32; 2]> = &new_features
+            .iter()
+            .flat_map(|feature_set| {
+                feature_set
+                    .iter()
+                    .map(|coord| [coord.x as f32, coord.y as f32])
+            })
+            .collect();
+
+        Self::cluster(&flattened_features);
+
         Ok(())
+    }
+
+    fn cluster(points: &Vec<[f32; 2]>) {
+        let mut tree: KdTree<f32, 2> = (points).into();
+
+        if points.len() < 3 {
+            return;
+        }
+
+        // DBSCAN algorithm to cluster the features
+
+        let eps = 20.0;
+        let min_pts = 3;
+
+        let mut visited = vec![false; points.len()];
+        let mut clusters = Vec::new();
+
+        for (i, point) in points.iter().enumerate() {
+            if visited[i] {
+                continue;
+            }
+            visited[i] = true;
+
+            let mut neighbors = tree.within_unsorted::<SquaredEuclidean>(point, eps);
+
+            if neighbors.len() < min_pts {
+                continue;
+            }
+
+            let mut cluster = HashSet::new();
+            cluster.insert(i as u64);
+
+            let mut index = 0;
+
+            while index < neighbors.len() {
+                let current_point = neighbors[index];
+                if !visited[current_point.item as usize] {
+                    visited[current_point.item as usize] = true;
+
+                    let current_neighbors = tree.within_unsorted::<SquaredEuclidean>(
+                        &points[current_point.item as usize],
+                        eps,
+                    );
+
+                    if current_neighbors.len() >= min_pts {
+                        neighbors.extend(
+                            current_neighbors
+                                .into_iter()
+                                .filter(|&i| !cluster.contains(&i.item)),
+                        );
+                    }
+                }
+
+                if !cluster.contains(&current_point.item) {
+                    cluster.insert(current_point.item);
+                }
+
+                index += 1;
+            }
+
+            clusters.push(cluster);
+        }
     }
 
     /// Set whether or not to detect features, and whether or not to display the features
