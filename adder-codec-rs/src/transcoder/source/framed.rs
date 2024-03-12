@@ -275,11 +275,6 @@ impl<W: Write + 'static> VideoBuilder<W> for Framed<W> {
         Ok(Box::new(self))
     }
 
-    fn show_display(mut self, show_display: bool) -> Self {
-        self.video = self.video.show_display(show_display);
-        self
-    }
-
     fn detect_features(mut self, detect_features: bool, show_features: ShowFeatureMode) -> Self {
         self.video = self.video.detect_features(detect_features, show_features);
         self

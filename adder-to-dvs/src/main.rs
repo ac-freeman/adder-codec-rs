@@ -501,7 +501,7 @@ fn fire_dvs_event(
         }
         WriteMode::Binary => {
             let event = DvsEvent {
-                t: (t) as u32,
+                t: t as u32,
                 x: x as u16,
                 y: y as u16,
                 p: if polarity { 1 } else { 0 },

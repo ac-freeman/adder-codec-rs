@@ -198,10 +198,9 @@ pub struct VideoState {
     // pub(crate) c_thresh_pos: u8,
     // pub(crate) c_thresh_neg: u8,
     pub(crate) ref_time_divisor: f32,
-    pub tps: DeltaT,
 
-    pub(crate) show_display: bool,
-    pub(crate) show_live: bool,
+    /// The number of ticks per second
+    pub tps: DeltaT,
 
     /// Whether or not to detect features
     pub feature_detection: bool,
@@ -228,8 +227,6 @@ impl Default for VideoState {
             in_interval_count: 1,
             ref_time_divisor: 1.0,
             tps: 7650,
-            show_display: false,
-            show_live: false,
             feature_detection: false,
             running_intensities: Default::default(),
             show_features: ShowFeatureMode::Off,
@@ -319,9 +316,6 @@ pub trait VideoBuilder<W> {
         write: W,
     ) -> Result<Box<Self>, SourceError>;
 
-    /// Set whether or not the show the live display
-    fn show_display(self, show_display: bool) -> Self;
-
     /// Set whether or not to detect features, and whether or not to display the features
     fn detect_features(self, detect_features: bool, show_features: ShowFeatureMode) -> Self;
 
@@ -345,8 +339,12 @@ pub struct Video<W: Write> {
 
     /// Channel for sending events to the encoder
     pub event_sender: Sender<Vec<Event>>,
+
+    /// The object that takes in ADDER events, potentially transforms them in some way,
+    /// and writes them somewhere
     pub encoder: Encoder<W>,
 
+    /// The type of encoder being used (e.g., compressed or raw)
     pub encoder_type: EncoderType,
     // TODO: Hold multiple encoder options and an enum, so that boxing isn't required.
     // Also hold a state for whether or not to write out events at all, so that a null writer isn't required.
@@ -644,12 +642,6 @@ impl<W: Write + 'static> Video<W> {
         Ok(self)
     }
 
-    /// Set the display mode for the instantaneous view.
-    pub fn show_display(mut self, show_display: bool) -> Self {
-        self.state.show_display = show_display;
-        self
-    }
-
     /// Close and flush the stream writer.
     /// # Errors
     /// Returns an error if the stream writer cannot be closed cleanly.
@@ -676,8 +668,6 @@ impl<W: Write + 'static> Video<W> {
         let parameters = *self.encoder.options.crf.get_parameters();
 
         self.state.in_interval_count += 1;
-
-        self.state.show_live = self.state.in_interval_count % view_interval == 0;
 
         // let matrix_f32 = convert_u8_to_f32_simd(&matrix.into_raw_vec());
         let matrix = matrix.mapv(f32::from);
@@ -788,10 +778,6 @@ impl<W: Write + 'static> Video<W> {
                     )
                     .unwrap();
             }
-        }
-
-        if self.state.show_live {
-            // show_display("instance", &self.instantaneous_frame, 1, self)?;
         }
 
         Ok(big_buffer)
@@ -1249,9 +1235,12 @@ impl<W: Write + 'static> Video<W> {
         }
     }
 
+    /// Get the encoder options
     pub fn get_encoder_options(&self) -> EncoderOptions {
         self.encoder.get_options()
     }
+
+    /// Get the time mode of the video
     pub fn get_time_mode(&self) -> TimeMode {
         self.encoder.meta().time_mode
     }
@@ -1282,6 +1271,7 @@ impl<W: Write + 'static> Video<W> {
         }
     }
 
+    /// Get the size of the raw events (in bytes)
     pub fn get_event_size(&self) -> u8 {
         self.encoder.meta().event_size
     }
@@ -1367,25 +1357,6 @@ pub fn integrate_for_px(
 }
 
 #[cfg(feature = "open-cv")]
-/// If `video.show_display`, shows the given [`Mat`] in an `OpenCV` window
-/// with the given name.
-///
-/// # Errors
-/// Returns an [`opencv::Error`] if the window cannot be shown, or the [`Mat`] cannot be scaled as
-/// needed.
-pub fn show_display<W: Write>(
-    window_name: &str,
-    mat: &Mat,
-    wait: i32,
-    video: &Video<W>,
-) -> opencv::Result<()> {
-    if video.state.show_display {
-        show_display_force(window_name, mat, wait)?;
-    }
-    Ok(())
-}
-
-#[cfg(feature = "open-cv")]
 /// Shows the given [`Mat`] in an `OpenCV` window with the given name.
 /// This function is the same as [`show_display`], except that it does not check
 /// [`Video::show_display`].
@@ -1441,6 +1412,7 @@ pub trait Source<W: Write> {
     /// process.
     fn get_video(self) -> Video<W>;
 
+    /// Get the input frame from the source
     fn get_input(&self) -> Option<&Frame>;
 
     /// Get the last-calculated bitrate of the input (in bits per second)

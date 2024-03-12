@@ -121,6 +121,7 @@ pub fn draw_feature_coord(
     }
 }
 
+/// Draw a rectangle on the given `img` with the given `color`
 pub fn draw_rect(
     x1: PixelAddress,
     y1: PixelAddress,

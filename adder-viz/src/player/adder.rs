@@ -316,27 +316,6 @@ impl AdderPlayer {
                         event.t = dt;
                     } else {
                         panic!("Relative time mode is deprecated.");
-                        self.stream_state.last_timestamps[[y as usize, x as usize, c as usize]] +=
-                            event.t;
-                        if self.stream_state.last_timestamps[[y as usize, x as usize, c as usize]]
-                            % meta.ref_interval
-                            != 0
-                        {
-                            self.stream_state.last_timestamps
-                                [[y as usize, x as usize, c as usize]] = ((self
-                                .stream_state
-                                .last_timestamps[[y as usize, x as usize, c as usize]]
-                                / meta.ref_interval)
-                                + 1)
-                                * meta.ref_interval;
-                        }
-
-                        if self.stream_state.last_timestamps[[y as usize, x as usize, c as usize]]
-                            > self.stream_state.current_t_ticks
-                        {
-                            self.stream_state.current_t_ticks = self.stream_state.last_timestamps
-                                [[y as usize, x as usize, c as usize]];
-                        }
                     }
 
                     // TODO: Support D and Dt view modes here

@@ -781,18 +781,18 @@ impl TranscoderState {
 }
 
 fn side_panel_grid_contents(
-    transcoder: &AdderTranscoder,
+    _transcoder: &AdderTranscoder,
     ui: &mut Ui,
     ui_state: &mut ParamsUiState,
     info_ui_state: &InfoUiState,
 ) {
     let dtr_max = ui_state.delta_t_ref_max;
 
-    #[allow(dead_code)]
+    #[allow(dead_code, unused_mut)]
     let mut enabled = true;
     #[cfg(feature = "open-cv")]
     {
-        enabled = transcoder.davis_source.is_none();
+        enabled = _transcoder.davis_source.is_none();
     }
     ui.add_enabled(enabled, egui::Label::new("Δt_ref:"));
     slider_pm(

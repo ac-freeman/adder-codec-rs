@@ -1,7 +1,5 @@
 use std::error::Error;
 
-use adder_codec_rs::adder_codec_core::DeltaT;
-
 #[cfg(feature = "open-cv")]
 use adder_codec_rs::transcoder::source::davis::Davis;
 use adder_codec_rs::transcoder::source::framed::Framed;
@@ -49,7 +47,7 @@ impl Error for AdderTranscoderError {}
 impl AdderTranscoder {
     pub(crate) fn new(
         input_path_buf: &Path,
-        input_path_buf_1: &Option<PathBuf>,
+        _input_path_buf_1: &Option<PathBuf>,
         output_path_opt: Option<PathBuf>,
         ui_state: &mut ParamsUiState,
         current_frame: u32,
@@ -85,8 +83,7 @@ impl AdderTranscoder {
                             ui_state.delta_t_ref as u32,
                             ui_state.delta_t_max_mult * ui_state.delta_t_ref as u32,
                             Some(ui_state.time_mode),
-                        )?
-                        .show_display(false);
+                        )?;
 
                         // TODO: Change the builder to take in a pathbuf directly, not a string,
                         // and to handle the error checking in the associated function
@@ -159,8 +156,8 @@ impl AdderTranscoder {
                             simulate_latency = false;
                         }
 
-                        let filename_1 = input_path_buf_1.as_ref().map(|input_path_buf_1| {
-                            input_path_buf_1
+                        let filename_1 = _input_path_buf_1.as_ref().map(|_input_path_buf_1| {
+                            _input_path_buf_1
                                 .file_name()
                                 .expect("File must exist")
                                 .to_str()
@@ -202,7 +199,7 @@ impl AdderTranscoder {
                                 )
                                 .time_parameters(
                                     1000000_u32,
-                                    (1_000_000.0 / ui_state.davis_output_fps) as DeltaT,
+                                    (1_000_000.0 / ui_state.davis_output_fps) as adder_codec_rs::adder_codec_core::DeltaT,
                                     ((1_000_000.0 / ui_state.davis_output_fps)
                                         * ui_state.delta_t_max_mult as f64)
                                         as u32,
