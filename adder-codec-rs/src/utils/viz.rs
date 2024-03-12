@@ -91,6 +91,7 @@ pub fn draw_feature_event(e: &Event, img: &mut Frame) {
     draw_feature_coord(e.coord.x, e.coord.y, img, false, None)
 }
 
+/// Draw a cross on the given `img` at the given `x` and `y` coordinates
 pub fn draw_feature_coord(
     x: PixelAddress,
     y: PixelAddress,

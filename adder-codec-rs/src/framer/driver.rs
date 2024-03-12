@@ -89,6 +89,7 @@ impl FramerBuilder {
         self
     }
 
+    /// Limit the size of the reconstruction frame buffer (for speed/latency)
     pub fn buffer_limit(mut self, buffer_limit: Option<u32>) -> FramerBuilder {
         self.buffer_limit = buffer_limit;
         self
@@ -244,6 +245,8 @@ impl FrameSequenceState {
     }
 }
 
+/// Associates detected features with the source time in which they were detected (since ADDER
+/// events may arrive out of order)
 pub struct FeatureInterval {
     end_ts: BigT,
     pub features: Vec<Coord>,

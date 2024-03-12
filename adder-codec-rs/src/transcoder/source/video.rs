@@ -195,9 +195,6 @@ pub struct VideoState {
 
     /// The number of input intervals (of fixed time) processed so far
     pub in_interval_count: u32,
-    // pub(crate) c_thresh_pos: u8,
-    // pub(crate) c_thresh_neg: u8,
-    pub(crate) ref_time_divisor: f32,
 
     /// The number of ticks per second
     pub tps: DeltaT,
@@ -225,7 +222,6 @@ impl Default for VideoState {
             params: VideoStateParams::default(),
             chunk_rows: 1,
             in_interval_count: 1,
-            ref_time_divisor: 1.0,
             tps: 7650,
             feature_detection: false,
             running_intensities: Default::default(),
@@ -266,9 +262,6 @@ impl Default for VideoState {
 
 /// A builder for a [`Video`]
 pub trait VideoBuilder<W> {
-    /// Set both the positive and negative contrast thresholds
-    fn contrast_thresholds(self, c_thresh_pos: u8, c_thresh_neg: u8) -> Self;
-
     /// Set the Constant Rate Factor (CRF) quality setting for the encoder. 0 is lossless, 9 is worst quality.
     fn crf(self, crf: u8) -> Self;
 
@@ -281,14 +274,6 @@ pub trait VideoBuilder<W> {
         c_increase_velocity: u8,
         feature_c_radius_denom: f32,
     ) -> Self;
-
-    /// Set the positive contrast threshold
-    #[deprecated(since = "0.3.4", note = "please use `crf` or `quality_manual` instead")]
-    fn c_thresh_pos(self, c_thresh_pos: u8) -> Self;
-
-    /// Set the negative contrast threshold
-    #[deprecated(since = "0.3.4", note = "please use `crf` or `quality_manual` instead")]
-    fn c_thresh_neg(self, c_thresh_neg: u8) -> Self;
 
     /// Set the chunk rows
     fn chunk_rows(self, chunk_rows: usize) -> Self;
@@ -659,7 +644,6 @@ impl<W: Write + 'static> Video<W> {
         &mut self,
         matrix: Frame,
         time_spanned: f32,
-        view_interval: u32,
     ) -> Result<Vec<Vec<Event>>, SourceError> {
         if self.state.in_interval_count == 0 {
             self.set_initial_d(&matrix);
@@ -902,7 +886,7 @@ impl<W: Write + 'static> Video<W> {
 
         let mut new_features = new_features.iter()
             .flat_map(|feature_set| feature_set.iter().map(|coord| [coord.x, coord.y])).collect::<Vec<[u16;2]>>();
-        let mut new_features: HashSet<[u16;2]> = new_features.drain(..).collect();
+        let new_features: HashSet<[u16;2]> = new_features.drain(..).collect();
 
         #[cfg(feature = "feature-logging")]
         {
@@ -1101,7 +1085,7 @@ impl<W: Write + 'static> Video<W> {
             .into_iter()
             .map(|coord| [coord[0] as f32, coord[1] as f32])
             .collect();
-        let mut tree: KdTree<f32, 2> = (&points).into();
+        let tree: KdTree<f32, 2> = (&points).into();
 
         if points.len() < 3 {
             return;
