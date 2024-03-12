@@ -215,6 +215,8 @@ pub struct VideoState {
     features: Vec<HashSet<Coord>>,
 
     pub feature_log_handle: Option<std::fs::File>,
+    feature_rate_adjustment: bool,
+    feature_cluster: bool
 }
 
 impl Default for VideoState {
@@ -233,6 +235,8 @@ impl Default for VideoState {
             show_features: ShowFeatureMode::Off,
             features: Default::default(),
             feature_log_handle: None,
+            feature_rate_adjustment: false,
+            feature_cluster: false,
         }
     }
 }
@@ -837,10 +841,14 @@ impl<W: Write + 'static> Video<W> {
         &mut self,
         detect_features: bool,
         show_features: ShowFeatureMode,
+        feature_rate_adjustment: bool,
+        feature_cluster: bool,
     ) {
         // Validate new value
         self.state.feature_detection = detect_features;
         self.state.show_features = show_features;
+        self.state.feature_rate_adjustment = feature_rate_adjustment;
+        self.state.feature_cluster = feature_cluster;
     }
 
     /// Set a new value for `c_thresh_pos`
@@ -1063,7 +1071,8 @@ impl<W: Write + 'static> Video<W> {
 
         let parameters = self.encoder.options.crf.get_parameters();
 
-        if parameters.feature_c_radius > 0 {
+        
+
             for coord in &new_features {
 
                     if self.state.show_features == ShowFeatureMode::Instant {
@@ -1075,6 +1084,7 @@ impl<W: Write + 'static> Video<W> {
                             None,
                         );
                     }
+                if self.state.feature_rate_adjustment && parameters.feature_c_radius > 0 {
                     let radius = parameters.feature_c_radius as i32;
                     for row in (coord[1] as i32 - radius).max(0)
                         ..=(coord[1] as i32 + radius).min(self.state.plane.h() as i32 - 1)
@@ -1093,7 +1103,9 @@ impl<W: Write + 'static> Video<W> {
         }
 
 
-        self.cluster(&new_features);
+        if self.state.feature_cluster {
+            self.cluster(&new_features);
+        }
 
         Ok(())
     }
@@ -1111,7 +1123,7 @@ impl<W: Write + 'static> Video<W> {
 
         // DBSCAN algorithm to cluster the features
 
-        let eps = 100.0;
+        let eps = self.state.plane.min_resolution() as f32 / 3.0;
         let min_pts = 3;
 
         let mut visited = vec![false; points.len()];
@@ -1198,7 +1210,7 @@ impl<W: Write + 'static> Video<W> {
             if (max_x - min_x) * (max_y - min_y) < self.state.plane.area_wh() / 4 {
                 bboxes.push((min_x, min_y, max_x, max_y));
 
-                if self.state.show_features != ShowFeatureMode::Off {
+                // if self.state.show_features != ShowFeatureMode::Off {
                     draw_rect(
                         min_x as PixelAddress,
                         min_y as PixelAddress,
@@ -1208,7 +1220,7 @@ impl<W: Write + 'static> Video<W> {
                         self.state.plane.c() != 1,
                         Some(random_color),
                     );
-                }
+                // }
             }
         }
     }
