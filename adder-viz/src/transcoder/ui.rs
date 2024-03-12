@@ -675,7 +675,7 @@ impl TranscoderState {
             }
         };
 
-        match source.consume(1, &pool) {
+        match source.consume(&pool) {
             Ok(events_vec_vec) => {
                 for events_vec in events_vec_vec {
                     ui_info_state.events_total += events_vec.len() as u64;

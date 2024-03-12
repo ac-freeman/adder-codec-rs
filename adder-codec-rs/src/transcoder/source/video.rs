@@ -1379,7 +1379,6 @@ pub trait Source<W: Write> {
     /// intensities.
     fn consume(
         &mut self,
-        view_interval: u32,
         thread_pool: &ThreadPool,
     ) -> Result<Vec<Vec<Event>>, SourceError>;
 

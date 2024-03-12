@@ -1,6 +1,6 @@
 use crate::codec::{CodecError, CodecMetadata, EncoderOptions, ReadCompression, WriteCompression};
 use bitstream_io::{BigEndian, BitRead, BitReader, BitWrite, BitWriter};
-use std::io::{BufWriter, Cursor, Read, Seek, SeekFrom, Write};
+use std::io::{Cursor, Read, Seek, SeekFrom, Write};
 
 use crate::codec::compressed::source_model::event_structure::event_adu::EventAdu;
 use crate::codec::compressed::source_model::HandleEvent;

@@ -6,10 +6,10 @@ use std::fs::File;
 use std::io;
 #[cfg(feature = "open-cv")]
 use std::io::BufWriter;
-use std::io::{Cursor, Write};
+use std::io::{Cursor};
 use std::path::Path;
 use std::process::{Command, Output};
-use video_rs_adder_dep::{Frame, Time};
+use video_rs_adder_dep::{Frame};
 
 #[cfg(feature = "open-cv")]
 /// Writes a given [`Mat`] to a file

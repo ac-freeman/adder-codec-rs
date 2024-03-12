@@ -116,6 +116,7 @@ impl<W: Write + 'static> Framed<W> {
         self.video.state.params.ref_time
     }
 
+    /// Get the previous input frame
     pub fn get_last_input_frame(&self) -> &Frame {
         &self.input_frame
     }
@@ -126,7 +127,6 @@ impl<W: Write + 'static> Source<W> for Framed<W> {
     /// `ref_time` (the number of ticks each frame is said to span)
     fn consume(
         &mut self,
-        view_interval: u32,
         thread_pool: &ThreadPool,
     ) -> Result<Vec<Vec<Event>>, SourceError> {
         let (_, frame) = self.cap.decode()?;

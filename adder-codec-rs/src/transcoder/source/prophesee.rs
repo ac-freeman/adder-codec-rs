@@ -16,10 +16,8 @@ use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::fs::File;
 use std::io::{self, BufRead, BufReader, Read, Seek, SeekFrom, Write};
-use std::path::Path;
 use std::path::PathBuf;
 use std::str::FromStr;
-use tokio::io::BufWriter;
 use video_rs_adder_dep::Frame;
 
 /// The temporal granularity of the source (ticks per second)
@@ -119,8 +117,7 @@ impl<W: Write + 'static> Prophesee<W> {
 impl<W: Write + 'static + std::marker::Send> Source<W> for Prophesee<W> {
     fn consume(
         &mut self,
-        view_interval: u32,
-        thread_pool: &ThreadPool,
+        _thread_pool: &ThreadPool,
     ) -> Result<Vec<Vec<Event>>, SourceError> {
         if self.running_t == 0 {
             self.video.integrate_matrix(
@@ -141,7 +138,7 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Prophesee<W> {
         }
 
         // TODO hardcoded: scale the view interval to be 60 FPS GUI display
-        let view_interval = (PROPHESEE_SOURCE_TPS / 60);
+        let view_interval = PROPHESEE_SOURCE_TPS / 60;
 
         // Read events from the source file until we find a timestamp that exceeds our `running_t`
         // by at least `view_interval`
@@ -208,7 +205,7 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Prophesee<W> {
                 mid_clamp_u8(&mut last_val, &mut last_ln_val);
 
                 // Integrate the last intensity for this pixel over the time since the last event
-                let time_spanned = ((t - last_t - 1) * self.video.state.params.ref_time);
+                let time_spanned = (t - last_t - 1) * self.video.state.params.ref_time;
                 let intensity_to_integrate = last_val * (t - last_t - 1) as f64;
 
                 let mut base_val = 0;
@@ -348,8 +345,8 @@ fn end_events<W: Write + 'static + std::marker::Send>(prophesee: &mut Prophesee<
             assert!(prophesee.running_t - prophesee.dvs_last_timestamps[[y, x, 0]] > 0);
 
             // Integrate the last intensity for this pixel over the time since the last event
-            let time_spanned = ((prophesee.running_t - prophesee.dvs_last_timestamps[[y, x, 0]])
-                * prophesee.video.state.params.ref_time);
+            let time_spanned = (prophesee.running_t - prophesee.dvs_last_timestamps[[y, x, 0]])
+                * prophesee.video.state.params.ref_time;
             let intensity_to_integrate = last_val * time_spanned as f64;
 
             let _ = integrate_for_px(
@@ -439,7 +436,7 @@ fn line_to_hw(words: Vec<&[u8]>) -> Option<u32> {
         .and_then(|s| s.parse().ok())
 }
 
-fn decode_event(reader: &mut BufReader<File>) -> io::Result<(DvsEvent)> {
+fn decode_event(reader: &mut BufReader<File>) -> io::Result<DvsEvent> {
     // Read one record
     let mut buffer = [0; 8]; // Adjust this size to match your record size
     reader.read_exact(&mut buffer)?;
@@ -479,7 +476,7 @@ impl<W: Write + 'static> VideoBuilder<W> for Prophesee<W> {
             feature_c_radius_denom,
         );
         self
-    };
+    }
 
     fn chunk_rows(mut self, chunk_rows: usize) -> Self {
         self.video = self.video.chunk_rows(chunk_rows);

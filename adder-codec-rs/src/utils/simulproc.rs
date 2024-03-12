@@ -231,14 +231,14 @@ impl<W: Write + 'static> SimulProcessor<W> {
         let mut now = Instant::now();
 
         loop {
-            match self.source.consume(1, &self.thread_pool) {
-                Ok(_events) => {
-                    // match self.events_tx.send(events) {
-                    //     Ok(_) => {}
-                    //     Err(_) => {
-                    //         break;
-                    //     }
-                    // };
+            match self.source.consume(&self.thread_pool) {
+                Ok(events) => {
+                    match self.events_tx.send(events) {
+                        Ok(_) => {}
+                        Err(_) => {
+                            break;
+                        }
+                    };
                 }
                 Err(e) => {
                     println!("Err: {e:?}");
