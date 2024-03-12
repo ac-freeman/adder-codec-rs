@@ -120,3 +120,41 @@ pub fn draw_feature_coord(
         }
     }
 }
+
+pub fn draw_rect(
+    x1: PixelAddress,
+    y1: PixelAddress,
+    x2: PixelAddress,
+    y2: PixelAddress,
+    img: &mut Frame,
+    three_color: bool,
+    color: Option<[u8; 3]>,
+) {
+    let draw_color: [u8; 3] = color.unwrap_or_else(|| [255, 255, 255]);
+
+    unsafe {
+        if three_color {
+            for i in x1..=x2 {
+                for c in 0..3 {
+                    *img.uget_mut((y1 as usize, i as usize, c)) = draw_color[c];
+                    *img.uget_mut((y2 as usize, i as usize, c)) = draw_color[c];
+                }
+            }
+            for i in y1..=y2 {
+                for c in 0..3 {
+                    *img.uget_mut((i as usize, x1 as usize, c)) = draw_color[c];
+                    *img.uget_mut((i as usize, x2 as usize, c)) = draw_color[c];
+                }
+            }
+        } else {
+            for i in x1..=x2 {
+                *img.uget_mut((y1 as usize, i as usize, 0)) = draw_color[0];
+                *img.uget_mut((y2 as usize, i as usize, 0)) = draw_color[0];
+            }
+            for i in y1..=y2 {
+                *img.uget_mut((i as usize, x1 as usize, 0)) = draw_color[0];
+                *img.uget_mut((i as usize, x2 as usize, 0)) = draw_color[0];
+            }
+        }
+    }
+}

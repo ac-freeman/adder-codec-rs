@@ -45,7 +45,7 @@ use rayon::ThreadPool;
 use crate::transcoder::source::video::FramedViewMode::SAE;
 use crate::utils::cv::is_feature;
 
-use crate::utils::viz::{draw_feature_coord, ShowFeatureMode};
+use crate::utils::viz::{draw_feature_coord, draw_rect, ShowFeatureMode};
 use adder_codec_core::codec::rate_controller::{Crf, CrfParameters};
 use kiddo::{KdTree, SquaredEuclidean};
 use thiserror::Error;
@@ -906,6 +906,10 @@ impl<W: Write + 'static> Video<W> {
                 }
             });
 
+        let mut new_features = new_features.iter()
+            .flat_map(|feature_set| feature_set.iter().map(|coord| [coord.x, coord.y])).collect::<Vec<[u16;2]>>();
+        let mut new_features: HashSet<[u16;2]> = new_features.drain(..).collect();
+
         #[cfg(feature = "feature-logging")]
         {
             let total_duration_nanos = _start.elapsed().as_nanos();
@@ -1060,23 +1064,23 @@ impl<W: Write + 'static> Video<W> {
         let parameters = self.encoder.options.crf.get_parameters();
 
         if parameters.feature_c_radius > 0 {
-            for feature_set in &new_features {
-                for coord in feature_set {
+            for coord in &new_features {
+
                     if self.state.show_features == ShowFeatureMode::Instant {
                         draw_feature_coord(
-                            coord.x,
-                            coord.y,
+                            coord[0],
+                            coord[1],
                             &mut self.display_frame_features,
                             self.state.plane.c() != 1,
                             None,
                         );
                     }
                     let radius = parameters.feature_c_radius as i32;
-                    for row in (coord.y() as i32 - radius).max(0)
-                        ..=(coord.y() as i32 + radius).min(self.state.plane.h() as i32 - 1)
+                    for row in (coord[1] as i32 - radius).max(0)
+                        ..=(coord[1] as i32 + radius).min(self.state.plane.h() as i32 - 1)
                     {
-                        for col in (coord.x() as i32 - radius).max(0)
-                            ..=(coord.x() as i32 + radius).min(self.state.plane.w() as i32 - 1)
+                        for col in (coord[0] as i32 - radius).max(0)
+                            ..=(coord[0] as i32 + radius).min(self.state.plane.w() as i32 - 1)
                         {
                             for c in 0..self.state.plane.c() {
                                 self.event_pixel_trees[[row as usize, col as usize, c as usize]]
@@ -1084,26 +1088,22 @@ impl<W: Write + 'static> Video<W> {
                             }
                         }
                     }
-                }
+
             }
         }
 
-        let flattened_features: &Vec<[f32; 2]> = &new_features
-            .iter()
-            .flat_map(|feature_set| {
-                feature_set
-                    .iter()
-                    .map(|coord| [coord.x as f32, coord.y as f32])
-            })
-            .collect();
 
-        self.cluster(&flattened_features);
+        self.cluster(&new_features);
 
         Ok(())
     }
 
-    fn cluster(&mut self, points: &Vec<[f32; 2]>) {
-        let mut tree: KdTree<f32, 2> = (points).into();
+    fn cluster(&mut self, set: &HashSet<[u16; 2]>) {
+        let points: Vec<[f32; 2]> = set
+            .into_iter()
+            .map(|coord| [coord[0] as f32, coord[1] as f32])
+            .collect();
+        let mut tree: KdTree<f32, 2> = (&points).into();
 
         if points.len() < 3 {
             return;
@@ -1163,33 +1163,53 @@ impl<W: Write + 'static> Video<W> {
             clusters.push(cluster);
         }
 
+        let mut bboxes = Vec::new();
         for cluster in clusters {
-            if self.state.show_features == ShowFeatureMode::Off {
-                break;
-            }
-
             let random_color = [
                 rand::random::<u8>(),
                 rand::random::<u8>(),
                 rand::random::<u8>(),
             ];
 
+            let mut min_x = self.state.plane.w_usize();
+            let mut max_x = 0;
+            let mut min_y = self.state.plane.h_usize();
+            let mut max_y = 0;
+
             for i in cluster {
-                draw_feature_coord(
-                    points[i as usize][0] as PixelAddress,
-                    points[i as usize][1] as PixelAddress,
-                    &mut self.display_frame_features,
-                    self.state.plane.c() != 1,
-                    Some(random_color),
-                );
+                let coord = points[i as usize];
+                min_x = min_x.min(coord[0] as usize);
+                max_x = max_x.max(coord[0] as usize);
+                min_y = min_y.min(coord[1] as usize);
+                max_y = max_y.max(coord[1] as usize);
+
+                if self.state.show_features != ShowFeatureMode::Off {
+                    draw_feature_coord(
+                        points[i as usize][0] as PixelAddress,
+                        points[i as usize][1] as PixelAddress,
+                        &mut self.display_frame_features,
+                        self.state.plane.c() != 1,
+                        Some(random_color),
+                    );
+                }
             }
 
-            // draw_feature_coord(
-            //     coord.x,
-            //     coord.y,
-            //     &mut self.display_frame_features,
-            //     self.state.plane.c() != 1,
-            // );
+            // If area is less then 1/4 the size of the frame, push it
+            if (max_x - min_x) * (max_y - min_y) < self.state.plane.area_wh() / 4 {
+                bboxes.push((min_x, min_y, max_x, max_y));
+
+                if self.state.show_features != ShowFeatureMode::Off {
+                    draw_rect(
+                        min_x as PixelAddress,
+                        min_y as PixelAddress,
+                        max_x as PixelAddress,
+                        max_y as PixelAddress,
+                        &mut self.display_frame_features,
+                        self.state.plane.c() != 1,
+                        Some(random_color),
+                    );
+                }
+            }
         }
     }
 
