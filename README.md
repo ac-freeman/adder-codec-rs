@@ -32,7 +32,11 @@ Source 8-bit image frame with shadows boosted ([source video](https://www.pexels
 - **aedat-rs**: a fast AEDAT 4 Rust reader. [[source](https://github.com/ac-freeman/aedat-rs)] [![Crates.io](https://img.shields.io/crates/v/aedat)](https://crates.io/crates/aedat)
 
 ## More information
-Read the [wiki](https://github.com/ac-freeman/adder-codec-rs/wiki/) for background on ADΔER, how to use it, and what tools are included.
+Read [this paper](https://arxiv.org/abs/2401.17151) and the [wiki](https://github.com/ac-freeman/adder-codec-rs/wiki/) for background on ADΔER, how to use it, and what tools are included.
+
+## Contributing
+
+Several [open issues](https://github.com/ac-freeman/adder-codec-rs/issues) would greatly benefit from additional help! I've marked some as "good first issues" for new contributors. If you have any questions, please ask them on the issues page so others with similar questions can refer to our discussions. I will try to elucidate any confusing code or concepts with better documentation.
 
 ## Cite this work
 
