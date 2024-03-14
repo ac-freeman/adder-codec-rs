@@ -67,7 +67,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     )?;
     prophesee_source
         .get_video_mut()
-        .update_detect_features(args.features, ShowFeatureMode::Off);
+        .update_detect_features(args.features, ShowFeatureMode::Off, true, true);
     // prophesee_source
     //     .get_video_mut()
     //     .encoder
