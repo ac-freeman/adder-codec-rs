@@ -73,7 +73,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
             // .chunk_rows(64)
             .frame_start(args.frame_idx_start)?
             .crf(args.crf)
-            .show_display(args.show_display)
             .auto_time_parameters(args.ref_time, args.delta_t_max, None)?;
 
     if !args.output_events_filename.is_empty() {

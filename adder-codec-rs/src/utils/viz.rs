@@ -6,7 +6,7 @@ use std::fs::File;
 use std::io;
 #[cfg(feature = "open-cv")]
 use std::io::BufWriter;
-use std::io::{Cursor};
+use std::io::{Cursor, Write};
 use std::path::Path;
 use std::process::{Command, Output};
 use video_rs_adder_dep::{Frame};

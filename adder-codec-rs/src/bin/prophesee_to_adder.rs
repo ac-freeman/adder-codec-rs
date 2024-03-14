@@ -81,7 +81,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .unwrap();
 
     loop {
-        match prophesee_source.consume(1, &pool) {
+        match prophesee_source.consume( &pool) {
             Ok(_) => {}
             Err(SourceError::Open) => return Ok(()),
             Err(e) => {
