@@ -13,6 +13,11 @@ A unified framework for event-based video. Encoder/transcoder/decoder for ADΔER
 
 To enable the use of _source-modeled lossy compression_ (the only such scheme for event-based video, as far as I'm aware), install/import the relevant crates below with the `compression` feature enabled and the _nightly_ toolchain. For example, install adder-viz as follows:
 ```
+cargo +nightly install adder-viz -F "compression"
+```
+
+To transcode from an iniVation DVS/DAVIS camera (using an older method, not yet unified with the Prophesee transcoder), enable the `open-cv` feature:
+```
 cargo +nightly install adder-viz -F "compression open-cv"
 ```
 
