@@ -116,6 +116,7 @@ impl<W: Write + 'static> Framed<W> {
         self.video.state.params.ref_time
     }
 
+    /// Get the previous input frame
     pub fn get_last_input_frame(&self) -> &Frame {
         &self.input_frame
     }
@@ -126,7 +127,6 @@ impl<W: Write + 'static> Source<W> for Framed<W> {
     /// `ref_time` (the number of ticks each frame is said to span)
     fn consume(
         &mut self,
-        view_interval: u32,
         thread_pool: &ThreadPool,
     ) -> Result<Vec<Vec<Event>>, SourceError> {
         let (_, frame) = self.cap.decode()?;
@@ -136,7 +136,6 @@ impl<W: Write + 'static> Source<W> for Framed<W> {
             self.video.integrate_matrix(
                 self.input_frame.clone(),
                 self.video.state.params.ref_time as f32,
-                view_interval,
             )
         });
         #[cfg(feature = "feature-logging")]
@@ -192,12 +191,6 @@ impl<W: Write + 'static> Source<W> for Framed<W> {
 }
 
 impl<W: Write + 'static> VideoBuilder<W> for Framed<W> {
-    fn contrast_thresholds(mut self, c_thresh_pos: u8, _c_thresh_neg: u8) -> Self {
-        self.video = self.video.c_thresh_pos(c_thresh_pos);
-        // self.video = self.video.c_thresh_neg(c_thresh_neg);
-        self
-    }
-
     fn crf(mut self, crf: u8) -> Self {
         self.video.update_crf(crf);
         self
@@ -218,16 +211,6 @@ impl<W: Write + 'static> VideoBuilder<W> for Framed<W> {
             c_increase_velocity,
             feature_c_radius_denom,
         );
-        self
-    }
-
-    fn c_thresh_pos(mut self, c_thresh_pos: u8) -> Self {
-        self.video = self.video.c_thresh_pos(c_thresh_pos);
-        self
-    }
-
-    fn c_thresh_neg(mut self, c_thresh_neg: u8) -> Self {
-        self.video = self.video.c_thresh_neg(c_thresh_neg);
         self
     }
 
@@ -273,11 +256,6 @@ impl<W: Write + 'static> VideoBuilder<W> for Framed<W> {
             write,
         )?;
         Ok(Box::new(self))
-    }
-
-    fn show_display(mut self, show_display: bool) -> Self {
-        self.video = self.video.show_display(show_display);
-        self
     }
 
     fn detect_features(mut self, detect_features: bool, show_features: ShowFeatureMode) -> Self {

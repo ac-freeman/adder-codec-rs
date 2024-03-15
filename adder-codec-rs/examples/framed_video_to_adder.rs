@@ -33,8 +33,6 @@ fn main() -> Result<(), Box<dyn Error>> {
             EncoderOptions::default(plane),
             writer,
         )?
-        .contrast_thresholds(10, 10)
-        .show_display(true)
         .auto_time_parameters(255, 255 * 30, None)?;
 
     let pool = rayon::ThreadPoolBuilder::new()
@@ -46,7 +44,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let frame_max = 500;
 
     loop {
-        match source.consume(1, &pool) {
+        match source.consume(&pool) {
             Ok(_) => {} // Returns Vec<Vec<Event>>, but we're just writing the events out in this example
             Err(e) => {
                 println!("Err: {e:?}");

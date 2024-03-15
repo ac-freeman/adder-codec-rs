@@ -1,6 +1,6 @@
 use crate::codec::{CodecError, CodecMetadata, EncoderOptions, ReadCompression, WriteCompression};
 use bitstream_io::{BigEndian, BitRead, BitReader, BitWrite, BitWriter};
-use std::io::{BufWriter, Cursor, Read, Seek, SeekFrom, Write};
+use std::io::{Cursor, Read, Seek, SeekFrom, Write};
 
 use crate::codec::compressed::source_model::event_structure::event_adu::EventAdu;
 use crate::codec::compressed::source_model::HandleEvent;
@@ -73,6 +73,30 @@ impl<W: Write> WriteCompression<W> for CompressedOutput<W> {
     }
 
     fn into_writer(&mut self) -> Option<W> {
+        if !self.adu.skip_adu {
+            if let Some(stream) = &mut self.stream {
+                dbg!("compressing partial last adu");
+                let mut temp_stream = BitWriter::endian(Vec::new(), BigEndian);
+
+                let parameters = self.options.crf.get_parameters();
+
+                // Compress the Adu. This also writes the EOF symbol and flushes the encoder
+                self.adu
+                    .compress(&mut temp_stream, parameters.c_thresh_max)
+                    .ok()?;
+
+                let written_data = temp_stream.into_writer();
+
+                // Write the number of bytes in the compressed Adu as the 32-bit header for this Adu
+                stream
+                    .write_bytes(&(written_data.len() as u32).to_be_bytes())
+                    .ok()?;
+
+                // Write the temporary stream to the actual stream
+                stream.write_bytes(&written_data).ok()?;
+            }
+        }
+
         let tmp = self.stream.take();
 
         tmp.map(|bitwriter| bitwriter.into_writer())
@@ -89,6 +113,7 @@ impl<W: Write> WriteCompression<W> for CompressedOutput<W> {
     fn ingest_event(&mut self, event: Event) -> Result<(), CodecError> {
         // Check that the event fits within the Adu's time range
         if event.t > self.adu.start_t + (self.adu.dt_ref * self.adu.num_intervals as DeltaT) {
+            // dbg!("compressing adu");
             // If it doesn't, compress the events and reset the Adu
             if let Some(stream) = &mut self.stream {
                 // Create a temporary u8 stream to write the arithmetic-coded data to
@@ -204,7 +229,7 @@ impl<R: Read + Seek> ReadCompression<R> for CompressedInput<R> {
                 adu.decompress(&mut adu_stream);
 
                 let duration = start.elapsed();
-                println!("Decompressed Adu in {:?} ns", duration.as_nanos());
+                // println!("Decompressed Adu in {:?} ns", duration.as_nanos());
             }
             // Then return the next event from the queue
             match adu.digest_event() {
@@ -249,7 +274,7 @@ mod tests {
     use std::io;
 
     /// Test the creation a CompressedOutput and writing a bunch of events to it but NOT getting
-    /// to the time where we compress the Adu
+    /// to the time where we have a full Adu. It will compress the last partial ADU.
     #[test]
     fn test_compress_empty() -> Result<(), Box<dyn Error>> {
         use crate::codec::compressed::stream::CompressedOutput;
@@ -301,7 +326,7 @@ mod tests {
         }
 
         let output = compressed_output.into_writer().unwrap().into_inner();
-        assert!(output.is_empty());
+        assert!(!output.is_empty());
         Ok(())
     }
 

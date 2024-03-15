@@ -453,9 +453,6 @@ impl PlayerState {
 
         self.ui_state.current_frame = 1;
 
-        if let Some(current_rx) = &self.player_rx {
-            drop(current_rx);
-        }
         let (player_tx, player_rx) = bounded(60);
         let detect_features = self.ui_state.detect_features;
 

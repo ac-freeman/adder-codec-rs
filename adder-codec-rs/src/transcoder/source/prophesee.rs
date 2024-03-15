@@ -3,7 +3,7 @@ use crate::transcoder::source::video::FramedViewMode::SAE;
 use crate::transcoder::source::video::{
     integrate_for_px, Source, SourceError, Video, VideoBuilder,
 };
-use crate::utils::cv::clamp_u8;
+use crate::utils::cv::{clamp_u8, mid_clamp_u8};
 use crate::utils::viz::ShowFeatureMode;
 use adder_codec_core::codec::{EncoderOptions, EncoderType};
 use adder_codec_core::Mode::Continuous;
@@ -16,10 +16,8 @@ use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::fs::File;
 use std::io::{self, BufRead, BufReader, Read, Seek, SeekFrom, Write};
-use std::path::Path;
 use std::path::PathBuf;
 use std::str::FromStr;
-use tokio::io::BufWriter;
 use video_rs_adder_dep::Frame;
 
 /// The temporal granularity of the source (ticks per second)
@@ -31,13 +29,9 @@ pub struct Prophesee<W: Write> {
 
     input_reader: BufReader<File>,
 
-    // We scale up the input timestamps by this amount for accuracy under ADDER.
-    // For example, with time_change = 255, a timestamp of 12 in the source becomes 3060
-    // ADDER ticks
-    // time_change: u32,
-    num_dvs_events: usize,
-
     running_t: u32,
+
+    t_subtract: u32,
 
     /// The timestamp (in-camera) of the last DVS event integrated for each pixel
     pub dvs_last_timestamps: Array3<u32>,
@@ -48,6 +42,7 @@ pub struct Prophesee<W: Write> {
     camera_theta: f64,
 }
 
+/// A DVS-style contrast event
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct DvsEvent {
     t: u32,
@@ -98,7 +93,7 @@ impl<W: Write + 'static> Prophesee<W> {
 
         let plane = &video.state.plane;
 
-        let start_vals = vec![0.5_f64.ln(); video.state.plane.volume()];
+        let start_vals = vec![(128.0_f64 / 255.0_f64).ln_1p(); video.state.plane.volume()];
 
         let dvs_last_ln_val: Array3<f64> = Array3::from_shape_vec(
             (plane.h() as usize, plane.w() as usize, plane.c() as usize),
@@ -108,11 +103,11 @@ impl<W: Write + 'static> Prophesee<W> {
         let prophesee_source = Prophesee {
             video,
             input_reader,
-            num_dvs_events: 0,
             running_t: 0,
+            t_subtract: 0,
             dvs_last_timestamps,
             dvs_last_ln_val,
-            camera_theta: 0.01, // A fixed assumption
+            camera_theta: 0.02, // A fixed assumption
         };
 
         Ok(prophesee_source)
@@ -122,21 +117,18 @@ impl<W: Write + 'static> Prophesee<W> {
 impl<W: Write + 'static + std::marker::Send> Source<W> for Prophesee<W> {
     fn consume(
         &mut self,
-        view_interval: u32,
-        thread_pool: &ThreadPool,
+        _thread_pool: &ThreadPool,
     ) -> Result<Vec<Vec<Event>>, SourceError> {
         if self.running_t == 0 {
             self.video.integrate_matrix(
                 self.video.state.running_intensities.clone(),
                 self.video.state.params.ref_time as f32,
-                1,
             )?;
             let first_events: Vec<Event> = self
                 .video
                 .integrate_matrix(
                     self.video.state.running_intensities.clone(),
                     self.video.state.params.ref_time as f32,
-                    1,
                 )?
                 .into_iter()
                 .flatten()
@@ -146,7 +138,7 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Prophesee<W> {
         }
 
         // TODO hardcoded: scale the view interval to be 60 FPS GUI display
-        let view_interval = (PROPHESEE_SOURCE_TPS / 60);
+        let view_interval = PROPHESEE_SOURCE_TPS / 60;
 
         // Read events from the source file until we find a timestamp that exceeds our `running_t`
         // by at least `view_interval`
@@ -157,13 +149,21 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Prophesee<W> {
             // TODO: integrate to fill in the rest of time once the eof is reached
 
             dvs_event = match decode_event(&mut self.input_reader) {
-                Ok(dvs_event) => {
+                Ok(mut dvs_event) => {
+                    // if self.running_t == 2 && dvs_events.is_empty() {
+                    //     self.t_subtract = dvs_event.t;
+                    //     eprintln!("t_subtract: {}", self.t_subtract);
+                    // }
+
+                    dvs_event.t -= self.t_subtract;
+
                     if dvs_event.t > self.running_t {
                         self.running_t = dvs_event.t;
                     }
                     dvs_event
                 }
                 Err(e) => {
+                    dbg!("End of input file");
                     end_events(self);
                     return Err(e.into());
                 }
@@ -196,16 +196,16 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Prophesee<W> {
             // Get the last ln intensity for this pixel
             let mut last_ln_val = self.dvs_last_ln_val[[y, x, 0]];
 
-            // Convert the ln intensity to a linear intensity
-            let mut last_val = (last_ln_val.exp() - 1.0) * 255.0;
-
-            clamp_u8(&mut last_val, &mut last_ln_val);
-
             let px = &mut self.video.event_pixel_trees[[y, x, 0]];
 
             if t > last_t + 1 {
+                // Convert the ln intensity to a linear intensity
+                let mut last_val = (last_ln_val.exp() - 1.0) * 255.0;
+
+                mid_clamp_u8(&mut last_val, &mut last_ln_val);
+
                 // Integrate the last intensity for this pixel over the time since the last event
-                let time_spanned = ((t - last_t - 1) * self.video.state.params.ref_time);
+                let time_spanned = (t - last_t - 1) * self.video.state.params.ref_time;
                 let intensity_to_integrate = last_val * (t - last_t - 1) as f64;
 
                 let mut base_val = 0;
@@ -228,10 +228,6 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Prophesee<W> {
                 _ => panic!("Invalid polarity"),
             };
 
-            let mut new_val = (new_ln_val.exp() - 1.0) * 255.0;
-
-            clamp_u8(&mut new_val, &mut new_ln_val);
-
             // Update the last intensity for this pixel
             self.dvs_last_ln_val[[y, x, 0]] = new_ln_val;
 
@@ -239,6 +235,13 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Prophesee<W> {
             self.dvs_last_timestamps[[y, x, 0]] = t;
 
             if t > last_t {
+                let mut new_val = (new_ln_val.exp() - 1.0) * 255.0;
+
+                mid_clamp_u8(&mut new_val, &mut new_ln_val);
+
+                // Update the last intensity for this pixel
+                self.dvs_last_ln_val[[y, x, 0]] = new_ln_val;
+
                 // Integrate 1 source time unit of the new intensity
                 let time_spanned = self.video.state.params.ref_time;
                 let intensity_to_integrate = new_val;
@@ -334,16 +337,16 @@ fn end_events<W: Write + 'static + std::marker::Send>(prophesee: &mut Prophesee<
             let mut base_val = 0;
 
             // Get the last ln intensity for this pixel
-            let mut last_ln_val = prophesee.dvs_last_ln_val[[y, x, 0]];
+            let last_ln_val = prophesee.dvs_last_ln_val[[y, x, 0]];
 
             // Convert the ln intensity to a linear intensity
-            let mut last_val = (last_ln_val.exp() - 1.0) * 255.0;
+            let last_val = (last_ln_val.exp() - 1.0) * 255.0;
 
             assert!(prophesee.running_t - prophesee.dvs_last_timestamps[[y, x, 0]] > 0);
 
             // Integrate the last intensity for this pixel over the time since the last event
-            let time_spanned = ((prophesee.running_t - prophesee.dvs_last_timestamps[[y, x, 0]])
-                * prophesee.video.state.params.ref_time);
+            let time_spanned = (prophesee.running_t - prophesee.dvs_last_timestamps[[y, x, 0]])
+                * prophesee.video.state.params.ref_time;
             let intensity_to_integrate = last_val * time_spanned as f64;
 
             let _ = integrate_for_px(
@@ -379,7 +382,7 @@ fn parse_header(file: &mut BufReader<File>) -> io::Result<(u64, u8, u8, (u32, u3
         if line.is_empty() || line[0] != b'%' {
             end_of_header = true;
         } else {
-            let mut words: Vec<&[u8]> = line.split(|&x| x == b' ' || x == b'\t').collect(); // Use &[u8] instead of &str
+            let words: Vec<&[u8]> = line.split(|&x| x == b' ' || x == b'\t').collect(); // Use &[u8] instead of &str
 
             if words.len() > 1 {
                 match words[1] {
@@ -404,6 +407,9 @@ fn parse_header(file: &mut BufReader<File>) -> io::Result<(u64, u8, u8, (u32, u3
         file.read_exact(&mut buf)?;
         let ev_type = buf[0];
         let ev_size = buf[1];
+        if ev_size != 8 || (ev_type != 0 && ev_type != 12) {
+            panic!("Invalid Prophesee event size");
+        }
 
         (ev_type, ev_size)
     } else {
@@ -419,7 +425,7 @@ fn parse_header(file: &mut BufReader<File>) -> io::Result<(u64, u8, u8, (u32, u3
 }
 
 fn line_to_hw(words: Vec<&[u8]>) -> Option<u32> {
-    let mut word = words.get(2).unwrap();
+    let  word = words.get(2).unwrap();
     let mut new_word = *word;
     if *word.last().unwrap() == '\n' as u8 {
         // Remove the trailing newline
@@ -430,7 +436,7 @@ fn line_to_hw(words: Vec<&[u8]>) -> Option<u32> {
         .and_then(|s| s.parse().ok())
 }
 
-fn decode_event(reader: &mut BufReader<File>) -> io::Result<(DvsEvent)> {
+fn decode_event(reader: &mut BufReader<File>) -> io::Result<DvsEvent> {
     // Read one record
     let mut buffer = [0; 8]; // Adjust this size to match your record size
     reader.read_exact(&mut buffer)?;
@@ -448,11 +454,6 @@ fn decode_event(reader: &mut BufReader<File>) -> io::Result<(DvsEvent)> {
 }
 
 impl<W: Write + 'static> VideoBuilder<W> for Prophesee<W> {
-    fn contrast_thresholds(mut self, c_thresh_pos: u8, _c_thresh_neg: u8) -> Self {
-        self.video = self.video.c_thresh_pos(c_thresh_pos);
-        // self.video = self.video.c_thresh_neg(c_thresh_neg);
-        self
-    }
 
     fn crf(mut self, crf: u8) -> Self {
         self.video.update_crf(crf);
@@ -474,16 +475,6 @@ impl<W: Write + 'static> VideoBuilder<W> for Prophesee<W> {
             c_increase_velocity,
             feature_c_radius_denom,
         );
-        self
-    }
-
-    fn c_thresh_pos(mut self, c_thresh_pos: u8) -> Self {
-        self.video = self.video.c_thresh_pos(c_thresh_pos);
-        self
-    }
-
-    fn c_thresh_neg(self, _c_thresh_neg: u8) -> Self {
-        // self.video = self.video.c_thresh_neg(c_thresh_neg);
         self
     }
 
@@ -527,12 +518,6 @@ impl<W: Write + 'static> VideoBuilder<W> for Prophesee<W> {
         )?;
         Ok(Box::new(self))
     }
-
-    fn show_display(mut self, show_display: bool) -> Self {
-        self.video = self.video.show_display(show_display);
-        self
-    }
-
     fn detect_features(mut self, detect_features: bool, show_features: ShowFeatureMode) -> Self {
         self.video = self.video.detect_features(detect_features, show_features);
         self

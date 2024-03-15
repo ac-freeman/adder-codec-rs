@@ -32,7 +32,7 @@ pub struct MyArgs {
     pub(crate) output_mode: WriteMode,
 
     /// Output DVS event video file path
-    #[clap(long)]
+    #[clap(long, default_value = "")]
     pub(crate) output_video: String,
 
     #[clap(long, default_value_t = 100.0)]
@@ -93,7 +93,6 @@ enum WriteMode {
 #[allow(dead_code)]
 fn main() -> Result<(), Box<dyn error::Error>> {
     let args: MyArgs = MyArgs::parse();
-    dbg!(args.clone());
     let file_path = args.input.as_str();
 
     let output_events_path = args.output_events.as_str();
@@ -205,14 +204,14 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let mut max_px_event_count = 0;
 
     loop {
-        if event_count % divisor == 0 {
-            write!(
-                handle,
-                "\rTranscoding ADΔER to DVS...{}%",
-                (event_count * 100) / num_events
-            )?;
-            handle.flush()?;
-        }
+        // if event_count % divisor == 0 {
+        //     write!(
+        //         handle,
+        //         "\rTranscoding ADΔER to DVS...{}%",
+        //         (event_count * 100) / num_events
+        //     )?;
+        //     handle.flush()?;
+        // }
         if current_t
             > (frame_count as u128 * frame_length) + (meta.tps as f32 * args.buffer_secs) as u128
         {
@@ -292,35 +291,72 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         match event.d {
                             255 => {
                                 // ignore empty events
+                                px.d = event.d;
                                 continue; // Don't update d with this
                             }
                             _ => {
+                                // TODO: also do it if 2^D / delta_t is an integer!
                                 let x = event.coord.x;
                                 let y = event.coord.y;
                                 let new_intensity_ln =
                                     event_to_frame_intensity(&event, meta.ref_interval as u128);
 
-                                if new_intensity_ln >= px.frame_intensity_ln + args.theta {
+                                if new_intensity_ln > 0.406
+                                    && new_intensity_ln < 0.407
+                                    && ((px.frame_intensity_ln > 1.0_f64.ln_1p() - args.theta)
+                                        || (px.t == old_t && px.frame_intensity_ln > 0.6))
+                                {
                                     fire_dvs_event(
                                         true,
                                         x,
                                         y,
-                                        px.t,
+                                        old_t + 1,
                                         &mut output_events_writer,
                                         &mut ordered_event_queue,
                                         args.output_mode,
                                     )?;
                                     px.frame_intensity_ln = new_intensity_ln;
-                                } else if new_intensity_ln <= px.frame_intensity_ln - args.theta {
+                                } else if new_intensity_ln > 0.406
+                                    && new_intensity_ln < 0.407
+                                    && ((px.frame_intensity_ln < 0.0_f64.ln_1p() + args.theta)
+                                        || (px.t == old_t && px.frame_intensity_ln < 0.3))
+                                {
                                     fire_dvs_event(
                                         false,
                                         x,
                                         y,
-                                        px.t,
+                                        old_t + 1,
                                         &mut output_events_writer,
                                         &mut ordered_event_queue,
                                         args.output_mode,
                                     )?;
+                                    px.frame_intensity_ln = new_intensity_ln;
+                                } else if new_intensity_ln
+                                    > px.frame_intensity_ln + args.theta / 2.0
+                                {
+                                    fire_dvs_event(
+                                        true,
+                                        x,
+                                        y,
+                                        old_t + 1,
+                                        &mut output_events_writer,
+                                        &mut ordered_event_queue,
+                                        args.output_mode,
+                                    )?;
+                                    px.frame_intensity_ln = new_intensity_ln;
+                                } else if new_intensity_ln
+                                    < px.frame_intensity_ln - args.theta / 2.0
+                                {
+                                    fire_dvs_event(
+                                        false,
+                                        x,
+                                        y,
+                                        old_t + 1,
+                                        &mut output_events_writer,
+                                        &mut ordered_event_queue,
+                                        args.output_mode,
+                                    )?;
+
                                     px.frame_intensity_ln = new_intensity_ln;
                                 }
                             }

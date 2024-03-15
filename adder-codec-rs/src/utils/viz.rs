@@ -9,7 +9,7 @@ use std::io::BufWriter;
 use std::io::{Cursor, Write};
 use std::path::Path;
 use std::process::{Command, Output};
-use video_rs_adder_dep::{Frame, Time};
+use video_rs_adder_dep::{Frame};
 
 #[cfg(feature = "open-cv")]
 /// Writes a given [`Mat`] to a file
@@ -88,25 +88,74 @@ pub enum ShowFeatureMode {
 
 /// Assuming the given event is a feature, draw it on the given `img` as a white cross
 pub fn draw_feature_event(e: &Event, img: &mut Frame) {
-    draw_feature_coord(e.coord.x, e.coord.y, img, false)
+    draw_feature_coord(e.coord.x, e.coord.y, img, false, None)
 }
 
-pub fn draw_feature_coord(x: PixelAddress, y: PixelAddress, img: &mut Frame, color: bool) {
-    let draw_color: u8 = 255;
+/// Draw a cross on the given `img` at the given `x` and `y` coordinates
+pub fn draw_feature_coord(
+    x: PixelAddress,
+    y: PixelAddress,
+    img: &mut Frame,
+    three_color: bool,
+    color: Option<[u8; 3]>,
+) {
+    let draw_color: [u8; 3] = color.unwrap_or_else(|| [255, 255, 255]);
+
     let radius = 2;
 
     unsafe {
-        if color {
+        if three_color {
             for i in -radius..=radius {
                 for c in 0..3 {
-                    *img.uget_mut(((y as i32 + i) as usize, (x as i32) as usize, c)) = draw_color;
-                    *img.uget_mut(((y as i32) as usize, (x as i32 + i) as usize, c)) = draw_color;
+                    *img.uget_mut(((y as i32 + i) as usize, (x as i32) as usize, c)) =
+                        draw_color[c];
+                    *img.uget_mut(((y as i32) as usize, (x as i32 + i) as usize, c)) =
+                        draw_color[c];
                 }
             }
         } else {
             for i in -radius..=radius {
-                *img.uget_mut(((y as i32 + i) as usize, (x as i32) as usize, 0)) = draw_color;
-                *img.uget_mut(((y as i32) as usize, (x as i32 + i) as usize, 0)) = draw_color;
+                *img.uget_mut(((y as i32 + i) as usize, (x as i32) as usize, 0)) = draw_color[0];
+                *img.uget_mut(((y as i32) as usize, (x as i32 + i) as usize, 0)) = draw_color[0];
+            }
+        }
+    }
+}
+
+/// Draw a rectangle on the given `img` with the given `color`
+pub fn draw_rect(
+    x1: PixelAddress,
+    y1: PixelAddress,
+    x2: PixelAddress,
+    y2: PixelAddress,
+    img: &mut Frame,
+    three_color: bool,
+    color: Option<[u8; 3]>,
+) {
+    let draw_color: [u8; 3] = color.unwrap_or_else(|| [255, 255, 255]);
+
+    unsafe {
+        if three_color {
+            for i in x1..=x2 {
+                for c in 0..3 {
+                    *img.uget_mut((y1 as usize, i as usize, c)) = draw_color[c];
+                    *img.uget_mut((y2 as usize, i as usize, c)) = draw_color[c];
+                }
+            }
+            for i in y1..=y2 {
+                for c in 0..3 {
+                    *img.uget_mut((i as usize, x1 as usize, c)) = draw_color[c];
+                    *img.uget_mut((i as usize, x2 as usize, c)) = draw_color[c];
+                }
+            }
+        } else {
+            for i in x1..=x2 {
+                *img.uget_mut((y1 as usize, i as usize, 0)) = draw_color[0];
+                *img.uget_mut((y2 as usize, i as usize, 0)) = draw_color[0];
+            }
+            for i in y1..=y2 {
+                *img.uget_mut((i as usize, x1 as usize, 0)) = draw_color[0];
+                *img.uget_mut((i as usize, x2 as usize, 0)) = draw_color[0];
             }
         }
     }

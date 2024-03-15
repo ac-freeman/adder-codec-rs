@@ -16,7 +16,6 @@ use opencv::prelude::*;
 use bumpalo::Bump;
 use ndarray::{Array3, Axis};
 
-use itertools::Itertools;
 use rayon::iter::IntoParallelIterator;
 use rayon::{current_num_threads, ThreadPool};
 use std::cmp::max;
@@ -103,6 +102,7 @@ pub struct Davis<W: Write> {
 
     time_change: f64,
     num_dvs_events: usize,
+    ref_time_divisor: f64
 }
 
 unsafe impl<W: Write> Sync for Davis<W> {}
@@ -174,6 +174,7 @@ impl<W: Write + 'static> Davis<W> {
             mode: TranscoderMode::Framed,
             time_change: 0.0,
             num_dvs_events: 0,
+            ref_time_divisor: 1.0,
         };
 
         Ok(davis_source)
@@ -466,9 +467,6 @@ impl<W: Write + 'static> Integration<W> {
             return Err(CodecError::VisionError(e.to_string()));
         }
 
-        if video.state.show_live {
-            // show_display("instance", &video.instantaneous_frame, 1, video).unwrap();
-        }
         Ok(())
     }
 
@@ -602,9 +600,6 @@ impl<W: Write + 'static> Integration<W> {
 
         video.handle_features(&big_buffer)?;
 
-        if video.state.show_live {
-            // show_display("instance", &video.instantaneous_frame, 1, video)?;
-        }
         Ok(())
     }
 }
@@ -612,7 +607,6 @@ impl<W: Write + 'static> Integration<W> {
 impl<W: Write + 'static + std::marker::Send> Source<W> for Davis<W> {
     fn consume(
         &mut self,
-        view_interval: u32,
         thread_pool: &ThreadPool,
     ) -> Result<Vec<Vec<Event>>, SourceError> {
         // Attempting new method for integration without requiring a buffer. Could be implemented
@@ -707,8 +701,8 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Davis<W> {
                     self.integration.dvs_events_before = Some(events_before);
                     self.integration.dvs_events_after = Some(events_after);
 
-                    self.video.state.ref_time_divisor = (img_end_ts - img_start_ts) as f32
-                        / self.video.state.params.ref_time as f32;
+                    self.ref_time_divisor = (img_end_ts - img_start_ts) as f64
+                        / self.video.state.params.ref_time as f64;
                     if let Some(latency) = opt_latency {
                         self.latency = latency;
                     }
@@ -846,7 +840,7 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Davis<W> {
 
             ret = thread_pool.install(|| {
                 self.video
-                    .integrate_matrix(frame, mat_integration_time, view_interval)
+                    .integrate_matrix(frame, mat_integration_time)
             });
 
             #[allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
@@ -935,7 +929,7 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Davis<W> {
         match self.mode {
             TranscoderMode::Framed => {
                 let fps = self.video.state.tps as f64
-                    / (self.video.state.ref_time_divisor as f64
+                    / (self.ref_time_divisor
                         * self.video.state.params.ref_time as f64);
                 self.video.state.plane.volume() as f64 * 8.0 * fps
             }
@@ -959,11 +953,6 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Davis<W> {
 }
 
 impl<W: Write + 'static> VideoBuilder<W> for Davis<W> {
-    fn contrast_thresholds(mut self, c_thresh_pos: u8, _c_thresh_neg: u8) -> Self {
-        self.video = self.video.c_thresh_pos(c_thresh_pos);
-        // self.video = self.video.c_thresh_neg(c_thresh_neg);
-        self
-    }
 
     fn crf(mut self, crf: u8) -> Self {
         self.video.update_crf(crf);
@@ -985,16 +974,6 @@ impl<W: Write + 'static> VideoBuilder<W> for Davis<W> {
             c_increase_velocity,
             feature_c_radius_denom,
         );
-        self
-    }
-
-    fn c_thresh_pos(mut self, c_thresh_pos: u8) -> Self {
-        self.video = self.video.c_thresh_pos(c_thresh_pos);
-        self
-    }
-
-    fn c_thresh_neg(self, _c_thresh_neg: u8) -> Self {
-        // self.video = self.video.c_thresh_neg(c_thresh_neg);
         self
     }
 
@@ -1037,11 +1016,6 @@ impl<W: Write + 'static> VideoBuilder<W> for Davis<W> {
             write,
         )?;
         Ok(Box::new(self))
-    }
-
-    fn show_display(mut self, show_display: bool) -> Self {
-        self.video = self.video.show_display(show_display);
-        self
     }
 
     fn detect_features(mut self, detect_features: bool, show_features: ShowFeatureMode) -> Self {

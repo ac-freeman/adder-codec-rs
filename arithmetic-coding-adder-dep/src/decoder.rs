@@ -1,7 +1,7 @@
 //! The [`Decoder`] half of the arithmetic coding library.
 
-use std::{io, ops::Range};
 use std::marker::PhantomData;
+use std::{io, ops::Range};
 
 use bitstream_io::BitRead;
 
@@ -105,7 +105,10 @@ where
     ///
     /// The iterator will continue returning symbols until EOF is reached
     pub fn decode_all<'a>(&'a mut self, input: &'a mut R) -> DecodeIter<M, R> {
-        DecodeIter { decoder: self, input}
+        DecodeIter {
+            decoder: self,
+            input,
+        }
     }
 
     /// Read the next symbol from the stream of bits
@@ -201,7 +204,8 @@ where
     R: BitRead,
 {
     /// todo
-    #[must_use] pub fn new(precision: u32) -> Self {
+    #[must_use]
+    pub fn new(precision: u32) -> Self {
         let low = B::ZERO;
         let high = B::ONE << precision;
         let x = B::ZERO;

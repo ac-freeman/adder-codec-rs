@@ -46,6 +46,7 @@ pub enum SourceCamera {
     Asint,
 }
 
+/// Is the given source camera a framed source?
 pub fn is_framed(source_camera: SourceCamera) -> bool {
     matches!(
         source_camera,

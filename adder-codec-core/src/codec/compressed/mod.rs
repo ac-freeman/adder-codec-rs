@@ -50,10 +50,10 @@ mod tests {
         encoder.flush_writer().unwrap();
         let writer = encoder.close_writer().unwrap().unwrap();
 
-        dbg!(writer.len());
-        // It should still be just the header, because we haven't integrated enough events
-        // to write out a frame (haven't reached DeltaT_max)
-        assert_eq!(writer.len(), meta.header_size);
+        let tmp_len = writer.len();
+
+        // We should have compressed the partial ADU, and thus have more than the header size
+        assert!(writer.len() > meta.header_size);
 
         let output = crate::codec::compressed::stream::CompressedOutput::new(meta, Vec::new());
         let mut encoder = Encoder::new_compressed(
@@ -75,6 +75,6 @@ mod tests {
         let writer = encoder.close_writer().unwrap().unwrap();
 
         // Now we've exceeded the DeltaT_max, so we should have written out a frame
-        assert!(writer.len() > meta.header_size);
+        assert!(writer.len() > tmp_len);
     }
 }

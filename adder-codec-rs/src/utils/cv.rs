@@ -207,6 +207,8 @@ pub fn is_feature(
     Ok(false)
 }
 
+
+/// If the input is a color image and we want a gray image, convert it to grayscale
 pub fn handle_color(mut input: Frame, color: bool) -> Result<Frame, SourceError> {
     if !color {
         // Map the three color channels to a single grayscale channel
@@ -324,6 +326,7 @@ pub fn calculate_quality_metrics(
     Ok(results)
 }
 
+/// Calculate the mean squared error
 fn calculate_mse(original: &Array3<u8>, reconstructed: &Array3<u8>) -> Result<f64, Box<dyn Error>> {
     if original.shape() != reconstructed.shape() {
         return Err("Shapes of original and reconstructed images must match".into());
@@ -339,6 +342,7 @@ fn calculate_mse(original: &Array3<u8>, reconstructed: &Array3<u8>) -> Result<f6
     Ok(error_sum / (original.len() as f64))
 }
 
+/// Calculate the peak signal-to-noise ratio from the given MSE
 fn calculate_psnr(mse: f64) -> Result<f64, Box<dyn Error>> {
     Ok(20.0 * (255.0_f64).log10() - 10.0 * mse.log10())
 }
@@ -388,6 +392,7 @@ fn calculate_ssim(
     Ok(score)
 }
 
+/// Calculate the SSIM for the given windows
 fn ssim_for_window(source_window: ArrayView<u8, Ix2>, recon_window: ArrayView<u8, Ix2>) -> f64 {
     let mean_x = mean(&source_window);
     let mean_y = mean(&recon_window);
@@ -399,6 +404,7 @@ fn ssim_for_window(source_window: ArrayView<u8, Ix2>, recon_window: ArrayView<u8
     counter / denominator
 }
 
+/// Calculate the covariance of the given windows for SSIM
 fn covariance(
     window_x: &ArrayView<u8, Ix2>,
     mean_x: f64,
@@ -412,12 +418,15 @@ fn covariance(
         .sum::<f64>()
 }
 
+/// Calculate the mean of the given window for SSIM
 fn mean(window: &ArrayView<u8, Ix2>) -> f64 {
     let sum = window.iter().map(|pixel| *pixel as f64).sum::<f64>();
 
     sum / window.len() as f64
 }
 
+
+/// Clamp the value to the range [0, 255].
 pub fn clamp_u8(frame_val: &mut f64, last_val_ln: &mut f64) {
     if *frame_val <= 0.0 {
         *frame_val = 0.0;
@@ -425,5 +434,14 @@ pub fn clamp_u8(frame_val: &mut f64, last_val_ln: &mut f64) {
     } else if *frame_val > 255.0 {
         *frame_val = 255.0;
         *last_val_ln = 1.0_f64.ln_1p();
+    }
+}
+
+/// Clamp the value to the range [0, 255]. If the value is outside of this range, set it to a mid-
+/// point gray value.
+pub fn mid_clamp_u8(frame_val: &mut f64, last_val_ln: &mut f64) {
+    if *frame_val < 0.0 || *frame_val > 255.0 {
+        *frame_val = 128.0;
+        *last_val_ln = (128.0_f64 / 255.0_f64).ln_1p();
     }
 }

@@ -1,4 +1,3 @@
-use crate::codec::Magic;
 use crate::codec::{CodecError, CodecMetadata, EncoderType, ReadCompression, ReadCompressionEnum};
 use crate::SourceType::*;
 use crate::{Event, PlaneSize, SourceCamera, SourceType};
@@ -8,7 +7,6 @@ use crate::{Event, PlaneSize, SourceCamera, SourceType};
 #[cfg(feature = "compression")]
 use crate::codec::compressed::stream::CompressedInput;
 
-use crate::codec::encoder::Encoder;
 use crate::codec::header::{
     EventStreamHeader, EventStreamHeaderExtensionV1, EventStreamHeaderExtensionV2,
     EventStreamHeaderExtensionV3, MAGIC_COMPRESSED,

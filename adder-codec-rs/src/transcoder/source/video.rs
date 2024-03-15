@@ -16,8 +16,8 @@ use adder_codec_core::codec::{
     CodecError, CodecMetadata, EncoderOptions, EncoderType, LATEST_CODEC_VERSION,
 };
 use adder_codec_core::{
-    Coord, DeltaT, Event, Mode, PixelMultiMode, PlaneError, PlaneSize, SourceCamera, SourceType,
-    TimeMode, D_EMPTY,
+    Coord, DeltaT, Event, Mode, PixelAddress, PixelMultiMode, PlaneError, PlaneSize, SourceCamera,
+    SourceType, TimeMode, D_EMPTY,
 };
 use bumpalo::Bump;
 
@@ -45,8 +45,9 @@ use rayon::ThreadPool;
 use crate::transcoder::source::video::FramedViewMode::SAE;
 use crate::utils::cv::is_feature;
 
-use crate::utils::viz::{draw_feature_coord, ShowFeatureMode};
+use crate::utils::viz::{draw_feature_coord, draw_rect, ShowFeatureMode};
 use adder_codec_core::codec::rate_controller::{Crf, CrfParameters};
+use kiddo::{KdTree, SquaredEuclidean};
 use thiserror::Error;
 use tokio::task::JoinError;
 use video_rs_adder_dep::Frame;
@@ -194,13 +195,9 @@ pub struct VideoState {
 
     /// The number of input intervals (of fixed time) processed so far
     pub in_interval_count: u32,
-    // pub(crate) c_thresh_pos: u8,
-    // pub(crate) c_thresh_neg: u8,
-    pub(crate) ref_time_divisor: f32,
-    pub tps: DeltaT,
 
-    pub(crate) show_display: bool,
-    pub(crate) show_live: bool,
+    /// The number of ticks per second
+    pub tps: DeltaT,
 
     /// Whether or not to detect features
     pub feature_detection: bool,
@@ -214,6 +211,8 @@ pub struct VideoState {
     features: Vec<HashSet<Coord>>,
 
     pub feature_log_handle: Option<std::fs::File>,
+    feature_rate_adjustment: bool,
+    feature_cluster: bool
 }
 
 impl Default for VideoState {
@@ -223,15 +222,14 @@ impl Default for VideoState {
             params: VideoStateParams::default(),
             chunk_rows: 1,
             in_interval_count: 1,
-            ref_time_divisor: 1.0,
             tps: 7650,
-            show_display: false,
-            show_live: false,
             feature_detection: false,
             running_intensities: Default::default(),
             show_features: ShowFeatureMode::Off,
             features: Default::default(),
             feature_log_handle: None,
+            feature_rate_adjustment: false,
+            feature_cluster: false,
         }
     }
 }
@@ -264,9 +262,6 @@ impl Default for VideoState {
 
 /// A builder for a [`Video`]
 pub trait VideoBuilder<W> {
-    /// Set both the positive and negative contrast thresholds
-    fn contrast_thresholds(self, c_thresh_pos: u8, c_thresh_neg: u8) -> Self;
-
     /// Set the Constant Rate Factor (CRF) quality setting for the encoder. 0 is lossless, 9 is worst quality.
     fn crf(self, crf: u8) -> Self;
 
@@ -279,14 +274,6 @@ pub trait VideoBuilder<W> {
         c_increase_velocity: u8,
         feature_c_radius_denom: f32,
     ) -> Self;
-
-    /// Set the positive contrast threshold
-    #[deprecated(since = "0.3.4", note = "please use `crf` or `quality_manual` instead")]
-    fn c_thresh_pos(self, c_thresh_pos: u8) -> Self;
-
-    /// Set the negative contrast threshold
-    #[deprecated(since = "0.3.4", note = "please use `crf` or `quality_manual` instead")]
-    fn c_thresh_neg(self, c_thresh_neg: u8) -> Self;
 
     /// Set the chunk rows
     fn chunk_rows(self, chunk_rows: usize) -> Self;
@@ -314,9 +301,6 @@ pub trait VideoBuilder<W> {
         write: W,
     ) -> Result<Box<Self>, SourceError>;
 
-    /// Set whether or not the show the live display
-    fn show_display(self, show_display: bool) -> Self;
-
     /// Set whether or not to detect features, and whether or not to display the features
     fn detect_features(self, detect_features: bool, show_features: ShowFeatureMode) -> Self;
 
@@ -340,8 +324,12 @@ pub struct Video<W: Write> {
 
     /// Channel for sending events to the encoder
     pub event_sender: Sender<Vec<Event>>,
+
+    /// The object that takes in ADDER events, potentially transforms them in some way,
+    /// and writes them somewhere
     pub encoder: Encoder<W>,
 
+    /// The type of encoder being used (e.g., compressed or raw)
     pub encoder_type: EncoderType,
     // TODO: Hold multiple encoder options and an enum, so that boxing isn't required.
     // Also hold a state for whether or not to write out events at all, so that a null writer isn't required.
@@ -639,12 +627,6 @@ impl<W: Write + 'static> Video<W> {
         Ok(self)
     }
 
-    /// Set the display mode for the instantaneous view.
-    pub fn show_display(mut self, show_display: bool) -> Self {
-        self.state.show_display = show_display;
-        self
-    }
-
     /// Close and flush the stream writer.
     /// # Errors
     /// Returns an error if the stream writer cannot be closed cleanly.
@@ -662,7 +644,6 @@ impl<W: Write + 'static> Video<W> {
         &mut self,
         matrix: Frame,
         time_spanned: f32,
-        view_interval: u32,
     ) -> Result<Vec<Vec<Event>>, SourceError> {
         if self.state.in_interval_count == 0 {
             self.set_initial_d(&matrix);
@@ -671,8 +652,6 @@ impl<W: Write + 'static> Video<W> {
         let parameters = *self.encoder.options.crf.get_parameters();
 
         self.state.in_interval_count += 1;
-
-        self.state.show_live = self.state.in_interval_count % view_interval == 0;
 
         // let matrix_f32 = convert_u8_to_f32_simd(&matrix.into_raw_vec());
         let matrix = matrix.mapv(f32::from);
@@ -785,10 +764,6 @@ impl<W: Write + 'static> Video<W> {
             }
         }
 
-        if self.state.show_live {
-            // show_display("instance", &self.instantaneous_frame, 1, self)?;
-        }
-
         Ok(big_buffer)
     }
 
@@ -836,10 +811,14 @@ impl<W: Write + 'static> Video<W> {
         &mut self,
         detect_features: bool,
         show_features: ShowFeatureMode,
+        feature_rate_adjustment: bool,
+        feature_cluster: bool,
     ) {
         // Validate new value
         self.state.feature_detection = detect_features;
         self.state.show_features = show_features;
+        self.state.feature_rate_adjustment = feature_rate_adjustment;
+        self.state.feature_cluster = feature_cluster;
     }
 
     /// Set a new value for `c_thresh_pos`
@@ -904,6 +883,10 @@ impl<W: Write + 'static> Video<W> {
                     }
                 }
             });
+
+        let mut new_features = new_features.iter()
+            .flat_map(|feature_set| feature_set.iter().map(|coord| [coord.x, coord.y])).collect::<Vec<[u16;2]>>();
+        let new_features: HashSet<[u16;2]> = new_features.drain(..).collect();
 
         #[cfg(feature = "feature-logging")]
         {
@@ -1050,6 +1033,7 @@ impl<W: Write + 'static> Video<W> {
                         coord.y,
                         &mut self.display_frame_features,
                         self.state.plane.c() != 1,
+                        None,
                     );
                 }
             }
@@ -1057,33 +1041,158 @@ impl<W: Write + 'static> Video<W> {
 
         let parameters = self.encoder.options.crf.get_parameters();
 
-        for feature_set in new_features {
-            for coord in feature_set {
-                if self.state.show_features == ShowFeatureMode::Instant {
-                    draw_feature_coord(
-                        coord.x,
-                        coord.y,
-                        &mut self.display_frame_features,
-                        self.state.plane.c() != 1,
-                    );
-                }
-                let radius = parameters.feature_c_radius as i32;
-                for row in (coord.y() as i32 - radius).max(0)
-                    ..(coord.y() as i32 + radius).min(self.state.plane.h() as i32)
-                {
-                    for col in (coord.x() as i32 - radius).max(0)
-                        ..(coord.x() as i32 + radius).min(self.state.plane.w() as i32)
+        
+
+            for coord in &new_features {
+
+                    if self.state.show_features == ShowFeatureMode::Instant {
+                        draw_feature_coord(
+                            coord[0],
+                            coord[1],
+                            &mut self.display_frame_features,
+                            self.state.plane.c() != 1,
+                            None,
+                        );
+                    }
+                if self.state.feature_rate_adjustment && parameters.feature_c_radius > 0 {
+                    let radius = parameters.feature_c_radius as i32;
+                    for row in (coord[1] as i32 - radius).max(0)
+                        ..=(coord[1] as i32 + radius).min(self.state.plane.h() as i32 - 1)
                     {
-                        for c in 0..self.state.plane.c() {
-                            self.event_pixel_trees[[row as usize, col as usize, c as usize]]
-                                .c_thresh = min(parameters.c_thresh_baseline, 2);
+                        for col in (coord[0] as i32 - radius).max(0)
+                            ..=(coord[0] as i32 + radius).min(self.state.plane.w() as i32 - 1)
+                        {
+                            for c in 0..self.state.plane.c() {
+                                self.event_pixel_trees[[row as usize, col as usize, c as usize]]
+                                    .c_thresh = min(parameters.c_thresh_baseline, 2);
+                            }
                         }
                     }
-                }
+
             }
         }
 
+
+        if self.state.feature_cluster {
+            self.cluster(&new_features);
+        }
+
         Ok(())
+    }
+
+    fn cluster(&mut self, set: &HashSet<[u16; 2]>) {
+        let points: Vec<[f32; 2]> = set
+            .into_iter()
+            .map(|coord| [coord[0] as f32, coord[1] as f32])
+            .collect();
+        let tree: KdTree<f32, 2> = (&points).into();
+
+        if points.len() < 3 {
+            return;
+        }
+
+        // DBSCAN algorithm to cluster the features
+
+        let eps = self.state.plane.min_resolution() as f32 / 3.0;
+        let min_pts = 3;
+
+        let mut visited = vec![false; points.len()];
+        let mut clusters = Vec::new();
+
+        for (i, point) in points.iter().enumerate() {
+            if visited[i] {
+                continue;
+            }
+            visited[i] = true;
+
+            let mut neighbors = tree.within_unsorted::<SquaredEuclidean>(point, eps);
+
+            if neighbors.len() < min_pts {
+                continue;
+            }
+
+            let mut cluster = HashSet::new();
+            cluster.insert(i as u64);
+
+            let mut index = 0;
+
+            while index < neighbors.len() {
+                let current_point = neighbors[index];
+                if !visited[current_point.item as usize] {
+                    visited[current_point.item as usize] = true;
+
+                    let current_neighbors = tree.within_unsorted::<SquaredEuclidean>(
+                        &points[current_point.item as usize],
+                        eps,
+                    );
+
+                    if current_neighbors.len() >= min_pts {
+                        neighbors.extend(
+                            current_neighbors
+                                .into_iter()
+                                .filter(|&i| !cluster.contains(&i.item)),
+                        );
+                    }
+                }
+
+                if !cluster.contains(&current_point.item) {
+                    cluster.insert(current_point.item);
+                }
+
+                index += 1;
+            }
+
+            clusters.push(cluster);
+        }
+
+        let mut bboxes = Vec::new();
+        for cluster in clusters {
+            let random_color = [
+                rand::random::<u8>(),
+                rand::random::<u8>(),
+                rand::random::<u8>(),
+            ];
+
+            let mut min_x = self.state.plane.w_usize();
+            let mut max_x = 0;
+            let mut min_y = self.state.plane.h_usize();
+            let mut max_y = 0;
+
+            for i in cluster {
+                let coord = points[i as usize];
+                min_x = min_x.min(coord[0] as usize);
+                max_x = max_x.max(coord[0] as usize);
+                min_y = min_y.min(coord[1] as usize);
+                max_y = max_y.max(coord[1] as usize);
+
+                if self.state.show_features != ShowFeatureMode::Off {
+                    draw_feature_coord(
+                        points[i as usize][0] as PixelAddress,
+                        points[i as usize][1] as PixelAddress,
+                        &mut self.display_frame_features,
+                        self.state.plane.c() != 1,
+                        Some(random_color),
+                    );
+                }
+            }
+
+            // If area is less then 1/4 the size of the frame, push it
+            if (max_x - min_x) * (max_y - min_y) < self.state.plane.area_wh() / 4 {
+                bboxes.push((min_x, min_y, max_x, max_y));
+
+                // if self.state.show_features != ShowFeatureMode::Off {
+                    draw_rect(
+                        min_x as PixelAddress,
+                        min_y as PixelAddress,
+                        max_x as PixelAddress,
+                        max_y as PixelAddress,
+                        &mut self.display_frame_features,
+                        self.state.plane.c() != 1,
+                        Some(random_color),
+                    );
+                // }
+            }
+        }
     }
 
     /// Set whether or not to detect features, and whether or not to display the features
@@ -1110,9 +1219,12 @@ impl<W: Write + 'static> Video<W> {
         }
     }
 
+    /// Get the encoder options
     pub fn get_encoder_options(&self) -> EncoderOptions {
         self.encoder.get_options()
     }
+
+    /// Get the time mode of the video
     pub fn get_time_mode(&self) -> TimeMode {
         self.encoder.meta().time_mode
     }
@@ -1143,6 +1255,7 @@ impl<W: Write + 'static> Video<W> {
         }
     }
 
+    /// Get the size of the raw events (in bytes)
     pub fn get_event_size(&self) -> u8 {
         self.encoder.meta().event_size
     }
@@ -1228,25 +1341,6 @@ pub fn integrate_for_px(
 }
 
 #[cfg(feature = "open-cv")]
-/// If `video.show_display`, shows the given [`Mat`] in an `OpenCV` window
-/// with the given name.
-///
-/// # Errors
-/// Returns an [`opencv::Error`] if the window cannot be shown, or the [`Mat`] cannot be scaled as
-/// needed.
-pub fn show_display<W: Write>(
-    window_name: &str,
-    mat: &Mat,
-    wait: i32,
-    video: &Video<W>,
-) -> opencv::Result<()> {
-    if video.state.show_display {
-        show_display_force(window_name, mat, wait)?;
-    }
-    Ok(())
-}
-
-#[cfg(feature = "open-cv")]
 /// Shows the given [`Mat`] in an `OpenCV` window with the given name.
 /// This function is the same as [`show_display`], except that it does not check
 /// [`Video::show_display`].
@@ -1285,7 +1379,6 @@ pub trait Source<W: Write> {
     /// intensities.
     fn consume(
         &mut self,
-        view_interval: u32,
         thread_pool: &ThreadPool,
     ) -> Result<Vec<Vec<Event>>, SourceError>;
 
@@ -1302,6 +1395,7 @@ pub trait Source<W: Write> {
     /// process.
     fn get_video(self) -> Video<W>;
 
+    /// Get the input frame from the source
     fn get_input(&self) -> Option<&Frame>;
 
     /// Get the last-calculated bitrate of the input (in bits per second)

@@ -63,6 +63,7 @@ pub mod empty;
 pub mod encoder;
 mod header;
 
+/// Control the quality of ADDER transcoding and compression in a predictable manner
 pub mod rate_controller;
 /// Raw codec utilities
 pub mod raw;

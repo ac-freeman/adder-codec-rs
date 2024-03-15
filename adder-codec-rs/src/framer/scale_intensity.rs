@@ -23,6 +23,7 @@ pub trait FrameValue {
     fn max_f32() -> f32;
 }
 
+/// Surface of Active Events
 pub struct SaeTime {
     pub(crate) running_t: DeltaT,
     pub(crate) last_fired_t: DeltaT,

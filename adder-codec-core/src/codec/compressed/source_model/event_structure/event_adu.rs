@@ -26,7 +26,7 @@ pub struct EventAdu {
     /// How many dt_ref intervals the whole adu spans
     pub(crate) num_intervals: usize,
 
-    skip_adu: bool,
+    pub(crate) skip_adu: bool,
 
     cube_to_write_count: u16,
 

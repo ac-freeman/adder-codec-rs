@@ -58,6 +58,8 @@ pub struct ParamsUiState {
     pub(crate) time_mode: TimeMode,
     pub(crate) encoder_type: EncoderType,
     pub(crate) detect_features: bool,
+    pub(crate) feature_rate_adjustment: bool,
+    pub(crate) feature_cluster: bool,
     pub(crate) show_features: ShowFeatureMode,
     pub(crate) auto_quality: bool,
     auto_quality_mirror: bool,
@@ -103,6 +105,8 @@ impl Default for ParamsUiState {
             time_mode: TimeMode::default(),
             encoder_type: EncoderType::default(),
             detect_features: false,
+            feature_rate_adjustment: false,
+            feature_cluster: false,
             show_features: ShowFeatureMode::Off,
             auto_quality: false,
             auto_quality_mirror: false,
@@ -632,7 +636,7 @@ impl TranscoderState {
         self.ui_info_state.plane = video.state.plane;
 
         video.instantaneous_view_mode = self.ui_state.view_mode_radio_state;
-        video.update_detect_features(self.ui_state.detect_features, self.ui_state.show_features);
+        video.update_detect_features(self.ui_state.detect_features, self.ui_state.show_features, self.ui_state.feature_rate_adjustment, self.ui_state.feature_cluster);
     }
 
     pub fn consume_source(
@@ -671,7 +675,7 @@ impl TranscoderState {
             }
         };
 
-        match source.consume(1, &pool) {
+        match source.consume(&pool) {
             Ok(events_vec_vec) => {
                 for events_vec in events_vec_vec {
                     ui_info_state.events_total += events_vec.len() as u64;
@@ -777,18 +781,18 @@ impl TranscoderState {
 }
 
 fn side_panel_grid_contents(
-    transcoder: &AdderTranscoder,
+    _transcoder: &AdderTranscoder,
     ui: &mut Ui,
     ui_state: &mut ParamsUiState,
     info_ui_state: &InfoUiState,
 ) {
     let dtr_max = ui_state.delta_t_ref_max;
 
-    #[allow(dead_code)]
+    #[allow(dead_code, unused_mut)]
     let mut enabled = true;
     #[cfg(feature = "open-cv")]
     {
-        enabled = transcoder.davis_source.is_none();
+        enabled = _transcoder.davis_source.is_none();
     }
     ui.add_enabled(enabled, egui::Label::new("Δt_ref:"));
     slider_pm(
@@ -846,7 +850,7 @@ fn side_panel_grid_contents(
         ui,
         &mut ui_state.delta_t_max_mult,
         &mut ui_state.delta_t_max_mult_slider,
-        1..=100,
+        1..=900,
         vec![],
         1,
     );
@@ -1174,6 +1178,8 @@ fn side_panel_grid_contents(
                     "Show & hold",
                 );
             });
+            ui.checkbox(&mut ui_state.feature_rate_adjustment, "Adjust sensitivities");
+            ui.checkbox(&mut ui_state.feature_cluster, "Cluster features");
         });
     });
     ui.end_row();

@@ -7,6 +7,8 @@ pub mod framed;
 
 /// Common functions and structs for all transcoder sources
 pub mod video;
+
+/// Tools for transcoding from a Prophesee video source to ADΔER
 pub mod prophesee;
 
 
