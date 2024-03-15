@@ -30,7 +30,6 @@ feature-logging-nonmaxsuppression = ["feature-logging"]
 
 
 [dependencies]
-packed_simd = "0.3.9"
 bytemuck = "1.14.0"
 adder-codec-core = { path = "../adder-codec-core", version = "0.3.2", default-features = false, optional = true}
 #adder-codec-core = { version = "0.3.0", default-features = false, optional = true}
