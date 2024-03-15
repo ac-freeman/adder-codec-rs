@@ -274,7 +274,7 @@ mod tests {
     use std::io;
 
     /// Test the creation a CompressedOutput and writing a bunch of events to it but NOT getting
-    /// to the time where we compress the Adu
+    /// to the time where we have a full Adu. It will compress the last partial ADU.
     #[test]
     fn test_compress_empty() -> Result<(), Box<dyn Error>> {
         use crate::codec::compressed::stream::CompressedOutput;
@@ -326,7 +326,7 @@ mod tests {
         }
 
         let output = compressed_output.into_writer().unwrap().into_inner();
-        assert!(output.is_empty());
+        assert!(!output.is_empty());
         Ok(())
     }
 
