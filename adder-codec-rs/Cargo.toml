@@ -73,7 +73,7 @@ indicatif = "0.17.7"
 const_for = "0.1.2"
 
 [dependencies.opencv]
-version = "0.83.0"
+version = "0.88.8"
 package = 'opencv'
 default-features = false
 features = ['videoio', 'imgproc', 'highgui', 'clang-runtime']
