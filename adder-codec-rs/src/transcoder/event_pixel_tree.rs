@@ -56,7 +56,7 @@ pub struct PixelArena {
     pub last_fired_t: f32,
     pub(crate) running_t: f32,
     length: usize,
-    pub base_val: u8,
+    pub base_val: u16,
     pub need_to_pop_top: bool,
     pub arena: SmallVec<[PixelNode; 6]>,
     pub(crate) c_thresh: u8,
