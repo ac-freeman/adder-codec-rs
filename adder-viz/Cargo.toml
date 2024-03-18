@@ -26,10 +26,14 @@ compression = ["adder-codec-rs/compression"]
 adder-codec-rs = { version = "0.4.4", path = "../adder-codec-rs", features = [
     "transcoder",
 ] }
-bevy = "0.11"
-bevy_egui = "0.21.0"
 crossbeam-channel = "0.5.6"
-egui_file = "0.11.0"
+egui = "0.26.2"
+eframe = { version = "0.26.2", default-features = false, features = [
+    "default_fonts", # Embed the default egui fonts.
+    "glow",          # Use the glow rendering backend. Alternative: "wgpu".
+    "persistence",   # Enable restoring app state when restarting the app.
+] }
+egui_file = "0.16.3"
 futures = "0.3.26"
 rayon = "1.5.3"
 rfd = "0.10.0"

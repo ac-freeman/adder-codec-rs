@@ -1,8 +1,3 @@
-use bevy::prelude::Image;
-
-use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
-use bevy_egui::egui::plot::{Line, PlotPoints};
-
 use std::collections::VecDeque;
 use std::error::Error;
 use video_rs_adder_dep::Frame;
