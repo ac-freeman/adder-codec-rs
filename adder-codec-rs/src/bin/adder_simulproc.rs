@@ -164,6 +164,7 @@ mod tests {
     use std::process::Command;
     use std::thread::sleep;
     use std::time::Duration;
+    use adder_codec_core::codec::rate_controller::Crf;
 
     #[test]
     fn dark() -> Result<(), Box<dyn Error>> {
@@ -173,8 +174,8 @@ mod tests {
         let args: SimulProcArgs = SimulProcArgs {
             args_filename: String::new(),
             color_input: false,
-            ref_time: 5000,
-            delta_t_max: 120_000,
+            ref_time: 255,
+            delta_t_max: 6120,
             frame_count_max: 0,
             frame_idx_start: 1,
             show_display: false,
@@ -192,7 +193,6 @@ mod tests {
         let mut source = Framed::new(args.input_filename, args.color_input, args.scale)?
             // .chunk_rows(64)
             .crf(0)
-            .time_parameters(5000 * 30, 5000, 120_000, Some(TimeMode::DeltaT))?
             .frame_start(args.frame_idx_start)?;
 
         let source_fps = source.source_fps as f64;
@@ -212,7 +212,11 @@ mod tests {
                 PixelMultiMode::Normal,
                 None,
                 EncoderType::Raw,
-                EncoderOptions::default(plane),
+                EncoderOptions {
+                    event_drop: Default::default(),
+                    event_order: Default::default(),
+                    crf: Crf::new(Some(0), plane),
+                },
                 writer,
             )?;
         }

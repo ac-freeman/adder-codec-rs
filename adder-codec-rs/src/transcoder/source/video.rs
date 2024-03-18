@@ -691,7 +691,7 @@ impl<W: Write + 'static> Video<W> {
                     integrate_for_px(
                         px,
                         base_val,
-                        *input as u16,
+                        *input as u8,
                         *input, // In this case, frame val is the same as intensity to integrate
                         time_spanned,
                         &mut buffer,
@@ -783,7 +783,7 @@ impl<W: Write + 'static> Video<W> {
 
 
                     px.arena[0].set_d(d_start);
-                    px.base_val = *frame_val as u16;
+                    px.base_val = *frame_val as u8;
                 }
             });
     }
@@ -1281,17 +1281,14 @@ impl<W: Write + 'static> Video<W> {
 #[inline(always)]
 pub fn integrate_for_px(
     px: &mut PixelArena,
-    base_val: &mut u16,
-    mut frame_val: u16,
+    base_val: &mut u8,
+    mut frame_val: u8,
     mut intensity: Intensity32,
     time_spanned: f32,
     buffer: &mut Vec<Event>,
     params: &VideoStateParams,
     parameters: &CrfParameters,
 ) -> bool {
-    // frame_val += 1;
-    // intensity += 1.0;
-
     let _start_len = buffer.len();
     let mut grew_buffer = false;
     if px.need_to_pop_top {
@@ -1301,8 +1298,8 @@ pub fn integrate_for_px(
 
     *base_val = px.base_val;
 
-    if frame_val < base_val.saturating_sub(px.c_thresh as u16)
-        || frame_val > base_val.saturating_add(px.c_thresh as u16)
+    if frame_val < base_val.saturating_sub(px.c_thresh)
+        || frame_val > base_val.saturating_add(px.c_thresh)
     {
         let _tmp = buffer.len();
         px.pop_best_events(

@@ -22,7 +22,6 @@ use crate::codec::header::{
 };
 
 use crate::codec::raw::stream::RawOutput;
-use crate::SourceType::U8;
 use bincode::config::{FixintEncoding, WithOtherEndian, WithOtherIntEncoding};
 use bincode::{DefaultOptions, Options};
 

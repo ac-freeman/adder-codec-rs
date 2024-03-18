@@ -212,7 +212,7 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Prophesee<W> {
                 let _ = integrate_for_px(
                     px,
                     &mut base_val,
-                    last_val as u16,
+                    last_val as u8,
                     intensity_to_integrate as f32,
                     time_spanned as f32,
                     &mut events,
@@ -250,7 +250,7 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Prophesee<W> {
                 let _ = integrate_for_px(
                     px,
                     &mut base_val,
-                    new_val as u16,
+                    new_val as u8,
                     intensity_to_integrate as f32,
                     time_spanned as f32,
                     &mut events,
@@ -352,7 +352,7 @@ fn end_events<W: Write + 'static + std::marker::Send>(prophesee: &mut Prophesee<
             let _ = integrate_for_px(
                 px,
                 &mut base_val,
-                last_val as u16,
+                last_val as u8,
                 intensity_to_integrate as f32,
                 time_spanned as f32,
                 &mut events,

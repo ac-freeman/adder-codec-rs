@@ -560,9 +560,9 @@ mod tests {
         assert_eq!(D_SHIFT[0], 1);
         assert_eq!(D_SHIFT_F64[0], 1.0);
         assert_eq!(D_SHIFT_F32[0], 1.0);
-        assert_eq!(D_SHIFT.len(), 128);
-        assert_eq!(D_SHIFT_F64.len(), 128);
-        assert_eq!(D_SHIFT_F32.len(), 128);
+        assert_eq!(D_SHIFT.len(), 129);
+        assert_eq!(D_SHIFT_F64.len(), 129);
+        assert_eq!(D_SHIFT_F32.len(), 129);
         assert_eq!(D_SHIFT[127], 1_u128 << 127);
         assert_eq!(D_SHIFT_F64[127], D_SHIFT[127] as f64);
         assert_eq!(D_SHIFT_F32[127], D_SHIFT[127] as f32);
