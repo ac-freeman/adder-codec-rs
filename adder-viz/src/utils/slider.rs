@@ -627,6 +627,11 @@ impl<'a> NotchedSlider<'a> {
                 },
                 // stroke: visuals.bg_stroke,
                 // stroke: ui.visuals().widgets.inactive.bg_stroke,
+                fill_texture_id: Default::default(),
+                uv: Rect {
+                    min: Default::default(),
+                    max: Default::default(),
+                },
             });
 
             for notch in &self.notches {
