@@ -187,7 +187,7 @@ pub const D_MAX: D = 127;
 pub const D_EMPTY: D = 255;
 
 /// Special symbol signifying no information (filler dt)
-pub const D_ZERO_INTEGRATION: D = 254;
+pub const D_ZERO_INTEGRATION: D = 128;
 
 /// Special symbol signifying no [`Event`] exists
 pub const D_NO_EVENT: D = 253;
@@ -219,11 +219,11 @@ use seq_macro::seq;
 
 macro_rules! make_d_shift_array {
     ($name:ident, $type:ty) => {
-        seq!(N in 0..=127 {
+        seq!(N in 0..=128 {
             /// Array for computing the intensity to integrate for a given [`D`] value
-            pub const $name: [$type; 128] = [
+            pub const $name: [$type; 129] = [
                 #(
-                    (1_u128 << N) as $type,
+                    if N == 128 { 0 as $type } else { (1_u128 << N) as $type },
                 )*
             ];
         });

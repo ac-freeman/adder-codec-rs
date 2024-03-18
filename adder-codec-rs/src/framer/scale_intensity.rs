@@ -68,7 +68,7 @@ impl FrameValue for u8 {
             FramedViewMode::Intensity => {
                 let intensity = event_to_intensity(event);
                 match source_type {
-                    SourceType::U8 => ((intensity * tpf) - 1.0) as u8,
+                    SourceType::U8 => ((intensity * tpf)) as u8,
                     SourceType::U16 => {
                         (intensity / f64::from(u16::MAX) * tpf * f64::from(u8::MAX)) as u8
                     }
