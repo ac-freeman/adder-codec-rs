@@ -13,7 +13,6 @@ use crate::codec::header::{
 };
 use crate::codec::raw::stream::RawInput;
 use crate::codec::CodecError::Deserialize;
-use crate::SourceType::U8;
 use bincode::config::{FixintEncoding, WithOtherEndian, WithOtherIntEncoding};
 use bincode::{DefaultOptions, Options};
 use bitstream_io::{BigEndian, BitRead, BitReader};

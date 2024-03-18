@@ -15,10 +15,7 @@ use adder_codec_core::codec::raw::stream::RawOutput;
 use adder_codec_core::codec::{
     CodecError, CodecMetadata, EncoderOptions, EncoderType, LATEST_CODEC_VERSION,
 };
-use adder_codec_core::{
-    Coord, DeltaT, Event, Mode, PixelAddress, PixelMultiMode, PlaneError, PlaneSize, SourceCamera,
-    SourceType, TimeMode, D_EMPTY,
-};
+use adder_codec_core::{Coord, DeltaT, Event, Mode, PixelAddress, PixelMultiMode, PlaneError, PlaneSize, SourceCamera, SourceType, TimeMode, D_EMPTY, D_ZERO_INTEGRATION};
 use bumpalo::Bump;
 
 use std::sync::mpsc::{channel, Sender};
@@ -778,9 +775,15 @@ impl<W: Write + 'static> Video<W> {
             )
             .for_each(|(mut px, frame_chunk)| {
                 for (px, frame_val) in px.iter_mut().zip(frame_chunk.iter()) {
-                    let d_start = f32::from(*frame_val).log2().floor() as D;
+                    let d_start = if *frame_val == 0 {
+                        D_ZERO_INTEGRATION
+                    } else {
+                        (f32::from(*frame_val)).log2().floor() as D
+                    };
+
+
                     px.arena[0].set_d(d_start);
-                    px.base_val = *frame_val;
+                    px.base_val = *frame_val as u8;
                 }
             });
     }
@@ -1279,8 +1282,8 @@ impl<W: Write + 'static> Video<W> {
 pub fn integrate_for_px(
     px: &mut PixelArena,
     base_val: &mut u8,
-    frame_val: u8,
-    intensity: Intensity32,
+    mut frame_val: u8,
+    mut intensity: Intensity32,
     time_spanned: f32,
     buffer: &mut Vec<Event>,
     params: &VideoStateParams,
