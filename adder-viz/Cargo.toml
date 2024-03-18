@@ -1,6 +1,6 @@
 [package]
 name = "adder-viz"
-version = "0.3.4"
+version = "0.3.5"
 edition = "2021"
 resolver = "2"
 authors = ["Andrew C. Freeman"]
@@ -23,7 +23,7 @@ open-cv = ["opencv", "adder-codec-rs/open-cv", "adder-codec-rs/transcoder" ]
 compression = ["adder-codec-rs/compression"]
 
 [dependencies]
-adder-codec-rs = { version = "0.4.3", path = "../adder-codec-rs", features = [
+adder-codec-rs = { version = "0.4.4", path = "../adder-codec-rs", features = [
     "transcoder",
 ] }
 bevy = "0.11"
