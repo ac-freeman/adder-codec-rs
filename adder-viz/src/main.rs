@@ -1,6 +1,7 @@
 mod transcoder;
 mod utils;
 
+use crate::transcoder::adder::AdderTranscoder;
 use crate::transcoder::ui::{TranscoderState, TranscoderStateMsg};
 use crate::utils::slider::NotchedSlider;
 use eframe::egui;
@@ -9,11 +10,9 @@ use std::ops::RangeInclusive;
 use std::sync::Arc;
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
+use tokio::sync::broadcast;
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::Sender;
-use crate::transcoder::adder::AdderTranscoder;
-use tokio::sync::broadcast;
-
 
 fn main() {
     let native_options = eframe::NativeOptions::default();
@@ -44,7 +43,6 @@ impl App {
         });
         let (tx, mut rx) = mpsc::channel(5);
 
-
         let mut app = App {
             view: Default::default(),
             error_msg: None,
@@ -53,14 +51,11 @@ impl App {
             transcoder_state_tx: tx,
         };
 
-
-
         app.spawn_transcoder(rx);
-
 
         app
     }
-    fn spawn_transcoder(&mut self, rx: mpsc::Receiver<TranscoderStateMsg>){
+    fn spawn_transcoder(&mut self, rx: mpsc::Receiver<TranscoderStateMsg>) {
         let images = self.images.clone();
         let rt = tokio::runtime::Runtime::new().expect("Unable to create Runtime");
 
@@ -72,6 +67,25 @@ impl App {
                 let mut transcoder = AdderTranscoder::new(rx, images);
                 transcoder.run();
             })
+        });
+    }
+
+    /// If the user has dropped a file into the window, we store the file path.
+    /// At the end of the frame, the receiver will be notified by update()
+    fn handle_file_drop(&mut self, ctx: &egui::Context) {
+        ctx.input(|i| {
+            if !i.raw.dropped_files.is_empty() {
+                // Which view are we currently in? (Where do we send this file to?)
+                match self.view {
+                    Tabs::Transcoder => {
+                        self.transcoder_state.core_params.input_path_buf_0 =
+                            i.raw.dropped_files[0].path.clone();
+                    }
+                    Tabs::Player => {
+                        todo!()
+                    }
+                }
+            }
         });
     }
 
@@ -88,26 +102,31 @@ impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         // self.handle_exit(ctx);
 
+        // Store a copy of the params to compare against later
+        let old_params = self.transcoder_state.clone();
+
         // Check if the scale key was hit
         handle_zoom(ctx);
         configure_menu_bar(self, ctx);
+
+        // Collect dropped files
+        self.handle_file_drop(ctx);
 
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("Hello World!");
         });
 
-        // Store a copy of the params to compare against later
-        let old_params = self.transcoder_state.params_ui_state.clone();
         draw_ui(self, ctx);
 
-        if old_params != self.transcoder_state.params_ui_state {
+        // This should always be the very last thing we do in this function
+        if old_params != self.transcoder_state {
             self.transcoder_state_tx
-                .blocking_send(TranscoderStateMsg::Set { transcoder_state: self.transcoder_state.clone() })
+                .blocking_send(TranscoderStateMsg::Set {
+                    transcoder_state: self.transcoder_state.clone(),
+                })
                 .unwrap();
         }
     }
-
-
 }
 
 fn handle_zoom(ctx: &egui::Context) {

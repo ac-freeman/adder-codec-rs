@@ -1,4 +1,5 @@
 use std::error::Error;
+use std::ffi::OsStr;
 
 #[cfg(feature = "open-cv")]
 use adder_codec_rs::transcoder::source::davis::Davis;
@@ -14,18 +15,22 @@ use adder_codec_rs::transcoder::source::davis::TranscoderMode;
 #[cfg(feature = "open-cv")]
 use adder_codec_rs::davis_edi_rs::util::reconstructor::Reconstructor;
 
-use crate::transcoder::ui::{ParamsUiState, TranscoderState, TranscoderStateMsg};
+use crate::transcoder::adder::AdderTranscoderError::InvalidFileType;
+use crate::transcoder::ui::{AdaptiveParams, TranscoderState, TranscoderStateMsg};
+use crate::Images;
 use adder_codec_rs::adder_codec_core::codec::rate_controller::DEFAULT_CRF_QUALITY;
+use adder_codec_rs::adder_codec_core::PlaneError;
 use adder_codec_rs::adder_codec_core::SourceCamera::{DavisU8, Dvs, FramedU8};
 use adder_codec_rs::transcoder::source::prophesee::Prophesee;
-use adder_codec_rs::transcoder::source::video::{Source, VideoBuilder};
+use adder_codec_rs::transcoder::source::video::{Source, SourceError, VideoBuilder};
 #[cfg(feature = "open-cv")]
 use opencv::Result;
+use thiserror::Error;
 use tokio::sync::mpsc::error::TryRecvError;
 use tokio::sync::mpsc::Receiver;
-use crate::Images;
 
 pub struct AdderTranscoder {
+    transcoder_state: TranscoderState,
     pub(crate) framed_source: Option<Framed<BufWriter<File>>>,
     #[cfg(feature = "open-cv")]
     pub(crate) davis_source: Option<Davis<BufWriter<File>>>,
@@ -34,20 +39,25 @@ pub struct AdderTranscoder {
     pub(crate) images: std::sync::Arc<Images>,
 }
 
-#[derive(Debug)]
-struct AdderTranscoderError(String);
+#[derive(Error, Debug)]
+pub enum AdderTranscoderError {
+    /// Input file error
+    #[error("Invalid file type")]
+    InvalidFileType,
 
-impl fmt::Display for AdderTranscoderError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "ADDER transcoder: {}", self.0)
-    }
+    /// Plane error
+    #[error("Source error")]
+    SourceError(#[from] SourceError),
+
+    /// IO error
+    #[error("IO error")]
+    IoError(#[from] std::io::Error),
 }
 
-impl Error for AdderTranscoderError {}
-
 impl AdderTranscoder {
-    pub(crate) fn new(rx: Receiver<TranscoderStateMsg>, images: std::sync::Arc<Images>) -> Self{
+    pub(crate) fn new(rx: Receiver<TranscoderStateMsg>, images: std::sync::Arc<Images>) -> Self {
         AdderTranscoder {
+            transcoder_state: Default::default(),
             framed_source: None,
             #[cfg(feature = "open-cv")]
             davis_source: None,
@@ -59,35 +69,153 @@ impl AdderTranscoder {
 
     pub(crate) fn run(&mut self) {
         loop {
-            eprintln!("Waiting to receive data");
+            // eprintln!("Waiting to receive data");
             // Sleep for 1 second
-            std::thread::sleep(std::time::Duration::from_secs(1));
+            // std::thread::sleep(std::time::Duration::from_secs(1));
             match self.rx.try_recv() {
-                Ok(msg) => {
-                    dbg!(msg);
-                    std::thread::sleep(std::time::Duration::from_secs(2));
-                    match msg {
-                        TranscoderStateMsg::Terminate => {
-                            break;}
-                        TranscoderStateMsg::Set { transcoder_state } => {
-                            eprintln!("Received transcoder state");
-                        }
+                Ok(msg) => match msg {
+                    TranscoderStateMsg::Terminate => {
+                        break;
                     }
-                }
+                    TranscoderStateMsg::Set { transcoder_state } => {
+                        eprintln!("Received transcoder state");
+                        let result = self.state_update(transcoder_state);
+                        self.handle_error(result);
+                    }
+                },
                 Err(_) => {
-                    eprintln!("Received no data");
+                    // eprintln!("Received no data");
                 }
             }
         }
     }
 
-    // pub(crate) fn new(
-    //     input_path_buf: &Path,
-    //     _input_path_buf_1: &Option<PathBuf>,
-    //     output_path_opt: Option<PathBuf>,
-    //     ui_state: &mut ParamsUiState,
-    //     current_frame: u32,
-    // ) -> Result<Self, Box<dyn Error>> {
+    fn handle_error(&mut self, result: Result<(), AdderTranscoderError>) {
+        match result {
+            Ok(()) => {}
+            Err(e) => {
+                eprintln!("TODO: handle Error: {}", e);
+            }
+        }
+    }
+
+    fn state_update(
+        &mut self,
+        transcoder_state: TranscoderState,
+    ) -> Result<(), AdderTranscoderError> {
+        if transcoder_state.core_params != self.transcoder_state.core_params {
+            eprintln!("Create new transcoder");
+            return self.core_state_update(transcoder_state);
+        } else if transcoder_state.adaptive_params != self.transcoder_state.adaptive_params {
+            eprintln!("Modify existing transcoder");
+            return Ok(());
+        }
+        Ok(())
+    }
+
+    fn core_state_update(
+        &mut self,
+        transcoder_state: TranscoderState,
+    ) -> Result<(), AdderTranscoderError> {
+        match &transcoder_state.core_params.input_path_buf_0 {
+            None => Err(InvalidFileType),
+            Some(input_path_buf) => match input_path_buf.extension() {
+                None => Err(InvalidFileType),
+                Some(ext) => match ext.to_ascii_lowercase().to_str().unwrap() {
+                    "mp4" | "mkv" | "avi" | "mov" => {
+                        // Framed video
+                        self.create_framed(transcoder_state)
+                    }
+                    // "aedat4" | "sock" => {
+                    //     // Davis video
+                    // }
+                    // "dat" => {
+                    //     // Prophesee video
+                    // }
+                    _ => Err(InvalidFileType),
+                },
+            },
+        }
+    }
+
+    fn update_params(&mut self, transcoder_state: TranscoderState) {
+        self.transcoder_state = transcoder_state;
+    }
+
+    fn create_framed(
+        &mut self,
+        transcoder_state: TranscoderState,
+    ) -> Result<(), AdderTranscoderError> {
+        // If we already have an adder_transcoder, get the current frame
+        let current_frame = match &self.framed_source {
+            None => 0,
+            Some(framed) => {
+                if transcoder_state.core_params.input_path_buf_0
+                    == self.transcoder_state.core_params.input_path_buf_0
+                {
+                    framed.get_video_ref().state.in_interval_count + framed.frame_idx_start
+                } else {
+                    0
+                }
+            }
+        };
+
+        self.update_params(transcoder_state);
+
+        let core_params = &self.transcoder_state.core_params;
+        let adaptive_params = &self.transcoder_state.adaptive_params;
+
+        let mut framed: Framed<BufWriter<File>> = Framed::new(
+            core_params.input_path_buf_0.clone().unwrap(),
+            core_params.color,
+            core_params.scale,
+        )?
+        .crf(
+            adaptive_params
+                .encoder_options
+                .crf
+                .get_quality()
+                .unwrap_or(DEFAULT_CRF_QUALITY),
+        )
+        .frame_start(current_frame)?
+        .chunk_rows(1)
+        .auto_time_parameters(
+            core_params.delta_t_ref as u32,
+            core_params.delta_t_max_mult * core_params.delta_t_ref as u32,
+            Some(core_params.time_mode),
+        )?;
+
+        // TODO: Change the builder to take in a pathbuf directly, not a string,
+        // and to handle the error checking in the associated function
+        match &core_params.output_path {
+            None => {}
+            Some(output_path) => {
+                let out_path = output_path.to_str().unwrap();
+                let writer = BufWriter::new(File::create(out_path)?);
+
+                framed = *framed.write_out(
+                    FramedU8,
+                    core_params.time_mode,
+                    adaptive_params.integration_mode_radio_state,
+                    Some(core_params.delta_t_max_mult as usize),
+                    core_params.encoder_type,
+                    adaptive_params.encoder_options,
+                    writer,
+                )?;
+            }
+        };
+
+        self.framed_source = Some(framed);
+        #[cfg(feature = "open-cv")]
+        {
+            self.davis_source = None;
+        }
+        self.prophesee_source = None;
+
+        eprintln!("Framed source created!");
+        Ok(())
+    }
+
     //     match input_path_buf.extension() {
     //         None => Err(Box::new(AdderTranscoderError("Invalid file type".into()))),
     //         Some(ext) => {

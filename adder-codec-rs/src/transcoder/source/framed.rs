@@ -43,11 +43,11 @@ unsafe impl<W: Write> Sync for Framed<W> {}
 impl<W: Write + 'static> Framed<W> {
     /// Create a new `Framed` source
     pub fn new(
-        input_filename: String,
+        input_path: PathBuf,
         color_input: bool,
         scale: f64,
     ) -> Result<Framed<W>, SourceError> {
-        let source = Locator::Path(PathBuf::from(input_filename));
+        let source = Locator::Path(input_path);
         let mut cap = Decoder::new(&source)?;
         let (width, height) = cap.size();
         let width = ((width as f64) * scale) as u32;
@@ -125,10 +125,7 @@ impl<W: Write + 'static> Framed<W> {
 impl<W: Write + 'static> Source<W> for Framed<W> {
     /// Get pixel-wise intensities directly from source frame, and integrate them with
     /// `ref_time` (the number of ticks each frame is said to span)
-    fn consume(
-        &mut self,
-        thread_pool: &ThreadPool,
-    ) -> Result<Vec<Vec<Event>>, SourceError> {
+    fn consume(&mut self, thread_pool: &ThreadPool) -> Result<Vec<Vec<Event>>, SourceError> {
         let (_, frame) = self.cap.decode()?;
         self.input_frame = handle_color(frame, self.color_input)?;
 

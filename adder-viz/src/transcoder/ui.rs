@@ -1,7 +1,8 @@
-use std::sync::Arc;
+use adder_codec_rs::adder_codec_core::codec::rate_controller::{Crf, CRF, DEFAULT_CRF_QUALITY};
 use adder_codec_rs::adder_codec_core::codec::{EncoderOptions, EncoderType};
-use adder_codec_rs::adder_codec_core::codec::rate_controller::Crf;
 use adder_codec_rs::adder_codec_core::{PixelMultiMode, TimeMode};
+use std::path::PathBuf;
+use std::sync::Arc;
 // use crate::transcoder::adder::{replace_adder_transcoder, AdderTranscoder};
 // use crate::utils::prep_bevy_image;
 use crate::{slider_pm, Images};
@@ -26,29 +27,57 @@ use crate::{slider_pm, Images};
 // use std::io::{BufWriter, Write};
 // use std::path::PathBuf;
 //
-#[derive(Debug,Copy,Clone, PartialEq)]
-pub struct ParamsUiState {
-    pub(crate) delta_t_ref: u32,
-    pub(crate) color: bool,
-    pub(crate) scale: f64,
+
+/// UI-driven parameters which do not require a total reset of the transcoder. These
+/// parameters can be adaptively changed during a transcoder operation.
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub struct AdaptiveParams {
+    pub(crate) auto_quality: bool,
+    pub(crate) crf_number: u8,
     pub(crate) encoder_options: EncoderOptions,
-    pub(crate) delta_t_max_mult: u32,
-    pub(crate) time_mode: TimeMode,
     pub(crate) integration_mode_radio_state: PixelMultiMode,
-    pub(crate) encoder_type: EncoderType,
 }
 
-impl Default for ParamsUiState {
+/// Core parameters which require a total reset of the transcoder. These parameters
+/// cannot be adaptively changed during a transcoder operation.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct CoreParams {
+    pub delta_t_ref: u32,
+    pub color: bool,
+    pub scale: f64,
+    pub delta_t_max_mult: u32,
+    pub time_mode: TimeMode,
+    pub encoder_type: EncoderType,
+    pub input_path_buf_0: Option<PathBuf>,
+    pub output_path: Option<PathBuf>,
+}
+
+impl Default for AdaptiveParams {
     fn default() -> Self {
-        ParamsUiState { delta_t_ref: 255, color: false, scale: 0.25, encoder_options: EncoderOptions {
-            event_drop: Default::default(),
-            event_order: Default::default(),
-            crf: Crf::new(None, Default::default()),
-        },
+        AdaptiveParams {
+            auto_quality: true,
+            crf_number: DEFAULT_CRF_QUALITY,
+            encoder_options: EncoderOptions {
+                event_drop: Default::default(),
+                event_order: Default::default(),
+                crf: Crf::new(None, Default::default()),
+            },
+            integration_mode_radio_state: Default::default(),
+        }
+    }
+}
+
+impl Default for CoreParams {
+    fn default() -> Self {
+        CoreParams {
+            delta_t_ref: 255,
+            color: false,
+            scale: 0.25,
             delta_t_max_mult: 30,
             time_mode: Default::default(),
-            integration_mode_radio_state: Default::default(),
             encoder_type: Default::default(),
+            input_path_buf_0: None,
+            output_path: None,
         }
     }
 }
@@ -229,19 +258,18 @@ impl Default for ParamsUiState {
 //
 // unsafe impl Sync for InfoUiState {}
 //
-#[derive(Default, Debug, Copy, Clone)]
+#[derive(Default, Debug, Clone, PartialEq)]
 pub struct TranscoderState {
     // pub(crate) transcoder: AdderTranscoder,
-    pub params_ui_state: ParamsUiState,
+    pub adaptive_params: AdaptiveParams,
+    pub core_params: CoreParams,
     // pub ui_info_state: InfoUiState,
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Clone)]
 pub enum TranscoderStateMsg {
-    Terminate ,
-    Set {
-        transcoder_state: TranscoderState,
-    }
+    Terminate,
+    Set { transcoder_state: TranscoderState },
 }
 
 impl TranscoderState {
@@ -272,7 +300,7 @@ impl TranscoderState {
             .spacing([10.0, 4.0])
             .striped(true)
             .show(ui, |ui| {
-                side_panel_grid_contents(ui, &mut self.params_ui_state);
+                side_panel_grid_contents(ui, &mut self.adaptive_params, &mut self.core_params);
             });
     }
     //
@@ -809,7 +837,8 @@ impl TranscoderState {
 //
 fn side_panel_grid_contents(
     ui: &mut egui::Ui,
-    params: &mut ParamsUiState,
+    adaptive_params: &mut AdaptiveParams,
+    core_params: &mut CoreParams,
     // info_ui_state: &InfoUiState,
 ) {
     //     let dtr_max = ui_state.delta_t_ref_max;
@@ -825,407 +854,401 @@ fn side_panel_grid_contents(
         enabled,
         false,
         ui,
-        &mut params.delta_t_ref,
+        &mut core_params.delta_t_ref,
         1..=255,
         vec![],
         10,
     );
     ui.end_row();
+
+    ui.label("Quality parameters:");
+    ui.add_enabled(
+        true,
+        egui::Checkbox::new(&mut adaptive_params.auto_quality, "Auto mode?"),
+    );
+    // ui.toggle_value(&mut ui_state.auto_quality, "Auto mode?");
+    ui.end_row();
+
+    ui.label("CRF quality:");
+    slider_pm(
+        adaptive_params.auto_quality,
+        false,
+        ui,
+        &mut adaptive_params.crf_number,
+        0..=CRF.len() as u8 - 1,
+        vec![],
+        1,
+    );
+    // if params.auto_quality
+    //     && params.crf_number
+    //         != params
+    //             .encoder_options
+    //             .crf
+    //             .get_quality()
+    //             .unwrap_or(DEFAULT_CRF_QUALITY)
+    // {
+    //     params.encoder_options.crf = Crf::new(Some(crf), info_ui_state.plane);
+    // }
+    // ui.end_row();
     //
-    //     ui.label("Quality parameters:");
-    //     ui.add_enabled(
-    //         true,
-    //         egui::Checkbox::new(&mut ui_state.auto_quality, "Auto mode?"),
+    // ui.label("Δt_max multiplier:");
+    // slider_pm(
+    //     !params.auto_quality,
+    //     false,
+    //     ui,
+    //     &mut params.delta_t_max_mult,
+    //     &mut params.delta_t_max_mult_slider,
+    //     1..=900,
+    //     vec![],
+    //     1,
+    // );
+    // ui.end_row();
+    //
+    // let parameters = params.encoder_options.crf.get_parameters_mut();
+    // ui.label("Threshold baseline:");
+    // slider_pm(
+    //     !params.auto_quality,
+    //     false,
+    //     ui,
+    //     &mut parameters.c_thresh_baseline,
+    //     &mut params.adder_tresh_baseline_slider,
+    //     0..=255,
+    //     vec![],
+    //     1,
+    // );
+    // ui.end_row();
+    //
+    // ui.label("Threshold max:");
+    // slider_pm(
+    //     !params.auto_quality,
+    //     false,
+    //     ui,
+    //     &mut parameters.c_thresh_max,
+    //     &mut params.adder_tresh_max_slider,
+    //     0..=255,
+    //     vec![],
+    //     1,
+    // );
+    // ui.end_row();
+    //
+    // ui.label("Threshold velocity:");
+    // slider_pm(
+    //     !params.auto_quality,
+    //     false,
+    //     ui,
+    //     &mut parameters.c_increase_velocity,
+    //     &mut params.adder_tresh_velocity_slider,
+    //     1..=30,
+    //     vec![],
+    //     1,
+    // );
+    // ui.end_row();
+    //
+    // ui.label("Feature radius:");
+    // slider_pm(
+    //     !params.auto_quality,
+    //     false,
+    //     ui,
+    //     &mut parameters.feature_c_radius,
+    //     &mut ui_state.feature_radius_slider,
+    //     0..=100,
+    //     vec![],
+    //     1,
+    // );
+    // ui.end_row();
+    //
+    // ui.label("Thread count:");
+    // slider_pm(
+    //     true,
+    //     false,
+    //     ui,
+    //     &mut params.thread_count,
+    //     &mut params.thread_count_slider,
+    //     1..=(current_num_threads() - 1).max(4),
+    //     vec![],
+    //     1,
+    // );
+    // ui.end_row();
+    //
+    // ui.label("Video scale:");
+    // slider_pm(
+    //     enabled,
+    //     false,
+    //     ui,
+    //     &mut params.scale,
+    //     &mut params.scale_slider,
+    //     0.001..=1.0,
+    //     vec![0.25, 0.5, 0.75],
+    //     0.1,
+    // );
+    // ui.end_row();
+    //
+    // ui.label("Channels:");
+    // ui.add_enabled(enabled, egui::Checkbox::new(&mut params.color, "Color?"));
+    // ui.end_row();
+    //
+    // ui.label("Integration mode:");
+    // ui.horizontal(|ui| {
+    //     ui.radio_value(
+    //         &mut params.integration_mode_radio_state,
+    //         PixelMultiMode::Normal,
+    //         "Normal",
     //     );
-    //     // ui.toggle_value(&mut ui_state.auto_quality, "Auto mode?");
-    //     ui.end_row();
-    //
-    //     ui.label("CRF quality:");
-    //     let mut crf = ui_state
-    //         .encoder_options
-    //         .crf
-    //         .get_quality()
-    //         .unwrap_or(DEFAULT_CRF_QUALITY);
-    //     slider_pm(
-    //         ui_state.auto_quality,
-    //         false,
-    //         ui,
-    //         &mut crf,
-    //         &mut ui_state.crf_slider,
-    //         0..=CRF.len() as u8 - 1,
-    //         vec![],
-    //         1,
+    //     ui.radio_value(
+    //         &mut params.integration_mode_radio_state,
+    //         PixelMultiMode::Collapse,
+    //         "Collapse",
     //     );
-    //     if ui_state.auto_quality
-    //         && crf
-    //             != ui_state
-    //                 .encoder_options
-    //                 .crf
-    //                 .get_quality()
-    //                 .unwrap_or(DEFAULT_CRF_QUALITY)
-    //     {
-    //         ui_state.encoder_options.crf = Crf::new(Some(crf), info_ui_state.plane);
-    //     }
-    //     ui.end_row();
+    // });
+    // ui.end_row();
     //
-    //     ui.label("Δt_max multiplier:");
-    //     slider_pm(
-    //         !ui_state.auto_quality,
-    //         false,
-    //         ui,
-    //         &mut ui_state.delta_t_max_mult,
-    //         &mut ui_state.delta_t_max_mult_slider,
-    //         1..=900,
-    //         vec![],
-    //         1,
-    //     );
-    //     ui.end_row();
-    //
-    //     let parameters = ui_state.encoder_options.crf.get_parameters_mut();
-    //     ui.label("Threshold baseline:");
-    //     slider_pm(
-    //         !ui_state.auto_quality,
-    //         false,
-    //         ui,
-    //         &mut parameters.c_thresh_baseline,
-    //         &mut ui_state.adder_tresh_baseline_slider,
-    //         0..=255,
-    //         vec![],
-    //         1,
-    //     );
-    //     ui.end_row();
-    //
-    //     ui.label("Threshold max:");
-    //     slider_pm(
-    //         !ui_state.auto_quality,
-    //         false,
-    //         ui,
-    //         &mut parameters.c_thresh_max,
-    //         &mut ui_state.adder_tresh_max_slider,
-    //         0..=255,
-    //         vec![],
-    //         1,
-    //     );
-    //     ui.end_row();
-    //
-    //     ui.label("Threshold velocity:");
-    //     slider_pm(
-    //         !ui_state.auto_quality,
-    //         false,
-    //         ui,
-    //         &mut parameters.c_increase_velocity,
-    //         &mut ui_state.adder_tresh_velocity_slider,
-    //         1..=30,
-    //         vec![],
-    //         1,
-    //     );
-    //     ui.end_row();
-    //
-    //     ui.label("Feature radius:");
-    //     slider_pm(
-    //         !ui_state.auto_quality,
-    //         false,
-    //         ui,
-    //         &mut parameters.feature_c_radius,
-    //         &mut ui_state.feature_radius_slider,
-    //         0..=100,
-    //         vec![],
-    //         1,
-    //     );
-    //     ui.end_row();
-    //
-    //     ui.label("Thread count:");
-    //     slider_pm(
-    //         true,
-    //         false,
-    //         ui,
-    //         &mut ui_state.thread_count,
-    //         &mut ui_state.thread_count_slider,
-    //         1..=(current_num_threads() - 1).max(4),
-    //         vec![],
-    //         1,
-    //     );
-    //     ui.end_row();
-    //
-    //     ui.label("Video scale:");
-    //     slider_pm(
-    //         enabled,
-    //         false,
-    //         ui,
-    //         &mut ui_state.scale,
-    //         &mut ui_state.scale_slider,
-    //         0.001..=1.0,
-    //         vec![0.25, 0.5, 0.75],
-    //         0.1,
-    //     );
-    //     ui.end_row();
-    //
-    //     ui.label("Channels:");
-    //     ui.add_enabled(enabled, egui::Checkbox::new(&mut ui_state.color, "Color?"));
-    //     ui.end_row();
-    //
-    //     ui.label("Integration mode:");
+    // ui.label("View mode:");
+    // ui.vertical(|ui| {
     //     ui.horizontal(|ui| {
     //         ui.radio_value(
-    //             &mut ui_state.integration_mode_radio_state,
-    //             PixelMultiMode::Normal,
-    //             "Normal",
+    //             &mut params.view_mode_radio_state,
+    //             FramedViewMode::Intensity,
+    //             "Intensity",
+    //         );
+    //         ui.radio_value(&mut params.view_mode_radio_state, FramedViewMode::D, "D");
+    //         ui.radio_value(
+    //             &mut params.view_mode_radio_state,
+    //             FramedViewMode::DeltaT,
+    //             "Δt",
     //         );
     //         ui.radio_value(
-    //             &mut ui_state.integration_mode_radio_state,
-    //             PixelMultiMode::Collapse,
-    //             "Collapse",
+    //             &mut params.view_mode_radio_state,
+    //             FramedViewMode::SAE,
+    //             "SAE",
     //         );
     //     });
-    //     ui.end_row();
+    //     ui.add_enabled(
+    //         enabled,
+    //         egui::Checkbox::new(&mut params.show_original, "Show original?"),
+    //     );
+    // });
+    // ui.end_row();
     //
-    //     ui.label("View mode:");
+    // ui.label("Time mode:");
+    // ui.add_enabled_ui(true, |ui| {
+    //     ui.horizontal(|ui| {
+    //         ui.radio_value(
+    //             &mut params.time_mode,
+    //             TimeMode::DeltaT,
+    //             "Δt (time change)",
+    //         );
+    //         ui.radio_value(
+    //             &mut params.time_mode,
+    //             TimeMode::AbsoluteT,
+    //             "t (absolute time)",
+    //         );
+    //     });
+    // });
+    // ui.end_row();
+    //
+    // ui.label("Compression mode:");
+    // ui.add_enabled_ui(true, |ui| {
     //     ui.vertical(|ui| {
     //         ui.horizontal(|ui| {
     //             ui.radio_value(
-    //                 &mut ui_state.view_mode_radio_state,
-    //                 FramedViewMode::Intensity,
-    //                 "Intensity",
+    //                 &mut params.encoder_type,
+    //                 EncoderType::Empty,
+    //                 "Empty (don't write)",
     //             );
-    //             ui.radio_value(&mut ui_state.view_mode_radio_state, FramedViewMode::D, "D");
-    //             ui.radio_value(
-    //                 &mut ui_state.view_mode_radio_state,
-    //                 FramedViewMode::DeltaT,
-    //                 "Δt",
-    //             );
-    //             ui.radio_value(
-    //                 &mut ui_state.view_mode_radio_state,
-    //                 FramedViewMode::SAE,
-    //                 "SAE",
-    //             );
+    //             ui.radio_value(&mut params.encoder_type, EncoderType::Raw, "Raw");
     //         });
-    //         ui.add_enabled(
-    //             enabled,
-    //             egui::Checkbox::new(&mut ui_state.show_original, "Show original?"),
-    //         );
-    //     });
-    //     ui.end_row();
-    //
-    //     ui.label("Time mode:");
-    //     ui.add_enabled_ui(true, |ui| {
     //         ui.horizontal(|ui| {
     //             ui.radio_value(
-    //                 &mut ui_state.time_mode,
-    //                 TimeMode::DeltaT,
-    //                 "Δt (time change)",
-    //             );
-    //             ui.radio_value(
-    //                 &mut ui_state.time_mode,
-    //                 TimeMode::AbsoluteT,
-    //                 "t (absolute time)",
+    //                 &mut params.encoder_type,
+    //                 EncoderType::Compressed,
+    //                 "Compressed",
     //             );
     //         });
     //     });
-    //     ui.end_row();
+    // });
+    // ui.end_row();
     //
-    //     ui.label("Compression mode:");
-    //     ui.add_enabled_ui(true, |ui| {
-    //         ui.vertical(|ui| {
-    //             ui.horizontal(|ui| {
-    //                 ui.radio_value(
-    //                     &mut ui_state.encoder_type,
-    //                     EncoderType::Empty,
-    //                     "Empty (don't write)",
-    //                 );
-    //                 ui.radio_value(&mut ui_state.encoder_type, EncoderType::Raw, "Raw");
-    //             });
-    //             ui.horizontal(|ui| {
-    //                 ui.radio_value(
-    //                     &mut ui_state.encoder_type,
-    //                     EncoderType::Compressed,
-    //                     "Compressed",
-    //                 );
-    //             });
-    //         });
-    //     });
-    //     ui.end_row();
-    //
-    //     #[cfg(feature = "open-cv")]
-    //     {
-    //         ui.label("DAVIS mode:");
-    //         ui.add_enabled_ui(!enabled, |ui| {
-    //             ui.horizontal(|ui| {
-    //                 ui.radio_value(
-    //                     &mut ui_state.davis_mode_radio_state,
-    //                     TranscoderMode::Framed,
-    //                     "Framed recon",
-    //                 );
-    //                 ui.radio_value(
-    //                     &mut ui_state.davis_mode_radio_state,
-    //                     TranscoderMode::RawDavis,
-    //                     "Raw DAVIS",
-    //                 );
-    //                 ui.radio_value(
-    //                     &mut ui_state.davis_mode_radio_state,
-    //                     TranscoderMode::RawDvs,
-    //                     "Raw DVS",
-    //                 );
-    //             });
-    //         });
-    //         ui.end_row();
-    //
-    //         ui.label("DAVIS deblurred FPS:");
-    //
-    //         slider_pm(
-    //             !enabled,
-    //             true,
-    //             ui,
-    //             &mut ui_state.davis_output_fps,
-    //             &mut ui_state.davis_output_fps_slider,
-    //             30.0..=1000000.0,
-    //             vec![
-    //                 50.0, 100.0, 250.0, 500.0, 1_000.0, 2_500.0, 5_000.0, 7_500.0, 10_000.0, 1000000.0,
-    //             ],
-    //             50.0,
-    //         );
-    //         ui.end_row();
-    //
-    //         let enable_optimize = !enabled && ui_state.davis_mode_radio_state != TranscoderMode::RawDvs;
-    //         ui.label("Optimize:");
-    //         ui.add_enabled(
-    //             enable_optimize,
-    //             egui::Checkbox::new(&mut ui_state.optimize_c, "Optimize θ?"),
-    //         );
-    //         ui.end_row();
-    //
-    //         ui.label("Optimize frequency:");
-    //         slider_pm(
-    //             enable_optimize,
-    //             true,
-    //             ui,
-    //             &mut ui_state.optimize_c_frequency,
-    //             &mut ui_state.optimize_c_frequency_slider,
-    //             1..=250,
-    //             vec![10, 25, 50, 100],
-    //             1,
-    //         );
-    //         ui.end_row();
-    //     }
-    //
-    //     let enable_encoder_options = ui_state.encoder_type != EncoderType::Empty;
-    //
-    //     ui.label("Event output order:");
-    //     ui.add_enabled_ui(enable_encoder_options, |ui| {
+    // #[cfg(feature = "open-cv")]
+    // {
+    //     ui.label("DAVIS mode:");
+    //     ui.add_enabled_ui(!enabled, |ui| {
     //         ui.horizontal(|ui| {
     //             ui.radio_value(
-    //                 &mut ui_state.encoder_options.event_order,
-    //                 EventOrder::Unchanged,
-    //                 "Unchanged",
+    //                 &mut params.davis_mode_radio_state,
+    //                 TranscoderMode::Framed,
+    //                 "Framed recon",
     //             );
     //             ui.radio_value(
-    //                 &mut ui_state.encoder_options.event_order,
-    //                 EventOrder::Interleaved,
-    //                 "Interleaved",
+    //                 &mut params.davis_mode_radio_state,
+    //                 TranscoderMode::RawDavis,
+    //                 "Raw DAVIS",
+    //             );
+    //             ui.radio_value(
+    //                 &mut params.davis_mode_radio_state,
+    //                 TranscoderMode::RawDvs,
+    //                 "Raw DVS",
     //             );
     //         });
     //     });
     //     ui.end_row();
     //
-    //     ui.label("Bandwidth limiting:");
-    //     ui.add_enabled(
-    //         enable_encoder_options,
-    //         egui::Checkbox::new(&mut ui_state.limit_bandwidth, "Limit bandwidth?"),
-    //     );
-    //     ui.end_row();
-    //
-    //     ui.label("Bandwidth limiting rate:");
+    //     ui.label("DAVIS deblurred FPS:");
     //
     //     slider_pm(
-    //         ui_state.limit_bandwidth,
+    //         !enabled,
     //         true,
     //         ui,
-    //         &mut ui_state.bandwidth_target_event_rate,
-    //         &mut ui_state.bandwidth_target_event_rate_slider,
-    //         1_000_000.0..=100_000_000.0,
+    //         &mut params.davis_output_fps,
+    //         &mut params.davis_output_fps_slider,
+    //         30.0..=1000000.0,
     //         vec![
-    //             1_000_000.0,
-    //             2_500_000.0,
-    //             5_000_000.0,
-    //             7_500_000.0,
-    //             10_000_000.0,
+    //             50.0, 100.0, 250.0, 500.0, 1_000.0, 2_500.0, 5_000.0, 7_500.0, 10_000.0, 1000000.0,
     //         ],
-    //         50_000.0,
+    //         50.0,
     //     );
     //     ui.end_row();
     //
-    //     ui.label("Bandwidth limiting alpha:");
+    //     let enable_optimize = !enabled && params.davis_mode_radio_state != TranscoderMode::RawDvs;
+    //     ui.label("Optimize:");
+    //     ui.add_enabled(
+    //         enable_optimize,
+    //         egui::Checkbox::new(&mut params.optimize_c, "Optimize θ?"),
+    //     );
+    //     ui.end_row();
     //
+    //     ui.label("Optimize frequency:");
     //     slider_pm(
-    //         ui_state.limit_bandwidth,
-    //         false,
+    //         enable_optimize,
+    //         true,
     //         ui,
-    //         &mut ui_state.bandwidth_alpha,
-    //         &mut ui_state.alpha_slider,
-    //         0.0..=1.0,
-    //         vec![0.5, 0.8, 0.9, 0.999, 0.99999, 1.0],
-    //         0.001,
+    //         &mut params.optimize_c_frequency,
+    //         &mut params.optimize_c_frequency_slider,
+    //         1..=250,
+    //         vec![10, 25, 50, 100],
+    //         1,
     //     );
     //     ui.end_row();
+    // }
     //
-    //     /* Update the bandwidth options in the UI state. If there's a change, it will later get reflected
-    //     by updating the encoder options in the transcoder.*/
-    //     if ui_state.limit_bandwidth {
-    //         ui_state.encoder_options.event_drop = EventDrop::Manual {
-    //             target_event_rate: ui_state.bandwidth_target_event_rate,
-    //             alpha: ui_state.bandwidth_alpha,
-    //         };
-    //     } else {
-    //         ui_state.encoder_options.event_drop = EventDrop::None;
-    //     }
+    // let enable_encoder_options = params.encoder_type != EncoderType::Empty;
     //
-    //     ui.label("Processing:");
-    //     ui.vertical(|ui| {
-    //         ui.add_enabled(
-    //             true,
-    //             egui::Checkbox::new(&mut ui_state.detect_features, "Detect features"),
+    // ui.label("Event output order:");
+    // ui.add_enabled_ui(enable_encoder_options, |ui| {
+    //     ui.horizontal(|ui| {
+    //         ui.radio_value(
+    //             &mut params.encoder_options.event_order,
+    //             EventOrder::Unchanged,
+    //             "Unchanged",
     //         );
+    //         ui.radio_value(
+    //             &mut params.encoder_options.event_order,
+    //             EventOrder::Interleaved,
+    //             "Interleaved",
+    //         );
+    //     });
+    // });
+    // ui.end_row();
     //
-    //         ui.add_enabled_ui(ui_state.detect_features, |ui| {
-    //             ui.horizontal(|ui| {
-    //                 ui.radio_value(
-    //                     &mut ui_state.show_features,
-    //                     ShowFeatureMode::Off,
-    //                     "Don't show",
-    //                 );
-    //                 ui.radio_value(
-    //                     &mut ui_state.show_features,
-    //                     ShowFeatureMode::Instant,
-    //                     "Show instant",
-    //                 );
-    //                 ui.radio_value(
-    //                     &mut ui_state.show_features,
-    //                     ShowFeatureMode::Hold,
-    //                     "Show & hold",
-    //                 );
-    //             });
-    //             ui.checkbox(
-    //                 &mut ui_state.feature_rate_adjustment,
-    //                 "Adjust sensitivities",
+    // ui.label("Bandwidth limiting:");
+    // ui.add_enabled(
+    //     enable_encoder_options,
+    //     egui::Checkbox::new(&mut params.limit_bandwidth, "Limit bandwidth?"),
+    // );
+    // ui.end_row();
+    //
+    // ui.label("Bandwidth limiting rate:");
+    //
+    // slider_pm(
+    //     params.limit_bandwidth,
+    //     true,
+    //     ui,
+    //     &mut params.bandwidth_target_event_rate,
+    //     &mut params.bandwidth_target_event_rate_slider,
+    //     1_000_000.0..=100_000_000.0,
+    //     vec![
+    //         1_000_000.0,
+    //         2_500_000.0,
+    //         5_000_000.0,
+    //         7_500_000.0,
+    //         10_000_000.0,
+    //     ],
+    //     50_000.0,
+    // );
+    // ui.end_row();
+    //
+    // ui.label("Bandwidth limiting alpha:");
+    //
+    // slider_pm(
+    //     params.limit_bandwidth,
+    //     false,
+    //     ui,
+    //     &mut params.bandwidth_alpha,
+    //     &mut params.alpha_slider,
+    //     0.0..=1.0,
+    //     vec![0.5, 0.8, 0.9, 0.999, 0.99999, 1.0],
+    //     0.001,
+    // );
+    // ui.end_row();
+    //
+    // /* Update the bandwidth options in the UI state. If there's a change, it will later get reflected
+    // by updating the encoder options in the transcoder.*/
+    // if params.limit_bandwidth {
+    //     params.encoder_options.event_drop = EventDrop::Manual {
+    //         target_event_rate: params.bandwidth_target_event_rate,
+    //         alpha: params.bandwidth_alpha,
+    //     };
+    // } else {
+    //     params.encoder_options.event_drop = EventDrop::None;
+    // }
+    //
+    // ui.label("Processing:");
+    // ui.vertical(|ui| {
+    //     ui.add_enabled(
+    //         true,
+    //         egui::Checkbox::new(&mut params.detect_features, "Detect features"),
+    //     );
+    //
+    //     ui.add_enabled_ui(params.detect_features, |ui| {
+    //         ui.horizontal(|ui| {
+    //             ui.radio_value(
+    //                 &mut params.show_features,
+    //                 ShowFeatureMode::Off,
+    //                 "Don't show",
     //             );
-    //             ui.checkbox(&mut ui_state.feature_cluster, "Cluster features");
+    //             ui.radio_value(
+    //                 &mut params.show_features,
+    //                 ShowFeatureMode::Instant,
+    //                 "Show instant",
+    //             );
+    //             ui.radio_value(
+    //                 &mut params.show_features,
+    //                 ShowFeatureMode::Hold,
+    //                 "Show & hold",
+    //             );
     //         });
+    //         ui.checkbox(
+    //             &mut params.feature_rate_adjustment,
+    //             "Adjust sensitivities",
+    //         );
+    //         ui.checkbox(&mut params.feature_cluster, "Cluster features");
     //     });
-    //     ui.end_row();
+    // });
+    // ui.end_row();
     //
-    //     ui.label("Metrics:");
-    //     ui.vertical(|ui| {
-    //         ui.add_enabled(
-    //             enabled,
-    //             egui::Checkbox::new(&mut ui_state.metric_mse, "MSE"),
-    //         );
-    //         ui.add_enabled(
-    //             enabled,
-    //             egui::Checkbox::new(&mut ui_state.metric_psnr, "PSNR"),
-    //         );
-    //         ui.add_enabled(
-    //             enabled,
-    //             egui::Checkbox::new(&mut ui_state.metric_ssim, "SSIM (Warning: slow!)"),
-    //         );
-    //     });
-    //     ui.end_row();
+    // ui.label("Metrics:");
+    // ui.vertical(|ui| {
+    //     ui.add_enabled(
+    //         enabled,
+    //         egui::Checkbox::new(&mut params.metric_mse, "MSE"),
+    //     );
+    //     ui.add_enabled(
+    //         enabled,
+    //         egui::Checkbox::new(&mut params.metric_psnr, "PSNR"),
+    //     );
+    //     ui.add_enabled(
+    //         enabled,
+    //         egui::Checkbox::new(&mut params.metric_ssim, "SSIM (Warning: slow!)"),
+    //     );
+    // });
+    // ui.end_row();
 }
