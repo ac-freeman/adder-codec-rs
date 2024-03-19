@@ -1,6 +1,7 @@
 use adder_codec_rs::adder_codec_core::codec::rate_controller::{Crf, CRF, DEFAULT_CRF_QUALITY};
 use adder_codec_rs::adder_codec_core::codec::{EncoderOptions, EncoderType};
 use adder_codec_rs::adder_codec_core::{PixelMultiMode, TimeMode};
+use eframe::epaint::ImageDelta;
 use egui::epaint::TextureManager;
 use egui::{ImageSource, TextureOptions};
 use std::path::PathBuf;
@@ -340,19 +341,16 @@ impl TranscoderState {
                 }
             };
 
-            // let mut manager = TextureManager::default();
-            // let id = manager.alloc(
-            //     "adder_image".parse().unwrap(),
-            //     (image.clone()).into(),
-            //     TextureOptions::default(),
-            // );
-            let id = ctx.load_texture(
+            let handle = ctx.load_texture(
                 "adder_image".to_owned().to_string(),
                 image.clone(),
                 TextureOptions::default(),
             );
-            let tmp = egui::load::SizedTexture::new(&id, size);
-            ui.image(ImageSource::Texture(tmp));
+            ui.image((handle.id(), size));
+            let image_delta = ImageDelta::full(egui::ColorImage::example(), Default::default());
+            let mut mngr = ctx.tex_manager();
+            let mut mngr = mngr.write();
+            mngr.set(handle.id(), image_delta);
         }
     }
     //         ui.horizontal(|ui| {
