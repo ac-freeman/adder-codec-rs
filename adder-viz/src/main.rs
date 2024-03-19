@@ -30,6 +30,7 @@ struct App {
     adder_image_handle: Option<egui::TextureHandle>,
     transcoder_state: TranscoderState,
     transcoder_state_tx: Sender<TranscoderStateMsg>,
+    last_frame_time: std::time::Instant,
 }
 
 impl App {
@@ -51,6 +52,7 @@ impl App {
             adder_image_handle: None,
             transcoder_state: Default::default(),
             transcoder_state_tx: tx,
+            last_frame_time: std::time::Instant::now(),
         };
 
         app.spawn_transcoder(rx);
@@ -114,10 +116,6 @@ impl eframe::App for App {
         // Collect dropped files
         self.handle_file_drop(ctx);
 
-        egui::CentralPanel::default().show(ctx, |ui| {
-            ui.heading("Hello World!");
-        });
-
         draw_ui(self, ctx);
 
         // This should always be the very last thing we do in this function
@@ -128,6 +126,8 @@ impl eframe::App for App {
                 })
                 .unwrap();
         }
+
+        ctx.request_repaint();
     }
 }
 
@@ -251,12 +251,21 @@ fn draw_ui(
 ) {
     egui::SidePanel::left("side_panel")
         .default_width(300.0)
-        .show(ctx, |ui| match app.view {
-            Tabs::Transcoder => {
-                app.transcoder_state.side_panel_ui(ui, &mut app.images);
-            }
-            Tabs::Player => {
-                // player_state.side_panel_ui(ui, commands, &mut images);
+        .show(ctx, |ui| {
+            ui.label(format!(
+                "FPS: {:.2}",
+                1.0 / app.last_frame_time.elapsed().as_secs_f64()
+            ));
+            // update the last frame time
+            app.last_frame_time = std::time::Instant::now();
+
+            match app.view {
+                Tabs::Transcoder => {
+                    app.transcoder_state.side_panel_ui(ui, &mut app.images);
+                }
+                Tabs::Player => {
+                    // player_state.side_panel_ui(ui, commands, &mut images);
+                }
             }
         });
     //
