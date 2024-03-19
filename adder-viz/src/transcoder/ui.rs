@@ -1,8 +1,10 @@
 use adder_codec_rs::adder_codec_core::codec::rate_controller::{Crf, CRF, DEFAULT_CRF_QUALITY};
 use adder_codec_rs::adder_codec_core::codec::{EncoderOptions, EncoderType};
 use adder_codec_rs::adder_codec_core::{PixelMultiMode, TimeMode};
+use egui::epaint::TextureManager;
+use egui::{ImageSource, TextureOptions};
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 // use crate::transcoder::adder::{replace_adder_transcoder, AdderTranscoder};
 // use crate::utils::prep_bevy_image;
 use crate::{slider_pm, Images};
@@ -36,6 +38,7 @@ pub struct AdaptiveParams {
     pub(crate) crf_number: u8,
     pub(crate) encoder_options: EncoderOptions,
     pub(crate) integration_mode_radio_state: PixelMultiMode,
+    pub(crate) thread_count: usize,
 }
 
 /// Core parameters which require a total reset of the transcoder. These parameters
@@ -63,6 +66,7 @@ impl Default for AdaptiveParams {
                 crf: Crf::new(None, Default::default()),
             },
             integration_mode_radio_state: Default::default(),
+            thread_count: 1,
         }
     }
 }
@@ -273,7 +277,7 @@ pub enum TranscoderStateMsg {
 }
 
 impl TranscoderState {
-    pub fn side_panel_ui(&mut self, ui: &mut egui::Ui, images: &mut Arc<Images>) {
+    pub fn side_panel_ui(&mut self, ui: &mut egui::Ui, images: &mut Arc<Mutex<Images>>) {
         ui.horizontal(|ui| {
             ui.heading("ADΔER Parameters");
             if ui.add(egui::Button::new("Reset params")).clicked() {
@@ -304,7 +308,53 @@ impl TranscoderState {
             });
     }
     //
-    //     pub fn central_panel_ui(&mut self, ui: &mut Ui, time: Res<Time>) {
+    pub fn central_panel_ui(
+        &mut self,
+        ctx: &egui::Context,
+        ui: &mut egui::Ui,
+        images: &mut Arc<Mutex<Images>>,
+    ) {
+        let avail_size = ui.available_size();
+        let images = images.lock().unwrap();
+        if let Some(image) = &images.image_view {
+            let size = match (image.size[0] as f32, image.size[1] as f32) {
+                (a, b) if a / b > avail_size.x / avail_size.y => {
+                    /*
+                    The available space has a taller aspect ratio than the video
+                    Fill the available horizontal space.
+                     */
+                    egui::Vec2 {
+                        x: avail_size.x,
+                        y: (avail_size.x / a) * b,
+                    }
+                }
+                (a, b) => {
+                    /*
+                    The available space has a shorter aspect ratio than the video
+                    Fill the available vertical space.
+                     */
+                    egui::Vec2 {
+                        x: (avail_size.y / b) * a,
+                        y: avail_size.y,
+                    }
+                }
+            };
+
+            // let mut manager = TextureManager::default();
+            // let id = manager.alloc(
+            //     "adder_image".parse().unwrap(),
+            //     (image.clone()).into(),
+            //     TextureOptions::default(),
+            // );
+            let id = ctx.load_texture(
+                "adder_image".to_owned().to_string(),
+                image.clone(),
+                TextureOptions::default(),
+            );
+            let tmp = egui::load::SizedTexture::new(&id, size);
+            ui.image(ImageSource::Texture(tmp));
+        }
+    }
     //         ui.horizontal(|ui| {
     //             if ui.button("Open file").clicked() {
     //                 if let Some(path) = rfd::FileDialog::new()

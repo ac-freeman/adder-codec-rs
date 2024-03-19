@@ -40,7 +40,7 @@ rfd = "0.10.0"
 strum = "0.24.1"
 strum_macros = "0.24.3"
 thiserror = "1.0.58"
-tokio = { version = "1.36.0", features = ["full"] }
+tokio = { version = "1.36.0", features = ["full", "rt-multi-thread"] }
 ndarray = "0.15.6"
 video-rs-adder-dep = { version = "0.4.1", features = ["ndarray"] }
 ndarray-image = "0.3.0"

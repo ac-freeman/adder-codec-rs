@@ -15,7 +15,10 @@ use adder_codec_core::codec::raw::stream::RawOutput;
 use adder_codec_core::codec::{
     CodecError, CodecMetadata, EncoderOptions, EncoderType, LATEST_CODEC_VERSION,
 };
-use adder_codec_core::{Coord, DeltaT, Event, Mode, PixelAddress, PixelMultiMode, PlaneError, PlaneSize, SourceCamera, SourceType, TimeMode, D_EMPTY, D_ZERO_INTEGRATION};
+use adder_codec_core::{
+    Coord, DeltaT, Event, Mode, PixelAddress, PixelMultiMode, PlaneError, PlaneSize, SourceCamera,
+    SourceType, TimeMode, D_EMPTY, D_ZERO_INTEGRATION,
+};
 use bumpalo::Bump;
 
 use std::sync::mpsc::{channel, Sender};
@@ -209,7 +212,7 @@ pub struct VideoState {
 
     pub feature_log_handle: Option<std::fs::File>,
     feature_rate_adjustment: bool,
-    feature_cluster: bool
+    feature_cluster: bool,
 }
 
 impl Default for VideoState {
@@ -781,7 +784,6 @@ impl<W: Write + 'static> Video<W> {
                         (f32::from(*frame_val)).log2().floor() as D
                     };
 
-
                     px.arena[0].set_d(d_start);
                     px.base_val = *frame_val as u8;
                 }
@@ -887,9 +889,11 @@ impl<W: Write + 'static> Video<W> {
                 }
             });
 
-        let mut new_features = new_features.iter()
-            .flat_map(|feature_set| feature_set.iter().map(|coord| [coord.x, coord.y])).collect::<Vec<[u16;2]>>();
-        let new_features: HashSet<[u16;2]> = new_features.drain(..).collect();
+        let mut new_features = new_features
+            .iter()
+            .flat_map(|feature_set| feature_set.iter().map(|coord| [coord.x, coord.y]))
+            .collect::<Vec<[u16; 2]>>();
+        let new_features: HashSet<[u16; 2]> = new_features.drain(..).collect();
 
         #[cfg(feature = "feature-logging")]
         {
@@ -1044,37 +1048,32 @@ impl<W: Write + 'static> Video<W> {
 
         let parameters = self.encoder.options.crf.get_parameters();
 
-        
-
-            for coord in &new_features {
-
-                    if self.state.show_features == ShowFeatureMode::Instant {
-                        draw_feature_coord(
-                            coord[0],
-                            coord[1],
-                            &mut self.display_frame_features,
-                            self.state.plane.c() != 1,
-                            None,
-                        );
-                    }
-                if self.state.feature_rate_adjustment && parameters.feature_c_radius > 0 {
-                    let radius = parameters.feature_c_radius as i32;
-                    for row in (coord[1] as i32 - radius).max(0)
-                        ..=(coord[1] as i32 + radius).min(self.state.plane.h() as i32 - 1)
+        for coord in &new_features {
+            if self.state.show_features == ShowFeatureMode::Instant {
+                draw_feature_coord(
+                    coord[0],
+                    coord[1],
+                    &mut self.display_frame_features,
+                    self.state.plane.c() != 1,
+                    None,
+                );
+            }
+            if self.state.feature_rate_adjustment && parameters.feature_c_radius > 0 {
+                let radius = parameters.feature_c_radius as i32;
+                for row in (coord[1] as i32 - radius).max(0)
+                    ..=(coord[1] as i32 + radius).min(self.state.plane.h() as i32 - 1)
+                {
+                    for col in (coord[0] as i32 - radius).max(0)
+                        ..=(coord[0] as i32 + radius).min(self.state.plane.w() as i32 - 1)
                     {
-                        for col in (coord[0] as i32 - radius).max(0)
-                            ..=(coord[0] as i32 + radius).min(self.state.plane.w() as i32 - 1)
-                        {
-                            for c in 0..self.state.plane.c() {
-                                self.event_pixel_trees[[row as usize, col as usize, c as usize]]
-                                    .c_thresh = min(parameters.c_thresh_baseline, 2);
-                            }
+                        for c in 0..self.state.plane.c() {
+                            self.event_pixel_trees[[row as usize, col as usize, c as usize]]
+                                .c_thresh = min(parameters.c_thresh_baseline, 2);
                         }
                     }
-
+                }
             }
         }
-
 
         if self.state.feature_cluster {
             self.cluster(&new_features);
@@ -1184,15 +1183,15 @@ impl<W: Write + 'static> Video<W> {
                 bboxes.push((min_x, min_y, max_x, max_y));
 
                 // if self.state.show_features != ShowFeatureMode::Off {
-                    draw_rect(
-                        min_x as PixelAddress,
-                        min_y as PixelAddress,
-                        max_x as PixelAddress,
-                        max_y as PixelAddress,
-                        &mut self.display_frame_features,
-                        self.state.plane.c() != 1,
-                        Some(random_color),
-                    );
+                draw_rect(
+                    min_x as PixelAddress,
+                    min_y as PixelAddress,
+                    max_x as PixelAddress,
+                    max_y as PixelAddress,
+                    &mut self.display_frame_features,
+                    self.state.plane.c() != 1,
+                    Some(random_color),
+                );
                 // }
             }
         }
@@ -1382,7 +1381,7 @@ pub trait Source<W: Write> {
     /// intensities.
     fn consume(
         &mut self,
-        thread_pool: &ThreadPool,
+        thread_pool: &tokio::runtime::Runtime,
     ) -> Result<Vec<Vec<Event>>, SourceError>;
 
     /// Set the Constant Rate Factor (CRF) quality setting for the encoder. 0 is lossless, 9 is worst quality.

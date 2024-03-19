@@ -90,7 +90,7 @@ pub struct SimulProcArgs {
 pub struct SimulProcessor<W: Write + 'static> {
     /// Framed transcoder hook
     pub source: Framed<W>,
-    thread_pool: ThreadPool,
+    thread_pool: tokio::runtime::Runtime,
     events_tx: Sender<Vec<Vec<Event>>>,
 }
 
@@ -136,8 +136,8 @@ impl<W: Write + 'static> SimulProcessor<W> {
         let thread_pool_framer = rayon::ThreadPoolBuilder::new()
             .num_threads(max(num_threads / 2, 1))
             .build()?;
-        let thread_pool_transcoder = rayon::ThreadPoolBuilder::new()
-            .num_threads(max(num_threads, 1))
+        let thread_pool_transcoder = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(max(num_threads, 1))
             .build()?;
         let reconstructed_frame_rate = source.source_fps;
         // For instantaneous reconstruction, make sure the frame rate matches the source video rate

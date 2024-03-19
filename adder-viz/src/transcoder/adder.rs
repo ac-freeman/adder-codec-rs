@@ -4,10 +4,13 @@ use std::ffi::OsStr;
 #[cfg(feature = "open-cv")]
 use adder_codec_rs::transcoder::source::davis::Davis;
 use adder_codec_rs::transcoder::source::framed::Framed;
+use eframe::epaint::ColorImage;
+use egui::Color32;
 use std::fmt;
 use std::fs::File;
 use std::io::BufWriter;
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
 
 #[cfg(feature = "open-cv")]
 use adder_codec_rs::transcoder::source::davis::TranscoderMode;
@@ -28,15 +31,17 @@ use opencv::Result;
 use thiserror::Error;
 use tokio::sync::mpsc::error::TryRecvError;
 use tokio::sync::mpsc::Receiver;
+use video_rs_adder_dep::Frame;
 
 pub struct AdderTranscoder {
+    pool: tokio::runtime::Runtime,
     transcoder_state: TranscoderState,
     pub(crate) framed_source: Option<Framed<BufWriter<File>>>,
     #[cfg(feature = "open-cv")]
     pub(crate) davis_source: Option<Davis<BufWriter<File>>>,
     pub(crate) prophesee_source: Option<Prophesee<BufWriter<File>>>,
     rx: Receiver<TranscoderStateMsg>,
-    pub(crate) images: std::sync::Arc<Images>,
+    pub(crate) images: Arc<Mutex<Images>>,
 }
 
 #[derive(Error, Debug)]
@@ -55,8 +60,11 @@ pub enum AdderTranscoderError {
 }
 
 impl AdderTranscoder {
-    pub(crate) fn new(rx: Receiver<TranscoderStateMsg>, images: std::sync::Arc<Images>) -> Self {
+    pub(crate) fn new(rx: Receiver<TranscoderStateMsg>, images: Arc<Mutex<Images>>) -> Self {
+        let threaded_rt = tokio::runtime::Runtime::new().unwrap();
+
         AdderTranscoder {
+            pool: threaded_rt,
             transcoder_state: Default::default(),
             framed_source: None,
             #[cfg(feature = "open-cv")]
@@ -84,7 +92,9 @@ impl AdderTranscoder {
                     }
                 },
                 Err(_) => {
-                    // eprintln!("Received no data");
+                    // Received no data, so consume the transcoder source if it exists
+                    let result = self.consume();
+                    self.handle_error(result);
                 }
             }
         }
@@ -99,6 +109,56 @@ impl AdderTranscoder {
         }
     }
 
+    fn consume(&mut self) -> Result<(), AdderTranscoderError> {
+        let mut image_ref = None;
+        match &mut self.framed_source {
+            None => {}
+            Some(framed) => {
+                let result = framed.consume(&self.pool); // TODO: remove pool from the consume() call entirely
+
+                // Display frame
+                image_ref = Some(framed.get_video_ref().display_frame_features.clone());
+            }
+        }
+        if let Some(img) = image_ref {
+            self.show_display_frame(img); // TODO: Make the image mat an Arc so you don't have to copy it
+        }
+        Ok(())
+    }
+
+    fn show_display_frame(&mut self, image_mat: Frame) {
+        let color = image_mat.shape()[2] == 3;
+        let mut images = self.images.lock().unwrap();
+        match images.image_view {
+            None => {
+                eprintln!("No image");
+                dbg!(image_mat.shape());
+                images.image_view = Some(ColorImage::new(
+                    [image_mat.shape()[1], image_mat.shape()[0]],
+                    Color32::RED,
+                ))
+            }
+            Some(_) => {
+                // eprintln!("already has an image")
+            }
+        }
+
+        // if let Some(image) = images.get_mut(&handles.image_view) {
+        //     crate::utils::prep_bevy_image_mut(image_mat, color, image)?;
+        // } else {
+        //     // dbg!("else");
+        //     let image_bevy = prep_bevy_image(
+        //         image_mat,
+        //         color,
+        //         source.get_video_ref().state.plane.w(),
+        //         source.get_video_ref().state.plane.h(),
+        //     )?;
+        //     self.transcoder.live_image = image_bevy;
+        //     let handle = images.add(self.transcoder.live_image.clone());
+        //     handles.image_view = handle;
+        // }
+    }
+
     fn state_update(
         &mut self,
         transcoder_state: TranscoderState,
@@ -108,8 +168,25 @@ impl AdderTranscoder {
             return self.core_state_update(transcoder_state);
         } else if transcoder_state.adaptive_params != self.transcoder_state.adaptive_params {
             eprintln!("Modify existing transcoder");
-            return Ok(());
+            return self.adaptive_state_update(transcoder_state);
         }
+        Ok(())
+    }
+
+    fn adaptive_state_update(
+        &mut self,
+        transcoder_state: TranscoderState,
+    ) -> Result<(), AdderTranscoderError> {
+        let new_adaptive_params = &transcoder_state.adaptive_params;
+        let old_adaptive_params = &self.transcoder_state.adaptive_params;
+
+        if new_adaptive_params.thread_count != old_adaptive_params.thread_count {
+            self.pool = tokio::runtime::Builder::new_multi_thread()
+                .worker_threads(new_adaptive_params.thread_count)
+                .build()
+                .unwrap();
+        }
+
         Ok(())
     }
 
