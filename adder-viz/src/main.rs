@@ -27,6 +27,7 @@ struct App {
     view: Tabs,
     error_msg: Option<String>,
     images: std::sync::Arc<std::sync::Mutex<Images>>,
+    adder_image_handle: Option<egui::TextureHandle>,
     transcoder_state: TranscoderState,
     transcoder_state_tx: Sender<TranscoderStateMsg>,
 }
@@ -47,6 +48,7 @@ impl App {
             view: Default::default(),
             error_msg: None,
             images: std::sync::Arc::new(std::sync::Mutex::new(Default::default())),
+            adder_image_handle: None,
             transcoder_state: Default::default(),
             transcoder_state_tx: tx,
         };
@@ -281,8 +283,11 @@ fn draw_ui(
 
         match app.view {
             Tabs::Transcoder => {
-                app.transcoder_state
-                    .central_panel_ui(ctx, ui, &mut app.images);
+                app.transcoder_state.central_panel_ui(
+                    ui,
+                    &mut app.images,
+                    &mut app.adder_image_handle,
+                );
             }
             Tabs::Player => {
                 // app.player_state.central_panel_ui(ui, time);

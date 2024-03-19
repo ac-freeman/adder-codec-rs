@@ -20,6 +20,7 @@ use adder_codec_rs::davis_edi_rs::util::reconstructor::Reconstructor;
 
 use crate::transcoder::adder::AdderTranscoderError::InvalidFileType;
 use crate::transcoder::ui::{AdaptiveParams, TranscoderState, TranscoderStateMsg};
+use crate::utils::prep_epaint_image;
 use crate::Images;
 use adder_codec_rs::adder_codec_core::codec::rate_controller::DEFAULT_CRF_QUALITY;
 use adder_codec_rs::adder_codec_core::PlaneError;
@@ -129,17 +130,24 @@ impl AdderTranscoder {
     fn show_display_frame(&mut self, image_mat: Frame) {
         let color = image_mat.shape()[2] == 3;
         let mut images = self.images.lock().unwrap();
+        let width = image_mat.shape()[1];
+        let height = image_mat.shape()[0];
         match images.image_view {
             None => {
                 eprintln!("No image");
                 dbg!(image_mat.shape());
-                images.image_view = Some(ColorImage::new(
-                    [image_mat.shape()[1], image_mat.shape()[0]],
-                    Color32::RED,
-                ))
+                // let tmp = image_mat.as_slice_memory_order().unwrap();
+                images.image_view =
+                    Some(prep_epaint_image(image_mat, color, width, height).unwrap());
+                // new(
+                //     [image_mat.shape()[1], image_mat.shape()[0]],
+                //     Color32::RED,
+                // ))
             }
             Some(_) => {
                 // eprintln!("already has an image")
+                images.image_view =
+                    Some(prep_epaint_image(image_mat, color, width, height).unwrap());
             }
         }
 
