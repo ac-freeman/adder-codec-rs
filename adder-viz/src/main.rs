@@ -1,13 +1,19 @@
 mod transcoder;
 mod utils;
 
-use crate::transcoder::ui::TranscoderState;
+use crate::transcoder::ui::{TranscoderState, TranscoderStateMsg};
 use crate::utils::slider::NotchedSlider;
 use eframe::egui;
 use egui::{ColorImage, Widget};
 use std::ops::RangeInclusive;
+use std::sync::Arc;
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
+use tokio::sync::mpsc;
+use tokio::sync::mpsc::Sender;
+use crate::transcoder::adder::AdderTranscoder;
+use tokio::sync::broadcast;
+
 
 fn main() {
     let native_options = eframe::NativeOptions::default();
@@ -18,12 +24,12 @@ fn main() {
     );
 }
 
-#[derive(Default)]
 struct App {
     view: Tabs,
     error_msg: Option<String>,
-    images: Images,
+    images: std::sync::Arc<Images>,
     transcoder_state: TranscoderState,
+    transcoder_state_tx: Sender<TranscoderStateMsg>,
 }
 
 impl App {
@@ -36,14 +42,53 @@ impl App {
             window_rounding: 5.0.into(),
             ..Default::default()
         });
-        Self::default()
+        let (tx, mut rx) = mpsc::channel(5);
+
+
+        let mut app = App {
+            view: Default::default(),
+            error_msg: None,
+            images: Arc::new(Default::default()),
+            transcoder_state: Default::default(),
+            transcoder_state_tx: tx,
+        };
+
+
+
+        app.spawn_transcoder(rx);
+
+
+        app
     }
+    fn spawn_transcoder(&mut self, rx: mpsc::Receiver<TranscoderStateMsg>){
+        let images = self.images.clone();
+        let rt = tokio::runtime::Runtime::new().expect("Unable to create Runtime");
+
+        let _enter = rt.enter();
+
+        // Execute the runtime in its own thread.
+        std::thread::spawn(move || {
+            rt.block_on(async {
+                let mut transcoder = AdderTranscoder::new(rx, images);
+                transcoder.run();
+            })
+        });
+    }
+
+    // #[tokio::main]
+    // async fn handle_exit(&mut self, ctx: &egui::Context) {
+    //     if ctx.input(|i| i.viewport().close_requested()) {
+    //         eprintln!("Handling exit");
+    //         // self.transcoder_state_tx.send(TranscoderStateMsg::Terminate).await.unwrap();
+    //     }
+    // }
 }
 
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
-        // Check if the scale key was hit
+        // self.handle_exit(ctx);
 
+        // Check if the scale key was hit
         handle_zoom(ctx);
         configure_menu_bar(self, ctx);
 
@@ -51,14 +96,24 @@ impl eframe::App for App {
             ui.heading("Hello World!");
         });
 
+        // Store a copy of the params to compare against later
+        let old_params = self.transcoder_state.params_ui_state.clone();
         draw_ui(self, ctx);
+
+        if old_params != self.transcoder_state.params_ui_state {
+            self.transcoder_state_tx
+                .blocking_send(TranscoderStateMsg::Set { transcoder_state: self.transcoder_state.clone() })
+                .unwrap();
+        }
     }
+
+
 }
 
 fn handle_zoom(ctx: &egui::Context) {
     if ctx.input(|i| i.key_pressed(egui::Key::Slash)) {
         // Toggle the scale factor
-        let scale_factor = if ctx.zoom_factor() == 1.0.into() {
+        let scale_factor = if ctx.zoom_factor() == 1.0_f32 {
             2.0
         } else {
             1.0

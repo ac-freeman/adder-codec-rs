@@ -1,3 +1,7 @@
+use std::sync::Arc;
+use adder_codec_rs::adder_codec_core::codec::{EncoderOptions, EncoderType};
+use adder_codec_rs::adder_codec_core::codec::rate_controller::Crf;
+use adder_codec_rs::adder_codec_core::{PixelMultiMode, TimeMode};
 // use crate::transcoder::adder::{replace_adder_transcoder, AdderTranscoder};
 // use crate::utils::prep_bevy_image;
 use crate::{slider_pm, Images};
@@ -22,13 +26,30 @@ use crate::{slider_pm, Images};
 // use std::io::{BufWriter, Write};
 // use std::path::PathBuf;
 //
+#[derive(Debug,Copy,Clone, PartialEq)]
 pub struct ParamsUiState {
     pub(crate) delta_t_ref: u32,
+    pub(crate) color: bool,
+    pub(crate) scale: f64,
+    pub(crate) encoder_options: EncoderOptions,
+    pub(crate) delta_t_max_mult: u32,
+    pub(crate) time_mode: TimeMode,
+    pub(crate) integration_mode_radio_state: PixelMultiMode,
+    pub(crate) encoder_type: EncoderType,
 }
 
 impl Default for ParamsUiState {
     fn default() -> Self {
-        ParamsUiState { delta_t_ref: 255 }
+        ParamsUiState { delta_t_ref: 255, color: false, scale: 0.25, encoder_options: EncoderOptions {
+            event_drop: Default::default(),
+            event_order: Default::default(),
+            crf: Crf::new(None, Default::default()),
+        },
+            delta_t_max_mult: 30,
+            time_mode: Default::default(),
+            integration_mode_radio_state: Default::default(),
+            encoder_type: Default::default(),
+        }
     }
 }
 
@@ -208,15 +229,23 @@ impl Default for ParamsUiState {
 //
 // unsafe impl Sync for InfoUiState {}
 //
-#[derive(Default)]
+#[derive(Default, Debug, Copy, Clone)]
 pub struct TranscoderState {
     // pub(crate) transcoder: AdderTranscoder,
     pub params_ui_state: ParamsUiState,
     // pub ui_info_state: InfoUiState,
 }
 
+#[derive(Debug, Copy, Clone)]
+pub enum TranscoderStateMsg {
+    Terminate ,
+    Set {
+        transcoder_state: TranscoderState,
+    }
+}
+
 impl TranscoderState {
-    pub fn side_panel_ui(&mut self, ui: &mut egui::Ui, images: &mut crate::Images) {
+    pub fn side_panel_ui(&mut self, ui: &mut egui::Ui, images: &mut Arc<Images>) {
         ui.horizontal(|ui| {
             ui.heading("ADΔER Parameters");
             if ui.add(egui::Button::new("Reset params")).clicked() {
