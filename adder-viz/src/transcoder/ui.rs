@@ -40,6 +40,7 @@ pub struct AdaptiveParams {
     pub(crate) encoder_options: EncoderOptions,
     pub(crate) integration_mode_radio_state: PixelMultiMode,
     pub(crate) thread_count: usize,
+    pub(crate) show_original: bool,
 }
 
 /// Core parameters which require a total reset of the transcoder. These parameters
@@ -68,6 +69,7 @@ impl Default for AdaptiveParams {
             },
             integration_mode_radio_state: Default::default(),
             thread_count: 1,
+            show_original: false,
         }
     }
 }
@@ -312,9 +314,13 @@ impl TranscoderState {
     pub fn central_panel_ui(
         &mut self,
         ui: &mut egui::Ui,
+        input_image_handle: &mut egui::TextureHandle,
         adder_image_handle: &mut egui::TextureHandle,
     ) {
-        let avail_size = ui.available_size();
+        let mut avail_size = ui.available_size();
+        if self.adaptive_params.show_original {
+            avail_size.x = avail_size.x / 2.0;
+        }
         // let images = images.lock().unwrap();
 
         let size = match (
@@ -343,13 +349,17 @@ impl TranscoderState {
             }
         };
 
-        let image = egui::Image::new(egui::load::SizedTexture::new(adder_image_handle.id(), size));
-        ui.add(image);
-        // }
-        //
-        // ui.image((adder_image_handle.unwrap(), size));
-        // let image_delta = ImageDelta::full(egui::ColorImage::example(), Default::default());
-        // ui.image((texture.id(), size));
+        ui.horizontal(|ui| {
+            if self.adaptive_params.show_original {
+                let input_image =
+                    egui::Image::new(egui::load::SizedTexture::new(input_image_handle.id(), size));
+                ui.add(input_image);
+            }
+
+            let image =
+                egui::Image::new(egui::load::SizedTexture::new(adder_image_handle.id(), size));
+            ui.add(image);
+        });
     }
     //         ui.horizontal(|ui| {
     //             if ui.button("Open file").clicked() {
@@ -935,7 +945,7 @@ fn side_panel_grid_contents(
     // {
     //     params.encoder_options.crf = Crf::new(Some(crf), info_ui_state.plane);
     // }
-    // ui.end_row();
+    ui.end_row();
     //
     // ui.label("Δt_max multiplier:");
     // slider_pm(
@@ -1048,32 +1058,32 @@ fn side_panel_grid_contents(
     // });
     // ui.end_row();
     //
-    // ui.label("View mode:");
-    // ui.vertical(|ui| {
-    //     ui.horizontal(|ui| {
-    //         ui.radio_value(
-    //             &mut params.view_mode_radio_state,
-    //             FramedViewMode::Intensity,
-    //             "Intensity",
-    //         );
-    //         ui.radio_value(&mut params.view_mode_radio_state, FramedViewMode::D, "D");
-    //         ui.radio_value(
-    //             &mut params.view_mode_radio_state,
-    //             FramedViewMode::DeltaT,
-    //             "Δt",
-    //         );
-    //         ui.radio_value(
-    //             &mut params.view_mode_radio_state,
-    //             FramedViewMode::SAE,
-    //             "SAE",
-    //         );
-    //     });
-    //     ui.add_enabled(
-    //         enabled,
-    //         egui::Checkbox::new(&mut params.show_original, "Show original?"),
-    //     );
-    // });
-    // ui.end_row();
+    ui.label("View mode:");
+    ui.vertical(|ui| {
+        // ui.horizontal(|ui| {
+        //     ui.radio_value(
+        //         &mut adaptive_params.view_mode_radio_state,
+        //         FramedViewMode::Intensity,
+        //         "Intensity",
+        //     );
+        //     ui.radio_value(&mut adaptive_params.view_mode_radio_state, FramedViewMode::D, "D");
+        //     ui.radio_value(
+        //         &mut adaptive_params.view_mode_radio_state,
+        //         FramedViewMode::DeltaT,
+        //         "Δt",
+        //     );
+        //     ui.radio_value(
+        //         &mut adaptive_params.view_mode_radio_state,
+        //         FramedViewMode::SAE,
+        //         "SAE",
+        //     );
+        // });
+        ui.add_enabled(
+            enabled,
+            egui::Checkbox::new(&mut adaptive_params.show_original, "Show original?"),
+        );
+    });
+    ui.end_row();
     //
     // ui.label("Time mode:");
     // ui.add_enabled_ui(true, |ui| {

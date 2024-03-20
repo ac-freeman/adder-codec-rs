@@ -27,6 +27,7 @@ struct App {
     view: Tabs,
     error_msg: Option<String>,
     adder_image_handle: egui::TextureHandle,
+    input_image_handle: egui::TextureHandle,
     transcoder_state: TranscoderState,
     transcoder_state_tx: Sender<TranscoderStateMsg>,
     last_frame_time: std::time::Instant,
@@ -52,6 +53,11 @@ impl App {
                 ColorImage::example(),
                 Default::default(),
             ),
+            input_image_handle: cc.egui_ctx.load_texture(
+                "adder_image",
+                ColorImage::example(),
+                Default::default(),
+            ),
             transcoder_state: Default::default(),
             transcoder_state_tx: tx,
             last_frame_time: std::time::Instant::now(),
@@ -63,6 +69,7 @@ impl App {
     }
     fn spawn_transcoder(&mut self, rx: mpsc::Receiver<TranscoderStateMsg>) {
         let adder_image_handle = self.adder_image_handle.clone();
+        let input_image_handle = self.input_image_handle.clone();
         let rt = tokio::runtime::Runtime::new().expect("Unable to create Runtime");
 
         let _enter = rt.enter();
@@ -70,7 +77,8 @@ impl App {
         // Execute the runtime in its own thread.
         std::thread::spawn(move || {
             rt.block_on(async {
-                let mut transcoder = AdderTranscoder::new(rx, adder_image_handle);
+                let mut transcoder =
+                    AdderTranscoder::new(rx, input_image_handle, adder_image_handle);
                 transcoder.run();
             })
         });
@@ -270,32 +278,17 @@ fn draw_ui(
                 }
             }
         });
-    //
-    //     let (image, texture_id) = match images.get(&handles.image_view) {
-    //         // texture_id = Some(egui_ctx.add_image(handles.image_view.clone()));
-    //         None => (None, None),
-    //         Some(image) => (
-    //             Some(image),
-    //             Some(egui_ctx.add_image(handles.image_view.clone())),
-    //         ),
-    //     };
-    //
-    //     let (input, input_texture_id) = match images.get(&handles.input_view) {
-    //         // texture_id = Some(egui_ctx.add_image(handles.image_view.clone()));
-    //         None => (None, None),
-    //         Some(image) => (
-    //             Some(image),
-    //             Some(egui_ctx.add_image(handles.input_view.clone())),
-    //         ),
-    //     };
-    //
+
     egui::CentralPanel::default().show(ctx, |ui| {
         egui::warn_if_debug_build(ui);
 
         match app.view {
             Tabs::Transcoder => {
-                app.transcoder_state
-                    .central_panel_ui(ui, &mut app.adder_image_handle);
+                app.transcoder_state.central_panel_ui(
+                    ui,
+                    &mut app.input_image_handle,
+                    &mut app.adder_image_handle,
+                );
             }
             Tabs::Player => {
                 // app.player_state.central_panel_ui(ui, time);

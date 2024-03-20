@@ -42,6 +42,7 @@ pub struct AdderTranscoder {
     pub(crate) davis_source: Option<Davis<BufWriter<File>>>,
     pub(crate) prophesee_source: Option<Prophesee<BufWriter<File>>>,
     rx: Receiver<TranscoderStateMsg>,
+    pub(crate) input_image_handle: egui::TextureHandle,
     pub(crate) adder_image_handle: egui::TextureHandle,
 }
 
@@ -63,6 +64,7 @@ pub enum AdderTranscoderError {
 impl AdderTranscoder {
     pub(crate) fn new(
         rx: Receiver<TranscoderStateMsg>,
+        input_image_handle: egui::TextureHandle,
         adder_image_handle: egui::TextureHandle,
     ) -> Self {
         let threaded_rt = tokio::runtime::Runtime::new().unwrap();
@@ -75,6 +77,7 @@ impl AdderTranscoder {
             davis_source: None,
             prophesee_source: None,
             rx,
+            input_image_handle,
             adder_image_handle,
         }
     }
@@ -118,10 +121,20 @@ impl AdderTranscoder {
             let result = framed.consume(&self.pool); // TODO: remove pool from the consume() call entirely
 
             // Display frame
-
-            self.show_display_frame(); // TODO: Make the image mat an Arc so you don't have to copy it
+            self.show_display_frame();
         }
         Ok(())
+    }
+
+    fn show_input_frame(&mut self) {
+        let image_mat = self.framed_source.as_ref().unwrap().get_input().unwrap();
+        let color = image_mat.shape()[2] == 3;
+        let width = image_mat.shape()[1];
+        let height = image_mat.shape()[0];
+
+        let image = prep_epaint_image(image_mat, color, width, height).unwrap();
+
+        self.input_image_handle.set(image, Default::default());
     }
 
     fn show_display_frame(&mut self) {
@@ -138,21 +151,6 @@ impl AdderTranscoder {
         let image = prep_epaint_image(image_mat, color, width, height).unwrap();
 
         self.adder_image_handle.set(image, Default::default());
-
-        // if let Some(image) = images.get_mut(&handles.image_view) {
-        //     crate::utils::prep_bevy_image_mut(image_mat, color, image)?;
-        // } else {
-        //     // dbg!("else");
-        //     let image_bevy = prep_bevy_image(
-        //         image_mat,
-        //         color,
-        //         source.get_video_ref().state.plane.w(),
-        //         source.get_video_ref().state.plane.h(),
-        //     )?;
-        //     self.transcoder.live_image = image_bevy;
-        //     let handle = images.add(self.transcoder.live_image.clone());
-        //     handles.image_view = handle;
-        // }
     }
 
     fn state_update(

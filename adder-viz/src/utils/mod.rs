@@ -40,32 +40,13 @@ pub(crate) mod slider;
 //     }
 // }
 
+#[inline]
 pub fn prep_epaint_image(
     image_mat: &Frame,
     color: bool,
     width: usize,
     height: usize,
 ) -> Result<ColorImage, Box<dyn Error>> {
-    // let view = Assets::get_mut(last_view)?;
-    // let image_mat = image_mat.as_standard_layout();
-    //
-    // // Preallocate space for the new vector
-    // let mut new_image_mat = Vec::with_capacity(width * height * 3);
-    //
-    // let image_mat = image_mat.into_owned().into_raw_vec();
-    // if color {
-    //     // Iterate over chunks of 3 elements and insert the value after each chunk
-    //     for chunk in image_mat.chunks(3) {
-    //         new_image_mat.extend(chunk.iter().cloned());
-    //     }
-    // } else {
-    //     for chunk in image_mat.chunks(1) {
-    //         new_image_mat.extend(chunk.iter().cloned());
-    //         new_image_mat.extend(chunk.iter().cloned());
-    //         new_image_mat.extend(chunk.iter().cloned());
-    //     }
-    // }
-
     if !color {
         return Ok(ColorImage::from_gray(
             [width, height],
@@ -77,38 +58,4 @@ pub fn prep_epaint_image(
             image_mat.as_standard_layout().as_slice().unwrap(),
         ));
     }
-
-    panic!("Not implemented");
-    // Ok(ColorImage::from_rgb(
-    //     [width, height],
-    //     new_image_mat.as_slice(),
-    // ))
 }
-
-// pub fn prep_bevy_image_mut(
-//     image_mat: Frame,
-//     color: bool,
-//     new_image: &mut Image,
-// ) -> Result<(), Box<dyn Error>> {
-//     let image_mat = image_mat.as_standard_layout().as_ptr();
-//
-//     let mut ref_idx = 0;
-//     unsafe {
-//         for (index, element) in new_image.data.iter_mut().enumerate() {
-//             // Skip every 4th element
-//             if (index + 1) % 4 == 0 {
-//                 if !color {
-//                     ref_idx += 1;
-//                 }
-//                 continue;
-//             }
-//
-//             *element = *image_mat.offset(ref_idx);
-//             if color {
-//                 ref_idx += 1;
-//             }
-//         }
-//     }
-//
-//     Ok(())
-// }
