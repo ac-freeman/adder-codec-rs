@@ -32,7 +32,8 @@ use adder_codec_rs::utils::cv::{calculate_quality_metrics, QualityMetrics};
 #[cfg(feature = "open-cv")]
 use opencv::Result;
 use thiserror::Error;
-use tokio::sync::mpsc::error::TryRecvError;
+use tokio::sync::mpsc;
+use tokio::sync::mpsc::error::{TryRecvError, TrySendError};
 use tokio::sync::mpsc::Receiver;
 use video_rs_adder_dep::Frame;
 
@@ -44,6 +45,7 @@ pub struct AdderTranscoder {
     pub(crate) davis_source: Option<Davis<BufWriter<File>>>,
     pub(crate) prophesee_source: Option<Prophesee<BufWriter<File>>>,
     rx: Receiver<TranscoderStateMsg>,
+    metrics_tx: mpsc::Sender<QualityMetrics>,
     pub(crate) input_image_handle: egui::TextureHandle,
     pub(crate) adder_image_handle: egui::TextureHandle,
     info_ui_state: Arc<Mutex<InfoUiState>>,
@@ -71,6 +73,7 @@ pub enum AdderTranscoderError {
 impl AdderTranscoder {
     pub(crate) fn new(
         rx: Receiver<TranscoderStateMsg>,
+        metrics_tx: mpsc::Sender<QualityMetrics>,
         input_image_handle: egui::TextureHandle,
         adder_image_handle: egui::TextureHandle,
         info_ui_state: Arc<Mutex<InfoUiState>>,
@@ -85,6 +88,7 @@ impl AdderTranscoder {
             davis_source: None,
             prophesee_source: None,
             rx,
+            metrics_tx,
             input_image_handle,
             adder_image_handle,
             info_ui_state,
@@ -183,7 +187,13 @@ impl AdderTranscoder {
         Ok(())
     }
 
-    fn quality_metrics(&self) -> Result<(), AdderTranscoderError> {
+    fn quality_metrics(&self) -> Result<(), Box<dyn Error>> {
+        if !(self.transcoder_state.info_params.metric_mse
+            || self.transcoder_state.info_params.metric_psnr
+            || self.transcoder_state.info_params.metric_ssim)
+        {
+            return Ok(());
+        }
         let input = self.framed_source.as_ref().unwrap().get_input().unwrap();
         let output = &self
             .framed_source
@@ -201,9 +211,17 @@ impl AdderTranscoder {
             psnr: if self.transcoder_state.info_params.metric_psnr {Some(0.0)} else {None},
             ssim: if self.transcoder_state.info_params.metric_ssim {Some(0.0)} else {None},
         })?;
-        dbg!(metrics);
 
-        // self.info_ui_state.get_mut()
+        eprintln!("Sending metrics");
+        match self.metrics_tx.try_send(metrics) {
+            Ok(_) => {}
+            Err(TrySendError::Full(..)) => {
+                eprintln!("Metrics channel full");
+            }
+            Err(e) => {
+                return Err(Box::new(e));
+            }
+        };
 
         Ok(())
     }

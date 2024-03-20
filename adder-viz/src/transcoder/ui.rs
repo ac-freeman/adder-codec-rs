@@ -2,6 +2,7 @@ use adder_codec_rs::adder_codec_core::codec::rate_controller::{Crf, CRF, DEFAULT
 use adder_codec_rs::adder_codec_core::codec::{EncoderOptions, EncoderType};
 use adder_codec_rs::adder_codec_core::{PixelMultiMode, TimeMode};
 use adder_codec_rs::transcoder::source::video::FramedViewMode;
+use adder_codec_rs::utils::cv::QualityMetrics;
 use adder_codec_rs::utils::viz::ShowFeatureMode;
 use eframe::epaint::{ColorImage, ImageDelta};
 use egui::epaint::TextureManager;
@@ -116,6 +117,7 @@ pub enum TranscoderStateMsg {
 pub struct TranscoderUi {
     pub transcoder_state: TranscoderState,
     pub info_ui_state: Arc<Mutex<InfoUiState>>,
+    metrics_rx: mpsc::Receiver<QualityMetrics>,
     pub transcoder_state_tx: Sender<TranscoderStateMsg>,
     adder_image_handle: egui::TextureHandle,
     input_image_handle: egui::TextureHandle,
@@ -125,10 +127,12 @@ pub struct TranscoderUi {
 impl TranscoderUi {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         let (tx, mut rx) = mpsc::channel(5);
+        let (metrics_tx, mut metrics_rx) = mpsc::channel(30);
 
         let mut transcoder_ui = TranscoderUi {
             transcoder_state: Default::default(),
             info_ui_state: Arc::new(Mutex::new(InfoUiState::default())),
+            metrics_rx,
             transcoder_state_tx: tx,
             adder_image_handle: cc.egui_ctx.load_texture(
                 "adder_image",
@@ -142,11 +146,15 @@ impl TranscoderUi {
             ),
             last_frame_time: std::time::Instant::now(),
         };
-        transcoder_ui.spawn_transcoder(rx);
+        transcoder_ui.spawn_transcoder(rx, metrics_tx);
         transcoder_ui
     }
 
-    fn spawn_transcoder(&mut self, rx: mpsc::Receiver<TranscoderStateMsg>) {
+    fn spawn_transcoder(
+        &mut self,
+        rx: mpsc::Receiver<TranscoderStateMsg>,
+        metrics_tx: mpsc::Sender<QualityMetrics>,
+    ) {
         let adder_image_handle = self.adder_image_handle.clone();
         let input_image_handle = self.input_image_handle.clone();
         let info_ui_state = self.info_ui_state.clone();
@@ -157,8 +165,13 @@ impl TranscoderUi {
         // Execute the runtime in its own thread.
         std::thread::spawn(move || {
             rt.block_on(async {
-                let mut transcoder =
-                    AdderTranscoder::new(rx, input_image_handle, adder_image_handle, info_ui_state);
+                let mut transcoder = AdderTranscoder::new(
+                    rx,
+                    metrics_tx,
+                    input_image_handle,
+                    adder_image_handle,
+                    info_ui_state,
+                );
                 transcoder.run();
             })
         });
@@ -170,6 +183,8 @@ impl TranscoderUi {
         // Collect dropped files
         self.handle_file_drop(ctx);
 
+        self.handle_metrics();
+
         self.draw_ui(ctx);
 
         // This should always be the very last thing we do in this function
@@ -180,6 +195,14 @@ impl TranscoderUi {
                 })
                 .unwrap();
         }
+    }
+
+    fn handle_metrics(&mut self) {
+        self.metrics_rx.try_recv().into_iter().for_each(|metrics| {
+            eprintln!("Got metrics!");
+            // let mut info_ui_state = self.info_ui_state.lock().unwrap();
+            // info_ui_state.update_metrics(metrics);
+        });
     }
 
     /// If the user has dropped a file into the window, we store the file path.
