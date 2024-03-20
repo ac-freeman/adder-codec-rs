@@ -204,6 +204,7 @@ impl TranscoderUi {
 
         // This should always be the very last thing we do in this function
         if old_params != self.transcoder_state {
+            eprintln!("Sending new transcoder state");
             self.transcoder_state_tx
                 .blocking_send(TranscoderStateMsg::Set {
                     transcoder_state: self.transcoder_state.clone(),
@@ -306,6 +307,20 @@ impl TranscoderUi {
         if let Some(error_string) = &self.info_ui_state.error_string {
             ui.label(error_string);
         }
+        ui.horizontal(|ui| {
+            if ui.button("Open file").clicked() {
+                if let Some(path) = rfd::FileDialog::new()
+                    .add_filter("framed video", &["mp4", "mkv", "avi", "mov"])
+                    .add_filter("DVS/DAVIS video", &["aedat4"])
+                    .add_filter("Prophesee video", &["dat"])
+                    .pick_file()
+                {
+                    eprintln!("Updating input path: {:?}", path);
+                    self.transcoder_state.core_params.input_path_buf_0 = Some(path.clone());
+                }
+            }
+            ui.label("OR drag and drop your source file here (.mp4, .aedat4, .dat)");
+        });
         Plot::new("my_plot")
             .height(100.0)
             .allow_drag(true)
@@ -791,28 +806,7 @@ impl TranscoderUi {
         });
         ui.end_row();
     }
-    //         ui.horizontal(|ui| {
-    //             if ui.button("Open file").clicked() {
-    //                 if let Some(path) = rfd::FileDialog::new()
-    //                     .add_filter("framed video", &["mp4"])
-    //                     .add_filter("DVS/DAVIS video", &["aedat4"])
-    //                     .add_filter("Prophesee video", &["dat"])
-    //                     .pick_file()
-    //                 {
-    //                     self.ui_info_state.input_path_0 = Some(path.clone());
-    //                     self.ui_info_state.input_path_1 = None;
-    //                     replace_adder_transcoder(
-    //                         self,
-    //                         Some(path),
-    //                         None,
-    //                         self.ui_info_state.output_path.clone(),
-    //                         0,
-    //                     );
-    //                 }
-    //             }
-    //
-    //             ui.label("OR drag and drop your source file here (.mp4, .aedat4, .dat)");
-    //         });
+
     //
     //         ui.horizontal(|ui| {
     //             if ui.button("Open DVS socket").clicked() {

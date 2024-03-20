@@ -113,6 +113,9 @@ impl AdderTranscoder {
                         }
                         self.prophesee_source = None;
 
+                        self.transcoder_state.core_params.input_path_buf_0 = None;
+                        self.transcoder_state.core_params.output_path = None;
+
                         // Clear the images
                         self.adder_image_handle
                             .set(ColorImage::default(), Default::default());
@@ -234,7 +237,6 @@ impl AdderTranscoder {
             ssim: if self.transcoder_state.info_params.metric_ssim {Some(0.0)} else {None},
         })?;
 
-        eprintln!("Sending metrics");
         match self
             .msg_tx
             .try_send(TranscoderInfoMsg::QualityMetrics(metrics))
