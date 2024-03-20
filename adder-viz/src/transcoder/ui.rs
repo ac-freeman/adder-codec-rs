@@ -3,14 +3,18 @@ use adder_codec_rs::adder_codec_core::codec::{EncoderOptions, EncoderType};
 use adder_codec_rs::adder_codec_core::{PixelMultiMode, TimeMode};
 use adder_codec_rs::transcoder::source::video::FramedViewMode;
 use adder_codec_rs::utils::viz::ShowFeatureMode;
-use eframe::epaint::ImageDelta;
+use eframe::epaint::{ColorImage, ImageDelta};
 use egui::epaint::TextureManager;
 use egui::{ImageSource, TextureOptions};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
+use tokio::sync::mpsc;
+use tokio::sync::mpsc::Sender;
 // use crate::transcoder::adder::{replace_adder_transcoder, AdderTranscoder};
 // use crate::utils::prep_bevy_image;
-use crate::{slider_pm, Images};
+use crate::transcoder::adder::AdderTranscoder;
+use crate::transcoder::{AdaptiveParams, CoreParams, InfoParams, InfoUiState};
+use crate::{slider_pm, App, Images, Tabs};
 // #[cfg(feature = "open-cv")]
 // use adder_codec_rs::transcoder::source::davis::TranscoderMode;
 // use adder_codec_rs::transcoder::source::video::{FramedViewMode, Source, SourceError};
@@ -33,191 +37,8 @@ use crate::{slider_pm, Images};
 // use std::path::PathBuf;
 //
 
-/// UI-driven parameters which do not require a total reset of the transcoder. These
-/// parameters can be adaptively changed during a transcoder operation.
-#[derive(Debug, Copy, Clone, PartialEq)]
-pub(crate) struct AdaptiveParams {
-    pub auto_quality: bool,
-    pub crf_number: u8,
-    pub encoder_options: EncoderOptions,
-    pub thread_count: usize,
-    pub show_original: bool,
-    pub view_mode_radio_state: FramedViewMode,
-    pub detect_features: bool,
-    pub show_features: ShowFeatureMode,
-    pub feature_rate_adjustment: bool,
-    pub feature_cluster: bool,
-}
-
-/// Core parameters which require a total reset of the transcoder. These parameters
-/// cannot be adaptively changed during a transcoder operation.
-#[derive(Debug, Clone, PartialEq)]
-pub(crate) struct CoreParams {
-    pub delta_t_ref: u32,
-    pub color: bool,
-    pub scale: f64,
-    pub delta_t_max_mult: u32,
-    pub time_mode: TimeMode,
-    pub encoder_type: EncoderType,
-    pub input_path_buf_0: Option<PathBuf>,
-    pub output_path: Option<PathBuf>,
-    pub(crate) integration_mode_radio_state: PixelMultiMode,
-}
-
-impl Default for AdaptiveParams {
-    fn default() -> Self {
-        AdaptiveParams {
-            auto_quality: true,
-            crf_number: DEFAULT_CRF_QUALITY,
-            encoder_options: EncoderOptions {
-                event_drop: Default::default(),
-                event_order: Default::default(),
-                crf: Crf::new(None, Default::default()),
-            },
-            thread_count: 1,
-            show_original: false,
-            view_mode_radio_state: Default::default(),
-            detect_features: false,
-            show_features: ShowFeatureMode::Off,
-            feature_rate_adjustment: false,
-            feature_cluster: false,
-        }
-    }
-}
-
-impl Default for CoreParams {
-    fn default() -> Self {
-        CoreParams {
-            delta_t_ref: 255,
-            color: false,
-            scale: 0.25,
-            delta_t_max_mult: 30,
-            time_mode: Default::default(),
-            encoder_type: Default::default(),
-            integration_mode_radio_state: Default::default(),
-            input_path_buf_0: None,
-            output_path: None,
-        }
-    }
-}
-
-// pub struct ParamsUiState {
-//     pub(crate) delta_t_ref: f32,
-//     pub(crate) delta_t_ref_max: f32,
-//     pub(crate) delta_t_max_mult: u32,
-//     delta_t_ref_slider: f32,
-//     pub(crate) delta_t_max_mult_slider: u32,
-//     pub(crate) scale: f64,
-//     scale_slider: f64,
-//     pub(crate) thread_count: usize,
-//     thread_count_slider: usize,
-//     pub(crate) color: bool,
-//     show_original: bool,
-//     view_mode_radio_state: FramedViewMode,
-//     #[cfg(feature = "open-cv")]
-//     pub(crate) davis_mode_radio_state: TranscoderMode,
-//     pub(crate) davis_output_fps: f64,
-//     davis_output_fps_slider: f64,
-//     pub(crate) optimize_c: bool,
-//     pub(crate) optimize_c_frequency: u32,
-//     pub(crate) optimize_c_frequency_slider: u32,
-//     limit_bandwidth: bool,
-//     pub(crate) bandwidth_target_event_rate: f64,
-//     bandwidth_target_event_rate_slider: f64,
-//     pub(crate) encoder_options: EncoderOptions,
-//     pub(crate) bandwidth_alpha: f64,
-//     alpha_slider: f64,
-//     pub(crate) time_mode: TimeMode,
-//     pub(crate) encoder_type: EncoderType,
-//     pub(crate) detect_features: bool,
-//     pub(crate) feature_rate_adjustment: bool,
-//     pub(crate) feature_cluster: bool,
-//     pub(crate) show_features: ShowFeatureMode,
-//     pub(crate) auto_quality: bool,
-//     auto_quality_mirror: bool,
-//     pub(crate) crf_slider: u8,
-//     feature_radius_slider: u16,
-//     adder_tresh_velocity_slider: u8,
-//     adder_tresh_max_slider: u8,
-//     adder_tresh_baseline_slider: u8,
-//     metric_mse: bool,
-//     metric_psnr: bool,
-//     metric_ssim: bool,
-//     pub(crate) integration_mode_radio_state: PixelMultiMode,
-// }
 //
-// impl Default for ParamsUiState {
-//     fn default() -> Self {
-//         ParamsUiState {
-//             delta_t_ref: 255.0,
-//             delta_t_ref_max: 255.0,
-//             delta_t_max_mult: 30,
-//             delta_t_ref_slider: 255.0,
-//             delta_t_max_mult_slider: 30,
-//             scale: 0.25,
-//             scale_slider: 0.25,
-//             thread_count: rayon::current_num_threads() - 1,
-//             thread_count_slider: rayon::current_num_threads() - 1,
-//             color: false,
-//             show_original: true,
-//             view_mode_radio_state: FramedViewMode::Intensity,
-//             #[cfg(feature = "open-cv")]
-//             davis_mode_radio_state: TranscoderMode::RawDavis,
-//             davis_output_fps: 500.0,
-//             davis_output_fps_slider: 500.0,
-//             optimize_c: true,
-//             optimize_c_frequency: 10,
-//             optimize_c_frequency_slider: 10,
-//             limit_bandwidth: false,
-//             bandwidth_target_event_rate: 5_000_000.0,
-//             bandwidth_target_event_rate_slider: 5_000_000.0,
-//             encoder_options: EncoderOptions::default(PlaneSize::default()),
-//             bandwidth_alpha: 0.999,
-//             alpha_slider: 0.999,
-//             time_mode: TimeMode::default(),
-//             encoder_type: EncoderType::default(),
-//             detect_features: false,
-//             feature_rate_adjustment: false,
-//             feature_cluster: false,
-//             show_features: ShowFeatureMode::Off,
-//             auto_quality: false,
-//             auto_quality_mirror: false,
-//             crf_slider: DEFAULT_CRF_QUALITY,
-//             feature_radius_slider: 5,
-//             adder_tresh_velocity_slider: CRF[DEFAULT_CRF_QUALITY as usize][2] as u8,
-//             adder_tresh_max_slider: CRF[DEFAULT_CRF_QUALITY as usize][1] as u8,
-//             adder_tresh_baseline_slider: CRF[DEFAULT_CRF_QUALITY as usize][0] as u8,
-//             metric_mse: true,
-//             metric_psnr: true,
-//             metric_ssim: false,
-//             integration_mode_radio_state: Default::default(),
-//         }
-//     }
-// }
-//
-// pub struct InfoUiState {
-//     pub events_per_sec: f64,
-//     pub events_ppc_per_sec: f64,
-//     pub events_ppc_total: f64,
-//     pub events_total: u64,
-//     pub event_size: u8,
-//     source_samples_per_sec: f64,
-//     plane: PlaneSize,
-//     pub source_name: RichText,
-//     pub output_name: OutputName,
-//     pub davis_latency: Option<f64>,
-//     pub(crate) input_path_0: Option<PathBuf>,
-//     pub(crate) input_path_1: Option<PathBuf>,
-//     pub(crate) output_path: Option<PathBuf>,
-//     plot_points_eventrate_y: PlotY,
-//     pub(crate) plot_points_raw_adder_bitrate_y: PlotY,
-//     pub(crate) plot_points_raw_source_bitrate_y: PlotY,
-//     pub(crate) plot_points_psnr_y: PlotY,
-//     pub(crate) plot_points_mse_y: PlotY,
-//     pub(crate) plot_points_ssim_y: PlotY,
-//     plot_points_latency_y: PlotY,
-//     pub view_mode_radio_state: FramedViewMode, // TODO: Move to different struct
-// }
+
 //
 // pub struct OutputName {
 //     pub text: RichText,
@@ -282,6 +103,7 @@ pub struct TranscoderState {
     // pub(crate) transcoder: AdderTranscoder,
     pub adaptive_params: AdaptiveParams,
     pub core_params: CoreParams,
+    pub info_params: InfoParams,
     // pub ui_info_state: InfoUiState,
 }
 
@@ -291,8 +113,113 @@ pub enum TranscoderStateMsg {
     Set { transcoder_state: TranscoderState },
 }
 
-impl TranscoderState {
-    pub fn side_panel_ui(&mut self, ui: &mut egui::Ui) {
+pub struct TranscoderUi {
+    pub transcoder_state: TranscoderState,
+    pub info_ui_state: Arc<Mutex<InfoUiState>>,
+    pub transcoder_state_tx: Sender<TranscoderStateMsg>,
+    adder_image_handle: egui::TextureHandle,
+    input_image_handle: egui::TextureHandle,
+    last_frame_time: std::time::Instant,
+}
+
+impl TranscoderUi {
+    pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
+        let (tx, mut rx) = mpsc::channel(5);
+
+        let mut transcoder_ui = TranscoderUi {
+            transcoder_state: Default::default(),
+            info_ui_state: Arc::new(Mutex::new(InfoUiState::default())),
+            transcoder_state_tx: tx,
+            adder_image_handle: cc.egui_ctx.load_texture(
+                "adder_image",
+                ColorImage::example(),
+                Default::default(),
+            ),
+            input_image_handle: cc.egui_ctx.load_texture(
+                "adder_image",
+                ColorImage::example(),
+                Default::default(),
+            ),
+            last_frame_time: std::time::Instant::now(),
+        };
+        transcoder_ui.spawn_transcoder(rx);
+        transcoder_ui
+    }
+
+    fn spawn_transcoder(&mut self, rx: mpsc::Receiver<TranscoderStateMsg>) {
+        let adder_image_handle = self.adder_image_handle.clone();
+        let input_image_handle = self.input_image_handle.clone();
+        let info_ui_state = self.info_ui_state.clone();
+        let rt = tokio::runtime::Runtime::new().expect("Unable to create Runtime");
+
+        let _enter = rt.enter();
+
+        // Execute the runtime in its own thread.
+        std::thread::spawn(move || {
+            rt.block_on(async {
+                let mut transcoder =
+                    AdderTranscoder::new(rx, input_image_handle, adder_image_handle, info_ui_state);
+                transcoder.run();
+            })
+        });
+    }
+    pub fn update(&mut self, ctx: &egui::Context) {
+        // Store a copy of the params to compare against later
+        let old_params = self.transcoder_state.clone();
+
+        // Collect dropped files
+        self.handle_file_drop(ctx);
+
+        self.draw_ui(ctx);
+
+        // This should always be the very last thing we do in this function
+        if old_params != self.transcoder_state {
+            self.transcoder_state_tx
+                .blocking_send(TranscoderStateMsg::Set {
+                    transcoder_state: self.transcoder_state.clone(),
+                })
+                .unwrap();
+        }
+    }
+
+    /// If the user has dropped a file into the window, we store the file path.
+    /// At the end of the frame, the receiver will be notified by update()
+    fn handle_file_drop(&mut self, ctx: &egui::Context) {
+        ctx.input(|i| {
+            if !i.raw.dropped_files.is_empty() {
+                self.transcoder_state.core_params.input_path_buf_0 =
+                    i.raw.dropped_files[0].path.clone();
+            }
+        });
+    }
+
+    fn draw_ui(
+        &mut self,
+        ctx: &egui::Context, // mut transcoder_state: ResMut<TranscoderState>,
+                             // mut player_state: ResMut<PlayerState>,
+                             // main_ui_state: Res<MainUiState>,
+    ) {
+        egui::SidePanel::left("side_panel")
+            .default_width(300.0)
+            .show(ctx, |ui| {
+                ui.label(format!(
+                    "FPS: {:.2}",
+                    1.0 / self.last_frame_time.elapsed().as_secs_f64()
+                ));
+                // update the last frame time
+                self.last_frame_time = std::time::Instant::now();
+
+                self.side_panel_ui(ui);
+            });
+
+        egui::CentralPanel::default().show(ctx, |ui| {
+            egui::warn_if_debug_build(ui);
+
+            self.central_panel_ui(ui);
+        });
+    }
+
+    fn side_panel_ui(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
             ui.heading("ADΔER Parameters");
             if ui.add(egui::Button::new("Reset params")).clicked() {
@@ -319,25 +246,20 @@ impl TranscoderState {
             .spacing([10.0, 4.0])
             .striped(true)
             .show(ui, |ui| {
-                side_panel_grid_contents(ui, &mut self.adaptive_params, &mut self.core_params);
+                self.side_panel_grid_contents(ui);
             });
     }
     //
-    pub fn central_panel_ui(
-        &mut self,
-        ui: &mut egui::Ui,
-        input_image_handle: &mut egui::TextureHandle,
-        adder_image_handle: &mut egui::TextureHandle,
-    ) {
+    pub fn central_panel_ui(&mut self, ui: &mut egui::Ui) {
         let mut avail_size = ui.available_size();
-        if self.adaptive_params.show_original {
+        if self.transcoder_state.adaptive_params.show_original {
             avail_size.x = avail_size.x / 2.0;
         }
         // let images = images.lock().unwrap();
 
         let size = match (
-            adder_image_handle.size()[0] as f32,
-            adder_image_handle.size()[1] as f32,
+            self.adder_image_handle.size()[0] as f32,
+            self.adder_image_handle.size()[1] as f32,
         ) {
             (a, b) if a / b > avail_size.x / avail_size.y => {
                 /*
@@ -362,16 +284,438 @@ impl TranscoderState {
         };
 
         ui.horizontal(|ui| {
-            if self.adaptive_params.show_original {
-                let input_image =
-                    egui::Image::new(egui::load::SizedTexture::new(input_image_handle.id(), size));
+            if self.transcoder_state.adaptive_params.show_original {
+                let input_image = egui::Image::new(egui::load::SizedTexture::new(
+                    self.input_image_handle.id(),
+                    size,
+                ));
                 ui.add(input_image);
             }
 
-            let image =
-                egui::Image::new(egui::load::SizedTexture::new(adder_image_handle.id(), size));
+            let image = egui::Image::new(egui::load::SizedTexture::new(
+                self.adder_image_handle.id(),
+                size,
+            ));
             ui.add(image);
         });
+    }
+
+    fn side_panel_grid_contents(&mut self, ui: &mut egui::Ui) {
+        let core_params = &mut self.transcoder_state.core_params;
+        let adaptive_params = &mut self.transcoder_state.adaptive_params;
+        let info_params = &mut self.transcoder_state.info_params;
+
+        #[allow(dead_code, unused_mut)]
+        let mut enabled = true;
+        #[cfg(feature = "open-cv")]
+        {
+            // enabled = _transcoder.davis_source.is_none();
+        }
+        ui.add_enabled(enabled, egui::Label::new("Δt_ref:"));
+        slider_pm(
+            enabled,
+            false,
+            ui,
+            &mut core_params.delta_t_ref,
+            1..=255,
+            vec![],
+            10,
+        );
+        ui.end_row();
+
+        ui.label("Quality parameters:");
+        ui.add_enabled(
+            true,
+            egui::Checkbox::new(&mut adaptive_params.auto_quality, "Auto mode?"),
+        );
+        // ui.toggle_value(&mut ui_state.auto_quality, "Auto mode?");
+        ui.end_row();
+
+        ui.label("CRF quality:");
+        slider_pm(
+            adaptive_params.auto_quality,
+            false,
+            ui,
+            &mut adaptive_params.crf_number,
+            0..=CRF.len() as u8 - 1,
+            vec![],
+            1,
+        );
+        if adaptive_params.auto_quality
+            && adaptive_params.crf_number
+                != adaptive_params
+                    .encoder_options
+                    .crf
+                    .get_quality()
+                    .unwrap_or(DEFAULT_CRF_QUALITY)
+        {
+            adaptive_params
+                .encoder_options
+                .crf
+                .update_quality(adaptive_params.crf_number);
+        }
+        ui.end_row();
+
+        ui.label("Δt_max multiplier:");
+        slider_pm(
+            !adaptive_params.auto_quality,
+            false,
+            ui,
+            &mut core_params.delta_t_max_mult,
+            1..=900,
+            vec![],
+            1,
+        );
+        ui.end_row();
+
+        let parameters = adaptive_params.encoder_options.crf.get_parameters_mut();
+        ui.label("Threshold baseline:");
+        slider_pm(
+            !adaptive_params.auto_quality,
+            false,
+            ui,
+            &mut parameters.c_thresh_baseline,
+            0..=255,
+            vec![],
+            1,
+        );
+        ui.end_row();
+
+        ui.label("Threshold max:");
+        slider_pm(
+            !adaptive_params.auto_quality,
+            false,
+            ui,
+            &mut parameters.c_thresh_max,
+            0..=255,
+            vec![],
+            1,
+        );
+        ui.end_row();
+
+        ui.label("Threshold velocity:");
+        slider_pm(
+            !adaptive_params.auto_quality,
+            false,
+            ui,
+            &mut parameters.c_increase_velocity,
+            1..=30,
+            vec![],
+            1,
+        );
+        ui.end_row();
+
+        ui.label("Feature radius:");
+        slider_pm(
+            !adaptive_params.auto_quality,
+            false,
+            ui,
+            &mut parameters.feature_c_radius,
+            0..=100,
+            vec![],
+            1,
+        );
+        ui.end_row();
+
+        // ui.label("Thread count:");
+        // slider_pm(
+        //     true,
+        //     false,
+        //     ui,
+        //     &mut params.thread_count,
+        //     &mut params.thread_count_slider,
+        //     1..=(current_num_threads() - 1).max(4),
+        //     vec![],
+        //     1,
+        // );
+        // ui.end_row();
+        //
+        ui.label("Video scale:");
+        slider_pm(
+            enabled,
+            false,
+            ui,
+            &mut core_params.scale,
+            0.001..=1.0,
+            vec![0.25, 0.5, 0.75],
+            0.1,
+        );
+        ui.end_row();
+        ui.label("Channels:");
+        ui.add_enabled(
+            enabled,
+            egui::Checkbox::new(&mut core_params.color, "Color?"),
+        );
+        ui.end_row();
+
+        ui.label("Integration mode:");
+        ui.horizontal(|ui| {
+            ui.radio_value(
+                &mut core_params.integration_mode_radio_state,
+                PixelMultiMode::Normal,
+                "Normal",
+            );
+            ui.radio_value(
+                &mut core_params.integration_mode_radio_state,
+                PixelMultiMode::Collapse,
+                "Collapse",
+            );
+        });
+        ui.end_row();
+
+        ui.label("View mode:");
+        ui.vertical(|ui| {
+            ui.horizontal(|ui| {
+                ui.radio_value(
+                    &mut adaptive_params.view_mode_radio_state,
+                    FramedViewMode::Intensity,
+                    "Intensity",
+                );
+                ui.radio_value(
+                    &mut adaptive_params.view_mode_radio_state,
+                    FramedViewMode::D,
+                    "D",
+                );
+                ui.radio_value(
+                    &mut adaptive_params.view_mode_radio_state,
+                    FramedViewMode::DeltaT,
+                    "Δt",
+                );
+                ui.radio_value(
+                    &mut adaptive_params.view_mode_radio_state,
+                    FramedViewMode::SAE,
+                    "SAE",
+                );
+            });
+            ui.add_enabled(
+                enabled,
+                egui::Checkbox::new(&mut adaptive_params.show_original, "Show original?"),
+            );
+        });
+        ui.end_row();
+
+        ui.label("Time mode:");
+        ui.add_enabled_ui(true, |ui| {
+            ui.horizontal(|ui| {
+                ui.radio_value(
+                    &mut core_params.time_mode,
+                    TimeMode::DeltaT,
+                    "Δt (time change)",
+                );
+                ui.radio_value(
+                    &mut core_params.time_mode,
+                    TimeMode::AbsoluteT,
+                    "t (absolute time)",
+                );
+            });
+        });
+        ui.end_row();
+
+        ui.label("Compression mode:");
+        ui.add_enabled_ui(true, |ui| {
+            ui.vertical(|ui| {
+                ui.horizontal(|ui| {
+                    ui.radio_value(
+                        &mut core_params.encoder_type,
+                        EncoderType::Empty,
+                        "Empty (don't write)",
+                    );
+                    ui.radio_value(&mut core_params.encoder_type, EncoderType::Raw, "Raw");
+                });
+                ui.horizontal(|ui| {
+                    ui.radio_value(
+                        &mut core_params.encoder_type,
+                        EncoderType::Compressed,
+                        "Compressed",
+                    );
+                });
+            });
+        });
+        ui.end_row();
+        //
+        // #[cfg(feature = "open-cv")]
+        // {
+        //     ui.label("DAVIS mode:");
+        //     ui.add_enabled_ui(!enabled, |ui| {
+        //         ui.horizontal(|ui| {
+        //             ui.radio_value(
+        //                 &mut params.davis_mode_radio_state,
+        //                 TranscoderMode::Framed,
+        //                 "Framed recon",
+        //             );
+        //             ui.radio_value(
+        //                 &mut params.davis_mode_radio_state,
+        //                 TranscoderMode::RawDavis,
+        //                 "Raw DAVIS",
+        //             );
+        //             ui.radio_value(
+        //                 &mut params.davis_mode_radio_state,
+        //                 TranscoderMode::RawDvs,
+        //                 "Raw DVS",
+        //             );
+        //         });
+        //     });
+        //     ui.end_row();
+        //
+        //     ui.label("DAVIS deblurred FPS:");
+        //
+        //     slider_pm(
+        //         !enabled,
+        //         true,
+        //         ui,
+        //         &mut params.davis_output_fps,
+        //         &mut params.davis_output_fps_slider,
+        //         30.0..=1000000.0,
+        //         vec![
+        //             50.0, 100.0, 250.0, 500.0, 1_000.0, 2_500.0, 5_000.0, 7_500.0, 10_000.0, 1000000.0,
+        //         ],
+        //         50.0,
+        //     );
+        //     ui.end_row();
+        //
+        //     let enable_optimize = !enabled && params.davis_mode_radio_state != TranscoderMode::RawDvs;
+        //     ui.label("Optimize:");
+        //     ui.add_enabled(
+        //         enable_optimize,
+        //         egui::Checkbox::new(&mut params.optimize_c, "Optimize θ?"),
+        //     );
+        //     ui.end_row();
+        //
+        //     ui.label("Optimize frequency:");
+        //     slider_pm(
+        //         enable_optimize,
+        //         true,
+        //         ui,
+        //         &mut params.optimize_c_frequency,
+        //         &mut params.optimize_c_frequency_slider,
+        //         1..=250,
+        //         vec![10, 25, 50, 100],
+        //         1,
+        //     );
+        //     ui.end_row();
+        // }
+        //
+        // let enable_encoder_options = params.encoder_type != EncoderType::Empty;
+        //
+        // ui.label("Event output order:");
+        // ui.add_enabled_ui(enable_encoder_options, |ui| {
+        //     ui.horizontal(|ui| {
+        //         ui.radio_value(
+        //             &mut params.encoder_options.event_order,
+        //             EventOrder::Unchanged,
+        //             "Unchanged",
+        //         );
+        //         ui.radio_value(
+        //             &mut params.encoder_options.event_order,
+        //             EventOrder::Interleaved,
+        //             "Interleaved",
+        //         );
+        //     });
+        // });
+        // ui.end_row();
+        //
+        // ui.label("Bandwidth limiting:");
+        // ui.add_enabled(
+        //     enable_encoder_options,
+        //     egui::Checkbox::new(&mut params.limit_bandwidth, "Limit bandwidth?"),
+        // );
+        // ui.end_row();
+        //
+        // ui.label("Bandwidth limiting rate:");
+        //
+        // slider_pm(
+        //     params.limit_bandwidth,
+        //     true,
+        //     ui,
+        //     &mut params.bandwidth_target_event_rate,
+        //     &mut params.bandwidth_target_event_rate_slider,
+        //     1_000_000.0..=100_000_000.0,
+        //     vec![
+        //         1_000_000.0,
+        //         2_500_000.0,
+        //         5_000_000.0,
+        //         7_500_000.0,
+        //         10_000_000.0,
+        //     ],
+        //     50_000.0,
+        // );
+        // ui.end_row();
+        //
+        // ui.label("Bandwidth limiting alpha:");
+        //
+        // slider_pm(
+        //     params.limit_bandwidth,
+        //     false,
+        //     ui,
+        //     &mut params.bandwidth_alpha,
+        //     &mut params.alpha_slider,
+        //     0.0..=1.0,
+        //     vec![0.5, 0.8, 0.9, 0.999, 0.99999, 1.0],
+        //     0.001,
+        // );
+        // ui.end_row();
+        //
+        // /* Update the bandwidth options in the UI state. If there's a change, it will later get reflected
+        // by updating the encoder options in the transcoder.*/
+        // if params.limit_bandwidth {
+        //     params.encoder_options.event_drop = EventDrop::Manual {
+        //         target_event_rate: params.bandwidth_target_event_rate,
+        //         alpha: params.bandwidth_alpha,
+        //     };
+        // } else {
+        //     params.encoder_options.event_drop = EventDrop::None;
+        // }
+        //
+        ui.label("Processing:");
+        ui.vertical(|ui| {
+            ui.add_enabled(
+                true,
+                egui::Checkbox::new(&mut adaptive_params.detect_features, "Detect features"),
+            );
+
+            ui.add_enabled_ui(adaptive_params.detect_features, |ui| {
+                ui.horizontal(|ui| {
+                    ui.radio_value(
+                        &mut adaptive_params.show_features,
+                        ShowFeatureMode::Off,
+                        "Don't show",
+                    );
+                    ui.radio_value(
+                        &mut adaptive_params.show_features,
+                        ShowFeatureMode::Instant,
+                        "Show instant",
+                    );
+                    ui.radio_value(
+                        &mut adaptive_params.show_features,
+                        ShowFeatureMode::Hold,
+                        "Show & hold",
+                    );
+                });
+                ui.checkbox(
+                    &mut adaptive_params.feature_rate_adjustment,
+                    "Adjust sensitivities",
+                );
+                ui.checkbox(&mut adaptive_params.feature_cluster, "Cluster features");
+            });
+        });
+        ui.end_row();
+
+        ui.label("Metrics:");
+        ui.vertical(|ui| {
+            ui.add_enabled(
+                enabled,
+                egui::Checkbox::new(&mut info_params.metric_mse, "MSE"),
+            );
+            ui.add_enabled(
+                enabled,
+                egui::Checkbox::new(&mut info_params.metric_psnr, "PSNR"),
+            );
+            ui.add_enabled(
+                enabled,
+                egui::Checkbox::new(&mut info_params.metric_ssim, "SSIM (Warning: slow!)"),
+            );
+        });
+        ui.end_row();
     }
     //         ui.horizontal(|ui| {
     //             if ui.button("Open file").clicked() {
@@ -903,423 +1247,3 @@ impl TranscoderState {
     //     }
 }
 //
-fn side_panel_grid_contents(
-    ui: &mut egui::Ui,
-    adaptive_params: &mut AdaptiveParams,
-    core_params: &mut CoreParams,
-    // info_ui_state: &InfoUiState,
-) {
-    //     let dtr_max = ui_state.delta_t_ref_max;
-
-    #[allow(dead_code, unused_mut)]
-    let mut enabled = true;
-    #[cfg(feature = "open-cv")]
-    {
-        // enabled = _transcoder.davis_source.is_none();
-    }
-    ui.add_enabled(enabled, egui::Label::new("Δt_ref:"));
-    slider_pm(
-        enabled,
-        false,
-        ui,
-        &mut core_params.delta_t_ref,
-        1..=255,
-        vec![],
-        10,
-    );
-    ui.end_row();
-
-    ui.label("Quality parameters:");
-    ui.add_enabled(
-        true,
-        egui::Checkbox::new(&mut adaptive_params.auto_quality, "Auto mode?"),
-    );
-    // ui.toggle_value(&mut ui_state.auto_quality, "Auto mode?");
-    ui.end_row();
-
-    ui.label("CRF quality:");
-    slider_pm(
-        adaptive_params.auto_quality,
-        false,
-        ui,
-        &mut adaptive_params.crf_number,
-        0..=CRF.len() as u8 - 1,
-        vec![],
-        1,
-    );
-    if adaptive_params.auto_quality
-        && adaptive_params.crf_number
-            != adaptive_params
-                .encoder_options
-                .crf
-                .get_quality()
-                .unwrap_or(DEFAULT_CRF_QUALITY)
-    {
-        adaptive_params
-            .encoder_options
-            .crf
-            .update_quality(adaptive_params.crf_number);
-    }
-    ui.end_row();
-
-    ui.label("Δt_max multiplier:");
-    slider_pm(
-        !adaptive_params.auto_quality,
-        false,
-        ui,
-        &mut core_params.delta_t_max_mult,
-        1..=900,
-        vec![],
-        1,
-    );
-    ui.end_row();
-
-    let parameters = adaptive_params.encoder_options.crf.get_parameters_mut();
-    ui.label("Threshold baseline:");
-    slider_pm(
-        !adaptive_params.auto_quality,
-        false,
-        ui,
-        &mut parameters.c_thresh_baseline,
-        0..=255,
-        vec![],
-        1,
-    );
-    ui.end_row();
-
-    ui.label("Threshold max:");
-    slider_pm(
-        !adaptive_params.auto_quality,
-        false,
-        ui,
-        &mut parameters.c_thresh_max,
-        0..=255,
-        vec![],
-        1,
-    );
-    ui.end_row();
-
-    ui.label("Threshold velocity:");
-    slider_pm(
-        !adaptive_params.auto_quality,
-        false,
-        ui,
-        &mut parameters.c_increase_velocity,
-        1..=30,
-        vec![],
-        1,
-    );
-    ui.end_row();
-
-    ui.label("Feature radius:");
-    slider_pm(
-        !adaptive_params.auto_quality,
-        false,
-        ui,
-        &mut parameters.feature_c_radius,
-        0..=100,
-        vec![],
-        1,
-    );
-    ui.end_row();
-
-    // ui.label("Thread count:");
-    // slider_pm(
-    //     true,
-    //     false,
-    //     ui,
-    //     &mut params.thread_count,
-    //     &mut params.thread_count_slider,
-    //     1..=(current_num_threads() - 1).max(4),
-    //     vec![],
-    //     1,
-    // );
-    // ui.end_row();
-    //
-    ui.label("Video scale:");
-    slider_pm(
-        enabled,
-        false,
-        ui,
-        &mut core_params.scale,
-        0.001..=1.0,
-        vec![0.25, 0.5, 0.75],
-        0.1,
-    );
-    ui.end_row();
-    ui.label("Channels:");
-    ui.add_enabled(
-        enabled,
-        egui::Checkbox::new(&mut core_params.color, "Color?"),
-    );
-    ui.end_row();
-
-    ui.label("Integration mode:");
-    ui.horizontal(|ui| {
-        ui.radio_value(
-            &mut core_params.integration_mode_radio_state,
-            PixelMultiMode::Normal,
-            "Normal",
-        );
-        ui.radio_value(
-            &mut core_params.integration_mode_radio_state,
-            PixelMultiMode::Collapse,
-            "Collapse",
-        );
-    });
-    ui.end_row();
-
-    ui.label("View mode:");
-    ui.vertical(|ui| {
-        ui.horizontal(|ui| {
-            ui.radio_value(
-                &mut adaptive_params.view_mode_radio_state,
-                FramedViewMode::Intensity,
-                "Intensity",
-            );
-            ui.radio_value(
-                &mut adaptive_params.view_mode_radio_state,
-                FramedViewMode::D,
-                "D",
-            );
-            ui.radio_value(
-                &mut adaptive_params.view_mode_radio_state,
-                FramedViewMode::DeltaT,
-                "Δt",
-            );
-            ui.radio_value(
-                &mut adaptive_params.view_mode_radio_state,
-                FramedViewMode::SAE,
-                "SAE",
-            );
-        });
-        ui.add_enabled(
-            enabled,
-            egui::Checkbox::new(&mut adaptive_params.show_original, "Show original?"),
-        );
-    });
-    ui.end_row();
-
-    ui.label("Time mode:");
-    ui.add_enabled_ui(true, |ui| {
-        ui.horizontal(|ui| {
-            ui.radio_value(
-                &mut core_params.time_mode,
-                TimeMode::DeltaT,
-                "Δt (time change)",
-            );
-            ui.radio_value(
-                &mut core_params.time_mode,
-                TimeMode::AbsoluteT,
-                "t (absolute time)",
-            );
-        });
-    });
-    ui.end_row();
-
-    ui.label("Compression mode:");
-    ui.add_enabled_ui(true, |ui| {
-        ui.vertical(|ui| {
-            ui.horizontal(|ui| {
-                ui.radio_value(
-                    &mut core_params.encoder_type,
-                    EncoderType::Empty,
-                    "Empty (don't write)",
-                );
-                ui.radio_value(&mut core_params.encoder_type, EncoderType::Raw, "Raw");
-            });
-            ui.horizontal(|ui| {
-                ui.radio_value(
-                    &mut core_params.encoder_type,
-                    EncoderType::Compressed,
-                    "Compressed",
-                );
-            });
-        });
-    });
-    ui.end_row();
-    //
-    // #[cfg(feature = "open-cv")]
-    // {
-    //     ui.label("DAVIS mode:");
-    //     ui.add_enabled_ui(!enabled, |ui| {
-    //         ui.horizontal(|ui| {
-    //             ui.radio_value(
-    //                 &mut params.davis_mode_radio_state,
-    //                 TranscoderMode::Framed,
-    //                 "Framed recon",
-    //             );
-    //             ui.radio_value(
-    //                 &mut params.davis_mode_radio_state,
-    //                 TranscoderMode::RawDavis,
-    //                 "Raw DAVIS",
-    //             );
-    //             ui.radio_value(
-    //                 &mut params.davis_mode_radio_state,
-    //                 TranscoderMode::RawDvs,
-    //                 "Raw DVS",
-    //             );
-    //         });
-    //     });
-    //     ui.end_row();
-    //
-    //     ui.label("DAVIS deblurred FPS:");
-    //
-    //     slider_pm(
-    //         !enabled,
-    //         true,
-    //         ui,
-    //         &mut params.davis_output_fps,
-    //         &mut params.davis_output_fps_slider,
-    //         30.0..=1000000.0,
-    //         vec![
-    //             50.0, 100.0, 250.0, 500.0, 1_000.0, 2_500.0, 5_000.0, 7_500.0, 10_000.0, 1000000.0,
-    //         ],
-    //         50.0,
-    //     );
-    //     ui.end_row();
-    //
-    //     let enable_optimize = !enabled && params.davis_mode_radio_state != TranscoderMode::RawDvs;
-    //     ui.label("Optimize:");
-    //     ui.add_enabled(
-    //         enable_optimize,
-    //         egui::Checkbox::new(&mut params.optimize_c, "Optimize θ?"),
-    //     );
-    //     ui.end_row();
-    //
-    //     ui.label("Optimize frequency:");
-    //     slider_pm(
-    //         enable_optimize,
-    //         true,
-    //         ui,
-    //         &mut params.optimize_c_frequency,
-    //         &mut params.optimize_c_frequency_slider,
-    //         1..=250,
-    //         vec![10, 25, 50, 100],
-    //         1,
-    //     );
-    //     ui.end_row();
-    // }
-    //
-    // let enable_encoder_options = params.encoder_type != EncoderType::Empty;
-    //
-    // ui.label("Event output order:");
-    // ui.add_enabled_ui(enable_encoder_options, |ui| {
-    //     ui.horizontal(|ui| {
-    //         ui.radio_value(
-    //             &mut params.encoder_options.event_order,
-    //             EventOrder::Unchanged,
-    //             "Unchanged",
-    //         );
-    //         ui.radio_value(
-    //             &mut params.encoder_options.event_order,
-    //             EventOrder::Interleaved,
-    //             "Interleaved",
-    //         );
-    //     });
-    // });
-    // ui.end_row();
-    //
-    // ui.label("Bandwidth limiting:");
-    // ui.add_enabled(
-    //     enable_encoder_options,
-    //     egui::Checkbox::new(&mut params.limit_bandwidth, "Limit bandwidth?"),
-    // );
-    // ui.end_row();
-    //
-    // ui.label("Bandwidth limiting rate:");
-    //
-    // slider_pm(
-    //     params.limit_bandwidth,
-    //     true,
-    //     ui,
-    //     &mut params.bandwidth_target_event_rate,
-    //     &mut params.bandwidth_target_event_rate_slider,
-    //     1_000_000.0..=100_000_000.0,
-    //     vec![
-    //         1_000_000.0,
-    //         2_500_000.0,
-    //         5_000_000.0,
-    //         7_500_000.0,
-    //         10_000_000.0,
-    //     ],
-    //     50_000.0,
-    // );
-    // ui.end_row();
-    //
-    // ui.label("Bandwidth limiting alpha:");
-    //
-    // slider_pm(
-    //     params.limit_bandwidth,
-    //     false,
-    //     ui,
-    //     &mut params.bandwidth_alpha,
-    //     &mut params.alpha_slider,
-    //     0.0..=1.0,
-    //     vec![0.5, 0.8, 0.9, 0.999, 0.99999, 1.0],
-    //     0.001,
-    // );
-    // ui.end_row();
-    //
-    // /* Update the bandwidth options in the UI state. If there's a change, it will later get reflected
-    // by updating the encoder options in the transcoder.*/
-    // if params.limit_bandwidth {
-    //     params.encoder_options.event_drop = EventDrop::Manual {
-    //         target_event_rate: params.bandwidth_target_event_rate,
-    //         alpha: params.bandwidth_alpha,
-    //     };
-    // } else {
-    //     params.encoder_options.event_drop = EventDrop::None;
-    // }
-    //
-    ui.label("Processing:");
-    ui.vertical(|ui| {
-        ui.add_enabled(
-            true,
-            egui::Checkbox::new(&mut adaptive_params.detect_features, "Detect features"),
-        );
-
-        ui.add_enabled_ui(adaptive_params.detect_features, |ui| {
-            ui.horizontal(|ui| {
-                ui.radio_value(
-                    &mut adaptive_params.show_features,
-                    ShowFeatureMode::Off,
-                    "Don't show",
-                );
-                ui.radio_value(
-                    &mut adaptive_params.show_features,
-                    ShowFeatureMode::Instant,
-                    "Show instant",
-                );
-                ui.radio_value(
-                    &mut adaptive_params.show_features,
-                    ShowFeatureMode::Hold,
-                    "Show & hold",
-                );
-            });
-            ui.checkbox(
-                &mut adaptive_params.feature_rate_adjustment,
-                "Adjust sensitivities",
-            );
-            ui.checkbox(&mut adaptive_params.feature_cluster, "Cluster features");
-        });
-    });
-    ui.end_row();
-    //
-    // ui.label("Metrics:");
-    // ui.vertical(|ui| {
-    //     ui.add_enabled(
-    //         enabled,
-    //         egui::Checkbox::new(&mut params.metric_mse, "MSE"),
-    //     );
-    //     ui.add_enabled(
-    //         enabled,
-    //         egui::Checkbox::new(&mut params.metric_psnr, "PSNR"),
-    //     );
-    //     ui.add_enabled(
-    //         enabled,
-    //         egui::Checkbox::new(&mut params.metric_ssim, "SSIM (Warning: slow!)"),
-    //     );
-    // });
-    // ui.end_row();
-}

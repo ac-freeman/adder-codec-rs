@@ -2,7 +2,7 @@ mod transcoder;
 mod utils;
 
 use crate::transcoder::adder::AdderTranscoder;
-use crate::transcoder::ui::{TranscoderState, TranscoderStateMsg};
+use crate::transcoder::ui::{TranscoderState, TranscoderStateMsg, TranscoderUi};
 use crate::utils::slider::NotchedSlider;
 use eframe::egui;
 use egui::{ColorImage, Widget};
@@ -26,11 +26,7 @@ fn main() {
 struct App {
     view: Tabs,
     error_msg: Option<String>,
-    adder_image_handle: egui::TextureHandle,
-    input_image_handle: egui::TextureHandle,
-    transcoder_state: TranscoderState,
-    transcoder_state_tx: Sender<TranscoderStateMsg>,
-    last_frame_time: std::time::Instant,
+    transcoder_ui: TranscoderUi,
 }
 
 impl App {
@@ -43,98 +39,29 @@ impl App {
             window_rounding: 5.0.into(),
             ..Default::default()
         });
-        let (tx, mut rx) = mpsc::channel(5);
 
         let mut app = App {
             view: Default::default(),
             error_msg: None,
-            adder_image_handle: cc.egui_ctx.load_texture(
-                "adder_image",
-                ColorImage::example(),
-                Default::default(),
-            ),
-            input_image_handle: cc.egui_ctx.load_texture(
-                "adder_image",
-                ColorImage::example(),
-                Default::default(),
-            ),
-            transcoder_state: Default::default(),
-            transcoder_state_tx: tx,
-            last_frame_time: std::time::Instant::now(),
-        };
 
-        app.spawn_transcoder(rx);
+            transcoder_ui: TranscoderUi::new(cc),
+        };
 
         app
     }
-    fn spawn_transcoder(&mut self, rx: mpsc::Receiver<TranscoderStateMsg>) {
-        let adder_image_handle = self.adder_image_handle.clone();
-        let input_image_handle = self.input_image_handle.clone();
-        let rt = tokio::runtime::Runtime::new().expect("Unable to create Runtime");
-
-        let _enter = rt.enter();
-
-        // Execute the runtime in its own thread.
-        std::thread::spawn(move || {
-            rt.block_on(async {
-                let mut transcoder =
-                    AdderTranscoder::new(rx, input_image_handle, adder_image_handle);
-                transcoder.run();
-            })
-        });
-    }
-
-    /// If the user has dropped a file into the window, we store the file path.
-    /// At the end of the frame, the receiver will be notified by update()
-    fn handle_file_drop(&mut self, ctx: &egui::Context) {
-        ctx.input(|i| {
-            if !i.raw.dropped_files.is_empty() {
-                // Which view are we currently in? (Where do we send this file to?)
-                match self.view {
-                    Tabs::Transcoder => {
-                        self.transcoder_state.core_params.input_path_buf_0 =
-                            i.raw.dropped_files[0].path.clone();
-                    }
-                    Tabs::Player => {
-                        todo!()
-                    }
-                }
-            }
-        });
-    }
-
-    // #[tokio::main]
-    // async fn handle_exit(&mut self, ctx: &egui::Context) {
-    //     if ctx.input(|i| i.viewport().close_requested()) {
-    //         eprintln!("Handling exit");
-    //         // self.transcoder_state_tx.send(TranscoderStateMsg::Terminate).await.unwrap();
-    //     }
-    // }
 }
 
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         // self.handle_exit(ctx);
 
-        // Store a copy of the params to compare against later
-        let old_params = self.transcoder_state.clone();
-
         // Check if the scale key was hit
         handle_zoom(ctx);
         configure_menu_bar(self, ctx);
 
-        // Collect dropped files
-        self.handle_file_drop(ctx);
-
-        draw_ui(self, ctx);
-
-        // This should always be the very last thing we do in this function
-        if old_params != self.transcoder_state {
-            self.transcoder_state_tx
-                .blocking_send(TranscoderStateMsg::Set {
-                    transcoder_state: self.transcoder_state.clone(),
-                })
-                .unwrap();
+        match self.view {
+            Tabs::Transcoder => self.transcoder_ui.update(ctx),
+            Tabs::Player => {}
         }
 
         ctx.request_repaint();
@@ -253,254 +180,254 @@ fn configure_menu_bar(app: &mut App, ctx: &egui::Context) {
 
 //
 // #[allow(clippy::too_many_arguments)]
-fn draw_ui(
-    app: &mut App,
-    ctx: &egui::Context, // mut transcoder_state: ResMut<TranscoderState>,
-                         // mut player_state: ResMut<PlayerState>,
-                         // main_ui_state: Res<MainUiState>,
-) {
-    egui::SidePanel::left("side_panel")
-        .default_width(300.0)
-        .show(ctx, |ui| {
-            ui.label(format!(
-                "FPS: {:.2}",
-                1.0 / app.last_frame_time.elapsed().as_secs_f64()
-            ));
-            // update the last frame time
-            app.last_frame_time = std::time::Instant::now();
+// fn draw_ui(
+//     app: &mut App,
+//     ctx: &egui::Context, // mut transcoder_state: ResMut<TranscoderState>,
+//                          // mut player_state: ResMut<PlayerState>,
+//                          // main_ui_state: Res<MainUiState>,
+// ) {
+//     egui::SidePanel::left("side_panel")
+//         .default_width(300.0)
+//         .show(ctx, |ui| {
+//             ui.label(format!(
+//                 "FPS: {:.2}",
+//                 1.0 / app.last_frame_time.elapsed().as_secs_f64()
+//             ));
+//             // update the last frame time
+//             app.last_frame_time = std::time::Instant::now();
+//
+//             match app.view {
+//                 Tabs::Transcoder => {
+//                     app.transcoder_ui.side_panel_ui(ui);
+//                 }
+//                 Tabs::Player => {
+//                     // player_state.side_panel_ui(ui, commands, &mut images);
+//                 }
+//             }
+//         });
+//
+//     egui::CentralPanel::default().show(ctx, |ui| {
+//         egui::warn_if_debug_build(ui);
+//
+//         match app.view {
+//             Tabs::Transcoder => {
+//                 app.transcoder_ui.central_panel_ui(
+//                     ui,
+//                     &mut app.input_image_handle,
+//                     &mut app.adder_image_handle,
+//                 );
+//             }
+//             Tabs::Player => {
+//                 // app.player_state.central_panel_ui(ui, time);
+//             }
+//         }
 
-            match app.view {
-                Tabs::Transcoder => {
-                    app.transcoder_state.side_panel_ui(ui);
-                }
-                Tabs::Player => {
-                    // player_state.side_panel_ui(ui, commands, &mut images);
-                }
-            }
-        });
-
-    egui::CentralPanel::default().show(ctx, |ui| {
-        egui::warn_if_debug_build(ui);
-
-        match app.view {
-            Tabs::Transcoder => {
-                app.transcoder_state.central_panel_ui(
-                    ui,
-                    &mut app.input_image_handle,
-                    &mut app.adder_image_handle,
-                );
-            }
-            Tabs::Player => {
-                // app.player_state.central_panel_ui(ui, time);
-            }
-        }
-
-        /*
-        Images in the central panel are common to both visualization tabs, so we can do this
-         here as the last step of drawing its UI
-        */
-        // let mut has_input = false;
-        // let avail_size = ui.available_size();
-        // ui.horizontal(|ui| {
-        //     ui.set_max_size(avail_size);
-        //
-        //     ui.vertical(|ui| {
-        //                 if let (Some(input), Some(input_texture_id)) = (input, input_texture_id) {
-        //                     let mut avail_size = ui.available_size();
-        //                     avail_size.x = avail_size.x / 2.0 - ui.spacing().item_spacing.y / 2.0;
-        //
-        //                     ui.set_max_size(avail_size);
-        //
-        //                     // Right-align the text so it's easier to compare to the ADDER version
-        //                     ui.with_layout(egui::Layout::top_down(Align::Max), |ui| {
-        //                         let mut job = LayoutJob::default();
-        //                         job.append(
-        //                             "Input\n",
-        //                             0.0,
-        //                             TextFormat {
-        //                                 font_id: FontId::new(24.0, FontFamily::Proportional),
-        //                                 color: Color32::WHITE,
-        //                                 ..Default::default()
-        //                             },
-        //                         );
-        //
-        //                         let last = transcoder_state
-        //                             .ui_info_state
-        //                             .plot_points_raw_source_bitrate_y
-        //                             .points
-        //                             .iter()
-        //                             .last();
-        //                         let str_num = match last {
-        //                             None => -999.0,
-        //                             Some(item) => item.unwrap_or(-999.0),
-        //                         };
-        //
-        //                         let str = format!("{number:.prec$} MB/s", prec = 2, number = str_num);
-        //                         job.append(
-        //                             &str,
-        //                             0.0,
-        //                             TextFormat {
-        //                                 font_id: FontId::new(14.0, FontFamily::Proportional),
-        //                                 ..Default::default()
-        //                             },
-        //                         );
-        //                         ui.label(job);
-        //                     });
-        //                     has_input = true;
-        //
-        //                     let size = match (
-        //                         input.texture_descriptor.size.width as f32,
-        //                         input.texture_descriptor.size.height as f32,
-        //                     ) {
-        //                         (a, b) if a / b > avail_size.x / avail_size.y => {
-        //                             /*
-        //                             The available space has a taller aspect ratio than the video
-        //                             Fill the available horizontal space.
-        //                              */
-        //                             egui::Vec2 {
-        //                                 x: avail_size.x,
-        //                                 y: (avail_size.x / a) * b,
-        //                             }
-        //                         }
-        //                         (a, b) => {
-        //                             /*
-        //                             The available space has a shorter aspect ratio than the video
-        //                             Fill the available vertical space.
-        //                              */
-        //                             egui::Vec2 {
-        //                                 x: (avail_size.y / b) * a,
-        //                                 y: avail_size.y,
-        //                             }
-        //                         }
-        //                     };
-        //                     ui.image(input_texture_id, size);
-        //                 }
-        //             });
-        //
-        //             ui.vertical(|ui| {
-        //                 if let (Some(image), Some(texture_id)) = (image, texture_id) {
-        //                     ui.with_layout(egui::Layout::top_down(Align::Min), |ui| {
-        //                         let mut job = LayoutJob::default();
-        //                         job.append(
-        //                             "ADΔER\n",
-        //                             0.0,
-        //                             TextFormat {
-        //                                 font_id: FontId::new(24.0, FontFamily::Proportional),
-        //                                 color: Color32::WHITE,
-        //                                 ..Default::default()
-        //                             },
-        //                         );
-        //
-        //                         let (bitrate, percentage_str, color) = match main_ui_state.view {
-        //                             Tabs::Transcoder => {
-        //                                 let last = transcoder_state
-        //                                     .ui_info_state
-        //                                     .plot_points_raw_adder_bitrate_y
-        //                                     .points
-        //                                     .iter()
-        //                                     .last();
-        //                                 let adder_bitrate = match last {
-        //                                     None => -999.0,
-        //                                     Some(item) => item.unwrap_or(-999.0),
-        //                                 };
-        //
-        //                                 let last = transcoder_state
-        //                                     .ui_info_state
-        //                                     .plot_points_raw_source_bitrate_y
-        //                                     .points
-        //                                     .iter()
-        //                                     .last();
-        //                                 let source_bitrate = match last {
-        //                                     None => -999.0,
-        //                                     Some(item) => item.unwrap_or(-999.0),
-        //                                 };
-        //
-        //                                 let percentage = adder_bitrate / source_bitrate * 100.0;
-        //
-        //                                 let percentage_str =
-        //                                     format!("{number:.prec$}%", prec = 2, number = percentage);
-        //                                 let color = if percentage < 100.0 {
-        //                                     Color32::GREEN
-        //                                 } else {
-        //                                     Color32::RED
-        //                                 };
-        //                                 (adder_bitrate, percentage_str, color)
-        //                             }
-        //                             Tabs::Player => {
-        //                                 let last = transcoder_state
-        //                                     .ui_info_state
-        //                                     .plot_points_raw_adder_bitrate_y
-        //                                     .points
-        //                                     .iter()
-        //                                     .last();
-        //                                 let adder_bitrate = match last {
-        //                                     None => -999.0,
-        //                                     Some(item) => item.unwrap_or(-999.0),
-        //                                 };
-        //                                 (adder_bitrate, "".to_string(), Color32::WHITE)
-        //                             }
-        //                         };
-        //
-        //                         let str = format!("{number:.prec$} MB/s | ", prec = 2, number = bitrate);
-        //                         job.append(
-        //                             &str,
-        //                             0.0,
-        //                             TextFormat {
-        //                                 font_id: FontId::new(14.0, FontFamily::Proportional),
-        //                                 ..Default::default()
-        //                             },
-        //                         );
-        //
-        //                         job.append(
-        //                             &percentage_str,
-        //                             0.0,
-        //                             TextFormat {
-        //                                 font_id: FontId::new(14.0, FontFamily::Proportional),
-        //                                 color,
-        //                                 ..Default::default()
-        //                             },
-        //                         );
-        //
-        //                         ui.label(job);
-        //                     });
-        //
-        //                     let avail_size = ui.available_size();
-        //                     let size = match (
-        //                         image.texture_descriptor.size.width as f32,
-        //                         image.texture_descriptor.size.height as f32,
-        //                     ) {
-        //                         (a, b) if a / b > avail_size.x / avail_size.y => {
-        //                             /*
-        //                             The available space has a taller aspect ratio than the video
-        //                             Fill the available horizontal space.
-        //                              */
-        //                             egui::Vec2 {
-        //                                 x: avail_size.x,
-        //                                 y: (avail_size.x / a) * b,
-        //                             }
-        //                         }
-        //                         (a, b) => {
-        //                             /*
-        //                             The available space has a shorter aspect ratio than the video
-        //                             Fill the available vertical space.
-        //                              */
-        //                             egui::Vec2 {
-        //                                 x: (avail_size.y / b) * a,
-        //                                 y: avail_size.y,
-        //                             }
-        //                         }
-        //                     };
-        //
-        //                     ui.image(texture_id, size);
-        //                 }
-        //             });
-        //         });
-        //
-        //         if let Some(msg) = main_ui_state.error_msg.as_ref() {
-        //             ui.label(msg);
-        //         }
-    });
-}
+/*
+Images in the central panel are common to both visualization tabs, so we can do this
+ here as the last step of drawing its UI
+*/
+// let mut has_input = false;
+// let avail_size = ui.available_size();
+// ui.horizontal(|ui| {
+//     ui.set_max_size(avail_size);
+//
+//     ui.vertical(|ui| {
+//                 if let (Some(input), Some(input_texture_id)) = (input, input_texture_id) {
+//                     let mut avail_size = ui.available_size();
+//                     avail_size.x = avail_size.x / 2.0 - ui.spacing().item_spacing.y / 2.0;
+//
+//                     ui.set_max_size(avail_size);
+//
+//                     // Right-align the text so it's easier to compare to the ADDER version
+//                     ui.with_layout(egui::Layout::top_down(Align::Max), |ui| {
+//                         let mut job = LayoutJob::default();
+//                         job.append(
+//                             "Input\n",
+//                             0.0,
+//                             TextFormat {
+//                                 font_id: FontId::new(24.0, FontFamily::Proportional),
+//                                 color: Color32::WHITE,
+//                                 ..Default::default()
+//                             },
+//                         );
+//
+//                         let last = transcoder_state
+//                             .ui_info_state
+//                             .plot_points_raw_source_bitrate_y
+//                             .points
+//                             .iter()
+//                             .last();
+//                         let str_num = match last {
+//                             None => -999.0,
+//                             Some(item) => item.unwrap_or(-999.0),
+//                         };
+//
+//                         let str = format!("{number:.prec$} MB/s", prec = 2, number = str_num);
+//                         job.append(
+//                             &str,
+//                             0.0,
+//                             TextFormat {
+//                                 font_id: FontId::new(14.0, FontFamily::Proportional),
+//                                 ..Default::default()
+//                             },
+//                         );
+//                         ui.label(job);
+//                     });
+//                     has_input = true;
+//
+//                     let size = match (
+//                         input.texture_descriptor.size.width as f32,
+//                         input.texture_descriptor.size.height as f32,
+//                     ) {
+//                         (a, b) if a / b > avail_size.x / avail_size.y => {
+//                             /*
+//                             The available space has a taller aspect ratio than the video
+//                             Fill the available horizontal space.
+//                              */
+//                             egui::Vec2 {
+//                                 x: avail_size.x,
+//                                 y: (avail_size.x / a) * b,
+//                             }
+//                         }
+//                         (a, b) => {
+//                             /*
+//                             The available space has a shorter aspect ratio than the video
+//                             Fill the available vertical space.
+//                              */
+//                             egui::Vec2 {
+//                                 x: (avail_size.y / b) * a,
+//                                 y: avail_size.y,
+//                             }
+//                         }
+//                     };
+//                     ui.image(input_texture_id, size);
+//                 }
+//             });
+//
+//             ui.vertical(|ui| {
+//                 if let (Some(image), Some(texture_id)) = (image, texture_id) {
+//                     ui.with_layout(egui::Layout::top_down(Align::Min), |ui| {
+//                         let mut job = LayoutJob::default();
+//                         job.append(
+//                             "ADΔER\n",
+//                             0.0,
+//                             TextFormat {
+//                                 font_id: FontId::new(24.0, FontFamily::Proportional),
+//                                 color: Color32::WHITE,
+//                                 ..Default::default()
+//                             },
+//                         );
+//
+//                         let (bitrate, percentage_str, color) = match main_ui_state.view {
+//                             Tabs::Transcoder => {
+//                                 let last = transcoder_state
+//                                     .ui_info_state
+//                                     .plot_points_raw_adder_bitrate_y
+//                                     .points
+//                                     .iter()
+//                                     .last();
+//                                 let adder_bitrate = match last {
+//                                     None => -999.0,
+//                                     Some(item) => item.unwrap_or(-999.0),
+//                                 };
+//
+//                                 let last = transcoder_state
+//                                     .ui_info_state
+//                                     .plot_points_raw_source_bitrate_y
+//                                     .points
+//                                     .iter()
+//                                     .last();
+//                                 let source_bitrate = match last {
+//                                     None => -999.0,
+//                                     Some(item) => item.unwrap_or(-999.0),
+//                                 };
+//
+//                                 let percentage = adder_bitrate / source_bitrate * 100.0;
+//
+//                                 let percentage_str =
+//                                     format!("{number:.prec$}%", prec = 2, number = percentage);
+//                                 let color = if percentage < 100.0 {
+//                                     Color32::GREEN
+//                                 } else {
+//                                     Color32::RED
+//                                 };
+//                                 (adder_bitrate, percentage_str, color)
+//                             }
+//                             Tabs::Player => {
+//                                 let last = transcoder_state
+//                                     .ui_info_state
+//                                     .plot_points_raw_adder_bitrate_y
+//                                     .points
+//                                     .iter()
+//                                     .last();
+//                                 let adder_bitrate = match last {
+//                                     None => -999.0,
+//                                     Some(item) => item.unwrap_or(-999.0),
+//                                 };
+//                                 (adder_bitrate, "".to_string(), Color32::WHITE)
+//                             }
+//                         };
+//
+//                         let str = format!("{number:.prec$} MB/s | ", prec = 2, number = bitrate);
+//                         job.append(
+//                             &str,
+//                             0.0,
+//                             TextFormat {
+//                                 font_id: FontId::new(14.0, FontFamily::Proportional),
+//                                 ..Default::default()
+//                             },
+//                         );
+//
+//                         job.append(
+//                             &percentage_str,
+//                             0.0,
+//                             TextFormat {
+//                                 font_id: FontId::new(14.0, FontFamily::Proportional),
+//                                 color,
+//                                 ..Default::default()
+//                             },
+//                         );
+//
+//                         ui.label(job);
+//                     });
+//
+//                     let avail_size = ui.available_size();
+//                     let size = match (
+//                         image.texture_descriptor.size.width as f32,
+//                         image.texture_descriptor.size.height as f32,
+//                     ) {
+//                         (a, b) if a / b > avail_size.x / avail_size.y => {
+//                             /*
+//                             The available space has a taller aspect ratio than the video
+//                             Fill the available horizontal space.
+//                              */
+//                             egui::Vec2 {
+//                                 x: avail_size.x,
+//                                 y: (avail_size.x / a) * b,
+//                             }
+//                         }
+//                         (a, b) => {
+//                             /*
+//                             The available space has a shorter aspect ratio than the video
+//                             Fill the available vertical space.
+//                              */
+//                             egui::Vec2 {
+//                                 x: (avail_size.y / b) * a,
+//                                 y: avail_size.y,
+//                             }
+//                         }
+//                     };
+//
+//                     ui.image(texture_id, size);
+//                 }
+//             });
+//         });
+//
+//         if let Some(msg) = main_ui_state.error_msg.as_ref() {
+//             ui.label(msg);
+//         }
+//     });
+// }
 //
 // fn update_adder_params(
 //     main_ui_state: Res<MainUiState>,

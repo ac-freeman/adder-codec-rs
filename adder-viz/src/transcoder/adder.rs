@@ -19,7 +19,8 @@ use adder_codec_rs::transcoder::source::davis::TranscoderMode;
 use adder_codec_rs::davis_edi_rs::util::reconstructor::Reconstructor;
 
 use crate::transcoder::adder::AdderTranscoderError::InvalidFileType;
-use crate::transcoder::ui::{AdaptiveParams, TranscoderState, TranscoderStateMsg};
+use crate::transcoder::ui::{TranscoderState, TranscoderStateMsg};
+use crate::transcoder::InfoUiState;
 use crate::utils::prep_epaint_image;
 use crate::Images;
 use adder_codec_rs::adder_codec_core::codec::rate_controller::DEFAULT_CRF_QUALITY;
@@ -27,6 +28,7 @@ use adder_codec_rs::adder_codec_core::PlaneError;
 use adder_codec_rs::adder_codec_core::SourceCamera::{DavisU8, Dvs, FramedU8};
 use adder_codec_rs::transcoder::source::prophesee::Prophesee;
 use adder_codec_rs::transcoder::source::video::{Source, SourceError, VideoBuilder};
+use adder_codec_rs::utils::cv::{calculate_quality_metrics, QualityMetrics};
 #[cfg(feature = "open-cv")]
 use opencv::Result;
 use thiserror::Error;
@@ -44,6 +46,7 @@ pub struct AdderTranscoder {
     rx: Receiver<TranscoderStateMsg>,
     pub(crate) input_image_handle: egui::TextureHandle,
     pub(crate) adder_image_handle: egui::TextureHandle,
+    info_ui_state: Arc<Mutex<InfoUiState>>,
 }
 
 #[derive(Error, Debug)]
@@ -59,6 +62,10 @@ pub enum AdderTranscoderError {
     /// IO error
     #[error("IO error")]
     IoError(#[from] std::io::Error),
+
+    /// Other error
+    #[error("Other error")]
+    OtherError(#[from] Box<dyn Error>),
 }
 
 impl AdderTranscoder {
@@ -66,6 +73,7 @@ impl AdderTranscoder {
         rx: Receiver<TranscoderStateMsg>,
         input_image_handle: egui::TextureHandle,
         adder_image_handle: egui::TextureHandle,
+        info_ui_state: Arc<Mutex<InfoUiState>>,
     ) -> Self {
         let threaded_rt = tokio::runtime::Runtime::new().unwrap();
 
@@ -79,6 +87,7 @@ impl AdderTranscoder {
             rx,
             input_image_handle,
             adder_image_handle,
+            info_ui_state,
         }
     }
 
@@ -124,6 +133,8 @@ impl AdderTranscoder {
 
             // Display frame
             self.show_display_frame();
+
+            self.quality_metrics();
         }
         Ok(())
     }
@@ -167,6 +178,32 @@ impl AdderTranscoder {
             self.update_params(transcoder_state);
             return self.adaptive_state_update();
         }
+        self.update_params(transcoder_state);
+
+        Ok(())
+    }
+
+    fn quality_metrics(&self) -> Result<(), AdderTranscoderError> {
+        let input = self.framed_source.as_ref().unwrap().get_input().unwrap();
+        let output = &self
+            .framed_source
+            .as_ref()
+            .unwrap()
+            .get_video_ref()
+            .state
+            .running_intensities;
+
+        #[rustfmt::skip]
+        let metrics = calculate_quality_metrics(input,
+        output,
+        QualityMetrics {
+            mse: if self.transcoder_state.info_params.metric_mse {Some(0.0)} else {None},
+            psnr: if self.transcoder_state.info_params.metric_psnr {Some(0.0)} else {None},
+            ssim: if self.transcoder_state.info_params.metric_ssim {Some(0.0)} else {None},
+        })?;
+        dbg!(metrics);
+
+        // self.info_ui_state.get_mut()
 
         Ok(())
     }
