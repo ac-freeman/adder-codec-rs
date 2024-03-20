@@ -41,7 +41,7 @@ pub(crate) mod slider;
 // }
 
 pub fn prep_epaint_image(
-    image_mat: Frame,
+    image_mat: &Frame,
     color: bool,
     width: usize,
     height: usize,

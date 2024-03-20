@@ -278,7 +278,7 @@ pub enum TranscoderStateMsg {
 }
 
 impl TranscoderState {
-    pub fn side_panel_ui(&mut self, ui: &mut egui::Ui, images: &mut Arc<Mutex<Images>>) {
+    pub fn side_panel_ui(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
             ui.heading("ADΔER Parameters");
             if ui.add(egui::Button::new("Reset params")).clicked() {
@@ -312,70 +312,44 @@ impl TranscoderState {
     pub fn central_panel_ui(
         &mut self,
         ui: &mut egui::Ui,
-        images: &mut Arc<Mutex<Images>>,
-        adder_image_handle: &mut Option<egui::TextureHandle>,
+        adder_image_handle: &mut egui::TextureHandle,
     ) {
         let avail_size = ui.available_size();
-        let images = images.lock().unwrap();
-        if let Some(image) = &images.image_view {
-            let size = match (image.size[0] as f32, image.size[1] as f32) {
-                (a, b) if a / b > avail_size.x / avail_size.y => {
-                    /*
-                    The available space has a taller aspect ratio than the video
-                    Fill the available horizontal space.
-                     */
-                    egui::Vec2 {
-                        x: avail_size.x,
-                        y: (avail_size.x / a) * b,
-                    }
+        // let images = images.lock().unwrap();
+
+        let size = match (
+            adder_image_handle.size()[0] as f32,
+            adder_image_handle.size()[1] as f32,
+        ) {
+            (a, b) if a / b > avail_size.x / avail_size.y => {
+                /*
+                The available space has a taller aspect ratio than the video
+                Fill the available horizontal space.
+                 */
+                egui::Vec2 {
+                    x: avail_size.x,
+                    y: (avail_size.x / a) * b,
                 }
-                (a, b) => {
-                    /*
-                    The available space has a shorter aspect ratio than the video
-                    Fill the available vertical space.
-                     */
-                    egui::Vec2 {
-                        x: (avail_size.y / b) * a,
-                        y: avail_size.y,
-                    }
+            }
+            (a, b) => {
+                /*
+                The available space has a shorter aspect ratio than the video
+                Fill the available vertical space.
+                 */
+                egui::Vec2 {
+                    x: (avail_size.y / b) * a,
+                    y: avail_size.y,
                 }
-            };
-            let texture: &mut egui::TextureHandle = adder_image_handle.get_or_insert_with(|| {
-                // Load the texture only once.
-                ui.ctx().load_texture(
-                    "adder_image".to_owned().to_string(),
-                    image.clone(),
-                    TextureOptions::default(),
-                )
-            });
+            }
+        };
 
-            // Show the image:
-
-            // if adder_image_handle.is_none() {
-            //     eprintln!("og");
-            //     let handle = ui.ctx().load_texture(
-            //         "adder_image".to_owned().to_string(),
-            //         image.clone(),
-            //         TextureOptions::default(),
-            //     );
-            //     *adder_image_handle = Some(handle.id());
-            // } else {
-            //     eprintln!("update");
-            // let image_delta = ImageDelta::full(image.clone(), Default::default());
-            // let mut mngr = ui.ctx().tex_manager();
-            // let mut mngr = mngr.write();
-            // mngr.set(texture.id(), image_delta);
-
-            texture.set(image.clone(), Default::default());
-
-            let image = egui::Image::new(egui::load::SizedTexture::new(texture.id(), size));
-            ui.add(image);
-            // }
-            //
-            // ui.image((adder_image_handle.unwrap(), size));
-            // let image_delta = ImageDelta::full(egui::ColorImage::example(), Default::default());
-            // ui.image((texture.id(), size));
-        }
+        let image = egui::Image::new(egui::load::SizedTexture::new(adder_image_handle.id(), size));
+        ui.add(image);
+        // }
+        //
+        // ui.image((adder_image_handle.unwrap(), size));
+        // let image_delta = ImageDelta::full(egui::ColorImage::example(), Default::default());
+        // ui.image((texture.id(), size));
     }
     //         ui.horizontal(|ui| {
     //             if ui.button("Open file").clicked() {

@@ -26,8 +26,7 @@ fn main() {
 struct App {
     view: Tabs,
     error_msg: Option<String>,
-    images: std::sync::Arc<std::sync::Mutex<Images>>,
-    adder_image_handle: Option<egui::TextureHandle>,
+    adder_image_handle: egui::TextureHandle,
     transcoder_state: TranscoderState,
     transcoder_state_tx: Sender<TranscoderStateMsg>,
     last_frame_time: std::time::Instant,
@@ -48,8 +47,11 @@ impl App {
         let mut app = App {
             view: Default::default(),
             error_msg: None,
-            images: std::sync::Arc::new(std::sync::Mutex::new(Default::default())),
-            adder_image_handle: None,
+            adder_image_handle: cc.egui_ctx.load_texture(
+                "adder_image",
+                ColorImage::example(),
+                Default::default(),
+            ),
             transcoder_state: Default::default(),
             transcoder_state_tx: tx,
             last_frame_time: std::time::Instant::now(),
@@ -60,7 +62,7 @@ impl App {
         app
     }
     fn spawn_transcoder(&mut self, rx: mpsc::Receiver<TranscoderStateMsg>) {
-        let images = self.images.clone();
+        let adder_image_handle = self.adder_image_handle.clone();
         let rt = tokio::runtime::Runtime::new().expect("Unable to create Runtime");
 
         let _enter = rt.enter();
@@ -68,7 +70,7 @@ impl App {
         // Execute the runtime in its own thread.
         std::thread::spawn(move || {
             rt.block_on(async {
-                let mut transcoder = AdderTranscoder::new(rx, images);
+                let mut transcoder = AdderTranscoder::new(rx, adder_image_handle);
                 transcoder.run();
             })
         });
@@ -261,7 +263,7 @@ fn draw_ui(
 
             match app.view {
                 Tabs::Transcoder => {
-                    app.transcoder_state.side_panel_ui(ui, &mut app.images);
+                    app.transcoder_state.side_panel_ui(ui);
                 }
                 Tabs::Player => {
                     // player_state.side_panel_ui(ui, commands, &mut images);
@@ -292,11 +294,8 @@ fn draw_ui(
 
         match app.view {
             Tabs::Transcoder => {
-                app.transcoder_state.central_panel_ui(
-                    ui,
-                    &mut app.images,
-                    &mut app.adder_image_handle,
-                );
+                app.transcoder_state
+                    .central_panel_ui(ui, &mut app.adder_image_handle);
             }
             Tabs::Player => {
                 // app.player_state.central_panel_ui(ui, time);

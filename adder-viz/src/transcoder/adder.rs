@@ -42,7 +42,7 @@ pub struct AdderTranscoder {
     pub(crate) davis_source: Option<Davis<BufWriter<File>>>,
     pub(crate) prophesee_source: Option<Prophesee<BufWriter<File>>>,
     rx: Receiver<TranscoderStateMsg>,
-    pub(crate) images: Arc<Mutex<Images>>,
+    pub(crate) adder_image_handle: egui::TextureHandle,
 }
 
 #[derive(Error, Debug)]
@@ -61,7 +61,10 @@ pub enum AdderTranscoderError {
 }
 
 impl AdderTranscoder {
-    pub(crate) fn new(rx: Receiver<TranscoderStateMsg>, images: Arc<Mutex<Images>>) -> Self {
+    pub(crate) fn new(
+        rx: Receiver<TranscoderStateMsg>,
+        adder_image_handle: egui::TextureHandle,
+    ) -> Self {
         let threaded_rt = tokio::runtime::Runtime::new().unwrap();
 
         AdderTranscoder {
@@ -72,7 +75,7 @@ impl AdderTranscoder {
             davis_source: None,
             prophesee_source: None,
             rx,
-            images,
+            adder_image_handle,
         }
     }
 
@@ -111,45 +114,30 @@ impl AdderTranscoder {
     }
 
     fn consume(&mut self) -> Result<(), AdderTranscoderError> {
-        let mut image_ref = None;
-        match &mut self.framed_source {
-            None => {}
-            Some(framed) => {
-                let result = framed.consume(&self.pool); // TODO: remove pool from the consume() call entirely
+        if let Some(framed) = &mut self.framed_source {
+            let result = framed.consume(&self.pool); // TODO: remove pool from the consume() call entirely
 
-                // Display frame
-                image_ref = Some(framed.get_video_ref().display_frame_features.clone());
-            }
-        }
-        if let Some(img) = image_ref {
-            self.show_display_frame(img); // TODO: Make the image mat an Arc so you don't have to copy it
+            // Display frame
+
+            self.show_display_frame(); // TODO: Make the image mat an Arc so you don't have to copy it
         }
         Ok(())
     }
 
-    fn show_display_frame(&mut self, image_mat: Frame) {
+    fn show_display_frame(&mut self) {
+        let image_mat = &self
+            .framed_source
+            .as_ref()
+            .unwrap()
+            .get_video_ref()
+            .display_frame_features;
         let color = image_mat.shape()[2] == 3;
-        let mut images = self.images.lock().unwrap();
         let width = image_mat.shape()[1];
         let height = image_mat.shape()[0];
-        match images.image_view {
-            None => {
-                eprintln!("No image");
-                dbg!(image_mat.shape());
-                // let tmp = image_mat.as_slice_memory_order().unwrap();
-                images.image_view =
-                    Some(prep_epaint_image(image_mat, color, width, height).unwrap());
-                // new(
-                //     [image_mat.shape()[1], image_mat.shape()[0]],
-                //     Color32::RED,
-                // ))
-            }
-            Some(_) => {
-                // eprintln!("already has an image")
-                images.image_view =
-                    Some(prep_epaint_image(image_mat, color, width, height).unwrap());
-            }
-        }
+
+        let image = prep_epaint_image(image_mat, color, width, height).unwrap();
+
+        self.adder_image_handle.set(image, Default::default());
 
         // if let Some(image) = images.get_mut(&handles.image_view) {
         //     crate::utils::prep_bevy_image_mut(image_mat, color, image)?;
