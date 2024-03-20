@@ -110,16 +110,35 @@ pub struct TranscoderState {
     // pub ui_info_state: InfoUiState,
 }
 
+impl TranscoderState {
+    pub fn reset_params(&mut self) {
+        self.adaptive_params = Default::default();
+        let input_path_buf_0 = self.core_params.input_path_buf_0.clone();
+        self.core_params = Default::default();
+        self.core_params.input_path_buf_0 = input_path_buf_0;
+    }
+
+    pub fn reset_video(&mut self) {
+        self.core_params.input_path_buf_0 = None;
+        self.core_params.output_path = None;
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum TranscoderStateMsg {
     Terminate,
     Set { transcoder_state: TranscoderState },
 }
+#[derive(Debug, Clone)]
+pub enum TranscoderInfoMsg {
+    QualityMetrics(QualityMetrics),
+    Error(String),
+}
 
 pub struct TranscoderUi {
     pub transcoder_state: TranscoderState,
     pub info_ui_state: InfoUiState,
-    metrics_rx: mpsc::Receiver<QualityMetrics>,
+    msg_rx: mpsc::Receiver<TranscoderInfoMsg>,
     pub transcoder_state_tx: Sender<TranscoderStateMsg>,
     adder_image_handle: egui::TextureHandle,
     input_image_handle: egui::TextureHandle,
@@ -129,33 +148,33 @@ pub struct TranscoderUi {
 impl TranscoderUi {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         let (tx, mut rx) = mpsc::channel(5);
-        let (metrics_tx, mut metrics_rx) = mpsc::channel(30);
+        let (msg_tx, mut msg_rx) = mpsc::channel(30);
 
         let mut transcoder_ui = TranscoderUi {
             transcoder_state: Default::default(),
             info_ui_state: InfoUiState::default(),
-            metrics_rx,
+            msg_rx,
             transcoder_state_tx: tx,
             adder_image_handle: cc.egui_ctx.load_texture(
                 "adder_image",
-                ColorImage::example(),
+                ColorImage::default(),
                 Default::default(),
             ),
             input_image_handle: cc.egui_ctx.load_texture(
                 "adder_image",
-                ColorImage::example(),
+                ColorImage::default(),
                 Default::default(),
             ),
             last_frame_time: std::time::Instant::now(),
         };
-        transcoder_ui.spawn_transcoder(rx, metrics_tx);
+        transcoder_ui.spawn_transcoder(rx, msg_tx);
         transcoder_ui
     }
 
     fn spawn_transcoder(
         &mut self,
         rx: mpsc::Receiver<TranscoderStateMsg>,
-        metrics_tx: mpsc::Sender<QualityMetrics>,
+        msg_tx: mpsc::Sender<TranscoderInfoMsg>,
     ) {
         let adder_image_handle = self.adder_image_handle.clone();
         let input_image_handle = self.input_image_handle.clone();
@@ -167,7 +186,7 @@ impl TranscoderUi {
         std::thread::spawn(move || {
             rt.block_on(async {
                 let mut transcoder =
-                    AdderTranscoder::new(rx, metrics_tx, input_image_handle, adder_image_handle);
+                    AdderTranscoder::new(rx, msg_tx, input_image_handle, adder_image_handle);
                 transcoder.run();
             })
         });
@@ -179,7 +198,7 @@ impl TranscoderUi {
         // Collect dropped files
         self.handle_file_drop(ctx);
 
-        self.handle_metrics();
+        self.handle_info_messages();
 
         self.draw_ui(ctx);
 
@@ -193,13 +212,22 @@ impl TranscoderUi {
         }
     }
 
-    fn handle_metrics(&mut self) {
-        self.metrics_rx.try_recv().into_iter().for_each(|metrics| {
-            dbg!(metrics);
-            self.info_ui_state.plot_points_psnr_y.update(metrics.psnr);
-            self.info_ui_state.plot_points_mse_y.update(metrics.mse);
-            self.info_ui_state.plot_points_ssim_y.update(metrics.ssim);
-        });
+    fn handle_info_messages(&mut self) {
+        self.msg_rx
+            .try_recv()
+            .into_iter()
+            .for_each(|message| match message {
+                TranscoderInfoMsg::QualityMetrics(metrics) => self.handle_metrics(metrics),
+                TranscoderInfoMsg::Error(error_string) => {
+                    self.info_ui_state.error_string = Some(error_string);
+                }
+            });
+    }
+
+    fn handle_metrics(&mut self, metrics: QualityMetrics) {
+        self.info_ui_state.plot_points_psnr_y.update(metrics.psnr);
+        self.info_ui_state.plot_points_mse_y.update(metrics.mse);
+        self.info_ui_state.plot_points_ssim_y.update(metrics.ssim);
     }
 
     /// If the user has dropped a file into the window, we store the file path.
@@ -243,9 +271,13 @@ impl TranscoderUi {
         ui.horizontal(|ui| {
             ui.heading("ADΔER Parameters");
             if ui.add(egui::Button::new("Reset params")).clicked() {
-                // self.ui_state = Default::default();
+                self.transcoder_state.reset_params();
             }
             if ui.add(egui::Button::new("Reset video")).clicked() {
+                self.transcoder_state.reset_video();
+                self.transcoder_state_tx
+                    .blocking_send(TranscoderStateMsg::Terminate)
+                    .unwrap();
                 // if let Some(framed_source) = &mut self.transcoder.framed_source {
                 //     match framed_source.get_video_mut().end_write_stream() {
                 //         Ok(Some(mut writer)) => {
@@ -271,6 +303,9 @@ impl TranscoderUi {
     }
     //
     pub fn central_panel_ui(&mut self, ui: &mut egui::Ui) {
+        if let Some(error_string) = &self.info_ui_state.error_string {
+            ui.label(error_string);
+        }
         Plot::new("my_plot")
             .height(100.0)
             .allow_drag(true)

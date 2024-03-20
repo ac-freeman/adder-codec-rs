@@ -18,8 +18,8 @@ use adder_codec_rs::transcoder::source::davis::TranscoderMode;
 #[cfg(feature = "open-cv")]
 use adder_codec_rs::davis_edi_rs::util::reconstructor::Reconstructor;
 
-use crate::transcoder::adder::AdderTranscoderError::InvalidFileType;
-use crate::transcoder::ui::{TranscoderState, TranscoderStateMsg};
+use crate::transcoder::adder::AdderTranscoderError::{InvalidFileType, NoFileSelected};
+use crate::transcoder::ui::{TranscoderInfoMsg, TranscoderState, TranscoderStateMsg};
 use crate::transcoder::InfoUiState;
 use crate::utils::prep_epaint_image;
 use crate::Images;
@@ -45,7 +45,7 @@ pub struct AdderTranscoder {
     pub(crate) davis_source: Option<Davis<BufWriter<File>>>,
     pub(crate) prophesee_source: Option<Prophesee<BufWriter<File>>>,
     rx: Receiver<TranscoderStateMsg>,
-    metrics_tx: mpsc::Sender<QualityMetrics>,
+    msg_tx: mpsc::Sender<TranscoderInfoMsg>,
     pub(crate) input_image_handle: egui::TextureHandle,
     pub(crate) adder_image_handle: egui::TextureHandle,
 }
@@ -55,6 +55,10 @@ pub enum AdderTranscoderError {
     /// Input file error
     #[error("Invalid file type")]
     InvalidFileType,
+
+    /// No file selected
+    #[error("No file selected")]
+    NoFileSelected,
 
     /// Plane error
     #[error("Source error")]
@@ -72,7 +76,7 @@ pub enum AdderTranscoderError {
 impl AdderTranscoder {
     pub(crate) fn new(
         rx: Receiver<TranscoderStateMsg>,
-        metrics_tx: mpsc::Sender<QualityMetrics>,
+        msg_tx: mpsc::Sender<TranscoderInfoMsg>,
         input_image_handle: egui::TextureHandle,
         adder_image_handle: egui::TextureHandle,
     ) -> Self {
@@ -86,7 +90,7 @@ impl AdderTranscoder {
             davis_source: None,
             prophesee_source: None,
             rx,
-            metrics_tx,
+            msg_tx,
             input_image_handle,
             adder_image_handle,
         }
@@ -100,7 +104,20 @@ impl AdderTranscoder {
             match self.rx.try_recv() {
                 Ok(msg) => match msg {
                     TranscoderStateMsg::Terminate => {
-                        break;
+                        eprintln!("Resetting video");
+                        self.framed_source = None;
+
+                        #[cfg(feature = "open-cv")]
+                        {
+                            self.davis_source = None;
+                        }
+                        self.prophesee_source = None;
+
+                        // Clear the images
+                        self.adder_image_handle
+                            .set(ColorImage::default(), Default::default());
+                        self.input_image_handle
+                            .set(ColorImage::default(), Default::default());
                     }
                     TranscoderStateMsg::Set { transcoder_state } => {
                         eprintln!("Received transcoder state");
@@ -121,7 +138,15 @@ impl AdderTranscoder {
         match result {
             Ok(()) => {}
             Err(e) => {
-                eprintln!("TODO: handle Error: {}", e);
+                match self
+                    .msg_tx
+                    .try_send(TranscoderInfoMsg::Error(e.to_string()))
+                {
+                    Err(TrySendError::Full(..)) => {
+                        eprintln!("Msg channel full");
+                    }
+                    _ => {}
+                };
             }
         }
     }
@@ -210,7 +235,10 @@ impl AdderTranscoder {
         })?;
 
         eprintln!("Sending metrics");
-        match self.metrics_tx.try_send(metrics) {
+        match self
+            .msg_tx
+            .try_send(TranscoderInfoMsg::QualityMetrics(metrics))
+        {
             Ok(_) => {}
             Err(TrySendError::Full(..)) => {
                 eprintln!("Metrics channel full");
@@ -272,7 +300,7 @@ impl AdderTranscoder {
         transcoder_state: TranscoderState,
     ) -> Result<(), AdderTranscoderError> {
         match &transcoder_state.core_params.input_path_buf_0 {
-            None => Err(InvalidFileType),
+            None => Err(NoFileSelected),
             Some(input_path_buf) => match input_path_buf.extension() {
                 None => Err(InvalidFileType),
                 Some(ext) => match ext.to_ascii_lowercase().to_str().unwrap() {

@@ -105,10 +105,10 @@ pub struct InfoUiState {
     //     plot_points_eventrate_y: PlotY,
     //     pub(crate) plot_points_raw_adder_bitrate_y: PlotY,
     //     pub(crate) plot_points_raw_source_bitrate_y: PlotY,
-    latest_mse: f64,
-    pub(crate) plot_points_psnr_y: PlotY,
-    pub(crate) plot_points_mse_y: PlotY,
-    pub(crate) plot_points_ssim_y: PlotY,
+    error_string: Option<String>,
+    plot_points_psnr_y: PlotY,
+    plot_points_mse_y: PlotY,
+    plot_points_ssim_y: PlotY,
     //     plot_points_latency_y: PlotY,
     //     pub view_mode_radio_state: FramedViewMode, // TODO: Move to different struct
 }
@@ -117,7 +117,7 @@ impl Default for InfoUiState {
     fn default() -> Self {
         let plot_points: VecDeque<Option<f64>> = (0..1000).map(|_| None).collect();
         InfoUiState {
-            latest_mse: 0.0,
+            error_string: None,
             plot_points_psnr_y: PlotY {
                 points: plot_points.clone(),
             },
