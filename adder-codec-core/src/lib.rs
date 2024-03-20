@@ -83,7 +83,7 @@ pub enum TimeMode {
 }
 
 /// The size of the image plane in pixels
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct PlaneSize {
     width: u16,
     height: u16,

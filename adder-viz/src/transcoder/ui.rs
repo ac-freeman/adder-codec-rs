@@ -935,16 +935,19 @@ fn side_panel_grid_contents(
         vec![],
         1,
     );
-    // if params.auto_quality
-    //     && params.crf_number
-    //         != params
-    //             .encoder_options
-    //             .crf
-    //             .get_quality()
-    //             .unwrap_or(DEFAULT_CRF_QUALITY)
-    // {
-    //     params.encoder_options.crf = Crf::new(Some(crf), info_ui_state.plane);
-    // }
+    if adaptive_params.auto_quality
+        && adaptive_params.crf_number
+            != adaptive_params
+                .encoder_options
+                .crf
+                .get_quality()
+                .unwrap_or(DEFAULT_CRF_QUALITY)
+    {
+        adaptive_params
+            .encoder_options
+            .crf
+            .update_quality(adaptive_params.crf_number);
+    }
     ui.end_row();
     //
     // ui.label("Δt_max multiplier:");
@@ -1026,22 +1029,23 @@ fn side_panel_grid_contents(
     // );
     // ui.end_row();
     //
-    // ui.label("Video scale:");
-    // slider_pm(
-    //     enabled,
-    //     false,
-    //     ui,
-    //     &mut params.scale,
-    //     &mut params.scale_slider,
-    //     0.001..=1.0,
-    //     vec![0.25, 0.5, 0.75],
-    //     0.1,
-    // );
-    // ui.end_row();
-    //
-    // ui.label("Channels:");
-    // ui.add_enabled(enabled, egui::Checkbox::new(&mut params.color, "Color?"));
-    // ui.end_row();
+    ui.label("Video scale:");
+    slider_pm(
+        enabled,
+        false,
+        ui,
+        &mut core_params.scale,
+        0.001..=1.0,
+        vec![0.25, 0.5, 0.75],
+        0.1,
+    );
+    ui.end_row();
+    ui.label("Channels:");
+    ui.add_enabled(
+        enabled,
+        egui::Checkbox::new(&mut core_params.color, "Color?"),
+    );
+    ui.end_row();
     //
     // ui.label("Integration mode:");
     // ui.horizontal(|ui| {

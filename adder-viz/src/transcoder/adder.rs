@@ -120,6 +120,8 @@ impl AdderTranscoder {
         if let Some(framed) = &mut self.framed_source {
             let result = framed.consume(&self.pool); // TODO: remove pool from the consume() call entirely
 
+            self.show_input_frame();
+
             // Display frame
             self.show_display_frame();
         }
@@ -175,10 +177,26 @@ impl AdderTranscoder {
         let old_adaptive_params = &self.transcoder_state.adaptive_params;
 
         if new_adaptive_params.thread_count != old_adaptive_params.thread_count {
+            // TODO: Probably doesn't work
             self.pool = tokio::runtime::Builder::new_multi_thread()
                 .worker_threads(new_adaptive_params.thread_count)
                 .build()
                 .unwrap();
+        }
+
+        if new_adaptive_params.encoder_options != old_adaptive_params.encoder_options {
+            if let Some(framed) = &mut self.framed_source {
+                let video = framed.get_video_mut();
+                let parameters = new_adaptive_params.encoder_options.crf.get_parameters();
+                video.update_quality_manual(
+                    parameters.c_thresh_baseline,
+                    parameters.c_thresh_max,
+                    transcoder_state.core_params.delta_t_max_mult,
+                    parameters.c_increase_velocity,
+                    parameters.feature_c_radius as f32,
+                )
+            }
+            // TODO: What about event drop and ordering?
         }
 
         Ok(())
