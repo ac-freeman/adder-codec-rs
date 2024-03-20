@@ -2,6 +2,7 @@ use adder_codec_rs::adder_codec_core::codec::rate_controller::{Crf, CRF, DEFAULT
 use adder_codec_rs::adder_codec_core::codec::{EncoderOptions, EncoderType};
 use adder_codec_rs::adder_codec_core::{PixelMultiMode, TimeMode};
 use adder_codec_rs::transcoder::source::video::FramedViewMode;
+use adder_codec_rs::utils::viz::ShowFeatureMode;
 use eframe::epaint::ImageDelta;
 use egui::epaint::TextureManager;
 use egui::{ImageSource, TextureOptions};
@@ -35,13 +36,17 @@ use crate::{slider_pm, Images};
 /// UI-driven parameters which do not require a total reset of the transcoder. These
 /// parameters can be adaptively changed during a transcoder operation.
 #[derive(Debug, Copy, Clone, PartialEq)]
-pub struct AdaptiveParams {
-    pub(crate) auto_quality: bool,
-    pub(crate) crf_number: u8,
-    pub(crate) encoder_options: EncoderOptions,
-    pub(crate) thread_count: usize,
-    pub(crate) show_original: bool,
-    pub(crate) view_mode_radio_state: FramedViewMode,
+pub(crate) struct AdaptiveParams {
+    pub auto_quality: bool,
+    pub crf_number: u8,
+    pub encoder_options: EncoderOptions,
+    pub thread_count: usize,
+    pub show_original: bool,
+    pub view_mode_radio_state: FramedViewMode,
+    pub detect_features: bool,
+    pub show_features: ShowFeatureMode,
+    pub feature_rate_adjustment: bool,
+    pub feature_cluster: bool,
 }
 
 /// Core parameters which require a total reset of the transcoder. These parameters
@@ -72,6 +77,10 @@ impl Default for AdaptiveParams {
             thread_count: 1,
             show_original: false,
             view_mode_radio_state: Default::default(),
+            detect_features: false,
+            show_features: ShowFeatureMode::Off,
+            feature_rate_adjustment: false,
+            feature_cluster: false,
         }
     }
 }
@@ -1090,45 +1099,45 @@ fn side_panel_grid_contents(
         );
     });
     ui.end_row();
-    //
-    // ui.label("Time mode:");
-    // ui.add_enabled_ui(true, |ui| {
-    //     ui.horizontal(|ui| {
-    //         ui.radio_value(
-    //             &mut params.time_mode,
-    //             TimeMode::DeltaT,
-    //             "Δt (time change)",
-    //         );
-    //         ui.radio_value(
-    //             &mut params.time_mode,
-    //             TimeMode::AbsoluteT,
-    //             "t (absolute time)",
-    //         );
-    //     });
-    // });
-    // ui.end_row();
-    //
-    // ui.label("Compression mode:");
-    // ui.add_enabled_ui(true, |ui| {
-    //     ui.vertical(|ui| {
-    //         ui.horizontal(|ui| {
-    //             ui.radio_value(
-    //                 &mut params.encoder_type,
-    //                 EncoderType::Empty,
-    //                 "Empty (don't write)",
-    //             );
-    //             ui.radio_value(&mut params.encoder_type, EncoderType::Raw, "Raw");
-    //         });
-    //         ui.horizontal(|ui| {
-    //             ui.radio_value(
-    //                 &mut params.encoder_type,
-    //                 EncoderType::Compressed,
-    //                 "Compressed",
-    //             );
-    //         });
-    //     });
-    // });
-    // ui.end_row();
+
+    ui.label("Time mode:");
+    ui.add_enabled_ui(true, |ui| {
+        ui.horizontal(|ui| {
+            ui.radio_value(
+                &mut core_params.time_mode,
+                TimeMode::DeltaT,
+                "Δt (time change)",
+            );
+            ui.radio_value(
+                &mut core_params.time_mode,
+                TimeMode::AbsoluteT,
+                "t (absolute time)",
+            );
+        });
+    });
+    ui.end_row();
+
+    ui.label("Compression mode:");
+    ui.add_enabled_ui(true, |ui| {
+        ui.vertical(|ui| {
+            ui.horizontal(|ui| {
+                ui.radio_value(
+                    &mut core_params.encoder_type,
+                    EncoderType::Empty,
+                    "Empty (don't write)",
+                );
+                ui.radio_value(&mut core_params.encoder_type, EncoderType::Raw, "Raw");
+            });
+            ui.horizontal(|ui| {
+                ui.radio_value(
+                    &mut core_params.encoder_type,
+                    EncoderType::Compressed,
+                    "Compressed",
+                );
+            });
+        });
+    });
+    ui.end_row();
     //
     // #[cfg(feature = "open-cv")]
     // {
@@ -1263,39 +1272,39 @@ fn side_panel_grid_contents(
     //     params.encoder_options.event_drop = EventDrop::None;
     // }
     //
-    // ui.label("Processing:");
-    // ui.vertical(|ui| {
-    //     ui.add_enabled(
-    //         true,
-    //         egui::Checkbox::new(&mut params.detect_features, "Detect features"),
-    //     );
-    //
-    //     ui.add_enabled_ui(params.detect_features, |ui| {
-    //         ui.horizontal(|ui| {
-    //             ui.radio_value(
-    //                 &mut params.show_features,
-    //                 ShowFeatureMode::Off,
-    //                 "Don't show",
-    //             );
-    //             ui.radio_value(
-    //                 &mut params.show_features,
-    //                 ShowFeatureMode::Instant,
-    //                 "Show instant",
-    //             );
-    //             ui.radio_value(
-    //                 &mut params.show_features,
-    //                 ShowFeatureMode::Hold,
-    //                 "Show & hold",
-    //             );
-    //         });
-    //         ui.checkbox(
-    //             &mut params.feature_rate_adjustment,
-    //             "Adjust sensitivities",
-    //         );
-    //         ui.checkbox(&mut params.feature_cluster, "Cluster features");
-    //     });
-    // });
-    // ui.end_row();
+    ui.label("Processing:");
+    ui.vertical(|ui| {
+        ui.add_enabled(
+            true,
+            egui::Checkbox::new(&mut adaptive_params.detect_features, "Detect features"),
+        );
+
+        ui.add_enabled_ui(adaptive_params.detect_features, |ui| {
+            ui.horizontal(|ui| {
+                ui.radio_value(
+                    &mut adaptive_params.show_features,
+                    ShowFeatureMode::Off,
+                    "Don't show",
+                );
+                ui.radio_value(
+                    &mut adaptive_params.show_features,
+                    ShowFeatureMode::Instant,
+                    "Show instant",
+                );
+                ui.radio_value(
+                    &mut adaptive_params.show_features,
+                    ShowFeatureMode::Hold,
+                    "Show & hold",
+                );
+            });
+            ui.checkbox(
+                &mut adaptive_params.feature_rate_adjustment,
+                "Adjust sensitivities",
+            );
+            ui.checkbox(&mut adaptive_params.feature_cluster, "Cluster features");
+        });
+    });
+    ui.end_row();
     //
     // ui.label("Metrics:");
     // ui.vertical(|ui| {

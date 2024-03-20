@@ -164,19 +164,17 @@ impl AdderTranscoder {
             return self.core_state_update(transcoder_state);
         } else if transcoder_state.adaptive_params != self.transcoder_state.adaptive_params {
             eprintln!("Modify existing transcoder");
-            return self.adaptive_state_update(transcoder_state);
+            self.update_params(transcoder_state);
+            return self.adaptive_state_update();
         }
 
         Ok(())
     }
 
-    fn adaptive_state_update(
-        &mut self,
-        transcoder_state: TranscoderState,
-    ) -> Result<(), AdderTranscoderError> {
-        let new_adaptive_params = &transcoder_state.adaptive_params;
-        let old_adaptive_params = &self.transcoder_state.adaptive_params;
-
+    /// Called both when creating a new transcoder source and when an adaptive parameter has
+    /// changed. Sets the adaptive parameters for the source. Sets all the parameters (instead of
+    /// only the changed ones) because it's much easier to read and it's still fast.
+    fn adaptive_state_update(&mut self) -> Result<(), AdderTranscoderError> {
         let source: &mut dyn Source<BufWriter<File>> = {
             match &mut self.framed_source {
                 None => {
@@ -197,34 +195,22 @@ impl AdderTranscoder {
             }
         };
 
-        if new_adaptive_params.thread_count != old_adaptive_params.thread_count {
-            // TODO: Probably doesn't work
-            self.pool = tokio::runtime::Builder::new_multi_thread()
-                .worker_threads(new_adaptive_params.thread_count)
-                .build()
-                .unwrap();
-        }
-
-        if new_adaptive_params.encoder_options != old_adaptive_params.encoder_options {
-            let video = source.get_video_mut();
-            let parameters = new_adaptive_params.encoder_options.crf.get_parameters();
-            video.update_quality_manual(
-                parameters.c_thresh_baseline,
-                parameters.c_thresh_max,
-                transcoder_state.core_params.delta_t_max_mult,
-                parameters.c_increase_velocity,
-                parameters.feature_c_radius as f32,
-            )
-
-            // TODO: What about event drop and ordering?
-        }
-
-        if new_adaptive_params.view_mode_radio_state != old_adaptive_params.view_mode_radio_state {
-            source.get_video_mut().instantaneous_view_mode =
-                new_adaptive_params.view_mode_radio_state;
-        }
-
-        self.update_params(transcoder_state);
+        let params = &self.transcoder_state.adaptive_params;
+        source.get_video_mut().instantaneous_view_mode = params.view_mode_radio_state;
+        source.get_video_mut().update_detect_features(
+            params.detect_features,
+            params.show_features,
+            params.feature_rate_adjustment,
+            params.feature_cluster,
+        );
+        let quality_parameters = params.encoder_options.crf.get_parameters();
+        source.get_video_mut().update_quality_manual(
+            quality_parameters.c_thresh_baseline,
+            quality_parameters.c_thresh_max,
+            self.transcoder_state.core_params.delta_t_max_mult,
+            quality_parameters.c_increase_velocity,
+            quality_parameters.feature_c_radius as f32,
+        );
 
         Ok(())
     }
@@ -321,8 +307,6 @@ impl AdderTranscoder {
             }
         };
 
-        self.set_other_adaptive(&mut framed);
-
         self.framed_source = Some(framed);
         #[cfg(feature = "open-cv")]
         {
@@ -330,15 +314,10 @@ impl AdderTranscoder {
         }
         self.prophesee_source = None;
 
+        self.adaptive_state_update()?;
+
         eprintln!("Framed source created!");
         Ok(())
-    }
-
-    /// Called when creating a new transcoder source. Sets the adaptive parameters for the source,
-    /// in case they're not part of the standard transcoder builder pattern.
-    fn set_other_adaptive(&mut self, source: &mut dyn Source<BufWriter<File>>) {
-        let params = &self.transcoder_state.adaptive_params;
-        source.get_video_mut().instantaneous_view_mode = params.view_mode_radio_state;
     }
 
     //     match input_path_buf.extension() {
