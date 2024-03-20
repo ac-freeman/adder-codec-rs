@@ -949,73 +949,68 @@ fn side_panel_grid_contents(
             .update_quality(adaptive_params.crf_number);
     }
     ui.end_row();
-    //
-    // ui.label("Δt_max multiplier:");
-    // slider_pm(
-    //     !params.auto_quality,
-    //     false,
-    //     ui,
-    //     &mut params.delta_t_max_mult,
-    //     &mut params.delta_t_max_mult_slider,
-    //     1..=900,
-    //     vec![],
-    //     1,
-    // );
-    // ui.end_row();
-    //
-    // let parameters = params.encoder_options.crf.get_parameters_mut();
-    // ui.label("Threshold baseline:");
-    // slider_pm(
-    //     !params.auto_quality,
-    //     false,
-    //     ui,
-    //     &mut parameters.c_thresh_baseline,
-    //     &mut params.adder_tresh_baseline_slider,
-    //     0..=255,
-    //     vec![],
-    //     1,
-    // );
-    // ui.end_row();
-    //
-    // ui.label("Threshold max:");
-    // slider_pm(
-    //     !params.auto_quality,
-    //     false,
-    //     ui,
-    //     &mut parameters.c_thresh_max,
-    //     &mut params.adder_tresh_max_slider,
-    //     0..=255,
-    //     vec![],
-    //     1,
-    // );
-    // ui.end_row();
-    //
-    // ui.label("Threshold velocity:");
-    // slider_pm(
-    //     !params.auto_quality,
-    //     false,
-    //     ui,
-    //     &mut parameters.c_increase_velocity,
-    //     &mut params.adder_tresh_velocity_slider,
-    //     1..=30,
-    //     vec![],
-    //     1,
-    // );
-    // ui.end_row();
-    //
-    // ui.label("Feature radius:");
-    // slider_pm(
-    //     !params.auto_quality,
-    //     false,
-    //     ui,
-    //     &mut parameters.feature_c_radius,
-    //     &mut ui_state.feature_radius_slider,
-    //     0..=100,
-    //     vec![],
-    //     1,
-    // );
-    // ui.end_row();
-    //
+
+    ui.label("Δt_max multiplier:");
+    slider_pm(
+        !adaptive_params.auto_quality,
+        false,
+        ui,
+        &mut core_params.delta_t_max_mult,
+        1..=900,
+        vec![],
+        1,
+    );
+    ui.end_row();
+
+    let parameters = adaptive_params.encoder_options.crf.get_parameters_mut();
+    ui.label("Threshold baseline:");
+    slider_pm(
+        !adaptive_params.auto_quality,
+        false,
+        ui,
+        &mut parameters.c_thresh_baseline,
+        0..=255,
+        vec![],
+        1,
+    );
+    ui.end_row();
+
+    ui.label("Threshold max:");
+    slider_pm(
+        !adaptive_params.auto_quality,
+        false,
+        ui,
+        &mut parameters.c_thresh_max,
+        0..=255,
+        vec![],
+        1,
+    );
+    ui.end_row();
+
+    ui.label("Threshold velocity:");
+    slider_pm(
+        !adaptive_params.auto_quality,
+        false,
+        ui,
+        &mut parameters.c_increase_velocity,
+        1..=30,
+        vec![],
+        1,
+    );
+    ui.end_row();
+
+    ui.label("Feature radius:");
+    slider_pm(
+        !adaptive_params.auto_quality,
+        false,
+        ui,
+        &mut parameters.feature_c_radius,
+        0..=100,
+        vec![],
+        1,
+    );
+    ui.end_row();
+
     // ui.label("Thread count:");
     // slider_pm(
     //     true,
