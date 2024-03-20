@@ -34,6 +34,7 @@ eframe = { version = "0.26.2", default-features = false, features = [
     "persistence",   # Enable restoring app state when restarting the app.
 ] }
 egui_file = "0.16.3"
+egui_plot = "0.26.2"
 futures = "0.3.26"
 rayon = "1.5.3"
 rfd = "0.10.0"

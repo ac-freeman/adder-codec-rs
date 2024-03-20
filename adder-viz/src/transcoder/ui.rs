@@ -6,7 +6,9 @@ use adder_codec_rs::utils::cv::QualityMetrics;
 use adder_codec_rs::utils::viz::ShowFeatureMode;
 use eframe::epaint::{ColorImage, ImageDelta};
 use egui::epaint::TextureManager;
-use egui::{ImageSource, TextureOptions};
+use egui::{ImageSource, TextureOptions, Vec2b};
+use egui_plot::Corner::LeftTop;
+use egui_plot::{Legend, Plot};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc;
@@ -23,7 +25,7 @@ use crate::{slider_pm, App, Images, Tabs};
 // use std::collections::VecDeque;
 // use std::error::Error;
 //
-// use crate::utils::PlotY;
+use crate::utils::PlotY;
 // use adder_codec_rs::adder_codec_core::codec::rate_controller::{Crf, CRF, DEFAULT_CRF_QUALITY};
 // use adder_codec_rs::adder_codec_core::codec::{EncoderOptions, EncoderType, EventDrop, EventOrder};
 // use adder_codec_rs::adder_codec_core::TimeMode;
@@ -116,7 +118,7 @@ pub enum TranscoderStateMsg {
 
 pub struct TranscoderUi {
     pub transcoder_state: TranscoderState,
-    pub info_ui_state: Arc<Mutex<InfoUiState>>,
+    pub info_ui_state: InfoUiState,
     metrics_rx: mpsc::Receiver<QualityMetrics>,
     pub transcoder_state_tx: Sender<TranscoderStateMsg>,
     adder_image_handle: egui::TextureHandle,
@@ -131,7 +133,7 @@ impl TranscoderUi {
 
         let mut transcoder_ui = TranscoderUi {
             transcoder_state: Default::default(),
-            info_ui_state: Arc::new(Mutex::new(InfoUiState::default())),
+            info_ui_state: InfoUiState::default(),
             metrics_rx,
             transcoder_state_tx: tx,
             adder_image_handle: cc.egui_ctx.load_texture(
@@ -157,7 +159,6 @@ impl TranscoderUi {
     ) {
         let adder_image_handle = self.adder_image_handle.clone();
         let input_image_handle = self.input_image_handle.clone();
-        let info_ui_state = self.info_ui_state.clone();
         let rt = tokio::runtime::Runtime::new().expect("Unable to create Runtime");
 
         let _enter = rt.enter();
@@ -165,13 +166,8 @@ impl TranscoderUi {
         // Execute the runtime in its own thread.
         std::thread::spawn(move || {
             rt.block_on(async {
-                let mut transcoder = AdderTranscoder::new(
-                    rx,
-                    metrics_tx,
-                    input_image_handle,
-                    adder_image_handle,
-                    info_ui_state,
-                );
+                let mut transcoder =
+                    AdderTranscoder::new(rx, metrics_tx, input_image_handle, adder_image_handle);
                 transcoder.run();
             })
         });
@@ -199,9 +195,10 @@ impl TranscoderUi {
 
     fn handle_metrics(&mut self) {
         self.metrics_rx.try_recv().into_iter().for_each(|metrics| {
-            eprintln!("Got metrics!");
-            // let mut info_ui_state = self.info_ui_state.lock().unwrap();
-            // info_ui_state.update_metrics(metrics);
+            dbg!(metrics);
+            self.info_ui_state.plot_points_psnr_y.update(metrics.psnr);
+            self.info_ui_state.plot_points_mse_y.update(metrics.mse);
+            self.info_ui_state.plot_points_ssim_y.update(metrics.ssim);
         });
     }
 
@@ -274,6 +271,25 @@ impl TranscoderUi {
     }
     //
     pub fn central_panel_ui(&mut self, ui: &mut egui::Ui) {
+        Plot::new("my_plot")
+            .height(100.0)
+            .allow_drag(true)
+            .auto_bounds(Vec2b { x: true, y: true })
+            .legend(Legend::default().position(LeftTop))
+            .show(ui, |plot_ui| {
+                let metrics = vec![
+                    (&self.info_ui_state.plot_points_psnr_y, "PSNR dB"),
+                    (&self.info_ui_state.plot_points_mse_y, "MSE"),
+                    (&self.info_ui_state.plot_points_ssim_y, "SSIM"),
+                ];
+
+                for (line, label) in metrics {
+                    if line.points.iter().last().unwrap().is_some() {
+                        plot_ui.line(line.get_plotline(label, false));
+                    }
+                }
+            });
+
         let mut avail_size = ui.available_size();
         if self.transcoder_state.adaptive_params.show_original {
             avail_size.x = avail_size.x / 2.0;

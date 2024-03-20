@@ -48,7 +48,6 @@ pub struct AdderTranscoder {
     metrics_tx: mpsc::Sender<QualityMetrics>,
     pub(crate) input_image_handle: egui::TextureHandle,
     pub(crate) adder_image_handle: egui::TextureHandle,
-    info_ui_state: Arc<Mutex<InfoUiState>>,
 }
 
 #[derive(Error, Debug)]
@@ -76,7 +75,6 @@ impl AdderTranscoder {
         metrics_tx: mpsc::Sender<QualityMetrics>,
         input_image_handle: egui::TextureHandle,
         adder_image_handle: egui::TextureHandle,
-        info_ui_state: Arc<Mutex<InfoUiState>>,
     ) -> Self {
         let threaded_rt = tokio::runtime::Runtime::new().unwrap();
 
@@ -91,7 +89,6 @@ impl AdderTranscoder {
             metrics_tx,
             input_image_handle,
             adder_image_handle,
-            info_ui_state,
         }
     }
 
