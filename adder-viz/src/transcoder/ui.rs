@@ -1,6 +1,7 @@
 use adder_codec_rs::adder_codec_core::codec::rate_controller::{Crf, CRF, DEFAULT_CRF_QUALITY};
 use adder_codec_rs::adder_codec_core::codec::{EncoderOptions, EncoderType};
 use adder_codec_rs::adder_codec_core::{PixelMultiMode, TimeMode};
+use adder_codec_rs::transcoder::source::video::FramedViewMode;
 use eframe::epaint::ImageDelta;
 use egui::epaint::TextureManager;
 use egui::{ImageSource, TextureOptions};
@@ -38,9 +39,9 @@ pub struct AdaptiveParams {
     pub(crate) auto_quality: bool,
     pub(crate) crf_number: u8,
     pub(crate) encoder_options: EncoderOptions,
-    pub(crate) integration_mode_radio_state: PixelMultiMode,
     pub(crate) thread_count: usize,
     pub(crate) show_original: bool,
+    pub(crate) view_mode_radio_state: FramedViewMode,
 }
 
 /// Core parameters which require a total reset of the transcoder. These parameters
@@ -55,6 +56,7 @@ pub(crate) struct CoreParams {
     pub encoder_type: EncoderType,
     pub input_path_buf_0: Option<PathBuf>,
     pub output_path: Option<PathBuf>,
+    pub(crate) integration_mode_radio_state: PixelMultiMode,
 }
 
 impl Default for AdaptiveParams {
@@ -67,9 +69,9 @@ impl Default for AdaptiveParams {
                 event_order: Default::default(),
                 crf: Crf::new(None, Default::default()),
             },
-            integration_mode_radio_state: Default::default(),
             thread_count: 1,
             show_original: false,
+            view_mode_radio_state: Default::default(),
         }
     }
 }
@@ -83,6 +85,7 @@ impl Default for CoreParams {
             delta_t_max_mult: 30,
             time_mode: Default::default(),
             encoder_type: Default::default(),
+            integration_mode_radio_state: Default::default(),
             input_path_buf_0: None,
             output_path: None,
         }
@@ -1041,42 +1044,46 @@ fn side_panel_grid_contents(
         egui::Checkbox::new(&mut core_params.color, "Color?"),
     );
     ui.end_row();
-    //
-    // ui.label("Integration mode:");
-    // ui.horizontal(|ui| {
-    //     ui.radio_value(
-    //         &mut params.integration_mode_radio_state,
-    //         PixelMultiMode::Normal,
-    //         "Normal",
-    //     );
-    //     ui.radio_value(
-    //         &mut params.integration_mode_radio_state,
-    //         PixelMultiMode::Collapse,
-    //         "Collapse",
-    //     );
-    // });
-    // ui.end_row();
-    //
+
+    ui.label("Integration mode:");
+    ui.horizontal(|ui| {
+        ui.radio_value(
+            &mut core_params.integration_mode_radio_state,
+            PixelMultiMode::Normal,
+            "Normal",
+        );
+        ui.radio_value(
+            &mut core_params.integration_mode_radio_state,
+            PixelMultiMode::Collapse,
+            "Collapse",
+        );
+    });
+    ui.end_row();
+
     ui.label("View mode:");
     ui.vertical(|ui| {
-        // ui.horizontal(|ui| {
-        //     ui.radio_value(
-        //         &mut adaptive_params.view_mode_radio_state,
-        //         FramedViewMode::Intensity,
-        //         "Intensity",
-        //     );
-        //     ui.radio_value(&mut adaptive_params.view_mode_radio_state, FramedViewMode::D, "D");
-        //     ui.radio_value(
-        //         &mut adaptive_params.view_mode_radio_state,
-        //         FramedViewMode::DeltaT,
-        //         "Δt",
-        //     );
-        //     ui.radio_value(
-        //         &mut adaptive_params.view_mode_radio_state,
-        //         FramedViewMode::SAE,
-        //         "SAE",
-        //     );
-        // });
+        ui.horizontal(|ui| {
+            ui.radio_value(
+                &mut adaptive_params.view_mode_radio_state,
+                FramedViewMode::Intensity,
+                "Intensity",
+            );
+            ui.radio_value(
+                &mut adaptive_params.view_mode_radio_state,
+                FramedViewMode::D,
+                "D",
+            );
+            ui.radio_value(
+                &mut adaptive_params.view_mode_radio_state,
+                FramedViewMode::DeltaT,
+                "Δt",
+            );
+            ui.radio_value(
+                &mut adaptive_params.view_mode_radio_state,
+                FramedViewMode::SAE,
+                "SAE",
+            );
+        });
         ui.add_enabled(
             enabled,
             egui::Checkbox::new(&mut adaptive_params.show_original, "Show original?"),

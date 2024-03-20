@@ -166,6 +166,7 @@ impl AdderTranscoder {
             eprintln!("Modify existing transcoder");
             return self.adaptive_state_update(transcoder_state);
         }
+
         Ok(())
     }
 
@@ -176,6 +177,26 @@ impl AdderTranscoder {
         let new_adaptive_params = &transcoder_state.adaptive_params;
         let old_adaptive_params = &self.transcoder_state.adaptive_params;
 
+        let source: &mut dyn Source<BufWriter<File>> = {
+            match &mut self.framed_source {
+                None => {
+                    // match &mut self.prophesee_source {
+                    //     None => {
+                    //         #[cfg(feature = "open-cv")]
+                    //         match &mut self.davis_source {
+                    //             None => {
+                    panic!("No source found");
+                    //             }
+                    //
+                    //             Some(source) => {}
+                    //         }
+                    //     }
+                    // }
+                }
+                Some(source) => source,
+            }
+        };
+
         if new_adaptive_params.thread_count != old_adaptive_params.thread_count {
             // TODO: Probably doesn't work
             self.pool = tokio::runtime::Builder::new_multi_thread()
@@ -185,19 +206,25 @@ impl AdderTranscoder {
         }
 
         if new_adaptive_params.encoder_options != old_adaptive_params.encoder_options {
-            if let Some(framed) = &mut self.framed_source {
-                let video = framed.get_video_mut();
-                let parameters = new_adaptive_params.encoder_options.crf.get_parameters();
-                video.update_quality_manual(
-                    parameters.c_thresh_baseline,
-                    parameters.c_thresh_max,
-                    transcoder_state.core_params.delta_t_max_mult,
-                    parameters.c_increase_velocity,
-                    parameters.feature_c_radius as f32,
-                )
-            }
+            let video = source.get_video_mut();
+            let parameters = new_adaptive_params.encoder_options.crf.get_parameters();
+            video.update_quality_manual(
+                parameters.c_thresh_baseline,
+                parameters.c_thresh_max,
+                transcoder_state.core_params.delta_t_max_mult,
+                parameters.c_increase_velocity,
+                parameters.feature_c_radius as f32,
+            )
+
             // TODO: What about event drop and ordering?
         }
+
+        if new_adaptive_params.view_mode_radio_state != old_adaptive_params.view_mode_radio_state {
+            source.get_video_mut().instantaneous_view_mode =
+                new_adaptive_params.view_mode_radio_state;
+        }
+
+        self.update_params(transcoder_state);
 
         Ok(())
     }
@@ -285,7 +312,7 @@ impl AdderTranscoder {
                 framed = *framed.write_out(
                     FramedU8,
                     core_params.time_mode,
-                    adaptive_params.integration_mode_radio_state,
+                    core_params.integration_mode_radio_state,
                     Some(core_params.delta_t_max_mult as usize),
                     core_params.encoder_type,
                     adaptive_params.encoder_options,
@@ -293,6 +320,8 @@ impl AdderTranscoder {
                 )?;
             }
         };
+
+        self.set_other_adaptive(&mut framed);
 
         self.framed_source = Some(framed);
         #[cfg(feature = "open-cv")]
@@ -303,6 +332,13 @@ impl AdderTranscoder {
 
         eprintln!("Framed source created!");
         Ok(())
+    }
+
+    /// Called when creating a new transcoder source. Sets the adaptive parameters for the source,
+    /// in case they're not part of the standard transcoder builder pattern.
+    fn set_other_adaptive(&mut self, source: &mut dyn Source<BufWriter<File>>) {
+        let params = &self.transcoder_state.adaptive_params;
+        source.get_video_mut().instantaneous_view_mode = params.view_mode_radio_state;
     }
 
     //     match input_path_buf.extension() {
