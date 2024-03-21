@@ -321,6 +321,26 @@ impl TranscoderUi {
             }
             ui.label("OR drag and drop your source file here (.mp4, .aedat4, .dat)");
         });
+        if ui.button("Save file").clicked() {
+            if let Some(mut path) = rfd::FileDialog::new()
+                .add_filter("adder video", &["adder"])
+                .save_file()
+            {
+                if !path.ends_with(".adder") {
+                    path = path.with_extension("adder");
+                };
+                self.transcoder_state.core_params.output_path = Some(path.clone());
+            }
+        }
+
+        ui.label(
+            self.transcoder_state
+                .core_params
+                .output_path
+                .as_ref()
+                .map_or("No output selected yet", |p| p.to_str().unwrap()),
+        );
+
         Plot::new("my_plot")
             .height(100.0)
             .allow_drag(true)
@@ -842,29 +862,7 @@ impl TranscoderUi {
     //         });
     //         ui.label(self.ui_info_state.source_name.clone());
     //
-    //         if ui.button("Save file").clicked() {
-    //             if let Some(mut path) = rfd::FileDialog::new()
-    //                 .add_filter("adder video", &["adder"])
-    //                 .save_file()
-    //             {
-    //                 if !path.ends_with(".adder") {
-    //                     path = path.with_extension("adder");
-    //                 };
-    //                 self.ui_info_state.output_path = Some(path.clone());
-    //                 self.ui_info_state.output_name = OutputName {
-    //                     text: RichText::new(path.to_str().unwrap_or("Error: invalid output string")),
-    //                 };
-    //                 replace_adder_transcoder(
-    //                     self,
-    //                     self.ui_info_state.input_path_0.clone(),
-    //                     self.ui_info_state.input_path_1.clone(),
-    //                     Some(path),
-    //                     0,
-    //                 );
-    //             }
-    //         }
     //
-    //         ui.label(self.ui_info_state.output_name.text.clone());
     //
     //         ui.label(format!(
     //             "{:.2} transcoded FPS\t\

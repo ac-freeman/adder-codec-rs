@@ -18,7 +18,9 @@ use adder_codec_rs::transcoder::source::davis::TranscoderMode;
 #[cfg(feature = "open-cv")]
 use adder_codec_rs::davis_edi_rs::util::reconstructor::Reconstructor;
 
-use crate::transcoder::adder::AdderTranscoderError::{InvalidFileType, NoFileSelected};
+use crate::transcoder::adder::AdderTranscoderError::{
+    InvalidFileType, NoFileSelected, Uninitialized,
+};
 use crate::transcoder::ui::{TranscoderInfoMsg, TranscoderState, TranscoderStateMsg};
 use crate::transcoder::InfoUiState;
 use crate::utils::prep_epaint_image;
@@ -60,7 +62,7 @@ pub enum AdderTranscoderError {
     #[error("No file selected")]
     NoFileSelected,
 
-    /// Plane error
+    /// Source error
     #[error("Source error")]
     SourceError(#[from] SourceError),
 
@@ -71,6 +73,10 @@ pub enum AdderTranscoderError {
     /// Other error
     #[error("Other error")]
     OtherError(#[from] Box<dyn Error>),
+
+    /// Uninitialized error
+    #[error("Uninitialized")]
+    Uninitialized,
 }
 
 impl AdderTranscoder {
@@ -105,6 +111,11 @@ impl AdderTranscoder {
                 Ok(msg) => match msg {
                     TranscoderStateMsg::Terminate => {
                         eprintln!("Resetting video");
+
+                        // Get the current source and close the writer
+                        let source = get_source(self).unwrap();
+                        source.get_video_mut().end_write_stream().unwrap();
+
                         self.framed_source = None;
 
                         #[cfg(feature = "open-cv")]
@@ -690,3 +701,25 @@ impl AdderTranscoder {
 //         eprintln!("No input path");
 //     }
 // }
+
+fn get_source(
+    transcoder: &mut AdderTranscoder,
+) -> Result<&mut dyn Source<BufWriter<File>>, AdderTranscoderError> {
+    match &mut transcoder.framed_source {
+        None => match &mut transcoder.prophesee_source {
+            None => {
+                #[cfg(feature = "open-cv")]
+                match &mut transcoder.davis_source {
+                    None => {
+                        panic!("No source found");
+                    }
+
+                    Some(source) => Ok(source),
+                }
+                Err(Uninitialized)
+            }
+            Some(source) => Ok(source),
+        },
+        Some(source) => Ok(source),
+    }
+}
