@@ -1375,7 +1375,10 @@ pub fn show_display_force(window_name: &str, mat: &Mat, wait: i32) -> opencv::Re
     Ok(())
 }
 
+use enum_dispatch::enum_dispatch;
+
 /// A trait for objects that can be used as a source of data for the ADΔER transcode model.
+#[enum_dispatch]
 pub trait Source<W: Write> {
     /// Intake one input interval worth of data from the source stream into the ADΔER model as
     /// intensities.
