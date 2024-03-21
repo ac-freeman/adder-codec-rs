@@ -304,9 +304,13 @@ impl TranscoderUi {
     }
     //
     pub fn central_panel_ui(&mut self, ui: &mut egui::Ui) {
-        if let Some(error_string) = &self.info_ui_state.error_string {
-            ui.label(error_string);
-        }
+        ui.colored_label(
+            ui.visuals().warn_fg_color,
+            self.info_ui_state
+                .error_string
+                .as_ref()
+                .unwrap_or(&"".to_string()),
+        );
         ui.horizontal(|ui| {
             if ui.button("Open file").clicked() {
                 if let Some(path) = rfd::FileDialog::new()
@@ -319,27 +323,50 @@ impl TranscoderUi {
                     self.transcoder_state.core_params.input_path_buf_0 = Some(path.clone());
                 }
             }
-            ui.label("OR drag and drop your source file here (.mp4, .aedat4, .dat)");
+            let label_opt = &self.transcoder_state.core_params.input_path_buf_0;
+            ui.colored_label(
+                if label_opt.is_some() {
+                    egui::Color32::GREEN
+                } else {
+                    ui.style().visuals.text_color()
+                },
+                label_opt.as_ref().map_or(
+                    "OR drag and drop your source file here (.mp4, .aedat4, .dat)",
+                    |p| p.to_str().unwrap(),
+                ),
+            );
         });
-        if ui.button("Save file").clicked() {
-            if let Some(mut path) = rfd::FileDialog::new()
-                .add_filter("adder video", &["adder"])
-                .save_file()
-            {
-                if !path.ends_with(".adder") {
-                    path = path.with_extension("adder");
-                };
-                self.transcoder_state.core_params.output_path = Some(path.clone());
+        ui.horizontal(|ui| {
+            if ui.button("Save file").clicked() {
+                // Check if 'empty' compression is selected, warn user if so
+                if self.transcoder_state.core_params.encoder_type == EncoderType::Empty {
+                    self.info_ui_state.error_string =
+                        Some("Empty compression selected, no output will be written".to_string());
+                } else if let Some(mut path) = rfd::FileDialog::new()
+                    .add_filter("adder video", &["adder"])
+                    .save_file()
+                {
+                    if !path.ends_with(".adder") {
+                        path = path.with_extension("adder");
+                    };
+                    self.transcoder_state.core_params.output_path = Some(path.clone());
+                    self.info_ui_state.error_string = None;
+                }
             }
-        }
 
-        ui.label(
-            self.transcoder_state
-                .core_params
-                .output_path
-                .as_ref()
-                .map_or("No output selected yet", |p| p.to_str().unwrap()),
-        );
+            let label_opt = &self.transcoder_state.core_params.output_path;
+
+            ui.colored_label(
+                if label_opt.is_some() {
+                    egui::Color32::GREEN
+                } else {
+                    ui.style().visuals.text_color()
+                },
+                label_opt
+                    .as_ref()
+                    .map_or("No output selected yet", |p| p.to_str().unwrap()),
+            );
+        });
 
         Plot::new("my_plot")
             .height(100.0)
@@ -621,6 +648,7 @@ impl TranscoderUi {
         ui.end_row();
 
         ui.label("Compression mode:");
+        let current_encoder_type = core_params.encoder_type;
         ui.add_enabled_ui(true, |ui| {
             ui.vertical(|ui| {
                 ui.horizontal(|ui| {
@@ -640,6 +668,11 @@ impl TranscoderUi {
                 });
             });
         });
+        if current_encoder_type == EncoderType::Empty
+            && current_encoder_type != core_params.encoder_type
+        {
+            self.info_ui_state.error_string = None;
+        }
         ui.end_row();
         //
         // #[cfg(feature = "open-cv")]
