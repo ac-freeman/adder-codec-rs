@@ -230,6 +230,23 @@ impl TranscoderUi {
                         self.info_ui_state.events_ppc_total = msg.events_ppc_total;
                         self.info_ui_state.events_ppc_per_sec = msg.events_ppc_per_sec;
                         self.info_ui_state.transcoded_fps = msg.transcoded_fps;
+
+                        #[rustfmt::skip]
+                        let event_size = if self.transcoder_state.core_params.color { 11} else {9};
+
+                        let bitrate = self.info_ui_state.events_ppc_per_sec
+                            * event_size as f64
+                            * msg.num_pixels as f64
+                            / 1024.0
+                            / 1024.0; // transcoded raw in megabytes per sec
+                        self.info_ui_state
+                            .plot_points_raw_adder_bitrate_y
+                            .update(Some(bitrate));
+
+                        let raw_source_bitrate = msg.running_input_bitrate / 8.0 / 1024.0 / 1024.0; // source in megabytes per sec
+                        self.info_ui_state
+                            .plot_points_raw_source_bitrate_y
+                            .update(Some(raw_source_bitrate));
                     }
                 },
                 Err(_) => {
@@ -382,7 +399,7 @@ impl TranscoderUi {
             );
         });
 
-        Plot::new("my_plot")
+        Plot::new("quality_plot")
             .height(100.0)
             .allow_drag(true)
             .auto_bounds(Vec2b { x: true, y: true })
@@ -392,6 +409,30 @@ impl TranscoderUi {
                     (&self.info_ui_state.plot_points_psnr_y, "PSNR dB"),
                     (&self.info_ui_state.plot_points_mse_y, "MSE"),
                     (&self.info_ui_state.plot_points_ssim_y, "SSIM"),
+                ];
+
+                for (line, label) in metrics {
+                    if line.points.iter().last().unwrap().is_some() {
+                        plot_ui.line(line.get_plotline(label, false));
+                    }
+                }
+            });
+
+        Plot::new("bitrate_plot")
+            .height(100.0)
+            .allow_drag(true)
+            .auto_bounds(Vec2b { x: true, y: true })
+            .legend(Legend::default().position(LeftTop))
+            .show(ui, |plot_ui| {
+                let metrics = vec![
+                    (
+                        &self.info_ui_state.plot_points_raw_adder_bitrate_y,
+                        "Raw ADDER MB/s",
+                    ),
+                    (
+                        &self.info_ui_state.plot_points_raw_source_bitrate_y,
+                        "Raw source MB/s",
+                    ),
                 ];
 
                 for (line, label) in metrics {

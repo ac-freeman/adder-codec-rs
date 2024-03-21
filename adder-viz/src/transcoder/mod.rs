@@ -58,6 +58,8 @@ struct EventRateMsg {
     events_ppc_total: f64,
     events_ppc_per_sec: f64,
     transcoded_fps: f64,
+    num_pixels: u64,
+    running_input_bitrate: f64,
 }
 
 impl Default for AdaptiveParams {
@@ -118,6 +120,8 @@ pub struct InfoUiState {
     plot_points_psnr_y: PlotY,
     plot_points_mse_y: PlotY,
     plot_points_ssim_y: PlotY,
+    plot_points_raw_adder_bitrate_y: PlotY,
+    plot_points_raw_source_bitrate_y: PlotY,
     total_events: u64,
     events_per_sec: f64,
     events_ppc_total: f64,
@@ -139,6 +143,12 @@ impl Default for InfoUiState {
                 points: plot_points.clone(),
             },
             plot_points_ssim_y: PlotY {
+                points: plot_points.clone(),
+            },
+            plot_points_raw_adder_bitrate_y: PlotY {
+                points: plot_points.clone(),
+            },
+            plot_points_raw_source_bitrate_y: PlotY {
                 points: plot_points.clone(),
             },
             total_events: 0,

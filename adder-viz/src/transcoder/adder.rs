@@ -185,6 +185,8 @@ impl AdderTranscoder {
                 / Instant::now()
                     .duration_since(self.last_consume_time)
                     .as_secs_f64();
+            msg.num_pixels = source.get_video_ref().state.plane.volume() as u64;
+            msg.running_input_bitrate = source.get_running_input_bitrate();
 
             // Send the message
             match self.msg_tx.try_send(TranscoderInfoMsg::EventRateMsg(msg)) {
