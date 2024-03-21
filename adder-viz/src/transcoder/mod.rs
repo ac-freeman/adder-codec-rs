@@ -51,6 +51,15 @@ pub(crate) struct InfoParams {
     pub metric_ssim: bool,
 }
 
+#[derive(Debug, Clone, PartialEq, Default)]
+struct EventRateMsg {
+    total_events: u64,
+    events_per_sec: f64,
+    events_ppc_total: f64,
+    events_ppc_per_sec: f64,
+    transcoded_fps: f64,
+}
+
 impl Default for AdaptiveParams {
     fn default() -> Self {
         AdaptiveParams {
@@ -109,6 +118,11 @@ pub struct InfoUiState {
     plot_points_psnr_y: PlotY,
     plot_points_mse_y: PlotY,
     plot_points_ssim_y: PlotY,
+    total_events: u64,
+    events_per_sec: f64,
+    events_ppc_total: f64,
+    events_ppc_per_sec: f64,
+    transcoded_fps: f64,
     //     plot_points_latency_y: PlotY,
     //     pub view_mode_radio_state: FramedViewMode, // TODO: Move to different struct
 }
@@ -127,6 +141,11 @@ impl Default for InfoUiState {
             plot_points_ssim_y: PlotY {
                 points: plot_points.clone(),
             },
+            total_events: 0,
+            events_per_sec: 0.0,
+            events_ppc_total: 0.0,
+            events_ppc_per_sec: 0.0,
+            transcoded_fps: 0.0,
         }
     }
 }

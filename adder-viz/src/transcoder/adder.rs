@@ -11,6 +11,7 @@ use std::fs::File;
 use std::io::BufWriter;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
+use std::time::Instant;
 
 #[cfg(feature = "open-cv")]
 use adder_codec_rs::transcoder::source::davis::TranscoderMode;
@@ -22,12 +23,12 @@ use crate::transcoder::adder::AdderTranscoderError::{
     InvalidFileType, NoFileSelected, Uninitialized,
 };
 use crate::transcoder::ui::{TranscoderInfoMsg, TranscoderState, TranscoderStateMsg};
-use crate::transcoder::InfoUiState;
+use crate::transcoder::{EventRateMsg, InfoUiState};
 use crate::utils::prep_epaint_image;
 use crate::Images;
 use adder_codec_rs::adder_codec_core::codec::rate_controller::DEFAULT_CRF_QUALITY;
-use adder_codec_rs::adder_codec_core::PlaneError;
 use adder_codec_rs::adder_codec_core::SourceCamera::{DavisU8, Dvs, FramedU8};
+use adder_codec_rs::adder_codec_core::{Event, PlaneError};
 use adder_codec_rs::transcoder::source::prophesee::Prophesee;
 use adder_codec_rs::transcoder::source::video::{Source, SourceError, VideoBuilder};
 use adder_codec_rs::transcoder::source::AdderSource;
@@ -48,6 +49,8 @@ pub struct AdderTranscoder {
     msg_tx: mpsc::Sender<TranscoderInfoMsg>,
     pub(crate) input_image_handle: egui::TextureHandle,
     pub(crate) adder_image_handle: egui::TextureHandle,
+    total_events: u64,
+    last_consume_time: std::time::Instant,
 }
 
 #[derive(Error, Debug)]
@@ -94,6 +97,8 @@ impl AdderTranscoder {
             msg_tx,
             input_image_handle,
             adder_image_handle,
+            total_events: 0,
+            last_consume_time: std::time::Instant::now(),
         }
     }
 
@@ -112,6 +117,7 @@ impl AdderTranscoder {
                             source.get_video_mut().end_write_stream().unwrap();
                         }
                         self.source = None;
+                        self.total_events = 0;
 
                         self.transcoder_state.core_params.input_path_buf_0 = None;
                         self.transcoder_state.core_params.output_path = None;
@@ -157,8 +163,40 @@ impl AdderTranscoder {
     }
 
     fn consume(&mut self) -> Result<(), AdderTranscoderError> {
-        let source = self.source.as_mut().ok_or(Uninitialized)?;
-        let result = source.consume(&self.pool);
+        {
+            let source = self.source.as_mut().ok_or(Uninitialized)?;
+            let result: Vec<Vec<Event>> = source.consume(&self.pool)?; // TODO: remove pool from the consume() call entirely
+            let mut msg = EventRateMsg::default();
+
+            for events_vec in result {
+                self.total_events += events_vec.len() as u64;
+                msg.events_per_sec += events_vec.len() as f64;
+            }
+            msg.events_ppc_total =
+                self.total_events as f64 / (source.get_video_ref().state.plane.volume() as f64);
+            let source_fps = source.get_video_ref().get_tps() as f64
+                / source.get_video_ref().get_ref_time() as f64;
+            msg.events_per_sec *= source_fps;
+            msg.events_ppc_per_sec =
+                msg.events_per_sec / (source.get_video_ref().state.plane.volume() as f64);
+            msg.total_events = self.total_events;
+
+            msg.transcoded_fps = 1.0
+                / Instant::now()
+                    .duration_since(self.last_consume_time)
+                    .as_secs_f64();
+
+            // Send the message
+            match self.msg_tx.try_send(TranscoderInfoMsg::EventRateMsg(msg)) {
+                Ok(_) => {}
+                Err(TrySendError::Full(..)) => {
+                    eprintln!("Event rate channel full");
+                }
+                Err(e) => {
+                    // return Err(Box::new(e)); // TODO
+                }
+            };
+        }
         self.show_input_frame();
 
         // Display frame
@@ -166,27 +204,8 @@ impl AdderTranscoder {
 
         self.quality_metrics();
 
-        // if let Some(framed) = &mut self.framed_source {
-        //     let result = framed.consume(&self.pool); // TODO: remove pool from the consume() call entirely
-        //
-        //     self.show_input_frame();
-        //
-        //     // Display frame
-        //     self.show_display_frame();
-        //
-        //     self.quality_metrics();
-        // }
-        // for events_vec in events_vec_vec {
-        //                     ui_info_state.events_total += events_vec.len() as u64;
-        //                     ui_info_state.events_per_sec += events_vec.len() as f64;
-        //                 }
-        //                 ui_info_state.events_ppc_total = ui_info_state.events_total as f64
-        //                     / (source.get_video_ref().state.plane.volume() as f64);
-        //                 let source_fps = source.get_video_ref().get_tps() as f64
-        //                     / source.get_video_ref().get_ref_time() as f64;
-        //                 ui_info_state.events_per_sec *= source_fps;
-        //                 ui_info_state.events_ppc_per_sec = ui_info_state.events_per_sec
-        //                     / (source.get_video_ref().state.plane.volume() as f64);
+        self.last_consume_time = std::time::Instant::now();
+
         Ok(())
     }
 
@@ -306,6 +325,7 @@ impl AdderTranscoder {
         &mut self,
         transcoder_state: TranscoderState,
     ) -> Result<(), AdderTranscoderError> {
+        self.total_events = 0;
         match &transcoder_state.core_params.input_path_buf_0 {
             None => Err(NoFileSelected),
             Some(input_path_buf) => match input_path_buf.extension() {
@@ -394,6 +414,7 @@ impl AdderTranscoder {
         self.source = Some(AdderSource::Framed(framed));
 
         self.adaptive_state_update()?;
+        self.last_consume_time = std::time::Instant::now();
 
         eprintln!("Framed source created!");
         Ok(())
@@ -685,27 +706,5 @@ impl AdderTranscoder {
 //         };
 //     } else {
 //         eprintln!("No input path");
-//     }
-// }
-
-// fn get_source(
-//     transcoder: &mut AdderTranscoder,
-// ) -> Result<&mut dyn Source<BufWriter<File>>, AdderTranscoderError> {
-//     match &mut transcoder.framed_source {
-//         None => match &mut transcoder.prophesee_source {
-//             None => {
-//                 #[cfg(feature = "open-cv")]
-//                 match &mut transcoder.davis_source {
-//                     None => {
-//                         panic!("No source found");
-//                     }
-//
-//                     Some(source) => Ok(source),
-//                 }
-//                 Err(Uninitialized)
-//             }
-//             Some(source) => Ok(source),
-//         },
-//         Some(source) => Ok(source),
 //     }
 // }

@@ -12,11 +12,12 @@ use egui_plot::{Legend, Plot};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc;
+use tokio::sync::mpsc::error::TryRecvError;
 use tokio::sync::mpsc::Sender;
 // use crate::transcoder::adder::{replace_adder_transcoder, AdderTranscoder};
 // use crate::utils::prep_bevy_image;
 use crate::transcoder::adder::AdderTranscoder;
-use crate::transcoder::{AdaptiveParams, CoreParams, InfoParams, InfoUiState};
+use crate::transcoder::{AdaptiveParams, CoreParams, EventRateMsg, InfoParams, InfoUiState};
 use crate::{slider_pm, App, Images, Tabs};
 // #[cfg(feature = "open-cv")]
 // use adder_codec_rs::transcoder::source::davis::TranscoderMode;
@@ -129,9 +130,11 @@ pub enum TranscoderStateMsg {
     Terminate,
     Set { transcoder_state: TranscoderState },
 }
+
 #[derive(Debug, Clone)]
 pub enum TranscoderInfoMsg {
     QualityMetrics(QualityMetrics),
+    EventRateMsg(EventRateMsg),
     Error(String),
 }
 
@@ -214,15 +217,26 @@ impl TranscoderUi {
     }
 
     fn handle_info_messages(&mut self) {
-        self.msg_rx
-            .try_recv()
-            .into_iter()
-            .for_each(|message| match message {
-                TranscoderInfoMsg::QualityMetrics(metrics) => self.handle_metrics(metrics),
-                TranscoderInfoMsg::Error(error_string) => {
-                    self.info_ui_state.error_string = Some(error_string);
+        loop {
+            match self.msg_rx.try_recv() {
+                Ok(message) => match message {
+                    TranscoderInfoMsg::QualityMetrics(metrics) => self.handle_metrics(metrics),
+                    TranscoderInfoMsg::Error(error_string) => {
+                        self.info_ui_state.error_string = Some(error_string);
+                    }
+                    TranscoderInfoMsg::EventRateMsg(msg) => {
+                        self.info_ui_state.total_events = msg.total_events;
+                        self.info_ui_state.events_per_sec = msg.events_per_sec;
+                        self.info_ui_state.events_ppc_total = msg.events_ppc_total;
+                        self.info_ui_state.events_ppc_per_sec = msg.events_ppc_per_sec;
+                        self.info_ui_state.transcoded_fps = msg.transcoded_fps;
+                    }
+                },
+                Err(_) => {
+                    break;
                 }
-            });
+            }
+        }
     }
 
     fn handle_metrics(&mut self, metrics: QualityMetrics) {
@@ -386,6 +400,19 @@ impl TranscoderUi {
                     }
                 }
             });
+
+        ui.label(format!(
+            "{:.2} transcoded FPS\t\
+                {:.2} events per source sec\t\
+                {:.2} events PPC per source sec\t\
+                {:.0} events total\t\
+                {:.0} events PPC total",
+            self.info_ui_state.transcoded_fps,
+            self.info_ui_state.events_per_sec,
+            self.info_ui_state.events_ppc_per_sec,
+            self.info_ui_state.total_events,
+            self.info_ui_state.events_ppc_total
+        ));
 
         let mut avail_size = ui.available_size();
         if self.transcoder_state.adaptive_params.show_original {
