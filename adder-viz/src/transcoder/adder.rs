@@ -248,7 +248,28 @@ impl AdderTranscoder {
     ) -> Result<(), AdderTranscoderError> {
         if transcoder_state.core_params != self.transcoder_state.core_params {
             eprintln!("Create new transcoder");
-            return self.core_state_update(transcoder_state);
+            let res = self.core_state_update(transcoder_state);
+            if res.is_ok() {
+                // Send a message with the plane size of the video
+                let plane = self
+                    .source
+                    .as_ref()
+                    .unwrap()
+                    .get_video_ref()
+                    .state
+                    .plane
+                    .clone();
+                match self.msg_tx.try_send(TranscoderInfoMsg::Plane(plane)) {
+                    Ok(_) => {}
+                    Err(TrySendError::Full(..)) => {
+                        eprintln!("Metrics channel full");
+                    }
+                    Err(e) => {
+                        panic!("todo");
+                    }
+                };
+            }
+            return res;
         } else if transcoder_state.adaptive_params != self.transcoder_state.adaptive_params {
             eprintln!("Modify existing transcoder");
             self.update_params(transcoder_state);

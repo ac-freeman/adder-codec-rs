@@ -31,7 +31,7 @@ pub struct Crf {
     /// * The radius for which to reset the c-threshold for neighboring pixels (if feature detection is enabled)
     crf_quality: Option<u8>,
 
-    plane: PlaneSize,
+    pub plane: PlaneSize,
 
     parameters: CrfParameters,
 }

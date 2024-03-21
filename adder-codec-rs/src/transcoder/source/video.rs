@@ -1059,6 +1059,7 @@ impl<W: Write + 'static> Video<W> {
                 );
             }
             if self.state.feature_rate_adjustment && parameters.feature_c_radius > 0 {
+                eprintln!("Adjusting feature rate");
                 let radius = parameters.feature_c_radius as i32;
                 for row in (coord[1] as i32 - radius).max(0)
                     ..=(coord[1] as i32 + radius).min(self.state.plane.h() as i32 - 1)

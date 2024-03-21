@@ -1,6 +1,6 @@
 use adder_codec_rs::adder_codec_core::codec::rate_controller::{Crf, CRF, DEFAULT_CRF_QUALITY};
 use adder_codec_rs::adder_codec_core::codec::{EncoderOptions, EncoderType};
-use adder_codec_rs::adder_codec_core::{PixelMultiMode, TimeMode};
+use adder_codec_rs::adder_codec_core::{PixelMultiMode, PlaneSize, TimeMode};
 use adder_codec_rs::transcoder::source::video::FramedViewMode;
 use adder_codec_rs::utils::cv::QualityMetrics;
 use adder_codec_rs::utils::viz::ShowFeatureMode;
@@ -133,6 +133,7 @@ pub enum TranscoderStateMsg {
 
 #[derive(Debug, Clone)]
 pub enum TranscoderInfoMsg {
+    Plane(PlaneSize),
     QualityMetrics(QualityMetrics),
     EventRateMsg(EventRateMsg),
     Error(String),
@@ -247,6 +248,20 @@ impl TranscoderUi {
                         self.info_ui_state
                             .plot_points_raw_source_bitrate_y
                             .update(Some(raw_source_bitrate));
+                    }
+                    TranscoderInfoMsg::Plane(plane) => {
+                        self.transcoder_state
+                            .adaptive_params
+                            .encoder_options
+                            .crf
+                            .plane = plane;
+                        if self.transcoder_state.adaptive_params.auto_quality {
+                            self.transcoder_state
+                                .adaptive_params
+                                .encoder_options
+                                .crf
+                                .update_quality(self.transcoder_state.adaptive_params.crf_number);
+                        }
                     }
                 },
                 Err(_) => {
@@ -413,7 +428,7 @@ impl TranscoderUi {
 
                 for (line, label) in metrics {
                     if line.points.iter().last().unwrap().is_some() {
-                        plot_ui.line(line.get_plotline(label, false));
+                        plot_ui.line(line.get_plotline(label, true));
                     }
                 }
             });
@@ -427,11 +442,11 @@ impl TranscoderUi {
                 let metrics = vec![
                     (
                         &self.info_ui_state.plot_points_raw_adder_bitrate_y,
-                        "Raw ADDER MB/s",
+                        "log Raw ADDER MB/s",
                     ),
                     (
                         &self.info_ui_state.plot_points_raw_source_bitrate_y,
-                        "Raw source MB/s",
+                        "log Raw source MB/s",
                     ),
                 ];
 
