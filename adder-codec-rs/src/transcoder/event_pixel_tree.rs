@@ -220,6 +220,15 @@ impl PixelArena {
                     }
                 }
                 Some(mut event) => {
+                    // if node_idx == self.length - 1 {
+                    //     if self.arena.len() > node_idx + 1 {
+                    //         self.arena[node_idx + 1] = PixelNode::new(0.0);
+                    //     } else {
+                    //         self.arena.push(PixelNode::new(0.0));
+                    //     }
+                    //     self.length = node_idx + 2;
+                    //     self.arena[node_idx].alt = Some(());
+                    // }
                     debug_assert_ne!(node_idx, self.length - 1);
                     let event = self.delta_t_to_absolute_t(&mut event, mode, ref_time);
                     local_buffer.push(event);
@@ -317,11 +326,12 @@ impl PixelArena {
         self.running_t += time;
 
         let mut idx = 0;
+        let mut count = 0;
         loop {
+            count += 1;
             let filled = match self.integrate_main(idx, intensity, time, mode) {
                 None => false,
                 Some((next_intensity, next_time)) => {
-                    // self.arena.drain(idx + 1..);
                     if self.arena.len() > idx + 1 {
                         self.arena[idx + 1] = PixelNode::new(intensity);
                     } else {
@@ -351,12 +361,21 @@ impl PixelArena {
                         if time > ref_time as f32 {
                             self.arena[idx].state.d = get_d_from_intensity(intensity);
                         }
+                        if intensity == 0.0 {
+                            break;
+                        }
+                        // else if time == 0.0 && intensity == 0.0 {
+                        //     self.arena[idx].state.d = 0;
+                        // }
                     }
                 }
             }
 
             if idx >= self.length {
                 break;
+            }
+            if count > 30 {
+                panic!("Infinite loop detected, idx {}", idx);
             }
         }
         debug_assert!(self.length <= self.arena.len());
@@ -376,7 +395,9 @@ impl PixelArena {
                 self.c_thresh = self.c_thresh.saturating_add(1);
                 self.c_increase_counter = 0;
             } else {
-                self.c_increase_counter = self.c_increase_counter.saturating_add((start_time as DeltaT / ref_time) as u8);
+                self.c_increase_counter = self
+                    .c_increase_counter
+                    .saturating_add((start_time as DeltaT / ref_time) as u8);
             }
         }
     }
@@ -396,15 +417,17 @@ impl PixelArena {
         if node.state.integration + intensity >= D_SHIFT_F32[d_usize] {
             // If the new intensity is much bigger, then we need to increase D accordingly, first
             let new_d = get_d_from_intensity(node.state.integration + intensity);
-            node.state.d = new_d;
 
-            d_usize = node.state.d as usize;
-
-
-            let mut prop = (D_SHIFT_F32[d_usize] - node.state.integration) / intensity;
-            if d_usize == D_ZERO_INTEGRATION as usize {
+            let mut prop = (D_SHIFT_F32[new_d as usize] - node.state.integration) / intensity;
+            if new_d == D_ZERO_INTEGRATION
+                || d_usize == D_ZERO_INTEGRATION as usize
+                || intensity < f32::EPSILON
+            {
                 prop = 1.0;
             }
+            node.state.d = new_d;
+            d_usize = new_d as usize;
+
             debug_assert!(prop > 0.0);
             node.best_event = Some(Event32 {
                 coord: self.coord,
@@ -447,21 +470,19 @@ impl PixelArena {
 }
 
 fn get_d_from_intensity(intensity: Intensity32) -> D {
-    if intensity < f32::EPSILON {
+    if intensity < 1.0 {
         return D_ZERO_INTEGRATION;
     }
 
     min(
         {
-
-                // SAFETY:
-                // By design, the integration will not exceed 2^[`D_MAX`], so we can
-                // safely cast it to integer [`D`] type.
-                unsafe {
-                    (128 - intensity.to_int_unchecked::<u128>().leading_zeros() - 1) as D
-                    // fast_math::log2_raw(intensity).to_int_unchecked::<D>()
-                }
-
+            // SAFETY:
+            // By design, the integration will not exceed 2^[`D_MAX`], so we can
+            // safely cast it to integer [`D`] type.
+            unsafe {
+                (128 - intensity.to_int_unchecked::<u128>().leading_zeros() - 1) as D
+                // fast_math::log2_raw(intensity).to_int_unchecked::<D>()
+            }
         },
         D_MAX,
     )

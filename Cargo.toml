@@ -16,14 +16,14 @@ opt-level = 3
 panic = "unwind"
 
 [profile.dev.package."adder-codec-rs"]
-opt-level = 1
-overflow-checks = false
+opt-level = 0
+#overflow-checks = false
 #panic = "abort"
 
 [profile.release-viz]
 inherits = "release"
-panic = "abort"
-overflow-checks = false
+#panic = "abort"
+#overflow-checks = false
 
 
 [profile.dev.package."*"]
