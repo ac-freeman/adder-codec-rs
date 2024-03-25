@@ -23,7 +23,7 @@ open-cv = ["opencv", "adder-codec-rs/open-cv", "adder-codec-rs/transcoder" ]
 compression = ["adder-codec-rs/compression"]
 
 [dependencies]
-adder-codec-rs = { version = "0.4.4", path = "../adder-codec-rs", features = [
+adder-codec-rs = { version = "0.4.5", path = "../adder-codec-rs", features = [
     "transcoder",
 ] }
 bevy = "0.11"
@@ -41,7 +41,7 @@ video-rs-adder-dep = { version = "0.4.1", features = ["ndarray"] }
 ndarray-image = "0.3.0"
 
 [dependencies.opencv]
-version = "0.83.0"
+version = "0.84.5"
 package = 'opencv'
 default-features = false
 features = ['videoio', 'imgproc', 'highgui', 'clang-runtime']

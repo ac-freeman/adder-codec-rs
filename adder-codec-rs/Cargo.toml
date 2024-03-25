@@ -1,6 +1,6 @@
 [package]
 name = "adder-codec-rs"
-version = "0.4.4"
+version = "0.4.5"
 edition = "2021"
 authors = ["Andrew C. Freeman"]
 description = """Encoder/transcoder/decoder for raw and compressed ADΔER (Address, Decimation, Δt Event Representation) streams.
@@ -39,7 +39,7 @@ bitvec = "1.0.1"
 bumpalo = "3.11.0"
 chrono = "0.4.31"
 clap = { version = "4.0.17", features = ["derive"] }
-davis-edi-rs = { version = "0.2.4", optional = true }
+davis-edi-rs = {version = "0.2.5", optional = true }
 duplicate = "0.4.1"
 fast-math = { version = "0.1", optional = true }
 fenwick = "2.0.1"
@@ -72,7 +72,7 @@ indicatif = "0.17.7"
 const_for = "0.1.2"
 
 [dependencies.opencv]
-version = "0.83.0"
+version = "0.84.5"
 package = 'opencv'
 default-features = false
 features = ['videoio', 'imgproc', 'highgui', 'clang-runtime']
