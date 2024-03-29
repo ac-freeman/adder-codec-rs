@@ -286,7 +286,10 @@ impl AdderTranscoder {
                     .state
                     .plane
                     .clone();
-                match self.msg_tx.try_send(TranscoderInfoMsg::Plane(plane)) {
+                match self
+                    .msg_tx
+                    .try_send(TranscoderInfoMsg::Plane((plane, force_new)))
+                {
                     Ok(_) => {}
                     Err(TrySendError::Full(..)) => {
                         eprintln!("Metrics channel full");

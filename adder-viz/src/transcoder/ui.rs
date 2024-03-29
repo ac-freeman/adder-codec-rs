@@ -133,7 +133,7 @@ pub enum TranscoderStateMsg {
 
 #[derive(Debug, Clone)]
 pub enum TranscoderInfoMsg {
-    Plane(PlaneSize),
+    Plane((PlaneSize, bool)),
     QualityMetrics(QualityMetrics),
     EventRateMsg(EventRateMsg),
     Error(String),
@@ -249,10 +249,12 @@ impl TranscoderUi {
                             .plot_points_raw_source_bitrate_y
                             .update(Some(raw_source_bitrate));
                     }
-                    TranscoderInfoMsg::Plane(plane) => {
+                    TranscoderInfoMsg::Plane((plane, finish)) => {
                         dbg!("Got plane");
                         // Received when we have created a new video
-                        self.transcoder_state.core_params.output_path = None;
+                        if finish {
+                            self.transcoder_state.core_params.output_path = None;
+                        }
                         self.transcoder_state
                             .adaptive_params
                             .encoder_options
