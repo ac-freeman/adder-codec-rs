@@ -250,6 +250,9 @@ impl TranscoderUi {
                             .update(Some(raw_source_bitrate));
                     }
                     TranscoderInfoMsg::Plane(plane) => {
+                        dbg!("Got plane");
+                        // Received when we have created a new video
+                        self.transcoder_state.core_params.output_path = None;
                         self.transcoder_state
                             .adaptive_params
                             .encoder_options
@@ -396,6 +399,7 @@ impl TranscoderUi {
                         path = path.with_extension("adder");
                     };
                     self.transcoder_state.core_params.output_path = Some(path.clone());
+                    dbg!("saving selected");
                     self.info_ui_state.error_string = None;
                 }
             }

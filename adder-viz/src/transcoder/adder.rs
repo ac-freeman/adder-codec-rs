@@ -131,7 +131,7 @@ impl AdderTranscoder {
                     }
                     TranscoderStateMsg::Set { transcoder_state } => {
                         eprintln!("Received transcoder state");
-                        let result = self.state_update(transcoder_state);
+                        let result = self.state_update(transcoder_state, false);
                         self.handle_error(result);
                     }
                 },
@@ -163,7 +163,8 @@ impl AdderTranscoder {
                             .get_video_mut()
                             .state
                             .in_interval_count = 0;
-                        self.core_state_update(state)
+                        state.core_params.output_path = None;
+                        self.state_update(state, true)
                             .expect("Error creating new transcoder");
                         return;
                     }
@@ -270,8 +271,9 @@ impl AdderTranscoder {
     fn state_update(
         &mut self,
         transcoder_state: TranscoderState,
+        force_new: bool,
     ) -> Result<(), AdderTranscoderError> {
-        if transcoder_state.core_params != self.transcoder_state.core_params {
+        if force_new || transcoder_state.core_params != self.transcoder_state.core_params {
             eprintln!("Create new transcoder");
             let res = self.core_state_update(transcoder_state);
             if res.is_ok() {
@@ -299,6 +301,8 @@ impl AdderTranscoder {
             eprintln!("Modify existing transcoder");
             self.update_params(transcoder_state);
             return self.adaptive_state_update();
+        } else {
+            eprintln!("No change in transcoder state");
         }
         self.update_params(transcoder_state);
 
@@ -408,6 +412,8 @@ impl AdderTranscoder {
         if let Some(AdderSource::Framed(source)) = &self.source {
             if transcoder_state.core_params.input_path_buf_0
                 == self.transcoder_state.core_params.input_path_buf_0
+                && transcoder_state.core_params.output_path.is_none()
+                && self.transcoder_state.core_params.output_path.is_none()
             {
                 current_frame =
                     source.get_video_ref().state.in_interval_count + source.frame_idx_start;
