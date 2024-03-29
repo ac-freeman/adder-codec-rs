@@ -72,8 +72,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut now = Instant::now();
     //
     loop {
+        let res = reader.digest_event(&mut bitreader);
         // read an event
-        if let Ok(mut event) = reader.digest_event(&mut bitreader) {
+        if let Ok(mut event) = res {
             // ingest the event
             if framer.ingest_event(&mut event, None) {
                 match framer.write_multi_frame_bytes(&mut output_stream) {
@@ -106,6 +107,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 break;
             }
         } else {
+            dbg!(res);
             break;
         }
     }

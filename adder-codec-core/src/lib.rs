@@ -477,6 +477,7 @@ pub fn open_file_decoder(
         Err(CodecError::WrongMagic) => {
             #[cfg(feature = "compression")]
             {
+                dbg!("Opening as compressed");
                 bufreader = BufReader::new(File::open(file_path)?);
                 let compression = CompressedInput::new(0, 0, 0); // TODO: temporary args. Need to refactor.
                 bitreader = BitReader::endian(bufreader, BigEndian);

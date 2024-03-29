@@ -229,7 +229,7 @@ impl<R: Read + Seek> ReadCompression<R> for CompressedInput<R> {
                 adu.decompress(&mut adu_stream);
 
                 let duration = start.elapsed();
-                // println!("Decompressed Adu in {:?} ns", duration.as_nanos());
+                println!("Decompressed Adu in {:?} ns", duration.as_nanos());
             }
             // Then return the next event from the queue
             match adu.digest_event() {

@@ -617,8 +617,14 @@ impl<
     ///
     /// Returns `true` if there are frames now ready to write out
     fn flush_frame_buffer(&mut self) -> bool {
-        let _all_filled = true;
-        if self.frames[0].len() > 1 {
+        let mut any_nonempty = false;
+        // Check if ANY of the frame arrays are nonempty
+        for chunk in &self.frames {
+            if chunk.len() > 1 {
+                any_nonempty = true;
+            }
+        }
+        if any_nonempty {
             for (chunk_num, chunk) in self.frames.iter_mut().enumerate() {
                 let frame_chunk = &mut chunk[0];
                 // for frame_chunk in chunk.iter_mut() {

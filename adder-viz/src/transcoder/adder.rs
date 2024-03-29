@@ -412,7 +412,7 @@ impl AdderTranscoder {
     ) -> Result<(), AdderTranscoderError> {
         let mut current_frame = 0;
         // If we already have an adder_transcoder, get the current frame
-        if let Some(AdderSource::Framed(source)) = &self.source {
+        if let Some(AdderSource::Framed(source)) = &mut self.source {
             if transcoder_state.core_params.input_path_buf_0
                 == self.transcoder_state.core_params.input_path_buf_0
                 && transcoder_state.core_params.output_path.is_none()
@@ -421,6 +421,7 @@ impl AdderTranscoder {
                 current_frame =
                     source.get_video_ref().state.in_interval_count + source.frame_idx_start;
             }
+            source.get_video_mut().end_write_stream()?;
         }
 
         self.update_params(transcoder_state);
