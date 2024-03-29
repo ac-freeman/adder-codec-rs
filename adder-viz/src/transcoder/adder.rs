@@ -461,7 +461,7 @@ impl AdderTranscoder {
                     FramedU8,
                     core_params.time_mode,
                     core_params.integration_mode_radio_state,
-                    Some(core_params.delta_t_max_mult as usize),
+                    Some(core_params.adu_interval as usize),
                     core_params.encoder_type,
                     adaptive_params.encoder_options,
                     writer,

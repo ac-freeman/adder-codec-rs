@@ -593,6 +593,18 @@ impl TranscoderUi {
         );
         ui.end_row();
 
+        ui.label("ADU interval:");
+        slider_pm(
+            true,
+            false,
+            ui,
+            &mut core_params.adu_interval,
+            1..=900,
+            vec![],
+            1,
+        );
+        ui.end_row();
+
         let parameters = adaptive_params.encoder_options.crf.get_parameters_mut();
         ui.label("Threshold baseline:");
         slider_pm(
