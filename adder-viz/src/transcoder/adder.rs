@@ -30,6 +30,7 @@ use adder_codec_rs::adder_codec_core::codec::rate_controller::DEFAULT_CRF_QUALIT
 use adder_codec_rs::adder_codec_core::SourceCamera::{DavisU8, Dvs, FramedU8};
 use adder_codec_rs::adder_codec_core::{Event, PlaneError};
 use adder_codec_rs::transcoder::source::prophesee::Prophesee;
+use adder_codec_rs::transcoder::source::video::SourceError::VideoError;
 use adder_codec_rs::transcoder::source::video::{Source, SourceError, VideoBuilder};
 use adder_codec_rs::transcoder::source::AdderSource;
 use adder_codec_rs::utils::cv::{calculate_quality_metrics, QualityMetrics};
@@ -149,11 +150,35 @@ impl AdderTranscoder {
         match result {
             Ok(()) => {}
             Err(e) => {
+                match e {
+                    InvalidFileType => {}
+                    NoFileSelected => {}
+                    AdderTranscoderError::SourceError(VideoError(
+                        video_rs_adder_dep::Error::ReadExhausted,
+                    )) => {
+                        let mut state = self.transcoder_state.clone();
+                        self.source
+                            .as_mut()
+                            .unwrap()
+                            .get_video_mut()
+                            .state
+                            .in_interval_count = 0;
+                        self.core_state_update(state)
+                            .expect("Error creating new transcoder");
+                        return;
+                    }
+                    AdderTranscoderError::SourceError(_) => {}
+                    AdderTranscoderError::IoError(_) => {}
+                    AdderTranscoderError::OtherError(_) => {}
+                    Uninitialized => {}
+                }
+
                 match self
                     .msg_tx
                     .try_send(TranscoderInfoMsg::Error(e.to_string()))
                 {
                     Err(TrySendError::Full(..)) => {
+                        dbg!(e);
                         eprintln!("Msg channel full");
                     }
                     _ => {}
