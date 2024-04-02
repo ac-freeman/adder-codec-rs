@@ -3,7 +3,7 @@ use adder_codec_core::codec::decoder::Decoder;
 use adder_codec_core::codec::rate_controller::Crf;
 use adder_codec_core::codec::raw::stream::RawInput;
 use adder_codec_core::codec::{EncoderOptions, EncoderType};
-use adder_codec_core::SourceCamera::{Dvs, FramedU8};
+use adder_codec_core::SourceCamera::{DavisU8, Dvs, FramedU8};
 use adder_codec_core::SourceType::U8;
 use adder_codec_core::{open_file_decoder, PixelMultiMode, TimeMode};
 use adder_codec_rs::framer::driver::FramerMode::INSTANTANEOUS;
@@ -62,9 +62,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut framer: FrameSequence<u8> = FramerBuilder::new(meta.plane, 1)
         .codec_version(meta.codec_version, meta.time_mode)
-        .time_parameters(meta.tps, meta.ref_interval, meta.delta_t_max, Some(30.0))
+        .time_parameters(meta.tps, meta.ref_interval, meta.delta_t_max, Some(1000.0))
         .mode(INSTANTANEOUS)
-        .source(U8, FramedU8)
+        .source(U8, DavisU8)
         .finish::<u8>();
 
     let mut output_stream = BufWriter::new(File::create(&args.output)?);
@@ -75,6 +75,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let res = reader.digest_event(&mut bitreader);
         // read an event
         if let Ok(mut event) = res {
+            if now.elapsed().as_millis() > 10 {
+                eprintln!("Flushing");
+                framer.flush_frame_buffer();
+            }
             // ingest the event
             if framer.ingest_event(&mut event, None) {
                 match framer.write_multi_frame_bytes(&mut output_stream) {
