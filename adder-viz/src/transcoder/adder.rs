@@ -198,11 +198,10 @@ impl AdderTranscoder {
                                         .unwrap_or(DEFAULT_CRF_QUALITY),
                                 )
                                 .time_parameters(
-                                    1000000_u32,
-                                    (1_000_000.0 / ui_state.davis_output_fps) as adder_codec_rs::adder_codec_core::DeltaT,
-                                    ((1_000_000.0 / ui_state.davis_output_fps)
-                                        * ui_state.delta_t_max_mult as f64)
-                                        as u32,
+                                    20000000_u32,
+                                    (1_000_000.0 / ui_state.davis_output_fps)
+                                        as adder_codec_rs::adder_codec_core::DeltaT,
+                                    20000000_u32,
                                     Some(ui_state.time_mode),
                                 )?;
 
