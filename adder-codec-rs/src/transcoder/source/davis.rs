@@ -503,8 +503,9 @@ impl<W: Write + 'static> Integration<W> {
                 {
                     *px_idx = chunk_px_idx + px_per_chunk * chunk_idx;
 
-                    let last_val = (last_val_ln.exp() - 1.0) * 255.0;
+                    let mut last_val = (last_val_ln.exp() - 1.0) * 255.0;
 
+                    clamp_u8(&mut last_val, last_val_ln);
                     *base_val = px.base_val;
                     *frame_val = last_val as u8;
 
