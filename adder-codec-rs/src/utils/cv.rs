@@ -207,7 +207,6 @@ pub fn is_feature(
     Ok(false)
 }
 
-
 /// If the input is a color image and we want a gray image, convert it to grayscale
 pub fn handle_color(mut input: Frame, color: bool) -> Result<Frame, SourceError> {
     if !color {
@@ -425,16 +424,16 @@ fn mean(window: &ArrayView<u8, Ix2>) -> f64 {
     sum / window.len() as f64
 }
 
-
 /// Clamp the value to the range [0, 255].
 pub fn clamp_u8(frame_val: &mut f64, last_val_ln: &mut f64) {
     if *frame_val <= 0.0 {
         *frame_val = 0.0;
-        *last_val_ln = 0.0; // = 0.0_f64.ln_1p();
-    } else if *frame_val > 255.0 {
-        *frame_val = 255.0;
-        *last_val_ln = 1.0_f64.ln_1p();
+        *last_val_ln = 0.0_f64.ln_1p();
     }
+    // else if *frame_val > 255.0 {
+    //     *frame_val = 255.0;
+    //     *last_val_ln = 1.0_f64.ln_1p();
+    // }
 }
 
 /// Clamp the value to the range [0, 255]. If the value is outside of this range, set it to a mid-

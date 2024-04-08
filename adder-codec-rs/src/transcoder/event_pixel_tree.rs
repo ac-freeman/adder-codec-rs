@@ -163,13 +163,23 @@ impl PixelArena {
                     // TODO: cover with a unit test
                     root.best_event = Some(Event32 {
                         coord: self.coord,
-                        d:
-                        // SAFETY:
-                        // By design, the integration will not exceed 2^[`D_MAX`], so we can
-                        // safely cast it to integer [`D`] type.
-                        unsafe {
-                            // fast_math::log2_raw(root.state.integration).to_int_unchecked::<D>()
-                            (32 - root.state.integration.to_int_unchecked::<u32>().leading_zeros() - 1) as D
+                        d: {
+                            // SAFETY:
+                            // By design, the integration will not exceed 2^[`D_MAX`], so we can
+                            // safely cast it to integer [`D`] type.
+
+                            if root.state.integration < 1.0 {
+                                D_ZERO_INTEGRATION
+                            } else {
+                                unsafe {
+                                    (32 - root
+                                        .state
+                                        .integration
+                                        .to_int_unchecked::<u32>()
+                                        .leading_zeros()
+                                        - 1) as D
+                                }
+                            }
                         },
                         delta_t: root.state.delta_t,
                     });

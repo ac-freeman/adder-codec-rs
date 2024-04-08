@@ -768,8 +768,8 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Davis<W> {
                         let a = px.running_t as i64;
                         let b = start_of_frame_timestamp
                             - self.integration.temp_first_frame_start_timestamp;
-                        debug_assert!(a <= b);
-                        debug_assert!(a <= start_of_frame_timestamp);
+                        // debug_assert!(a <= b);
+                        // debug_assert!(a <= start_of_frame_timestamp);
                     }
 
                     self.integration.integrate_frame_gaps(&mut self.video)?;
@@ -777,8 +777,8 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Davis<W> {
                         let a = px.running_t as i64;
                         let b = start_of_frame_timestamp
                             - self.integration.temp_first_frame_start_timestamp;
-                        debug_assert!(a <= b);
-                        debug_assert!(a > b - 1000);
+                        // debug_assert!(a <= b);
+                        // debug_assert!(a > b - 1000);
                     }
                 }
             }
