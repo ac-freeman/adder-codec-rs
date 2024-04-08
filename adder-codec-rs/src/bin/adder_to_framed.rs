@@ -39,9 +39,6 @@ pub struct MyArgs {
     #[clap(long, default_value = "")]
     pub output: String,
 
-    #[clap(long, default_value_t = 3)]
-    pub crf: u8,
-
     /// Number of threads to use. If not provided, will default to the number of cores on the
     /// system.
     #[clap(long, default_value_t = 8)]
@@ -76,6 +73,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         // read an event
         if let Ok(mut event) = res {
             if now.elapsed().as_millis() > 10 {
+                // this is a hacky way of limiting the buffer size
                 eprintln!("Flushing");
                 framer.flush_frame_buffer();
             }
