@@ -172,12 +172,6 @@ impl PixelArena {
                                 D_ZERO_INTEGRATION
                             } else {
                                 unsafe {
-                                    dbg!(root
-                                        .state
-                                        .integration
-                                        .to_int_unchecked::<u32>()
-                                        .leading_zeros());
-                                    // fast_math::log2_raw(root.state.integration).to_int_unchecked::<D>()
                                     (32 - root
                                         .state
                                         .integration
