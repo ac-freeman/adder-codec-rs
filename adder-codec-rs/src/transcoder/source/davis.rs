@@ -370,7 +370,7 @@ impl<W: Write + 'static> Integration<W> {
                             // let mut frame_val = (base_val as f64);
                             // let mut lat_frame_val = (frame_val / 255.0).ln();
 
-                            *last_val_ln += if event.on() { self.dvs_c } else { -self.dvs_c };
+                            *last_val_ln *= if event.on() { self.dvs_c } else { -self.dvs_c }.exp();
                             let mut frame_val = (last_val_ln.exp() - 1.0) * 255.0;
                             clamp_u8(&mut frame_val, last_val_ln);
 
