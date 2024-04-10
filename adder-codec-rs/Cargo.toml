@@ -1,6 +1,6 @@
 [package]
 name = "adder-codec-rs"
-version = "0.4.6"
+version = "0.4.7"
 edition = "2021"
 authors = ["Andrew C. Freeman"]
 description = """Encoder/transcoder/decoder for raw and compressed ADΔER (Address, Decimation, Δt Event Representation) streams.
