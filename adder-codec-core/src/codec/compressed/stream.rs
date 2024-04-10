@@ -4,6 +4,7 @@ use std::io::{Cursor, Read, Seek, SeekFrom, Write};
 
 use crate::codec::compressed::source_model::event_structure::event_adu::EventAdu;
 use crate::codec::compressed::source_model::HandleEvent;
+use crate::codec::encoder::RateAction;
 use crate::codec::header::{Magic, MAGIC_COMPRESSED};
 use crate::{DeltaT, Event};
 
@@ -110,7 +111,7 @@ impl<W: Write> WriteCompression<W> for CompressedOutput<W> {
         self.stream().flush()
     }
 
-    fn ingest_event(&mut self, event: Event) -> Result<(), CodecError> {
+    fn ingest_event(&mut self, event: Event) -> Result<RateAction, CodecError> {
         // Check that the event fits within the Adu's time range
         if event.t > self.adu.start_t + (self.adu.dt_ref * self.adu.num_intervals as DeltaT) {
             // dbg!("compressing adu");
@@ -138,7 +139,7 @@ impl<W: Write> WriteCompression<W> for CompressedOutput<W> {
         // Ingest the event in the Adu
         let _ = self.adu.ingest_event(event);
 
-        Ok(())
+        Ok(RateAction::Same)
     }
     // fn ingest_event_debug(&mut self, event: Event) -> Result<Option<Adu>, CodecError> {
     //     if let (true, _) = self.frame.add_event(event, self.meta.delta_t_max)? {

@@ -6,7 +6,7 @@ use adder_codec_rs::transcoder::source::framed::Framed;
 use bevy::prelude::Image;
 use std::fmt;
 use std::fs::File;
-use std::io::BufWriter;
+use std::io::{BufWriter, Sink};
 use std::path::{Path, PathBuf};
 
 #[cfg(feature = "open-cv")]
@@ -17,6 +17,7 @@ use adder_codec_rs::davis_edi_rs::util::reconstructor::Reconstructor;
 
 use crate::transcoder::ui::{ParamsUiState, TranscoderState};
 use adder_codec_rs::adder_codec_core::codec::rate_controller::DEFAULT_CRF_QUALITY;
+use adder_codec_rs::adder_codec_core::codec::EncoderType;
 use adder_codec_rs::adder_codec_core::SourceCamera::{DavisU8, Dvs, FramedU8};
 use adder_codec_rs::transcoder::source::prophesee::Prophesee;
 use adder_codec_rs::transcoder::source::video::{Source, VideoBuilder};
@@ -88,7 +89,9 @@ impl AdderTranscoder {
                         // TODO: Change the builder to take in a pathbuf directly, not a string,
                         // and to handle the error checking in the associated function
                         match output_path_opt {
-                            None => {}
+                            None => {
+                                framed.get_video_mut().encoder.options = ui_state.encoder_options;
+                            }
                             Some(output_path) => {
                                 let out_path = output_path.to_str().unwrap();
                                 let writer = BufWriter::new(File::create(out_path)?);

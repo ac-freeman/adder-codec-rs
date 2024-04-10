@@ -527,6 +527,17 @@ impl TranscoderState {
                     }
                 }
                 Some(source) => {
+                    dbg!(
+                        self.ui_state.encoder_options.event_drop,
+                        source.get_video_ref().get_encoder_options().event_drop
+                    );
+                    if source.get_video_ref().get_encoder_options().event_drop
+                        != self.ui_state.encoder_options.event_drop
+                    {
+                        source.get_video_mut().encoder.options.event_drop =
+                            self.ui_state.encoder_options.event_drop;
+                    }
+
                     if source.scale != self.ui_state.scale
                         || source.get_ref_time() != self.ui_state.delta_t_ref as u32
                         || ((source.get_video_ref().get_time_mode() != self.ui_state.time_mode
@@ -547,6 +558,7 @@ impl TranscoderState {
                             }
                         }
                     {
+                        dbg!("Try to replace");
                         let current_frame =
                             source.get_video_ref().state.in_interval_count + source.frame_idx_start;
                         images.clear();
@@ -636,7 +648,12 @@ impl TranscoderState {
         self.ui_info_state.plane = video.state.plane;
 
         video.instantaneous_view_mode = self.ui_state.view_mode_radio_state;
-        video.update_detect_features(self.ui_state.detect_features, self.ui_state.show_features, self.ui_state.feature_rate_adjustment, self.ui_state.feature_cluster);
+        video.update_detect_features(
+            self.ui_state.detect_features,
+            self.ui_state.show_features,
+            self.ui_state.feature_rate_adjustment,
+            self.ui_state.feature_cluster,
+        );
     }
 
     pub fn consume_source(
@@ -1178,7 +1195,10 @@ fn side_panel_grid_contents(
                     "Show & hold",
                 );
             });
-            ui.checkbox(&mut ui_state.feature_rate_adjustment, "Adjust sensitivities");
+            ui.checkbox(
+                &mut ui_state.feature_rate_adjustment,
+                "Adjust sensitivities",
+            );
             ui.checkbox(&mut ui_state.feature_cluster, "Cluster features");
         });
     });

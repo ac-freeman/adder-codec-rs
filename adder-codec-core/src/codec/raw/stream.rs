@@ -1,5 +1,6 @@
 // #[cfg(feature = "compression")]
 // use crate::codec::compressed::adu::frame::Adu;
+use crate::codec::encoder::RateAction;
 use crate::codec::header::{Magic, MAGIC_RAW};
 use crate::codec::{CodecError, CodecMetadata, ReadCompression, WriteCompression};
 use crate::{Coord, Event, EventSingle, EOF_PX_ADDRESS};
@@ -96,7 +97,7 @@ impl<W: Write> WriteCompression<W> for RawOutput<W> {
     /// Ingest an event into the codec.
     ///
     /// This will always write the event immediately to the underlying writer.
-    fn ingest_event(&mut self, event: Event) -> Result<(), CodecError> {
+    fn ingest_event(&mut self, event: Event) -> Result<RateAction, CodecError> {
         // NOTE: for speed, the following checks only run in debug builds. It's entirely
         // possibly to encode nonsensical events if you want to.
         debug_assert!(event.coord.x < self.meta.plane.width || event.coord.x == EOF_PX_ADDRESS);
@@ -114,7 +115,7 @@ impl<W: Write> WriteCompression<W> for RawOutput<W> {
             self.bincode.serialize_into(self.stream(), &event)?;
         }
 
-        Ok(())
+        Ok(RateAction::Same)
     }
 
     // #[cfg(feature = "compression")]

@@ -139,7 +139,7 @@ pub trait WriteCompression<W: Write> {
 
     /// Take in an event and process it. May or may not write to the output, depending on the state
     /// of the stream (Is it ready to write events? Is it accumulating/reorganizing events? etc.)
-    fn ingest_event(&mut self, event: Event) -> Result<(), CodecError>;
+    fn ingest_event(&mut self, event: Event) -> Result<RateAction, CodecError>;
 
     // #[cfg(feature = "compression")]
     // fn ingest_event_debug(&mut self, event: Event) -> Result<Option<Adu>, CodecError>;
@@ -200,6 +200,7 @@ pub trait ReadCompression<R: Read> {
 #[cfg(feature = "compression")]
 use crate::codec::compressed::stream::{CompressedInput, CompressedOutput};
 use crate::codec::empty::stream::EmptyOutput;
+use crate::codec::encoder::RateAction;
 use crate::codec::rate_controller::Crf;
 use crate::codec::raw::stream::{RawInput, RawOutput};
 use thiserror::Error;

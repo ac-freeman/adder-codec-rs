@@ -52,6 +52,12 @@ impl Default for EncoderState {
     }
 }
 
+pub enum RateAction {
+    Higher,
+    Same,
+    Lower,
+}
+
 #[allow(dead_code)]
 impl<W: Write + 'static> Encoder<W> {
     /// Create a new [`Encoder`] with an empty compression scheme
@@ -230,7 +236,8 @@ impl<W: Write + 'static> Encoder<W> {
 
     /// Ingest an event
     #[inline(always)]
-    pub fn ingest_event(&mut self, event: Event) -> Result<(), CodecError> {
+    pub fn ingest_event(&mut self, event: Event) -> Result<RateAction, CodecError> {
+        let mut rate_action = RateAction::Same;
         match self.options.event_drop {
             EventDrop::None => {}
             EventDrop::Manual {
@@ -241,8 +248,11 @@ impl<W: Write + 'static> Encoder<W> {
                 let t_diff = now.duration_since(self.state.last_event_ts).as_secs_f64();
                 let new_event_rate = alpha * self.state.current_event_rate + (1.0 - alpha) / t_diff;
                 if new_event_rate > target_event_rate {
-                    self.state.current_event_rate *= alpha;
-                    return Ok(()); // skip this event
+                    rate_action = RateAction::Lower;
+                    // self.state.current_event_rate *= alpha;
+                    // return Ok(()); // skip this event
+                } else {
+                    rate_action = RateAction::Higher;
                 }
                 self.state.last_event_ts = now; // update time
                 self.state.current_event_rate = new_event_rate;
@@ -252,14 +262,14 @@ impl<W: Write + 'static> Encoder<W> {
             }
         }
 
-        match self.options.event_order {
+        let res = match self.options.event_order {
             EventOrder::Unchanged => self.output.ingest_event(event),
             EventOrder::Interleaved => {
                 let dt = event.t;
                 // First, push the event to the queue
                 self.state.queue.push(event);
 
-                let mut res = Ok(());
+                let mut res = Ok(RateAction::Same);
                 if let Some(first_item_addr) = self.state.queue.peek() {
                     if first_item_addr.t < dt.saturating_sub(self.meta().delta_t_max) {
                         if let Some(first_item) = self.state.queue.pop() {
@@ -269,6 +279,11 @@ impl<W: Write + 'static> Encoder<W> {
                 }
                 res
             }
+        };
+        if res.is_ok() {
+            Ok(rate_action)
+        } else {
+            res
         }
     }
     // /// Ingest an event

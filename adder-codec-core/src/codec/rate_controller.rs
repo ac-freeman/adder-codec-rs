@@ -48,6 +48,9 @@ pub struct CrfParameters {
 
     /// The radius for which to reset the c-threshold for neighboring pixels (if feature detection is enabled)
     pub feature_c_radius: u16,
+
+    /// Add this number to whatever the c-threshold is for the current pixel
+    pub global_c_thresh_offset: u8,
 }
 
 impl Crf {
@@ -62,6 +65,7 @@ impl Crf {
                 c_increase_velocity: CRF[default_crf as usize][2] as u8,
                 feature_c_radius: (CRF[default_crf as usize][3] * plane.min_resolution() as f32)
                     as u16,
+                global_c_thresh_offset: 0,
             },
         }
     }
@@ -92,6 +96,18 @@ impl Crf {
 
     pub fn get_parameters_mut(&mut self) -> &mut CrfParameters {
         &mut self.parameters
+    }
+
+    pub fn lower_c_thresh_offset(&mut self) {
+        self.parameters.global_c_thresh_offset =
+            self.parameters.global_c_thresh_offset.saturating_sub(1);
+    }
+
+    pub fn raise_c_thresh_offset(&mut self) {
+        if self.parameters.global_c_thresh_offset < self.parameters.c_thresh_max {
+            self.parameters.global_c_thresh_offset =
+                self.parameters.global_c_thresh_offset.saturating_add(1);
+        }
     }
 
     pub fn get_quality(&self) -> Option<u8> {

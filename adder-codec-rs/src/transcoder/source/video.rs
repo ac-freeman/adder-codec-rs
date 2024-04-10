@@ -10,12 +10,15 @@ use std::io::{sink, Write};
 use std::mem::swap;
 
 use adder_codec_core::codec::empty::stream::EmptyOutput;
-use adder_codec_core::codec::encoder::Encoder;
+use adder_codec_core::codec::encoder::{Encoder, RateAction};
 use adder_codec_core::codec::raw::stream::RawOutput;
 use adder_codec_core::codec::{
     CodecError, CodecMetadata, EncoderOptions, EncoderType, LATEST_CODEC_VERSION,
 };
-use adder_codec_core::{Coord, DeltaT, Event, Mode, PixelAddress, PixelMultiMode, PlaneError, PlaneSize, SourceCamera, SourceType, TimeMode, D_EMPTY, D_ZERO_INTEGRATION};
+use adder_codec_core::{
+    Coord, DeltaT, Event, Mode, PixelAddress, PixelMultiMode, PlaneError, PlaneSize, SourceCamera,
+    SourceType, TimeMode, D_EMPTY, D_ZERO_INTEGRATION,
+};
 use bumpalo::Bump;
 
 use std::sync::mpsc::{channel, Sender};
@@ -209,7 +212,7 @@ pub struct VideoState {
 
     pub feature_log_handle: Option<std::fs::File>,
     feature_rate_adjustment: bool,
-    feature_cluster: bool
+    feature_cluster: bool,
 }
 
 impl Default for VideoState {
@@ -722,11 +725,33 @@ impl<W: Write + 'static> Video<W> {
             })
             .collect();
 
+        let mut rate_action = RateAction::Same;
         for events in &big_buffer {
             for e1 in events.iter() {
-                self.encoder.ingest_event(*e1)?;
+                rate_action = self.encoder.ingest_event(*e1)?;
             }
         }
+
+        match rate_action {
+            RateAction::Higher => {
+                dbg!("Raising usage");
+                // We have bandwidth headroom. Lower the global c_thresh
+                self.encoder.options.crf.lower_c_thresh_offset();
+            }
+            RateAction::Same => {}
+            RateAction::Lower => {
+                dbg!("Lowering usage");
+                // We're using too much bandwidth. Increase the global c_thresh
+                self.encoder.options.crf.raise_c_thresh_offset();
+            }
+        }
+        dbg!(
+            self.encoder
+                .options
+                .crf
+                .get_parameters()
+                .global_c_thresh_offset
+        );
 
         self.display_frame_features = self.state.running_intensities.clone();
 
@@ -780,7 +805,6 @@ impl<W: Write + 'static> Video<W> {
                     } else {
                         (f32::from(*frame_val)).log2().floor() as D
                     };
-
 
                     px.arena[0].set_d(d_start);
                     px.base_val = *frame_val as u8;
@@ -887,9 +911,11 @@ impl<W: Write + 'static> Video<W> {
                 }
             });
 
-        let mut new_features = new_features.iter()
-            .flat_map(|feature_set| feature_set.iter().map(|coord| [coord.x, coord.y])).collect::<Vec<[u16;2]>>();
-        let new_features: HashSet<[u16;2]> = new_features.drain(..).collect();
+        let mut new_features = new_features
+            .iter()
+            .flat_map(|feature_set| feature_set.iter().map(|coord| [coord.x, coord.y]))
+            .collect::<Vec<[u16; 2]>>();
+        let new_features: HashSet<[u16; 2]> = new_features.drain(..).collect();
 
         #[cfg(feature = "feature-logging")]
         {
@@ -1044,37 +1070,32 @@ impl<W: Write + 'static> Video<W> {
 
         let parameters = self.encoder.options.crf.get_parameters();
 
-        
-
-            for coord in &new_features {
-
-                    if self.state.show_features == ShowFeatureMode::Instant {
-                        draw_feature_coord(
-                            coord[0],
-                            coord[1],
-                            &mut self.display_frame_features,
-                            self.state.plane.c() != 1,
-                            None,
-                        );
-                    }
-                if self.state.feature_rate_adjustment && parameters.feature_c_radius > 0 {
-                    let radius = parameters.feature_c_radius as i32;
-                    for row in (coord[1] as i32 - radius).max(0)
-                        ..=(coord[1] as i32 + radius).min(self.state.plane.h() as i32 - 1)
+        for coord in &new_features {
+            if self.state.show_features == ShowFeatureMode::Instant {
+                draw_feature_coord(
+                    coord[0],
+                    coord[1],
+                    &mut self.display_frame_features,
+                    self.state.plane.c() != 1,
+                    None,
+                );
+            }
+            if self.state.feature_rate_adjustment && parameters.feature_c_radius > 0 {
+                let radius = parameters.feature_c_radius as i32;
+                for row in (coord[1] as i32 - radius).max(0)
+                    ..=(coord[1] as i32 + radius).min(self.state.plane.h() as i32 - 1)
+                {
+                    for col in (coord[0] as i32 - radius).max(0)
+                        ..=(coord[0] as i32 + radius).min(self.state.plane.w() as i32 - 1)
                     {
-                        for col in (coord[0] as i32 - radius).max(0)
-                            ..=(coord[0] as i32 + radius).min(self.state.plane.w() as i32 - 1)
-                        {
-                            for c in 0..self.state.plane.c() {
-                                self.event_pixel_trees[[row as usize, col as usize, c as usize]]
-                                    .c_thresh = min(parameters.c_thresh_baseline, 2);
-                            }
+                        for c in 0..self.state.plane.c() {
+                            self.event_pixel_trees[[row as usize, col as usize, c as usize]]
+                                .c_thresh = min(parameters.c_thresh_baseline, 2);
                         }
                     }
-
+                }
             }
         }
-
 
         if self.state.feature_cluster {
             self.cluster(&new_features);
@@ -1184,15 +1205,15 @@ impl<W: Write + 'static> Video<W> {
                 bboxes.push((min_x, min_y, max_x, max_y));
 
                 // if self.state.show_features != ShowFeatureMode::Off {
-                    draw_rect(
-                        min_x as PixelAddress,
-                        min_y as PixelAddress,
-                        max_x as PixelAddress,
-                        max_y as PixelAddress,
-                        &mut self.display_frame_features,
-                        self.state.plane.c() != 1,
-                        Some(random_color),
-                    );
+                draw_rect(
+                    min_x as PixelAddress,
+                    min_y as PixelAddress,
+                    max_x as PixelAddress,
+                    max_y as PixelAddress,
+                    &mut self.display_frame_features,
+                    self.state.plane.c() != 1,
+                    Some(random_color),
+                );
                 // }
             }
         }
@@ -1298,8 +1319,8 @@ pub fn integrate_for_px(
 
     *base_val = px.base_val;
 
-    if frame_val < base_val.saturating_sub(px.c_thresh)
-        || frame_val > base_val.saturating_add(px.c_thresh)
+    if frame_val < base_val.saturating_sub(px.c_thresh + parameters.global_c_thresh_offset)
+        || frame_val > base_val.saturating_add(px.c_thresh + parameters.global_c_thresh_offset)
     {
         let _tmp = buffer.len();
         px.pop_best_events(
@@ -1380,10 +1401,7 @@ pub fn show_display_force(window_name: &str, mat: &Mat, wait: i32) -> opencv::Re
 pub trait Source<W: Write> {
     /// Intake one input interval worth of data from the source stream into the ADΔER model as
     /// intensities.
-    fn consume(
-        &mut self,
-        thread_pool: &ThreadPool,
-    ) -> Result<Vec<Vec<Event>>, SourceError>;
+    fn consume(&mut self, thread_pool: &ThreadPool) -> Result<Vec<Vec<Event>>, SourceError>;
 
     /// Set the Constant Rate Factor (CRF) quality setting for the encoder. 0 is lossless, 9 is worst quality.
     fn crf(&mut self, crf: u8);
