@@ -244,8 +244,14 @@ impl<W: Write + 'static> Encoder<W> {
                 target_event_rate,
                 alpha,
             } => {
+                // Exponential smoothing for bitrate adaptation
                 let now = Instant::now();
                 let t_diff = now.duration_since(self.state.last_event_ts).as_secs_f64();
+
+                // ChatGPT explanation: alpha is a smoothing factor that controls the influence of
+                // the new observation versus the existing value. It's a value between 0 and 1,
+                // where smaller values give more weight to historical data, and larger values give
+                // more weight to recent observations.
                 let new_event_rate = alpha * self.state.current_event_rate + (1.0 - alpha) / t_diff;
                 if new_event_rate > target_event_rate {
                     rate_action = RateAction::Lower;

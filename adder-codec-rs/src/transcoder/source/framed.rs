@@ -125,10 +125,7 @@ impl<W: Write + 'static> Framed<W> {
 impl<W: Write + 'static> Source<W> for Framed<W> {
     /// Get pixel-wise intensities directly from source frame, and integrate them with
     /// `ref_time` (the number of ticks each frame is said to span)
-    fn consume(
-        &mut self,
-        thread_pool: &ThreadPool,
-    ) -> Result<Vec<Vec<Event>>, SourceError> {
+    fn consume(&mut self, thread_pool: &ThreadPool) -> Result<Vec<Vec<Event>>, SourceError> {
         let (_, frame) = self.cap.decode()?;
         self.input_frame = handle_color(frame, self.color_input)?;
 
@@ -192,6 +189,7 @@ impl<W: Write + 'static> Source<W> for Framed<W> {
 
 impl<W: Write + 'static> VideoBuilder<W> for Framed<W> {
     fn crf(mut self, crf: u8) -> Self {
+        dbg!("Calling crf");
         self.video.update_crf(crf);
         self
     }

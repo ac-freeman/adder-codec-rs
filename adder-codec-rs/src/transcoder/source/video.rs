@@ -734,13 +734,13 @@ impl<W: Write + 'static> Video<W> {
 
         match rate_action {
             RateAction::Higher => {
-                dbg!("Raising usage");
+                // dbg!("Raising usage");
                 // We have bandwidth headroom. Lower the global c_thresh
                 self.encoder.options.crf.lower_c_thresh_offset();
             }
             RateAction::Same => {}
             RateAction::Lower => {
-                dbg!("Lowering usage");
+                // dbg!("Lowering usage");
                 // We're using too much bandwidth. Increase the global c_thresh
                 self.encoder.options.crf.raise_c_thresh_offset();
             }
@@ -751,6 +751,14 @@ impl<W: Write + 'static> Video<W> {
                 .crf
                 .get_parameters()
                 .global_c_thresh_offset
+        );
+        dbg!(self.event_pixel_trees[[0, 0, 0]].c_thresh);
+        dbg!(
+            self.encoder
+                .options
+                .crf
+                .get_parameters()
+                .c_increase_velocity
         );
 
         self.display_frame_features = self.state.running_intensities.clone();
@@ -1262,6 +1270,7 @@ impl<W: Write + 'static> Video<W> {
         c_increase_velocity: u8,
         feature_c_radius: f32,
     ) {
+        dbg!("Calling update manual");
         {
             let crf = &mut self.encoder.options.crf;
 
@@ -1319,8 +1328,11 @@ pub fn integrate_for_px(
 
     *base_val = px.base_val;
 
-    if frame_val < base_val.saturating_sub(px.c_thresh + parameters.global_c_thresh_offset)
-        || frame_val > base_val.saturating_add(px.c_thresh + parameters.global_c_thresh_offset)
+    if frame_val
+        < base_val.saturating_sub((px.c_thresh as i16 + parameters.global_c_thresh_offset) as u8)
+        || frame_val
+            > base_val
+                .saturating_add((px.c_thresh as i16 + parameters.global_c_thresh_offset) as u8)
     {
         let _tmp = buffer.len();
         px.pop_best_events(

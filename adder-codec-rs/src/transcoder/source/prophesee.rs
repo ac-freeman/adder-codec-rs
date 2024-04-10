@@ -115,10 +115,7 @@ impl<W: Write + 'static> Prophesee<W> {
 }
 
 impl<W: Write + 'static + std::marker::Send> Source<W> for Prophesee<W> {
-    fn consume(
-        &mut self,
-        _thread_pool: &ThreadPool,
-    ) -> Result<Vec<Vec<Event>>, SourceError> {
+    fn consume(&mut self, _thread_pool: &ThreadPool) -> Result<Vec<Vec<Event>>, SourceError> {
         if self.running_t == 0 {
             self.video.integrate_matrix(
                 self.video.state.running_intensities.clone(),
@@ -425,7 +422,7 @@ fn parse_header(file: &mut BufReader<File>) -> io::Result<(u64, u8, u8, (u32, u3
 }
 
 fn line_to_hw(words: Vec<&[u8]>) -> Option<u32> {
-    let  word = words.get(2).unwrap();
+    let word = words.get(2).unwrap();
     let mut new_word = *word;
     if *word.last().unwrap() == '\n' as u8 {
         // Remove the trailing newline
@@ -454,7 +451,6 @@ fn decode_event(reader: &mut BufReader<File>) -> io::Result<DvsEvent> {
 }
 
 impl<W: Write + 'static> VideoBuilder<W> for Prophesee<W> {
-
     fn crf(mut self, crf: u8) -> Self {
         self.video.update_crf(crf);
         self

@@ -391,17 +391,24 @@ impl PixelArena {
         // safely cast it to integer [`D`] type.
         // (!self.dtm_reached && unsafe { self.arena[0].state.delta_t.to_int_unchecked::<DeltaT>() } >= dtm);
 
-        if self.c_thresh < c_thresh_max {
-            if self.c_increase_counter >= c_increase_velocity - 1 {
-                // Increment the threshold
-                self.c_thresh = self.c_thresh.saturating_add(1);
-                self.c_increase_counter = 0;
-            } else {
-                self.c_increase_counter = self
-                    .c_increase_counter
-                    .saturating_add((start_time as DeltaT / ref_time) as u8);
-            }
-        }
+        // TODO: restore this functionality, make it play nicely with bandwidth limiting
+        // if self.c_thresh < c_thresh_max {
+        //     if self.c_increase_counter >= c_increase_velocity - 1 {
+        //         // Increment the threshold
+        //         self.c_thresh = self.c_thresh.saturating_add(1);
+        //         self.c_increase_counter = 0;
+        //         if self.coord.x == 0 && self.coord.y == 0 {
+        //             dbg!("RESET");
+        //         }
+        //     } else {
+        //         if self.coord.x == 0 && self.coord.y == 0 {
+        //             dbg!(self.c_thresh, self.c_increase_counter);
+        //         }
+        //         self.c_increase_counter = self
+        //             .c_increase_counter
+        //             .saturating_add((start_time as DeltaT / ref_time) as u8);
+        //     }
+        // }
     }
 
     /// Integrate an intensity for a given node. Returns `Some()` if the node fires an event, so

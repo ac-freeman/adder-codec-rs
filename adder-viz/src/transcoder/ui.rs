@@ -617,12 +617,12 @@ impl TranscoderState {
             && (self.ui_state.delta_t_max_mult
                 != source.get_video_ref().state.params.delta_t_max
                     / source.get_video_ref().state.params.ref_time
-                || self.ui_state.encoder_options.crf.get_parameters()
+                || self.ui_state.encoder_options.crf.get_fixed_parameters()
                     != source
                         .get_video_ref()
                         .get_encoder_options()
                         .crf
-                        .get_parameters())
+                        .get_fixed_parameters())
         {
             let video = source.get_video_mut();
             let parameters = self.ui_state.encoder_options.crf.get_parameters();

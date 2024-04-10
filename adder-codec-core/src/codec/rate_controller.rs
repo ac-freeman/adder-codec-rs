@@ -50,7 +50,7 @@ pub struct CrfParameters {
     pub feature_c_radius: u16,
 
     /// Add this number to whatever the c-threshold is for the current pixel
-    pub global_c_thresh_offset: u8,
+    pub global_c_thresh_offset: i16,
 }
 
 impl Crf {
@@ -94,17 +94,26 @@ impl Crf {
         &self.parameters
     }
 
+    pub fn get_fixed_parameters(&self) -> CrfParameters {
+        // TODO: Improve this with clearer separation.
+        let mut params = self.parameters;
+        params.global_c_thresh_offset = 0;
+        params
+    }
+
     pub fn get_parameters_mut(&mut self) -> &mut CrfParameters {
         &mut self.parameters
     }
 
     pub fn lower_c_thresh_offset(&mut self) {
-        self.parameters.global_c_thresh_offset =
-            self.parameters.global_c_thresh_offset.saturating_sub(1);
+        if self.parameters.global_c_thresh_offset > -(self.parameters.c_thresh_baseline as i16) {
+            self.parameters.global_c_thresh_offset =
+                self.parameters.global_c_thresh_offset.saturating_sub(1);
+        }
     }
 
     pub fn raise_c_thresh_offset(&mut self) {
-        if self.parameters.global_c_thresh_offset < self.parameters.c_thresh_max {
+        if self.parameters.global_c_thresh_offset < self.parameters.c_thresh_max as i16 {
             self.parameters.global_c_thresh_offset =
                 self.parameters.global_c_thresh_offset.saturating_add(1);
         }
