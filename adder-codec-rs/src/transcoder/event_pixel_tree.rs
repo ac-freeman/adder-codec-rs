@@ -3,6 +3,7 @@ use adder_codec_core::{
     AbsoluteT, Coord, DeltaT, Event, Mode, PixelMultiMode, TimeMode, D, D_SHIFT_F32,
 };
 use adder_codec_core::{UDshift, D_EMPTY, D_MAX, D_SHIFT, D_ZERO_INTEGRATION};
+use rand::Rng;
 use smallvec::{smallvec, SmallVec};
 use std::cmp::min;
 
@@ -218,6 +219,25 @@ impl PixelArena {
         ref_time: DeltaT,
         intensity: Intensity32,
     ) {
+        // Generate random number between 1 and 10
+        let mut rng = rand::thread_rng();
+        let random_number = rng.gen_range(1..=10);
+        if random_number < 6 {
+            // With 50% probability, do NOT pop the best events. The caller should
+            // then set a new base_val for the pixel, allowing us to keep integrating.
+            // self.arena[0].alt = None;
+            // if self.length > 1 {
+            //     self.arena[1] = PixelNode::new(intensity);
+            // } else {
+            //     self.arena.push(PixelNode::new(intensity));
+            // }
+            // self.length = 1;
+            self.need_to_pop_top = false;
+            self.dtm_reached = false;
+            self.popped_dtm = false;
+            return;
+        }
+
         let mut local_buffer = Vec::with_capacity(self.length);
         for node_idx in 0..self.length {
             match self.arena[node_idx].best_event {
@@ -272,15 +292,6 @@ impl PixelArena {
         debug_assert!(self.arena[0].alt.is_none());
         self.length = 1;
 
-        // match next_intensity {
-        //     None => {}
-        //     // TODO: match on mode instead. This is disjoint.
-        //     Some(intensity) => {
-        // self.arena[0].state.d = get_d_from_intensity(intensity);
-        // self.arena[0].state.integration = 0.0;
-        // self.arena[0].state.delta_t = 0.0;
-        //     }
-        // };
         self.need_to_pop_top = false;
         self.dtm_reached = false;
         self.popped_dtm = false;
