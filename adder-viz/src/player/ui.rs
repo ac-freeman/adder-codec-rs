@@ -1,3 +1,136 @@
+use eframe::epaint::ColorImage;
+use crate::{VizTab, VizUi};
+use crate::player::{AdaptiveParams, CoreParams};
+use crate::transcoder::InfoParams;
+
+#[derive(Default, Debug, Clone, PartialEq)]pl
+pub struct PlayerState {
+    pub adaptive_params: AdaptiveParams,
+    pub core_params: CoreParams,
+    // pub info_params: InfoParams,
+}
+
+impl PlayerState {
+    pub fn reset_params(&mut self) {
+        self.adaptive_params = Default::default();
+        let input_path_buf_0 = self.core_params.input_path_buf_0.clone();
+        self.core_params = Default::default();
+        self.core_params.input_path_buf_0 = input_path_buf_0;
+    }
+
+    pub fn reset_video(&mut self) {
+        self.core_params.input_path_buf_0 = None;
+    }
+}
+
+pub struct PlayerUi {
+    pub player_state: PlayerState,
+    adder_image_handle: egui::TextureHandle,
+    last_frame_time: std::time::Instant,
+}
+
+impl VizTab for PlayerUi {
+    fn new(cc: &eframe::CreationContext<'_>) -> Self {
+        PlayerUi {
+            player_state: PlayerState::default(),
+            adder_image_handle: cc.egui_ctx.load_texture(
+                "adder_image",
+                ColorImage::default(),
+                Default::default(),
+            ),
+            last_frame_time: std::time::Instant::now(),
+        }
+    }
+
+
+
+
+
+    fn update(&mut self, ctx: &egui::Context) {
+        // Store a copy of the params to compare against later
+        // let old_params = self.player_state.clone();
+
+        // Collect dropped files
+        // self.handle_file_drop(ctx);
+
+        // self.handle_info_messages();
+
+        self.draw_ui(ctx);
+
+        // This should always be the very last thing we do in this function
+        // if old_params != self.transcoder_state {
+        //     eprintln!("Sending new transcoder state");
+        //     self.transcoder_state_tx
+        //         .blocking_send(TranscoderStateMsg::Set {
+        //             transcoder_state: self.transcoder_state.clone(),
+        //         })
+        //         .unwrap();
+        // }
+    }
+
+
+    fn handle_file_drop(&mut self, ctx: &egui::Context) {
+        ctx.input(|i| {
+            if !i.raw.dropped_files.is_empty() {
+                self.player_state.core_params.input_path_buf_0 =
+                    i.raw.dropped_files[0].path.clone();
+            }
+        });
+    }
+}
+
+impl VizUi for PlayerUi {
+
+    fn draw_ui(
+        &mut self,
+        ctx: &egui::Context,
+    ) {
+        egui::SidePanel::left("side_panel")
+            .default_width(300.0)
+            .show(ctx, |ui| {
+                ui.label(format!(
+                    "FPS: {:.2}",
+                    1.0 / self.last_frame_time.elapsed().as_secs_f64()
+                ));
+                // update the last frame time
+                self.last_frame_time = std::time::Instant::now();
+
+                self.side_panel_ui(ui);
+            });
+
+        egui::CentralPanel::default().show(ctx, |ui| {
+            egui::warn_if_debug_build(ui);
+
+            self.central_panel_ui(ui);
+        });
+    }
+    fn side_panel_ui(&mut self, ui: &mut egui::Ui) {
+        ui.horizontal(|ui| {
+            ui.heading("ADΔER Parameters");
+            // if ui.add(egui::Button::new("Reset params")).clicked() {
+            //     self.transcoder_state.reset_params();
+            // }
+            // if ui.add(egui::Button::new("Reset video")).clicked() {
+            //     self.transcoder_state.reset_video();
+            //     self.transcoder_state_tx
+            //         .blocking_send(TranscoderStateMsg::Terminate)
+            //         .unwrap();
+            // }
+        });
+        egui::Grid::new("my_grid")
+            .num_columns(2)
+            .spacing([10.0, 4.0])
+            .striped(true)
+            .show(ui, |ui| {
+                // self.side_panel_grid_contents(ui);
+            });
+    }
+
+    fn central_panel_ui(&mut self, ui: &mut egui::Ui) {
+    }
+}
+
+
 // use crossbeam_channel::{bounded, Receiver};
 // use std::collections::VecDeque;
 // use std::error::Error;

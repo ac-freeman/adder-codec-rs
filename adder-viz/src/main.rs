@@ -1,8 +1,10 @@
 mod transcoder;
+mod player;
 mod utils;
 
 use crate::transcoder::adder::AdderTranscoder;
 use crate::transcoder::ui::{TranscoderState, TranscoderStateMsg, TranscoderUi};
+use crate::player::ui::{PlayerUi};
 use crate::utils::slider::NotchedSlider;
 use eframe::egui;
 use egui::{ColorImage, Widget};
@@ -13,6 +15,7 @@ use strum_macros::EnumIter;
 use tokio::sync::broadcast;
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::Sender;
+use crate::Tabs::Player;
 
 fn main() {
     let native_options = eframe::NativeOptions::default();
@@ -27,6 +30,7 @@ struct App {
     view: Tabs,
     error_msg: Option<String>,
     transcoder_ui: TranscoderUi,
+    player_ui: PlayerUi,
 }
 
 impl App {
@@ -45,6 +49,7 @@ impl App {
             error_msg: None,
 
             transcoder_ui: TranscoderUi::new(cc),
+            player_ui: PlayerUi::new(cc),
         };
 
         app
@@ -61,7 +66,7 @@ impl eframe::App for App {
 
         match self.view {
             Tabs::Transcoder => self.transcoder_ui.update(ctx),
-            Tabs::Player => {}
+            Tabs::Player => self.player_ui.update(ctx),
         }
 
         ctx.request_repaint();
@@ -176,6 +181,28 @@ fn configure_menu_bar(app: &mut App, ctx: &egui::Context) {
             }
         });
     });
+}
+
+trait VizTab {
+    fn new(cc: &eframe::CreationContext<'_>) -> Self;
+
+
+
+    fn update(&mut self, ctx: &egui::Context);
+
+    /// If the user has dropped a file into the window, we store the file path.
+    /// At the end of the frame, the receiver will be notified by update()
+    fn handle_file_drop(&mut self, ctx: &egui::Context);
+}
+
+trait VizUi {
+    fn draw_ui( &mut self,
+                ctx: &egui::Context,
+    );
+
+    fn side_panel_ui(&mut self, ui: &mut egui::Ui);
+
+    fn central_panel_ui(&mut self, ui: &mut egui::Ui);
 }
 
 //

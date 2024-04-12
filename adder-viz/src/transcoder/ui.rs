@@ -104,11 +104,9 @@ use crate::utils::PlotY;
 //
 #[derive(Default, Debug, Clone, PartialEq)]
 pub struct TranscoderState {
-    // pub(crate) transcoder: AdderTranscoder,
     pub adaptive_params: AdaptiveParams,
     pub core_params: CoreParams,
     pub info_params: InfoParams,
-    // pub ui_info_state: InfoUiState,
 }
 
 impl TranscoderState {
