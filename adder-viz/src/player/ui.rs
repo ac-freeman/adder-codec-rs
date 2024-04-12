@@ -1,24 +1,31 @@
 use eframe::epaint::ColorImage;
-use crate::{VizTab, VizUi};
+use egui::Ui;
+use crate::{slider_pm, TabState, VizTab, VizUi};
 use crate::player::{AdaptiveParams, CoreParams};
 use crate::transcoder::InfoParams;
 
-#[derive(Default, Debug, Clone, PartialEq)]pl
+#[derive(Debug, Clone)]
+pub enum PlayerStateMsg {
+    Terminate,
+    Set { player_state: PlayerState },
+}
+
+#[derive(Default, Debug, Clone, PartialEq)]
 pub struct PlayerState {
     pub adaptive_params: AdaptiveParams,
     pub core_params: CoreParams,
     // pub info_params: InfoParams,
 }
 
-impl PlayerState {
-    pub fn reset_params(&mut self) {
+impl TabState for PlayerState {
+    fn reset_params(&mut self) {
         self.adaptive_params = Default::default();
         let input_path_buf_0 = self.core_params.input_path_buf_0.clone();
         self.core_params = Default::default();
         self.core_params.input_path_buf_0 = input_path_buf_0;
     }
 
-    pub fn reset_video(&mut self) {
+    fn reset_video(&mut self) {
         self.core_params.input_path_buf_0 = None;
     }
 }
@@ -48,10 +55,10 @@ impl VizTab for PlayerUi {
 
     fn update(&mut self, ctx: &egui::Context) {
         // Store a copy of the params to compare against later
-        // let old_params = self.player_state.clone();
+        let old_params = self.player_state.clone();
 
         // Collect dropped files
-        // self.handle_file_drop(ctx);
+        self.handle_file_drop(ctx);
 
         // self.handle_info_messages();
 
@@ -107,26 +114,43 @@ impl VizUi for PlayerUi {
     fn side_panel_ui(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
             ui.heading("ADΔER Parameters");
-            // if ui.add(egui::Button::new("Reset params")).clicked() {
-            //     self.transcoder_state.reset_params();
-            // }
-            // if ui.add(egui::Button::new("Reset video")).clicked() {
-            //     self.transcoder_state.reset_video();
-            //     self.transcoder_state_tx
-            //         .blocking_send(TranscoderStateMsg::Terminate)
-            //         .unwrap();
-            // }
+            if ui.add(egui::Button::new("Reset params")).clicked() {
+                self.player_state.reset_params();
+            }
+            if ui.add(egui::Button::new("Reset video")).clicked() {
+                self.player_state.reset_video();
+                // self.transcoder_state_tx
+                //     .blocking_send(TranscoderStateMsg::Terminate)
+                //     .unwrap();
+            }
         });
         egui::Grid::new("my_grid")
             .num_columns(2)
             .spacing([10.0, 4.0])
             .striped(true)
             .show(ui, |ui| {
-                // self.side_panel_grid_contents(ui);
+                self.side_panel_grid_contents(ui);
             });
     }
 
     fn central_panel_ui(&mut self, ui: &mut egui::Ui) {
+    }
+
+    fn side_panel_grid_contents(&mut self, ui: &mut Ui) {
+        let core_params = &mut self.player_state.core_params;
+        let adaptive_params = &mut self.player_state.adaptive_params;
+        // let info_params = &mut self.transcoder_state.info_params;
+
+        ui.label("Playback speed:");
+        slider_pm(
+            true,
+            true,
+            ui,
+            &mut core_params.playback_speed,
+            0.001..=1000.0,
+            vec![0.25, 0.5, 1.0, 5.0, 10.0],
+            1.0,
+        );
     }
 }
 

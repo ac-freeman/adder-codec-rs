@@ -203,6 +203,14 @@ trait VizUi {
     fn side_panel_ui(&mut self, ui: &mut egui::Ui);
 
     fn central_panel_ui(&mut self, ui: &mut egui::Ui);
+
+    fn side_panel_grid_contents(&mut self, ui: &mut egui::Ui);
+}
+
+trait TabState {
+    fn reset_params(&mut self);
+
+    fn reset_video(&mut self);
 }
 
 //

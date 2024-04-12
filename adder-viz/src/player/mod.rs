@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 use adder_codec_rs::utils::viz::ShowFeatureMode;
 
-// mod adder;
+mod adder;
 pub mod ui;
 
 

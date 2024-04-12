@@ -1,3 +1,83 @@
+use thiserror::Error;
+use crate::player::ui::PlayerStateMsg;
+use tokio::sync::mpsc;
+use tokio::sync::mpsc::Receiver;
+use adder_codec_rs::framer::driver::{Framer, FramerBuilder, FrameSequence};
+use crate::player::ui::PlayerState;
+
+#[derive(Error, Debug)]
+pub enum AdderPlayerError {
+    /// Input file error
+    #[error("Invalid file type")]
+    InvalidFileType,
+
+    /// No file selected
+    #[error("No file selected")]
+    NoFileSelected,
+}
+
+pub struct AdderPlayer {
+    pool: tokio::runtime::Runtime,
+    transcoder_state: PlayerState,
+    framer: Option<FrameSequence<u8>>,
+    // source: Option<dyn Framer<Output=()>>,
+    rx: Receiver<PlayerStateMsg>,
+    // msg_tx: mpsc::Sender<TranscoderInfoMsg>,
+    pub(crate) adder_image_handle: egui::TextureHandle,
+    total_events: u64,
+    last_consume_time: std::time::Instant,
+}
+
+impl AdderPlayer {
+    pub(crate) fn new(
+        rx: Receiver<PlayerStateMsg>,
+        // msg_tx: mpsc::Sender<PlayerInfoMsg>,
+        adder_image_handle: egui::TextureHandle,
+    ) -> Self {
+        let threaded_rt = tokio::runtime::Runtime::new().unwrap();
+
+
+        AdderPlayer {
+            pool: threaded_rt,
+            transcoder_state: Default::default(),
+            adder_image_handle,
+            total_events: 0,
+            last_consume_time: std::time::Instant::now(),
+            framer: None,
+            rx,
+        }
+    }
+
+    pub(crate) fn run(&mut self) {
+        loop {
+            match self.rx.try_recv() {
+                Ok(msg) => match msg {
+                    PlayerStateMsg::Terminate => {
+                        eprintln!("Resetting video");
+                        todo!();
+                    }
+                    PlayerStateMsg::Set { player_state } => {
+                        eprintln!("Received player state");
+                        todo!();
+                    }
+                }
+                Err(_) => {
+                    // Received no data, so consume the transcoder source if it exists
+                    if self.framer.is_some() {
+                        let result = self.consume();
+                        // self.handle_error(result);
+                    }
+                }
+            }
+        }
+    }
+
+
+    fn consume(&mut self) -> Result<(), AdderPlayerError> {
+    todo!();re
+    }
+}
+
 // use crate::player::adder::codec::CodecError;
 // use crate::player::ui::ReconstructionMethod;
 // use adder_codec_rs::adder_codec_core::bitstream_io::{BigEndian, BitReader};

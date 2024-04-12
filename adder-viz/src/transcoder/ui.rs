@@ -18,7 +18,7 @@ use tokio::sync::mpsc::Sender;
 // use crate::utils::prep_bevy_image;
 use crate::transcoder::adder::AdderTranscoder;
 use crate::transcoder::{AdaptiveParams, CoreParams, EventRateMsg, InfoParams, InfoUiState};
-use crate::{slider_pm, App, Images, Tabs};
+use crate::{slider_pm, App, Images, Tabs, TabState};
 // #[cfg(feature = "open-cv")]
 // use adder_codec_rs::transcoder::source::davis::TranscoderMode;
 // use adder_codec_rs::transcoder::source::video::{FramedViewMode, Source, SourceError};
@@ -109,15 +109,15 @@ pub struct TranscoderState {
     pub info_params: InfoParams,
 }
 
-impl TranscoderState {
-    pub fn reset_params(&mut self) {
+impl TabState for TranscoderState {
+    fn reset_params(&mut self) {
         self.adaptive_params = Default::default();
         let input_path_buf_0 = self.core_params.input_path_buf_0.clone();
         self.core_params = Default::default();
         self.core_params.input_path_buf_0 = input_path_buf_0;
     }
 
-    pub fn reset_video(&mut self) {
+    fn reset_video(&mut self) {
         self.core_params.input_path_buf_0 = None;
         self.core_params.output_path = None;
     }

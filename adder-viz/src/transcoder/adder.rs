@@ -103,11 +103,10 @@ impl AdderTranscoder {
         }
     }
 
+
+    /// The unbounded loop. Continually processes messages or consumes the source
     pub(crate) fn run(&mut self) {
         loop {
-            // eprintln!("Waiting to receive data");
-            // Sleep for 1 second
-            // std::thread::sleep(std::time::Duration::from_secs(1));
             match self.rx.try_recv() {
                 Ok(msg) => match msg {
                     TranscoderStateMsg::Terminate => {
