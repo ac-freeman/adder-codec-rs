@@ -183,17 +183,19 @@ fn configure_menu_bar(app: &mut App, ctx: &egui::Context) {
     });
 }
 
-trait VizTab {
-    fn new(cc: &eframe::CreationContext<'_>) -> Self;
-
-
-
-    fn update(&mut self, ctx: &egui::Context);
-
-    /// If the user has dropped a file into the window, we store the file path.
-    /// At the end of the frame, the receiver will be notified by update()
-    fn handle_file_drop(&mut self, ctx: &egui::Context);
-}
+// trait VizTab<A,B> {
+//     fn new(cc: &eframe::CreationContext<'_>) -> Self;
+//
+//     fn spawn_tab_runner(&mut self,
+//                         rx: mpsc::Receiver<A>,
+//                         msg_tx: mpsc::Sender<B>,);
+//
+//     fn update(&mut self, ctx: &egui::Context);
+//
+//     /// If the user has dropped a file into the window, we store the file path.
+//     /// At the end of the frame, the receiver will be notified by update()
+//     fn handle_file_drop(&mut self, ctx: &egui::Context);
+// }
 
 trait VizUi {
     fn draw_ui( &mut self,

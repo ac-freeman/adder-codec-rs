@@ -1,6 +1,10 @@
+use crate::player::adder::AdderPlayer;
 use eframe::epaint::ColorImage;
 use egui::Ui;
-use crate::{slider_pm, TabState, VizTab, VizUi};
+use tokio::sync::mpsc;
+use tokio::sync::mpsc::Sender;
+use adder_codec_rs::adder_codec_core::PlaneSize;
+use crate::{slider_pm, TabState, VizUi};
 use crate::player::{AdaptiveParams, CoreParams};
 use crate::transcoder::InfoParams;
 
@@ -8,6 +12,13 @@ use crate::transcoder::InfoParams;
 pub enum PlayerStateMsg {
     Terminate,
     Set { player_state: PlayerState },
+}
+
+#[derive(Debug, Clone)]
+pub enum PlayerInfoMsg {
+    Plane((PlaneSize, bool)),
+    // EventRateMsg(EventRateMsg),
+    Error(String),
 }
 
 #[derive(Default, Debug, Clone, PartialEq)]
@@ -34,11 +45,16 @@ pub struct PlayerUi {
     pub player_state: PlayerState,
     adder_image_handle: egui::TextureHandle,
     last_frame_time: std::time::Instant,
+    pub player_state_tx: Sender<PlayerStateMsg>,
+    msg_rx: mpsc::Receiver<PlayerInfoMsg>,
 }
 
-impl VizTab for PlayerUi {
-    fn new(cc: &eframe::CreationContext<'_>) -> Self {
-        PlayerUi {
+impl PlayerUi {
+    pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
+        let (tx, mut rx) = mpsc::channel::<PlayerStateMsg>(5);
+        let (msg_tx, mut msg_rx) = mpsc::channel::<PlayerInfoMsg>(30);
+
+        let mut player_ui =  PlayerUi {
             player_state: PlayerState::default(),
             adder_image_handle: cc.egui_ctx.load_texture(
                 "adder_image",
@@ -46,14 +62,39 @@ impl VizTab for PlayerUi {
                 Default::default(),
             ),
             last_frame_time: std::time::Instant::now(),
-        }
+            player_state_tx: tx,
+            msg_rx,
+        };
+
+        player_ui.spawn_tab_runner(rx, msg_tx);
+        player_ui
+    }
+
+
+    fn spawn_tab_runner(
+        &mut self,
+        rx: mpsc::Receiver<PlayerStateMsg>,
+        msg_tx: mpsc::Sender<PlayerInfoMsg>,
+    ) {
+        let adder_image_handle = self.adder_image_handle.clone();
+        let rt = tokio::runtime::Runtime::new().expect("Unable to create Runtime");
+
+        let _enter = rt.enter();
+
+        // Execute the runtime in its own thread.
+        std::thread::spawn(move || {
+            rt.block_on(async {
+                let mut transcoder =
+                    AdderPlayer::new(rx, msg_tx, adder_image_handle);
+                transcoder.run();
+            })
+        });
     }
 
 
 
 
-
-    fn update(&mut self, ctx: &egui::Context) {
+    pub fn update(&mut self, ctx: &egui::Context) {
         // Store a copy of the params to compare against later
         let old_params = self.player_state.clone();
 
@@ -65,14 +106,14 @@ impl VizTab for PlayerUi {
         self.draw_ui(ctx);
 
         // This should always be the very last thing we do in this function
-        // if old_params != self.transcoder_state {
-        //     eprintln!("Sending new transcoder state");
-        //     self.transcoder_state_tx
-        //         .blocking_send(TranscoderStateMsg::Set {
-        //             transcoder_state: self.transcoder_state.clone(),
-        //         })
-        //         .unwrap();
-        // }
+        if old_params != self.player_state {
+            eprintln!("Sending new transcoder state");
+            self.player_state_tx
+                .blocking_send(PlayerStateMsg::Set {
+                    player_state: self.player_state.clone(),
+                })
+                .unwrap();
+        }
     }
 
 

@@ -1,16 +1,15 @@
-use std::path::PathBuf;
 use adder_codec_rs::utils::viz::ShowFeatureMode;
+use std::path::PathBuf;
 
 mod adder;
 pub mod ui;
-
 
 /// Core parameters which require a total reset of the player. These parameters
 /// cannot be adaptively changed during a player operation.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct CoreParams {
     pub input_path_buf_0: Option<PathBuf>,
-    pub playback_speed: f64,
+    pub playback_speed: f32,
 }
 
 impl Default for CoreParams {
