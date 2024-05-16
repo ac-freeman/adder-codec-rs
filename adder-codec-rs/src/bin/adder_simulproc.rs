@@ -113,7 +113,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let now = std::time::Instant::now();
     simul_processor.run(args.frame_count_max)?;
     println!("\n\n{} ms elapsed\n\n", now.elapsed().as_millis());
-    let fps = 1000.0
+    let fps = 25.0
         / (now.elapsed().as_millis() as f64
             / args.frame_count_max.saturating_sub(args.frame_idx_start) as f64);
     println!("{:.1} average frames transcoded per second", fps);
@@ -149,6 +149,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
 #[cfg(test)]
 mod tests {
+    use adder_codec_core::codec::rate_controller::Crf;
     use adder_codec_core::codec::{EncoderOptions, EncoderType};
     use adder_codec_core::SourceCamera::FramedU8;
     use adder_codec_core::TimeMode;
@@ -164,7 +165,6 @@ mod tests {
     use std::process::Command;
     use std::thread::sleep;
     use std::time::Duration;
-    use adder_codec_core::codec::rate_controller::Crf;
 
     #[test]
     fn dark() -> Result<(), Box<dyn Error>> {

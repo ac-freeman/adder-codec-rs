@@ -46,6 +46,15 @@ pub struct MyArgs {
 
     #[clap(short, long, action)]
     pub features: bool,
+
+    /// Frames per second to derive the video from the adder events
+    #[clap(short, long, default_value_t = 30.0)]
+    pub fps: f64,
+
+    /// For encoding with ffmpeg, the playback FPS = fps above * playback_speed
+    /// This is useful for slow motion or fast forward
+    #[clap(short, long, default_value_t = 1.0)]
+    pub playback_speed: f64,
 }
 
 #[tokio::main]
@@ -59,9 +68,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut framer: FrameSequence<u8> = FramerBuilder::new(meta.plane, 1)
         .codec_version(meta.codec_version, meta.time_mode)
-        .time_parameters(meta.tps, meta.ref_interval, meta.delta_t_max, Some(1000.0))
+        .time_parameters(
+            meta.tps,
+            meta.ref_interval,
+            meta.delta_t_max,
+            Some(args.fps as f32),
+        )
         .mode(INSTANTANEOUS)
-        .source(U8, DavisU8)
+        .source(U8, meta.source_camera)
         .finish::<u8>();
 
     let mut output_stream = BufWriter::new(File::create(&args.output)?);
@@ -72,11 +86,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let res = reader.digest_event(&mut bitreader);
         // read an event
         if let Ok(mut event) = res {
-            if now.elapsed().as_millis() > 10 {
-                // this is a hacky way of limiting the buffer size
-                eprintln!("Flushing");
-                framer.flush_frame_buffer();
-            }
+            // if now.elapsed().as_millis() > 100 {
+            //     // this is a hacky way of limiting the buffer size
+            //     eprintln!("Flushing");
+            //     framer.flush_frame_buffer();
+            // }
             // ingest the event
             if framer.ingest_event(&mut event, None) {
                 match framer.write_multi_frame_bytes(&mut output_stream) {
@@ -143,7 +157,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Use ffmpeg to encode the raw frame data as an mp4
     let color_str = match meta.plane.c() != 1 {
-        true => "bgr24",
+        true => "rgb24",
         _ => "gray",
     };
 
@@ -157,7 +171,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 + "x"
                 + meta.plane.h().to_string().as_str()
                 + " -r "
-                + "30.0"
+                + (args.fps * args.playback_speed).to_string().as_str()
                 + " -i "
                 + &args.output
                 + " -crf 0 -c:v libx264 -y "
