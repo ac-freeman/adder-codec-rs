@@ -11,7 +11,7 @@ use rayon::iter::IndexedParallelIterator;
 use rayon::iter::ParallelIterator;
 
 use opencv::core::{Mat, CV_8U};
-use opencv::prelude::*;
+// use opencv::prelude::*;
 
 use bumpalo::Bump;
 use ndarray::{Array3, Axis};
@@ -102,7 +102,7 @@ pub struct Davis<W: Write> {
 
     time_change: f64,
     num_dvs_events: usize,
-    ref_time_divisor: f64
+    ref_time_divisor: f64,
 }
 
 unsafe impl<W: Write> Sync for Davis<W> {}
@@ -605,10 +605,7 @@ impl<W: Write + 'static> Integration<W> {
 }
 
 impl<W: Write + 'static + std::marker::Send> Source<W> for Davis<W> {
-    fn consume(
-        &mut self,
-        thread_pool: &ThreadPool,
-    ) -> Result<Vec<Vec<Event>>, SourceError> {
+    fn consume(&mut self, thread_pool: &Runtime) -> Result<Vec<Vec<Event>>, SourceError> {
         // Attempting new method for integration without requiring a buffer. Could be implemented
         // for framed source just as easily
         // Keep running integration starting at D=log_2(current_frame) + 1
@@ -838,10 +835,7 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Davis<W> {
                 )
             };
 
-            ret = thread_pool.install(|| {
-                self.video
-                    .integrate_matrix(frame, mat_integration_time)
-            });
+            ret = thread_pool.install(|| self.video.integrate_matrix(frame, mat_integration_time));
 
             #[allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
             for (idx, val) in self.integration.dvs_last_ln_val.iter_mut().enumerate() {
@@ -929,8 +923,7 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Davis<W> {
         match self.mode {
             TranscoderMode::Framed => {
                 let fps = self.video.state.tps as f64
-                    / (self.ref_time_divisor
-                        * self.video.state.params.ref_time as f64);
+                    / (self.ref_time_divisor * self.video.state.params.ref_time as f64);
                 self.video.state.plane.volume() as f64 * 8.0 * fps
             }
             TranscoderMode::RawDavis => {
@@ -953,7 +946,6 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Davis<W> {
 }
 
 impl<W: Write + 'static> VideoBuilder<W> for Davis<W> {
-
     fn crf(mut self, crf: u8) -> Self {
         self.video.update_crf(crf);
         self
