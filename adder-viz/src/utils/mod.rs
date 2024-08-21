@@ -1,7 +1,11 @@
+use crate::Pm;
+use eframe::emath;
 use eframe::epaint::ColorImage;
+use egui::{Ui, WidgetText};
 use egui_plot::{Line, PlotPoints};
 use std::collections::VecDeque;
 use std::error::Error;
+use std::ops::RangeInclusive;
 use video_rs_adder_dep::Frame;
 
 pub(crate) mod slider;
@@ -59,4 +63,43 @@ pub fn prep_epaint_image(
             image_mat.as_standard_layout().as_slice().unwrap(),
         ));
     }
+}
+
+pub fn add_checkbox_row(
+    enabled: bool,
+    label_1: impl Into<WidgetText>,
+    label_2: impl Into<WidgetText>,
+    ui: &mut Ui,
+    checkbox_value: &mut bool,
+) -> bool {
+    ui.add_enabled(enabled, egui::Label::new(label_1));
+    let ret = ui
+        .add_enabled(enabled, egui::Checkbox::new(checkbox_value, label_2))
+        .changed();
+    ui.end_row();
+    ret
+}
+
+pub fn add_slider_row<Num: emath::Numeric + Pm>(
+    enabled: bool,
+    logarithmic: bool,
+    label: impl Into<WidgetText>,
+    ui: &mut Ui,
+    instant_value: &mut Num,
+    range: RangeInclusive<Num>,
+    notches: Vec<Num>,
+    interval: Num,
+) -> bool {
+    ui.add_enabled(enabled, egui::Label::new(label));
+    let ret = crate::slider_pm(
+        enabled,
+        logarithmic,
+        ui,
+        instant_value,
+        range,
+        notches,
+        interval,
+    );
+    ui.end_row();
+    ret
 }

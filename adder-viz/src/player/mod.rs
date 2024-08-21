@@ -28,6 +28,7 @@ pub(crate) struct AdaptiveParams {
     pub thread_count: usize,
     pub detect_features: bool,
     pub show_features: ShowFeatureMode,
+    pub buffer_limit: Option<u32>,
 }
 
 impl Default for AdaptiveParams {
@@ -36,6 +37,7 @@ impl Default for AdaptiveParams {
             thread_count: 1,
             detect_features: false,
             show_features: ShowFeatureMode::Off,
+            buffer_limit: None,
         }
     }
 }

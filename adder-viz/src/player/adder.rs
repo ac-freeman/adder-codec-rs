@@ -142,6 +142,8 @@ impl AdderPlayer {
         transcoder_state: PlayerState,
         force_new: bool,
     ) -> Result<(), AdderPlayerError> {
+        dbg!(transcoder_state.core_params.clone());
+        dbg!(self.player_state.core_params.clone());
         if force_new || transcoder_state.core_params != self.player_state.core_params {
             eprintln!("Create new transcoder");
 
@@ -206,9 +208,9 @@ impl AdderPlayer {
     fn core_state_update(&mut self, player_state: PlayerState) -> Result<(), AdderPlayerError> {
         self.total_events = 0;
         match &player_state.core_params.input_path_buf_0 {
-            None => Err(NoFileSelected),
+            None => return Err(NoFileSelected),
             Some(input_path_buf) => match input_path_buf.extension() {
-                None => Err(InvalidFileType),
+                None => return Err(InvalidFileType),
                 Some(ext) => match ext.to_ascii_lowercase().to_str().unwrap() {
                     "adder" => {
                         // adder video
@@ -262,8 +264,8 @@ impl AdderPlayer {
                         // consume(&mut stream, &mut frame_sequence).await;
 
                         // self.input_stream = Some(stream);
+
                         eprintln!("Created framer");
-                        Ok(())
                     }
                     // "aedat4" | "sock" => {
                     //     // Davis video
@@ -271,10 +273,13 @@ impl AdderPlayer {
                     // "dat" => {
                     //     // Prophesee video
                     // }
-                    _ => Err(InvalidFileType),
+                    _ => return Err(InvalidFileType),
                 },
             },
         }
+        // Update the params to match
+        self.player_state.core_params = player_state.core_params;
+        Ok(())
     }
     fn consume(
         &mut self,
@@ -367,7 +372,7 @@ impl AdderPlayer {
 
         let mut last_event: Option<Event> = None;
         loop {
-            eprintln!("Consume");
+            // eprintln!("Consume");
             match stream.decoder.digest_event(&mut stream.bitreader) {
                 Ok(mut event) => {
                     event_count += 1;

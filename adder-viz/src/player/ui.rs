@@ -1,6 +1,7 @@
 use crate::player::adder::AdderPlayer;
 use crate::player::{AdaptiveParams, CoreParams};
 use crate::transcoder::InfoParams;
+use crate::utils::{add_checkbox_row, add_slider_row};
 use crate::{slider_pm, TabState, VizUi};
 use adder_codec_rs::adder_codec_core::PlaneSize;
 use eframe::epaint::ColorImage;
@@ -216,6 +217,39 @@ impl VizUi for PlayerUi {
             vec![0.25, 0.5, 1.0, 5.0, 10.0],
             1.0,
         );
+        ui.end_row();
+
+        let mut limit_frame_buffer_bool = adaptive_params.buffer_limit.is_some();
+        add_checkbox_row(
+            true,
+            "Frame buffer",
+            "Limit frame buffer?",
+            ui,
+            &mut limit_frame_buffer_bool,
+        );
+
+        if limit_frame_buffer_bool && adaptive_params.buffer_limit.is_none() {
+            // If the user just selected to limit the frame buffer, set the default value
+            adaptive_params.buffer_limit = Some(100);
+        } else if !limit_frame_buffer_bool {
+            adaptive_params.buffer_limit = None;
+        }
+
+        let mut buffer_limit = adaptive_params.buffer_limit.unwrap_or(100);
+        add_slider_row(
+            limit_frame_buffer_bool,
+            false,
+            "Buffer limit:",
+            ui,
+            &mut buffer_limit,
+            0..=1000,
+            vec![10, 100, 250, 500, 750],
+            10,
+        );
+
+        if limit_frame_buffer_bool {
+            adaptive_params.buffer_limit = Some(buffer_limit);
+        }
     }
 }
 

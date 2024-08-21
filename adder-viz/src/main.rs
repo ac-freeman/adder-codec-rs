@@ -1,11 +1,12 @@
-mod transcoder;
 mod player;
+mod transcoder;
 mod utils;
 
+use crate::player::ui::PlayerUi;
 use crate::transcoder::adder::AdderTranscoder;
 use crate::transcoder::ui::{TranscoderState, TranscoderStateMsg, TranscoderUi};
-use crate::player::ui::{PlayerUi};
 use crate::utils::slider::NotchedSlider;
+use crate::Tabs::Player;
 use eframe::egui;
 use egui::{ColorImage, Widget};
 use std::ops::RangeInclusive;
@@ -15,7 +16,6 @@ use strum_macros::EnumIter;
 use tokio::sync::broadcast;
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::Sender;
-use crate::Tabs::Player;
 
 fn main() {
     let native_options = eframe::NativeOptions::default();
@@ -198,9 +198,7 @@ fn configure_menu_bar(app: &mut App, ctx: &egui::Context) {
 // }
 
 trait VizUi {
-    fn draw_ui( &mut self,
-                ctx: &egui::Context,
-    );
+    fn draw_ui(&mut self, ctx: &egui::Context);
 
     fn side_panel_ui(&mut self, ui: &mut egui::Ui);
 
@@ -585,46 +583,9 @@ fn slider_pm<Num: egui::emath::Numeric + Pm>(
 }
 
 //
-// fn add_slider_row<Num: emath::Numeric + Pm>(
-//     enabled: bool,
-//     logarithmic: bool,
-//     label: impl Into<WidgetText>,
-//     ui: &mut Ui,
-//     instant_value: &mut Num,
-//     drag_value: &mut Num,
-//     range: RangeInclusive<Num>,
-//     notches: Vec<Num>,
-//     interval: Num,
-// ) -> bool {
-//     ui.add_enabled(enabled, egui::Label::new(label));
-//     let ret = slider_pm(
-//         enabled,
-//         logarithmic,
-//         ui,
-//         instant_value,
-//         drag_value,
-//         range,
-//         notches,
-//         interval,
-//     );
-//     ui.end_row();
-//     ret
-// }
+
 //
-// fn add_checkbox_row(
-//     enabled: bool,
-//     label_1: impl Into<WidgetText>,
-//     label_2: impl Into<WidgetText>,
-//     ui: &mut Ui,
-//     checkbox_value: &mut bool,
-// ) -> bool {
-//     ui.add_enabled(enabled, egui::Label::new(label_1));
-//     let ret = ui
-//         .add_enabled(enabled, egui::Checkbox::new(checkbox_value, label_2))
-//         .changed();
-//     ui.end_row();
-//     ret
-// }
+
 //
 // fn add_radio_row<Value: PartialEq + Clone>(
 //     enabled: bool,
