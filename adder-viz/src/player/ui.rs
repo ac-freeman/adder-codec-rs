@@ -1,12 +1,12 @@
 use crate::player::adder::AdderPlayer;
+use crate::player::{AdaptiveParams, CoreParams};
+use crate::transcoder::InfoParams;
+use crate::{slider_pm, TabState, VizUi};
+use adder_codec_rs::adder_codec_core::PlaneSize;
 use eframe::epaint::ColorImage;
 use egui::Ui;
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::Sender;
-use adder_codec_rs::adder_codec_core::PlaneSize;
-use crate::{slider_pm, TabState, VizUi};
-use crate::player::{AdaptiveParams, CoreParams};
-use crate::transcoder::InfoParams;
 
 #[derive(Debug, Clone)]
 pub enum PlayerStateMsg {
@@ -18,6 +18,7 @@ pub enum PlayerStateMsg {
 pub enum PlayerInfoMsg {
     Plane((PlaneSize, bool)),
     // EventRateMsg(EventRateMsg),
+    // Image(ColorImage),
     Error(String),
 }
 
@@ -54,7 +55,7 @@ impl PlayerUi {
         let (tx, mut rx) = mpsc::channel::<PlayerStateMsg>(5);
         let (msg_tx, mut msg_rx) = mpsc::channel::<PlayerInfoMsg>(30);
 
-        let mut player_ui =  PlayerUi {
+        let mut player_ui = PlayerUi {
             player_state: PlayerState::default(),
             adder_image_handle: cc.egui_ctx.load_texture(
                 "adder_image",
@@ -70,7 +71,6 @@ impl PlayerUi {
         player_ui
     }
 
-
     fn spawn_tab_runner(
         &mut self,
         rx: mpsc::Receiver<PlayerStateMsg>,
@@ -84,15 +84,11 @@ impl PlayerUi {
         // Execute the runtime in its own thread.
         std::thread::spawn(move || {
             rt.block_on(async {
-                let mut transcoder =
-                    AdderPlayer::new(rx, msg_tx, adder_image_handle);
+                let mut transcoder = AdderPlayer::new(rx, msg_tx, adder_image_handle);
                 transcoder.run();
             })
         });
     }
-
-
-
 
     pub fn update(&mut self, ctx: &egui::Context) {
         // Store a copy of the params to compare against later
@@ -116,7 +112,6 @@ impl PlayerUi {
         }
     }
 
-
     fn handle_file_drop(&mut self, ctx: &egui::Context) {
         ctx.input(|i| {
             if !i.raw.dropped_files.is_empty() {
@@ -128,11 +123,7 @@ impl PlayerUi {
 }
 
 impl VizUi for PlayerUi {
-
-    fn draw_ui(
-        &mut self,
-        ctx: &egui::Context,
-    ) {
+    fn draw_ui(&mut self, ctx: &egui::Context) {
         egui::SidePanel::left("side_panel")
             .default_width(300.0)
             .show(ctx, |ui| {
@@ -175,6 +166,39 @@ impl VizUi for PlayerUi {
     }
 
     fn central_panel_ui(&mut self, ui: &mut egui::Ui) {
+        let mut avail_size = ui.available_size();
+
+        let size = match (
+            self.adder_image_handle.size()[0] as f32,
+            self.adder_image_handle.size()[1] as f32,
+        ) {
+            (a, b) if a / b > avail_size.x / avail_size.y => {
+                /*
+                The available space has a taller aspect ratio than the video
+                Fill the available horizontal space.
+                 */
+                egui::Vec2 {
+                    x: avail_size.x,
+                    y: (avail_size.x / a) * b,
+                }
+            }
+            (a, b) => {
+                /*
+                The available space has a shorter aspect ratio than the video
+                Fill the available vertical space.
+                 */
+                egui::Vec2 {
+                    x: (avail_size.y / b) * a,
+                    y: avail_size.y,
+                }
+            }
+        };
+
+        let image = egui::Image::new(egui::load::SizedTexture::new(
+            self.adder_image_handle.id(),
+            size,
+        ));
+        ui.add(image);
     }
 
     fn side_panel_grid_contents(&mut self, ui: &mut Ui) {
@@ -194,7 +218,6 @@ impl VizUi for PlayerUi {
         );
     }
 }
-
 
 // use crossbeam_channel::{bounded, Receiver};
 // use std::collections::VecDeque;

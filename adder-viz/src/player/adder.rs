@@ -2,14 +2,21 @@ use crate::player::adder::AdderPlayerError::Uninitialized;
 use crate::player::adder::AdderPlayerError::{InvalidFileType, NoFileSelected};
 use crate::player::ui::PlayerState;
 use crate::player::ui::{PlayerInfoMsg, PlayerStateMsg};
-use adder_codec_rs::adder_codec_core::codec::CodecError;
-use adder_codec_rs::adder_codec_core::{is_framed, open_file_decoder};
+use crate::utils::prep_epaint_image;
+use adder_codec_rs::adder_codec_core::bitstream_io::{BigEndian, BitReader};
+use adder_codec_rs::adder_codec_core::codec::decoder::Decoder;
+use adder_codec_rs::adder_codec_core::codec::{CodecError, EncoderType};
+use adder_codec_rs::adder_codec_core::{is_framed, open_file_decoder, Event};
 use adder_codec_rs::framer::driver::FramerMode::INSTANTANEOUS;
 use adder_codec_rs::framer::driver::{FrameSequence, Framer, FramerBuilder};
+use ndarray::Array3;
+use std::fs::File;
+use std::io::BufReader;
 use thiserror::Error;
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::error::TrySendError;
 use tokio::sync::mpsc::Receiver;
+use video_rs_adder_dep::Frame;
 
 #[derive(Error, Debug)]
 pub enum AdderPlayerError {
@@ -40,6 +47,8 @@ pub struct AdderPlayer {
     pub(crate) adder_image_handle: egui::TextureHandle,
     total_events: u64,
     last_consume_time: std::time::Instant,
+    input_stream: Option<InputStream>,
+    running_frame: Frame,
 }
 
 impl AdderPlayer {
@@ -59,6 +68,8 @@ impl AdderPlayer {
             framer: None,
             rx,
             msg_tx,
+            input_stream: None,
+            running_frame: Frame::zeros((0, 0, 0)),
         }
     }
 
@@ -80,7 +91,7 @@ impl AdderPlayer {
                     // Received no data, so consume the transcoder source if it exists
                     if self.framer.is_some() {
                         let result = self.consume();
-                        // self.handle_error(result);
+                        self.handle_error(result);
                     }
                 }
             }
@@ -157,6 +168,9 @@ impl AdderPlayer {
                 //         panic!("todo");
                 //     }
                 // };
+            } else {
+                eprintln!("Error creating new transcoder: {:?}", res);
+                return res;
             }
             return res;
         } else if transcoder_state.adaptive_params != self.player_state.adaptive_params {
@@ -226,8 +240,29 @@ impl AdderPlayer {
                             // .detect_features(detect_features)
                             .source(stream.get_source_type(), meta.source_camera);
 
-                        let frame_sequence: FrameSequence<u8> = framer_builder.clone().finish();
+                        let mut frame_sequence: FrameSequence<u8> = framer_builder.clone().finish();
                         self.framer = Some(frame_sequence);
+
+                        let mut stream = InputStream {
+                            decoder: stream,
+                            bitreader,
+                        };
+                        self.input_stream = Some(stream);
+                        self.running_frame = Frame::zeros((
+                            meta.plane.h_usize(),
+                            meta.plane.w_usize(),
+                            meta.plane.c_usize(),
+                        ));
+
+                        // Create an image channel for the UI thread
+
+                        // Spawn a new thread, holding the framer and stream, that continually consumes the video.
+                        // When a new frame is available, it sends it to the player
+
+                        // consume(&mut stream, &mut frame_sequence).await;
+
+                        // self.input_stream = Some(stream);
+                        eprintln!("Created framer");
                         Ok(())
                     }
                     // "aedat4" | "sock" => {
@@ -241,138 +276,98 @@ impl AdderPlayer {
             },
         }
     }
+    fn consume(
+        &mut self,
+        // stream: &mut InputStream,
+        // frame_sequence: &mut FrameSequence<u8>,
+    ) -> Result<(), AdderPlayerError> {
+        let stream = self.input_stream.as_mut().ok_or(Uninitialized)?;
+        let frame_sequence = self.framer.as_mut().ok_or(Uninitialized)?;
 
-    fn consume(&mut self) -> Result<(), AdderPlayerError> {
         let mut event_count = 0;
 
-        let stream = match &mut self.input_stream {
-            None => {
-                return Ok((event_count, None));
-            }
-            Some(s) => s,
-        };
-        let meta = *stream.decoder.meta();
+        // let image_mat = frame_sequence.get_frame();
+        // let color = image_mat.shape()[2] == 3;
+        // let width = image_mat.shape()[1];
+        // let height = image_mat.shape()[0];
 
-        let frame_sequence = match &mut self.frame_sequence {
-            None => {
-                return Ok((event_count, None));
-            }
-            Some(s) => s,
-        };
-
-        let display_mat = &mut self.display_frame;
-
-        let image_bevy = if frame_sequence.is_frame_0_filled() {
+        // let adder_ = &mut self.display_frame;
+        //
+        if frame_sequence.is_frame_0_filled() {
             let mut idx = 0;
-            let db = display_mat.as_slice_mut().unwrap();
-            let new_frame = frame_sequence.pop_next_frame().unwrap();
-            for chunk in new_frame {
-                // match frame_sequence.pop_next_frame_for_chunk(chunk_num) {
-                //     Some(arr) => {
-                for px in chunk.iter() {
-                    match px {
-                        Some(event) => {
-                            db[idx] = *event;
-                        }
-                        None => {}
-                    };
-                    idx += 1;
-                }
-                // }
-                // None => {
-                //     println!("Couldn't pop chunk {chunk_num}!")
-                // }
-                // }
-            }
-
-            // TODO: temporary, for testing what the running intensities look like
-            // let running_intensities = frame_sequence.get_running_intensities();
-            // for px in running_intensities.iter() {
-            //     db[idx] = *px as u8;
-            //     idx += 1;
-            // }
-
-            if let Some(feature_interval) = frame_sequence.pop_features() {
-                for feature in feature_interval.features {
-                    let db = display_mat.as_slice_mut().unwrap();
-
-                    let color: u8 = 255;
-                    let radius = 2;
-                    for i in -radius..=radius {
-                        let idx =
-                            ((feature.y as i32 + i) * meta.plane.w() as i32 * meta.plane.c() as i32
-                                + (feature.x as i32) * meta.plane.c() as i32)
-                                as usize;
-                        db[idx] = color;
-
-                        if meta.plane.c() > 1 {
-                            db[idx + 1] = color;
-                            db[idx + 2] = color;
-                        }
-
-                        let idx = (feature.y as i32 * meta.plane.w() as i32 * meta.plane.c() as i32
-                            + (feature.x as i32 + i) * meta.plane.c() as i32)
-                            as usize;
-                        db[idx] = color;
-
-                        if meta.plane.c() > 1 {
-                            db[idx + 1] = color;
-                            db[idx + 2] = color;
+            unsafe {
+                let db = self.running_frame.as_slice_mut().unwrap();
+                let new_frame = frame_sequence.pop_next_frame().unwrap();
+                // Flatten the frame
+                for chunk in 0..new_frame.len() {
+                    for y in 0..new_frame[chunk].shape()[0] {
+                        for x in 0..new_frame[chunk].shape()[1] {
+                            for c in 0..new_frame[chunk].shape()[2] {
+                                if let Some(val) = new_frame[chunk].uget((y, x, c)) {
+                                    db[idx] = *val;
+                                }
+                                idx += 1;
+                            }
                         }
                     }
                 }
             }
 
-            // if self.view_mode == FramedViewMode::DeltaT {
-            //     opencv::core::normalize(
-            //         &display_mat.clone(),
-            //         &mut display_mat,
-            //         0.0,
-            //         255.0,
-            //         opencv::core::NORM_MINMAX,
-            //         opencv::core::CV_8U,
-            //         &Mat::default(),
-            //     )?;
-            //     opencv::core::subtract(
-            //         &Scalar::new(255.0, 255.0, 255.0, 0.0),
-            //         &display_mat.clone(),
-            //         &mut display_mat,
-            //         &Mat::default(),
-            //         opencv::core::CV_8U,
-            //     )?;
-            // } else if self.view_mode == FramedViewMode::D {
+            let color = self.running_frame.shape()[2] == 3;
+            let width = self.running_frame.shape()[1];
+            let height = self.running_frame.shape()[0];
+
+            let image = prep_epaint_image(&self.running_frame, color, width, height).unwrap();
+
+            // TODO: Reenable the below
+            // if let Some(feature_interval) = frame_sequence.pop_features() {
+            //     for feature in feature_interval.features {
+            //         // let db = display_mat.as_slice_mut().unwrap();
+            //
+            //         let color: u8 = 255;
+            //         let radius = 2;
+            //         for i in -radius..=radius {
+            //             let idx =
+            //                 ((feature.y as i32 + i) * meta.plane.w() as i32 * meta.plane.c() as i32
+            //                     + (feature.x as i32) * meta.plane.c() as i32)
+            //                     as usize;
+            //             db[idx] = color;
+            //
+            //             if meta.plane.c() > 1 {
+            //                 db[idx + 1] = color;
+            //                 db[idx + 2] = color;
+            //             }
+            //
+            //             let idx = (feature.y as i32 * meta.plane.w() as i32 * meta.plane.c() as i32
+            //                 + (feature.x as i32 + i) * meta.plane.c() as i32)
+            //                 as usize;
+            //             db[idx] = color;
+            //
+            //             if meta.plane.c() > 1 {
+            //                 db[idx + 1] = color;
+            //                 db[idx + 2] = color;
+            //             }
+            //         }
+            //     }
             // }
 
-            // let mut keypoints = Vector::<KeyPoint>::new();
-            // opencv::features2d::fast(display_mat, &mut keypoints, 50, true)?;
-            // let mut keypoint_mat = Mat::default();
-            // opencv::features2d::draw_keypoints(
-            //     display_mat,
-            //     &keypoints,
-            //     &mut keypoint_mat,
-            //     Scalar::new(0.0, 0.0, 255.0, 0.0),
-            //     opencv::features2d::DrawMatchesFlags::DEFAULT,
-            // )?;
-            // show_display_force("keypoints", &keypoint_mat, 1)?;
+            // self.stream_state.current_t_ticks += frame_sequence.state.tpf;
 
-            self.stream_state.current_t_ticks += frame_sequence.state.tpf;
+            // let image_mat = self.display_frame.clone();
+            // let color = image_mat.shape()[2] == 3;
+            //
+            // let image_bevy = prep_bevy_image(image_mat, color, meta.plane.w(), meta.plane.h())?;
 
-            let image_mat = self.display_frame.clone();
-            let color = image_mat.shape()[2] == 3;
+            // Set the image to the handle, so that the UI can display it
+            self.adder_image_handle.set(image, Default::default());
 
-            let image_bevy = prep_bevy_image(image_mat, color, meta.plane.w(), meta.plane.h())?;
-
-            Some(image_bevy)
-        } else {
-            None
-        };
-
-        if image_bevy.is_some() {
-            return Ok((0, image_bevy));
+            return Ok(());
         }
+        let meta = stream.decoder.meta();
 
         let mut last_event: Option<Event> = None;
         loop {
+            eprintln!("Consume");
             match stream.decoder.digest_event(&mut stream.bitreader) {
                 Ok(mut event) => {
                     event_count += 1;
@@ -381,40 +376,42 @@ impl AdderPlayer {
                     last_event = Some(event);
 
                     if filled {
-                        return Ok((event_count, image_bevy));
+                        // return Ok((event_count, image_bevy));
+                        return Ok(());
                     }
                 }
                 Err(e) => {
-                    if !frame_sequence.flush_frame_buffer() {
-                        eprintln!("Player error: {}", e);
-                        eprintln!("Completely done");
-                        // TODO: Need to reset the UI event count events_ppc count when looping back here
-                        // Loop/restart back to the beginning
-                        if stream.decoder.get_compression_type() == EncoderType::Raw {
-                            stream.decoder.set_input_stream_position(
-                                &mut stream.bitreader,
-                                meta.header_size as u64,
-                            )?;
-                        } else {
-                            stream
-                                .decoder
-                                .set_input_stream_position(&mut stream.bitreader, 1)?;
-                        }
-
-                        self.frame_sequence =
-                            self.framer_builder.clone().map(|builder| builder.finish());
-                        self.stream_state.last_timestamps = Array::zeros((
-                            meta.plane.h_usize(),
-                            meta.plane.w_usize(),
-                            meta.plane.c_usize(),
-                        ));
-                        self.stream_state.current_t_ticks = 0;
-                        self.current_frame = 0;
-
-                        return Err(Box::try_from(CodecError::Eof).unwrap());
-                    } else {
-                        return self.consume_source_accurate();
-                    }
+                    todo!("handle codec error (e.g., restart playback)");
+                    // if !frame_sequence.flush_frame_buffer() {
+                    //     eprintln!("Player error: {}", e);
+                    //     eprintln!("Completely done");
+                    //     // TODO: Need to reset the UI event count events_ppc count when looping back here
+                    //     // Loop/restart back to the beginning
+                    //     if stream.decoder.get_compression_type() == EncoderType::Raw {
+                    //         stream.decoder.set_input_stream_position(
+                    //             &mut stream.bitreader,
+                    //             meta.header_size as u64,
+                    //         )?;
+                    //     } else {
+                    //         stream
+                    //             .decoder
+                    //             .set_input_stream_position(&mut stream.bitreader, 1)?;
+                    //     }
+                    //
+                    //     frame_sequence =
+                    //         self.framer_builder.clone().map(|builder| builder.finish());
+                    //     self.stream_state.last_timestamps = Array::zeros((
+                    //         meta.plane.h_usize(),
+                    //         meta.plane.w_usize(),
+                    //         meta.plane.c_usize(),
+                    //     ));
+                    //     self.stream_state.current_t_ticks = 0;
+                    //     self.current_frame = 0;
+                    //
+                    //     return Err(Box::try_from(CodecError::Eof).unwrap());
+                    // } else {
+                    //     return self.consume_source_accurate();
+                    // }
                 }
             }
         }
@@ -460,12 +457,12 @@ impl AdderPlayer {
 //     pub running_intensities: Array3<i32>,
 // }
 //
-// // TODO: allow flexibility with decoding non-file inputs
-// pub struct InputStream {
-//     pub(crate) decoder: Decoder<BufReader<File>>,
-//     pub(crate) bitreader: BitReader<BufReader<File>, BigEndian>,
-// }
-// unsafe impl Send for InputStream {}
+// TODO: allow flexibility with decoding non-file inputs
+pub struct InputStream {
+    pub(crate) decoder: Decoder<BufReader<File>>,
+    pub(crate) bitreader: BitReader<BufReader<File>, BigEndian>,
+}
+unsafe impl Send for InputStream {}
 //
 // #[derive(Default)]
 // pub struct AdderPlayer {
