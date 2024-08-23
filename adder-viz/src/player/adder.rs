@@ -139,15 +139,15 @@ impl AdderPlayer {
     }
     fn state_update(
         &mut self,
-        transcoder_state: PlayerState,
+        player_state: PlayerState,
         force_new: bool,
     ) -> Result<(), AdderPlayerError> {
-        dbg!(transcoder_state.core_params.clone());
+        dbg!(player_state.core_params.clone());
         dbg!(self.player_state.core_params.clone());
-        if force_new || transcoder_state.core_params != self.player_state.core_params {
+        if force_new || player_state.core_params != self.player_state.core_params {
             eprintln!("Create new transcoder");
 
-            let res = self.core_state_update(transcoder_state);
+            let res = self.core_state_update(player_state);
             if res.is_ok() {
                 // Send a message with the plane size of the video
                 // let plane = self
@@ -175,14 +175,14 @@ impl AdderPlayer {
                 return res;
             }
             return res;
-        } else if transcoder_state.adaptive_params != self.player_state.adaptive_params {
-            eprintln!("Modify existing transcoder");
-            self.update_params(transcoder_state);
+        } else if player_state.adaptive_params != self.player_state.adaptive_params {
+            eprintln!("Modify existing player");
+            self.update_params(player_state);
             return self.adaptive_state_update();
         } else {
             eprintln!("No change in transcoder state");
         }
-        self.update_params(transcoder_state);
+        self.update_params(player_state);
 
         Ok(())
     }
@@ -195,6 +195,9 @@ impl AdderPlayer {
         let source = self.framer.as_mut().ok_or(Uninitialized)?;
 
         let params = &self.player_state.adaptive_params;
+
+        source.buffer_limit = params.buffer_limit;
+
         // source.get_video_mut().instantaneous_view_mode = params.view_mode_radio_state;
         // source.get_video_mut().update_detect_features(
         //     params.detect_features,

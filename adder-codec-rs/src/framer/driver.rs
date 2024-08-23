@@ -266,7 +266,7 @@ pub struct FrameSequence<T> {
     pub(crate) mode: FramerMode,
     pub(crate) detect_features: bool,
     pub(crate) features: VecDeque<FeatureInterval>,
-    buffer_limit: Option<u32>,
+    pub buffer_limit: Option<u32>,
 
     pub(crate) running_intensities: Array3<u8>,
 
