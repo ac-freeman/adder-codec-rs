@@ -6,6 +6,7 @@ use crate::{slider_pm, TabState, VizUi};
 use adder_codec_rs::adder_codec_core::PlaneSize;
 use eframe::epaint::ColorImage;
 use egui::Ui;
+use std::time::{Duration, Instant};
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::Sender;
 
@@ -23,11 +24,25 @@ pub enum PlayerInfoMsg {
     Error(String),
 }
 
-#[derive(Default, Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct PlayerState {
     pub adaptive_params: AdaptiveParams,
     pub core_params: CoreParams,
+    pub last_frame_display_time: Option<Instant>,
+    pub frame_length: Duration,
     // pub info_params: InfoParams,
+}
+
+impl Default for PlayerState {
+    fn default() -> Self {
+        Self {
+            adaptive_params: Default::default(),
+            core_params: Default::default(),
+            last_frame_display_time: None,
+            frame_length: Duration::from_secs_f32(1.0 / 30.0),
+            // info_params: Default::default(),
+        }
+    }
 }
 
 impl TabState for PlayerState {

@@ -12,6 +12,7 @@ use adder_codec_rs::framer::driver::{FrameSequence, Framer, FramerBuilder};
 use ndarray::Array3;
 use std::fs::File;
 use std::io::BufReader;
+use std::time::{Duration, Instant};
 use thiserror::Error;
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::error::TrySendError;
@@ -299,9 +300,17 @@ impl AdderPlayer {
         // let width = image_mat.shape()[1];
         // let height = image_mat.shape()[0];
 
-        // let adder_ = &mut self.display_frame;
-        //
-        if frame_sequence.is_frame_0_filled() {
+        let time_since_last_displayed = match self.player_state.last_frame_display_time {
+            None => {
+                self.player_state.last_frame_display_time = Some(Instant::now());
+                Duration::from_secs(0)
+            }
+            Some(a) => a.elapsed(),
+        };
+
+        if frame_sequence.is_frame_0_filled()
+            && time_since_last_displayed >= self.player_state.frame_length
+        {
             let mut idx = 0;
             unsafe {
                 let db = self.running_frame.as_slice_mut().unwrap();
@@ -367,9 +376,11 @@ impl AdderPlayer {
             // let image_bevy = prep_bevy_image(image_mat, color, meta.plane.w(), meta.plane.h())?;
 
             // Set the image to the handle, so that the UI can display it
+            // TODO: Actually send the images on a channel, so they can be displayed separately from the decompression thread
             self.adder_image_handle.set(image, Default::default());
+            self.player_state.last_frame_display_time = Some(Instant::now());
 
-            return Ok(());
+            // return Ok(());
         }
         let meta = stream.decoder.meta();
 
