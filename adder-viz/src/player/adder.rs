@@ -9,6 +9,7 @@ use adder_codec_rs::adder_codec_core::codec::{CodecError, EncoderType};
 use adder_codec_rs::adder_codec_core::{is_framed, open_file_decoder, Event};
 use adder_codec_rs::framer::driver::FramerMode::INSTANTANEOUS;
 use adder_codec_rs::framer::driver::{FrameSequence, Framer, FramerBuilder};
+use eframe::epaint::ColorImage;
 use ndarray::Array3;
 use std::fs::File;
 use std::io::BufReader;
@@ -16,7 +17,7 @@ use std::time::{Duration, Instant};
 use thiserror::Error;
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::error::TrySendError;
-use tokio::sync::mpsc::Receiver;
+use tokio::sync::mpsc::{Receiver, Sender};
 use video_rs_adder_dep::Frame;
 
 #[derive(Error, Debug)]
@@ -36,6 +37,9 @@ pub enum AdderPlayerError {
     /// Codec error
     #[error("Codec error")]
     CodecError(#[from] CodecError),
+    // /// Everything else error
+    // #[error(transparent)]
+    // Other(#[from] anyhow::Error),
 }
 
 pub struct AdderPlayer {
@@ -45,25 +49,27 @@ pub struct AdderPlayer {
     // source: Option<dyn Framer<Output=()>>,
     rx: Receiver<PlayerStateMsg>,
     msg_tx: mpsc::Sender<PlayerInfoMsg>,
-    pub(crate) adder_image_handle: egui::TextureHandle,
+    // pub(crate) adder_image_handle: egui::TextureHandle,
+    // adder_image_tx: Sender<ColorImage>,
     total_events: u64,
     last_consume_time: std::time::Instant,
     input_stream: Option<InputStream>,
     running_frame: Frame,
+    pub image_tx: Sender<ColorImage>,
 }
 
 impl AdderPlayer {
     pub(crate) fn new(
         rx: Receiver<PlayerStateMsg>,
         msg_tx: mpsc::Sender<PlayerInfoMsg>,
-        adder_image_handle: egui::TextureHandle,
+        image_tx: Sender<ColorImage>,
     ) -> Self {
         let threaded_rt = tokio::runtime::Runtime::new().unwrap();
 
         AdderPlayer {
             pool: threaded_rt,
             player_state: Default::default(),
-            adder_image_handle,
+            image_tx,
             total_events: 0,
             last_consume_time: std::time::Instant::now(),
             framer: None,
@@ -74,7 +80,7 @@ impl AdderPlayer {
         }
     }
 
-    pub(crate) fn run(&mut self) {
+    pub(crate) async fn run(&mut self) {
         loop {
             match self.rx.try_recv() {
                 Ok(msg) => match msg {
@@ -91,7 +97,7 @@ impl AdderPlayer {
                 Err(_) => {
                     // Received no data, so consume the transcoder source if it exists
                     if self.framer.is_some() {
-                        let result = self.consume();
+                        let result = self.consume().await;
                         self.handle_error(result);
                     }
                 }
@@ -285,7 +291,7 @@ impl AdderPlayer {
         self.player_state.core_params = player_state.core_params;
         Ok(())
     }
-    fn consume(
+    async fn consume(
         &mut self,
         // stream: &mut InputStream,
         // frame_sequence: &mut FrameSequence<u8>,
@@ -300,17 +306,7 @@ impl AdderPlayer {
         // let width = image_mat.shape()[1];
         // let height = image_mat.shape()[0];
 
-        let time_since_last_displayed = match self.player_state.last_frame_display_time {
-            None => {
-                self.player_state.last_frame_display_time = Some(Instant::now());
-                Duration::from_secs(0)
-            }
-            Some(a) => a.elapsed(),
-        };
-
-        if frame_sequence.is_frame_0_filled()
-            && time_since_last_displayed >= self.player_state.frame_length
-        {
+        while frame_sequence.is_frame_0_filled() {
             let mut idx = 0;
             unsafe {
                 let db = self.running_frame.as_slice_mut().unwrap();
@@ -377,8 +373,8 @@ impl AdderPlayer {
 
             // Set the image to the handle, so that the UI can display it
             // TODO: Actually send the images on a channel, so they can be displayed separately from the decompression thread
-            self.adder_image_handle.set(image, Default::default());
-            self.player_state.last_frame_display_time = Some(Instant::now());
+            self.image_tx.send(image).await.unwrap();
+            // self.player_state.last_frame_display_time = Some(Instant::now());
 
             // return Ok(());
         }

@@ -46,6 +46,7 @@ ndarray = "0.15.6"
 video-rs-adder-dep = { version = "0.4.1", features = ["ndarray"] }
 ndarray-image = "0.3.0"
 rand = "0.8.5"
+anyhow = "1.0.82"
 
 [dependencies.opencv]
 version = "0.83.0"

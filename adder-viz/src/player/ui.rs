@@ -8,7 +8,7 @@ use eframe::epaint::ColorImage;
 use egui::Ui;
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc;
-use tokio::sync::mpsc::Sender;
+use tokio::sync::mpsc::{Receiver, Sender};
 
 #[derive(Debug, Clone)]
 pub enum PlayerStateMsg {
@@ -28,8 +28,6 @@ pub enum PlayerInfoMsg {
 pub struct PlayerState {
     pub adaptive_params: AdaptiveParams,
     pub core_params: CoreParams,
-    pub last_frame_display_time: Option<Instant>,
-    pub frame_length: Duration,
     // pub info_params: InfoParams,
 }
 
@@ -38,8 +36,6 @@ impl Default for PlayerState {
         Self {
             adaptive_params: Default::default(),
             core_params: Default::default(),
-            last_frame_display_time: None,
-            frame_length: Duration::from_secs_f32(1.0 / 30.0),
             // info_params: Default::default(),
         }
     }
@@ -64,12 +60,16 @@ pub struct PlayerUi {
     last_frame_time: std::time::Instant,
     pub player_state_tx: Sender<PlayerStateMsg>,
     msg_rx: mpsc::Receiver<PlayerInfoMsg>,
+    pub image_rx: Receiver<ColorImage>,
+    pub last_frame_display_time: Option<Instant>,
+    pub frame_length: Duration,
 }
 
 impl PlayerUi {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         let (tx, mut rx) = mpsc::channel::<PlayerStateMsg>(5);
         let (msg_tx, mut msg_rx) = mpsc::channel::<PlayerInfoMsg>(30);
+        let (image_tx, mut image_rx) = mpsc::channel::<ColorImage>(500);
 
         let mut player_ui = PlayerUi {
             player_state: PlayerState::default(),
@@ -81,9 +81,12 @@ impl PlayerUi {
             last_frame_time: std::time::Instant::now(),
             player_state_tx: tx,
             msg_rx,
+            image_rx,
+            last_frame_display_time: None,
+            frame_length: Duration::from_secs_f32(1.0 / 30.0),
         };
 
-        player_ui.spawn_tab_runner(rx, msg_tx);
+        player_ui.spawn_tab_runner(rx, msg_tx, image_tx);
         player_ui
     }
 
@@ -91,6 +94,7 @@ impl PlayerUi {
         &mut self,
         rx: mpsc::Receiver<PlayerStateMsg>,
         msg_tx: mpsc::Sender<PlayerInfoMsg>,
+        image_tx: Sender<ColorImage>,
     ) {
         let adder_image_handle = self.adder_image_handle.clone();
         let rt = tokio::runtime::Runtime::new().expect("Unable to create Runtime");
@@ -100,8 +104,8 @@ impl PlayerUi {
         // Execute the runtime in its own thread.
         std::thread::spawn(move || {
             rt.block_on(async {
-                let mut transcoder = AdderPlayer::new(rx, msg_tx, adder_image_handle);
-                transcoder.run();
+                let mut transcoder = AdderPlayer::new(rx, msg_tx, image_tx);
+                transcoder.run().await;
             })
         });
     }
@@ -120,11 +124,10 @@ impl PlayerUi {
         // This should always be the very last thing we do in this function
         if old_params != self.player_state {
             eprintln!("Sending new transcoder state");
-            self.player_state_tx
-                .blocking_send(PlayerStateMsg::Set {
-                    player_state: self.player_state.clone(),
-                })
-                .unwrap();
+            let res = self.player_state_tx.blocking_send(PlayerStateMsg::Set {
+                player_state: self.player_state.clone(),
+            });
+            dbg!(res);
         }
     }
 
@@ -215,6 +218,25 @@ impl VizUi for PlayerUi {
             size,
         ));
         ui.add(image);
+
+        let time_since_last_displayed = match self.last_frame_display_time {
+            None => {
+                self.last_frame_display_time = Some(Instant::now());
+                Duration::from_secs(0)
+            }
+            Some(a) => a.elapsed(),
+        };
+
+        if time_since_last_displayed >= self.frame_length {
+            // Get the next image
+            match self.image_rx.try_recv() {
+                Ok(image) => {
+                    self.adder_image_handle.set(image, Default::default());
+                    self.last_frame_display_time = Some(Instant::now());
+                }
+                Err(_) => {}
+            }
+        }
     }
 
     fn side_panel_grid_contents(&mut self, ui: &mut Ui) {
