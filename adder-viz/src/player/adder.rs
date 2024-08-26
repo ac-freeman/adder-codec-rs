@@ -430,26 +430,7 @@ impl AdderPlayer {
                         eprintln!("Completely done");
                         // TODO: Need to reset the UI event count events_ppc count when looping back here
                         // Loop/restart back to the beginning
-                        if stream.decoder.get_compression_type() == EncoderType::Raw {
-                            stream.decoder.set_input_stream_position(
-                                &mut stream.bitreader,
-                                meta.header_size as u64,
-                            )?;
-                        } else {
-                            stream
-                                .decoder
-                                .set_input_stream_position(&mut stream.bitreader, 1)?;
-                        }
-
-                        *frame_sequence = self.framer_builder.clone().finish();
-                        // self.framer_builder.clone().map(|builder| builder.finish());
-                        // self.stream_state.last_timestamps = Array::zeros((
-                        //     meta.plane.h_usize(),
-                        //     meta.plane.w_usize(),
-                        //     meta.plane.c_usize(),
-                        // ));
-                        // self.stream_state.current_t_ticks = 0;
-                        // self.current_frame = 0;
+                        self.state_update(self.player_state.clone(), true)?;
 
                         return Err(AdderPlayerError::from(CodecError::Eof));
                     } else {
