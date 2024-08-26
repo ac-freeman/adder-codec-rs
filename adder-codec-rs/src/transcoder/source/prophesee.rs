@@ -116,7 +116,7 @@ impl<W: Write + 'static> Prophesee<W> {
 }
 
 impl<W: Write + 'static + std::marker::Send> Source<W> for Prophesee<W> {
-    fn consume(&mut self, _thread_pool: &Runtime) -> Result<Vec<Vec<Event>>, SourceError> {
+    fn consume(&mut self) -> Result<Vec<Vec<Event>>, SourceError> {
         if self.running_t == 0 {
             self.video.integrate_matrix(
                 self.video.state.running_intensities.clone(),

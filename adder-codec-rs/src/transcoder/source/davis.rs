@@ -11,7 +11,7 @@ use rayon::iter::IndexedParallelIterator;
 use rayon::iter::ParallelIterator;
 
 use opencv::core::{Mat, CV_8U};
-// use opencv::prelude::*;
+use opencv::prelude::*;
 
 use bumpalo::Bump;
 use ndarray::{Array3, Axis};
@@ -35,7 +35,7 @@ use tokio::runtime::Runtime;
 use video_rs_adder_dep::Frame;
 
 /// The EDI reconstruction mode, determining how intensities are integrated for the ADΔER model
-#[derive(PartialEq, Eq, Clone, Copy)]
+#[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub enum TranscoderMode {
     /// Perform a framed EDI reconstruction at a given (constant) frame rate. Each frame is
     /// integrated in the ADΔER model with a [Framed](crate::transcoder::source::framed::Framed) source.
@@ -606,7 +606,7 @@ impl<W: Write + 'static> Integration<W> {
 }
 
 impl<W: Write + 'static + std::marker::Send> Source<W> for Davis<W> {
-    fn consume(&mut self, thread_pool: &Runtime) -> Result<Vec<Vec<Event>>, SourceError> {
+    fn consume(&mut self) -> Result<Vec<Vec<Event>>, SourceError> {
         // Attempting new method for integration without requiring a buffer. Could be implemented
         // for framed source just as easily
         // Keep running integration starting at D=log_2(current_frame) + 1
@@ -836,7 +836,7 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Davis<W> {
                 )
             };
 
-            ret = thread_pool.install(|| self.video.integrate_matrix(frame, mat_integration_time));
+            ret = self.video.integrate_matrix(frame, mat_integration_time);
 
             #[allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
             for (idx, val) in self.integration.dvs_last_ln_val.iter_mut().enumerate() {

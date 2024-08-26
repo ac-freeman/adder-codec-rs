@@ -1,5 +1,5 @@
 use std::error::Error;
-use std::ffi::OsStr;
+use std::ffi::{OsStr, OsString};
 
 #[cfg(feature = "open-cv")]
 use adder_codec_rs::transcoder::source::davis::Davis;
@@ -29,6 +29,7 @@ use crate::Images;
 use adder_codec_rs::adder_codec_core::codec::rate_controller::DEFAULT_CRF_QUALITY;
 use adder_codec_rs::adder_codec_core::SourceCamera::{DavisU8, Dvs, FramedU8};
 use adder_codec_rs::adder_codec_core::{Event, PlaneError};
+use adder_codec_rs::davis_edi_rs::util::reconstructor::ReconstructorError;
 use adder_codec_rs::transcoder::source::prophesee::Prophesee;
 use adder_codec_rs::transcoder::source::video::SourceError::VideoError;
 use adder_codec_rs::transcoder::source::video::{Source, SourceError, VideoBuilder};
@@ -76,6 +77,9 @@ pub enum AdderTranscoderError {
     #[error("Other error")]
     OtherError(#[from] Box<dyn Error>),
 
+    #[error(transparent)]
+    ReconstructorError(#[from] ReconstructorError),
+
     /// Uninitialized error
     #[error("Uninitialized")]
     Uninitialized,
@@ -104,7 +108,7 @@ impl AdderTranscoder {
     }
 
     /// The unbounded loop. Continually processes messages or consumes the source
-    pub(crate) fn run(&mut self) {
+    pub(crate) async fn run(&mut self) {
         loop {
             match self.rx.try_recv() {
                 Ok(msg) => match msg {
@@ -130,124 +134,8 @@ impl AdderTranscoder {
 
                     TranscoderStateMsg::Set { transcoder_state } => {
                         eprintln!("Received transcoder state");
-                        let result = self.state_update(transcoder_state, false);
+                        let result = self.state_update(transcoder_state, false).await;
                         self.handle_error(result);
-
-                        // #[cfg(feature = "open-cv")]
-                        // Some(ext) if ext == "aedat4" || ext == "sock" => {
-                        //     let events_only = match &ui_state.davis_mode_radio_state {
-                        //         TranscoderMode::Framed => false,
-                        //         TranscoderMode::RawDavis => false,
-                        //         TranscoderMode::RawDvs => true,
-                        //     };
-                        //     let deblur_only = match &ui_state.davis_mode_radio_state {
-                        //         TranscoderMode::Framed => false,
-                        //         TranscoderMode::RawDavis => true,
-                        //         TranscoderMode::RawDvs => true,
-                        //     };
-                        //
-                        //     let rt = tokio::runtime::Builder::new_multi_thread()
-                        //         .worker_threads(ui_state.thread_count)
-                        //         .enable_time()
-                        //         .build()?;
-                        //     let dir = input_path_buf
-                        //         .parent()
-                        //         .expect("File must be in some directory")
-                        //         .to_str()
-                        //         .expect("Bad path")
-                        //         .to_string();
-                        //     let filename_0 = input_path_buf
-                        //         .file_name()
-                        //         .expect("File must exist")
-                        //         .to_str()
-                        //         .expect("Bad filename")
-                        //         .to_string();
-                        //
-                        //     let mut mode = "file";
-                        //     let mut simulate_latency = true;
-                        //     if ext == "sock" {
-                        //         mode = "socket";
-                        //         simulate_latency = false;
-                        //     }
-                        //
-                        //     let filename_1 = _input_path_buf_1.as_ref().map(|_input_path_buf_1| {
-                        //         _input_path_buf_1
-                        //             .file_name()
-                        //             .expect("File must exist")
-                        //             .to_str()
-                        //             .expect("Bad filename")
-                        //             .to_string()
-                        //     });
-                        //
-                        //     let reconstructor = rt.block_on(Reconstructor::new(
-                        //         dir + "/",
-                        //         filename_0,
-                        //         filename_1.unwrap_or("".to_string()),
-                        //         mode.to_string(), // TODO
-                        //         0.15,
-                        //         ui_state.optimize_c,
-                        //         ui_state.optimize_c_frequency,
-                        //         false,
-                        //         false,
-                        //         false,
-                        //         ui_state.davis_output_fps,
-                        //         deblur_only,
-                        //         events_only,
-                        //         1000.0, // Target latency (not used)
-                        //         simulate_latency,
-                        //     ))?;
-                        //
-                        //     let output_string = output_path_opt
-                        //         .map(|output_path| output_path.to_str().expect("Bad path").to_string());
-                        //
-                        //     let mut davis_source: Davis<BufWriter<File>> =
-                        //         Davis::new(reconstructor, rt, ui_state.davis_mode_radio_state)?
-                        //             .optimize_adder_controller(false) // TODO
-                        //             .mode(ui_state.davis_mode_radio_state)
-                        //             .crf(
-                        //                 ui_state
-                        //                     .encoder_options
-                        //                     .crf
-                        //                     .get_quality()
-                        //                     .unwrap_or(DEFAULT_CRF_QUALITY),
-                        //             )
-                        //             .time_parameters(
-                        //                 20000000_u32,
-                        //                 (1_000_000.0 / ui_state.davis_output_fps)
-                        //                     as adder_codec_rs::adder_codec_core::DeltaT,
-                        //                 20000000_u32,
-                        //                 Some(ui_state.time_mode),
-                        //             )?;
-                        //
-                        //     // Override time parameters if we're in framed mode
-                        //     if ui_state.davis_mode_radio_state == TranscoderMode::Framed {
-                        //         davis_source = davis_source.time_parameters(
-                        //             (255.0 * ui_state.davis_output_fps) as u32,
-                        //             255,
-                        //             255 * ui_state.delta_t_max_mult,
-                        //             Some(ui_state.time_mode),
-                        //         )?;
-                        //     }
-                        //
-                        //     if let Some(output_string) = output_string {
-                        //         let writer = BufWriter::new(File::create(output_string)?);
-                        //         davis_source = *davis_source.write_out(
-                        //             DavisU8,
-                        //             ui_state.time_mode,
-                        //             ui_state.integration_mode_radio_state,
-                        //             Some(ui_state.delta_t_max_mult as usize),
-                        //             ui_state.encoder_type,
-                        //             ui_state.encoder_options,
-                        //             writer,
-                        //         )?;
-                        //     }
-                        //
-                        //     Ok(AdderTranscoder {
-                        //         framed_source: None,
-                        //         davis_source: Some(davis_source),
-                        //         prophesee_source: None,
-                        //         live_image: Default::default(),
-                        //     })
                     }
                 },
                 Err(_) => {
@@ -261,7 +149,7 @@ impl AdderTranscoder {
         }
     }
 
-    fn handle_error(&mut self, result: Result<(), AdderTranscoderError>) {
+    async fn handle_error(&mut self, result: Result<(), AdderTranscoderError>) {
         match result {
             Ok(()) => {}
             Err(e) => {
@@ -280,6 +168,7 @@ impl AdderTranscoder {
                             .in_interval_count = 0;
                         state.core_params.output_path = None;
                         self.state_update(state, true)
+                            .await
                             .expect("Error creating new transcoder");
                         return;
                     }
@@ -287,6 +176,7 @@ impl AdderTranscoder {
                     AdderTranscoderError::IoError(_) => {}
                     AdderTranscoderError::OtherError(_) => {}
                     Uninitialized => {}
+                    _ => {}
                 }
 
                 match self
@@ -306,7 +196,7 @@ impl AdderTranscoder {
     fn consume(&mut self) -> Result<(), AdderTranscoderError> {
         {
             let source = self.source.as_mut().ok_or(Uninitialized)?;
-            let result: Vec<Vec<Event>> = source.consume(&self.pool)?; // TODO: remove pool from the consume() call entirely
+            let result: Vec<Vec<Event>> = source.consume()?;
             let mut msg = EventRateMsg::default();
 
             for events_vec in result {
@@ -383,14 +273,14 @@ impl AdderTranscoder {
         self.adder_image_handle.set(image, Default::default());
     }
 
-    fn state_update(
+    async fn state_update(
         &mut self,
         transcoder_state: TranscoderState,
         force_new: bool,
     ) -> Result<(), AdderTranscoderError> {
         if force_new || transcoder_state.core_params != self.transcoder_state.core_params {
             eprintln!("Create new transcoder");
-            let res = self.core_state_update(transcoder_state);
+            let res = self.core_state_update(transcoder_state).await;
             if res.is_ok() {
                 // Send a message with the plane size of the video
                 let plane = self
@@ -491,7 +381,7 @@ impl AdderTranscoder {
         Ok(())
     }
 
-    fn core_state_update(
+    async fn core_state_update(
         &mut self,
         transcoder_state: TranscoderState,
     ) -> Result<(), AdderTranscoderError> {
@@ -505,9 +395,12 @@ impl AdderTranscoder {
                         // Framed video
                         self.create_framed(transcoder_state)
                     }
-                    // "aedat4" | "sock" => {
-                    //     // Davis video
-                    // }
+                    "aedat4" | "sock" => {
+                        // Davis video
+                        let ext = ext.to_os_string();
+                        #[cfg(feature = "open-cv")]
+                        self.create_davis(transcoder_state, ext).await
+                    }
                     // "dat" => {
                     //     // Prophesee video
                     // }
@@ -590,6 +483,142 @@ impl AdderTranscoder {
         self.last_consume_time = std::time::Instant::now();
 
         eprintln!("Framed source created!");
+        Ok(())
+    }
+
+    async fn create_davis(
+        &mut self,
+        transcoder_state: TranscoderState,
+        ext: OsString,
+    ) -> Result<(), AdderTranscoderError> {
+        self.update_params(transcoder_state);
+
+        let core_params = &self.transcoder_state.core_params;
+        let adaptive_params = &self.transcoder_state.adaptive_params;
+
+        let events_only = match &core_params.davis_mode_radio_state {
+            TranscoderMode::Framed => false,
+            TranscoderMode::RawDavis => false,
+            TranscoderMode::RawDvs => true,
+        };
+        let deblur_only = match &core_params.davis_mode_radio_state {
+            TranscoderMode::Framed => false,
+            TranscoderMode::RawDavis => true,
+            TranscoderMode::RawDvs => true,
+        };
+
+        let rt = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(8) // TODO: get from a slider
+            .enable_time()
+            .build()?;
+        let dir = core_params
+            .input_path_buf_0
+            .clone()
+            .unwrap()
+            .parent()
+            .expect("File must be in some directory")
+            .to_str()
+            .expect("Bad path")
+            .to_string();
+        let filename_0 = core_params
+            .input_path_buf_0
+            .clone()
+            .unwrap()
+            .file_name()
+            .expect("File must exist")
+            .to_str()
+            .expect("Bad filename")
+            .to_string();
+
+        let mut mode = "file";
+        let mut simulate_latency = true;
+        if ext == "sock" {
+            mode = "socket";
+            simulate_latency = false;
+        }
+
+        // let filename_1 = _input_path_buf_1.as_ref().map(|_input_path_buf_1| {
+        //     _input_path_buf_1
+        //         .file_name()
+        //         .expect("File must exist")
+        //         .to_str()
+        //         .expect("Bad filename")
+        //         .to_string()
+        // });
+        let filename_1 = None;
+
+        let reconstructor: Reconstructor = Reconstructor::new(
+            dir + "/",
+            filename_0,
+            filename_1.unwrap_or("".to_string()),
+            mode.to_string(), // TODO
+            0.15,
+            adaptive_params.optimize_c,
+            adaptive_params.optimize_c_frequency,
+            false,
+            false,
+            false,
+            core_params.davis_output_fps,
+            deblur_only,
+            events_only,
+            1000.0, // Target latency (not used)
+            simulate_latency,
+        )
+        .await?;
+
+        let output_string = core_params
+            .output_path
+            .clone()
+            .map(|output_path| output_path.to_str().expect("Bad path").to_string());
+
+        let mut davis_source: Davis<BufWriter<File>> =
+            Davis::new(reconstructor, rt, core_params.davis_mode_radio_state)?
+                .optimize_adder_controller(false) // TODO
+                .mode(core_params.davis_mode_radio_state)
+                .crf(
+                    adaptive_params
+                        .encoder_options
+                        .crf
+                        .get_quality()
+                        .unwrap_or(DEFAULT_CRF_QUALITY),
+                )
+                .time_parameters(
+                    20000000_u32,
+                    (1_000_000.0 / core_params.davis_output_fps)
+                        as adder_codec_rs::adder_codec_core::DeltaT,
+                    20000000_u32,
+                    Some(core_params.time_mode),
+                )?;
+
+        // Override time parameters if we're in framed mode
+        if core_params.davis_mode_radio_state == TranscoderMode::Framed {
+            davis_source = davis_source.time_parameters(
+                (255.0 * core_params.davis_output_fps) as u32,
+                255,
+                255 * core_params.delta_t_max_mult,
+                Some(core_params.time_mode),
+            )?;
+        }
+
+        if let Some(output_string) = output_string {
+            let writer = BufWriter::new(File::create(output_string)?);
+            davis_source = *davis_source.write_out(
+                DavisU8,
+                core_params.time_mode,
+                core_params.integration_mode_radio_state,
+                Some(core_params.delta_t_max_mult as usize),
+                core_params.encoder_type,
+                adaptive_params.encoder_options,
+                writer,
+            )?;
+        }
+
+        self.source = Some(AdderSource::Davis(davis_source));
+
+        self.adaptive_state_update()?;
+        self.last_consume_time = std::time::Instant::now();
+
+        eprintln!("Davis source created!");
         Ok(())
     }
 }

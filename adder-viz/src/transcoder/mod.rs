@@ -2,6 +2,7 @@ use crate::utils::PlotY;
 use adder_codec_rs::adder_codec_core::codec::rate_controller::{Crf, DEFAULT_CRF_QUALITY};
 use adder_codec_rs::adder_codec_core::codec::{EncoderOptions, EncoderType};
 use adder_codec_rs::adder_codec_core::{PixelMultiMode, TimeMode};
+use adder_codec_rs::transcoder::source::davis::TranscoderMode;
 use adder_codec_rs::transcoder::source::video::FramedViewMode;
 use adder_codec_rs::utils::viz::ShowFeatureMode;
 use std::collections::VecDeque;
@@ -25,6 +26,8 @@ pub(crate) struct AdaptiveParams {
     pub show_features: ShowFeatureMode,
     pub feature_rate_adjustment: bool,
     pub feature_cluster: bool,
+    optimize_c: bool,
+    optimize_c_frequency: u32,
 }
 
 /// Core parameters which require a total reset of the transcoder. These parameters
@@ -41,6 +44,8 @@ pub(crate) struct CoreParams {
     pub input_path_buf_0: Option<PathBuf>,
     pub output_path: Option<PathBuf>,
     pub(crate) integration_mode_radio_state: PixelMultiMode,
+    davis_mode_radio_state: TranscoderMode,
+    davis_output_fps: f64,
 }
 
 /// These are not passed along to the transcoder, but are used to store settings for quality metrics
@@ -80,6 +85,8 @@ impl Default for AdaptiveParams {
             show_features: ShowFeatureMode::Off,
             feature_rate_adjustment: false,
             feature_cluster: false,
+            optimize_c: false,
+            optimize_c_frequency: 10,
         }
     }
 }
@@ -95,8 +102,10 @@ impl Default for CoreParams {
             time_mode: Default::default(),
             encoder_type: Default::default(),
             integration_mode_radio_state: Default::default(),
+            davis_mode_radio_state: TranscoderMode::RawDavis,
             input_path_buf_0: None,
             output_path: None,
+            davis_output_fps: 30.0,
         }
     }
 }

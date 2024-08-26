@@ -1,6 +1,6 @@
 <component name="ProjectRunConfigurationManager">
   <configuration default="false" name="Run adder-viz dynamic" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
-    <option name="command" value="run -p adder-viz --features &quot;compression&quot;" />
+    <option name="command" value="run -p adder-viz --features &quot;compression open-cv&quot;" />
     <option name="workingDirectory" value="file://$PROJECT_DIR$" />
     <envs>
       <env name="LD_LIBRARY_PATH" value="$PROJECT_DIR$/target/debug/deps/:$PROJECT_DIR$/target/debug/libbevy_dylib.so:$LD_LIBRARY_PATH" />

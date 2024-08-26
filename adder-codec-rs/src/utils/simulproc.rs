@@ -231,7 +231,7 @@ impl<W: Write + 'static> SimulProcessor<W> {
         let mut now = Instant::now();
 
         loop {
-            match self.source.consume(&self.thread_pool) {
+            match self.source.consume() {
                 Ok(events) => {
                     match self.events_tx.send(events) {
                         Ok(_) => {}

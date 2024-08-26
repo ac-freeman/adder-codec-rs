@@ -1383,10 +1383,7 @@ use enum_dispatch::enum_dispatch;
 pub trait Source<W: Write> {
     /// Intake one input interval worth of data from the source stream into the ADΔER model as
     /// intensities.
-    fn consume(
-        &mut self,
-        thread_pool: &tokio::runtime::Runtime,
-    ) -> Result<Vec<Vec<Event>>, SourceError>;
+    fn consume(&mut self) -> Result<Vec<Vec<Event>>, SourceError>;
 
     /// Set the Constant Rate Factor (CRF) quality setting for the encoder. 0 is lossless, 9 is worst quality.
     fn crf(&mut self, crf: u8);

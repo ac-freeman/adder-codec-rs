@@ -1,6 +1,7 @@
 use adder_codec_rs::adder_codec_core::codec::rate_controller::{Crf, CRF, DEFAULT_CRF_QUALITY};
 use adder_codec_rs::adder_codec_core::codec::{EncoderOptions, EncoderType};
 use adder_codec_rs::adder_codec_core::{PixelMultiMode, PlaneSize, TimeMode};
+use adder_codec_rs::transcoder::source::davis::TranscoderMode;
 use adder_codec_rs::transcoder::source::video::FramedViewMode;
 use adder_codec_rs::utils::cv::QualityMetrics;
 use adder_codec_rs::utils::viz::ShowFeatureMode;
@@ -18,7 +19,7 @@ use tokio::sync::mpsc::Sender;
 // use crate::utils::prep_bevy_image;
 use crate::transcoder::adder::AdderTranscoder;
 use crate::transcoder::{AdaptiveParams, CoreParams, EventRateMsg, InfoParams, InfoUiState};
-use crate::{slider_pm, App, Images, Tabs, TabState};
+use crate::{slider_pm, App, Images, TabState, Tabs};
 // #[cfg(feature = "open-cv")]
 // use adder_codec_rs::transcoder::source::davis::TranscoderMode;
 // use adder_codec_rs::transcoder::source::video::{FramedViewMode, Source, SourceError};
@@ -189,7 +190,7 @@ impl TranscoderUi {
             rt.block_on(async {
                 let mut transcoder =
                     AdderTranscoder::new(rx, msg_tx, input_image_handle, adder_image_handle);
-                transcoder.run();
+                transcoder.run().await;
             })
         });
     }
@@ -774,67 +775,67 @@ impl TranscoderUi {
         }
         ui.end_row();
         //
-        // #[cfg(feature = "open-cv")]
-        // {
-        //     ui.label("DAVIS mode:");
-        //     ui.add_enabled_ui(!enabled, |ui| {
-        //         ui.horizontal(|ui| {
-        //             ui.radio_value(
-        //                 &mut params.davis_mode_radio_state,
-        //                 TranscoderMode::Framed,
-        //                 "Framed recon",
-        //             );
-        //             ui.radio_value(
-        //                 &mut params.davis_mode_radio_state,
-        //                 TranscoderMode::RawDavis,
-        //                 "Raw DAVIS",
-        //             );
-        //             ui.radio_value(
-        //                 &mut params.davis_mode_radio_state,
-        //                 TranscoderMode::RawDvs,
-        //                 "Raw DVS",
-        //             );
-        //         });
-        //     });
-        //     ui.end_row();
-        //
-        //     ui.label("DAVIS deblurred FPS:");
-        //
-        //     slider_pm(
-        //         !enabled,
-        //         true,
-        //         ui,
-        //         &mut params.davis_output_fps,
-        //         &mut params.davis_output_fps_slider,
-        //         30.0..=1000000.0,
-        //         vec![
-        //             50.0, 100.0, 250.0, 500.0, 1_000.0, 2_500.0, 5_000.0, 7_500.0, 10_000.0, 1000000.0,
-        //         ],
-        //         50.0,
-        //     );
-        //     ui.end_row();
-        //
-        //     let enable_optimize = !enabled && params.davis_mode_radio_state != TranscoderMode::RawDvs;
-        //     ui.label("Optimize:");
-        //     ui.add_enabled(
-        //         enable_optimize,
-        //         egui::Checkbox::new(&mut params.optimize_c, "Optimize θ?"),
-        //     );
-        //     ui.end_row();
-        //
-        //     ui.label("Optimize frequency:");
-        //     slider_pm(
-        //         enable_optimize,
-        //         true,
-        //         ui,
-        //         &mut params.optimize_c_frequency,
-        //         &mut params.optimize_c_frequency_slider,
-        //         1..=250,
-        //         vec![10, 25, 50, 100],
-        //         1,
-        //     );
-        //     ui.end_row();
-        // }
+        #[cfg(feature = "open-cv")]
+        {
+            ui.label("DAVIS mode:");
+            ui.add_enabled_ui(!enabled, |ui| {
+                ui.horizontal(|ui| {
+                    ui.radio_value(
+                        &mut core_params.davis_mode_radio_state,
+                        TranscoderMode::Framed,
+                        "Framed recon",
+                    );
+                    ui.radio_value(
+                        &mut core_params.davis_mode_radio_state,
+                        TranscoderMode::RawDavis,
+                        "Raw DAVIS",
+                    );
+                    ui.radio_value(
+                        &mut core_params.davis_mode_radio_state,
+                        TranscoderMode::RawDvs,
+                        "Raw DVS",
+                    );
+                });
+            });
+            ui.end_row();
+
+            ui.label("DAVIS deblurred FPS:");
+
+            slider_pm(
+                !enabled,
+                true,
+                ui,
+                &mut core_params.davis_output_fps,
+                30.0..=1000000.0,
+                vec![
+                    50.0, 100.0, 250.0, 500.0, 1_000.0, 2_500.0, 5_000.0, 7_500.0, 10_000.0,
+                    1000000.0,
+                ],
+                50.0,
+            );
+            ui.end_row();
+
+            let enable_optimize =
+                !enabled && core_params.davis_mode_radio_state != TranscoderMode::RawDvs;
+            ui.label("Optimize:");
+            ui.add_enabled(
+                enable_optimize,
+                egui::Checkbox::new(&mut adaptive_params.optimize_c, "Optimize θ?"),
+            );
+            ui.end_row();
+
+            ui.label("Optimize frequency:");
+            slider_pm(
+                enable_optimize,
+                true,
+                ui,
+                &mut adaptive_params.optimize_c_frequency,
+                1..=250,
+                vec![10, 25, 50, 100],
+                1,
+            );
+            ui.end_row();
+        }
         //
         // let enable_encoder_options = params.encoder_type != EncoderType::Empty;
         //
