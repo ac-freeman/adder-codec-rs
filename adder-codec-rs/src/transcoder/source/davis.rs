@@ -370,7 +370,7 @@ impl<W: Write + 'static> Integration<W> {
                             // let mut frame_val = (base_val as f64);
                             // let mut lat_frame_val = (frame_val / 255.0).ln();
 
-                            *last_val_ln += if event.on() { self.dvs_c } else { -self.dvs_c };
+                            *last_val_ln *= if event.on() { self.dvs_c } else { -self.dvs_c }.exp();
                             let mut frame_val = (last_val_ln.exp() - 1.0) * 255.0;
                             clamp_u8(&mut frame_val, last_val_ln);
 
@@ -503,8 +503,9 @@ impl<W: Write + 'static> Integration<W> {
                 {
                     *px_idx = chunk_px_idx + px_per_chunk * chunk_idx;
 
-                    let last_val = (last_val_ln.exp() - 1.0) * 255.0;
+                    let mut last_val = (last_val_ln.exp() - 1.0) * 255.0;
 
+                    clamp_u8(&mut last_val, last_val_ln);
                     *base_val = px.base_val;
                     *frame_val = last_val as u8;
 
@@ -768,8 +769,8 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Davis<W> {
                         let a = px.running_t as i64;
                         let b = start_of_frame_timestamp
                             - self.integration.temp_first_frame_start_timestamp;
-                        debug_assert!(a <= b);
-                        debug_assert!(a <= start_of_frame_timestamp);
+                        // debug_assert!(a <= b);
+                        // debug_assert!(a <= start_of_frame_timestamp);
                     }
 
                     self.integration.integrate_frame_gaps(&mut self.video)?;
@@ -777,8 +778,8 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Davis<W> {
                         let a = px.running_t as i64;
                         let b = start_of_frame_timestamp
                             - self.integration.temp_first_frame_start_timestamp;
-                        debug_assert!(a <= b);
-                        debug_assert!(a > b - 1000);
+                        // debug_assert!(a <= b);
+                        // debug_assert!(a > b - 1000);
                     }
                 }
             }

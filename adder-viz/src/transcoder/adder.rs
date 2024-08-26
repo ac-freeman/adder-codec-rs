@@ -127,10 +127,127 @@ impl AdderTranscoder {
                         self.input_image_handle
                             .set(ColorImage::default(), Default::default());
                     }
+
                     TranscoderStateMsg::Set { transcoder_state } => {
                         eprintln!("Received transcoder state");
                         let result = self.state_update(transcoder_state, false);
                         self.handle_error(result);
+
+                        // #[cfg(feature = "open-cv")]
+                        // Some(ext) if ext == "aedat4" || ext == "sock" => {
+                        //     let events_only = match &ui_state.davis_mode_radio_state {
+                        //         TranscoderMode::Framed => false,
+                        //         TranscoderMode::RawDavis => false,
+                        //         TranscoderMode::RawDvs => true,
+                        //     };
+                        //     let deblur_only = match &ui_state.davis_mode_radio_state {
+                        //         TranscoderMode::Framed => false,
+                        //         TranscoderMode::RawDavis => true,
+                        //         TranscoderMode::RawDvs => true,
+                        //     };
+                        //
+                        //     let rt = tokio::runtime::Builder::new_multi_thread()
+                        //         .worker_threads(ui_state.thread_count)
+                        //         .enable_time()
+                        //         .build()?;
+                        //     let dir = input_path_buf
+                        //         .parent()
+                        //         .expect("File must be in some directory")
+                        //         .to_str()
+                        //         .expect("Bad path")
+                        //         .to_string();
+                        //     let filename_0 = input_path_buf
+                        //         .file_name()
+                        //         .expect("File must exist")
+                        //         .to_str()
+                        //         .expect("Bad filename")
+                        //         .to_string();
+                        //
+                        //     let mut mode = "file";
+                        //     let mut simulate_latency = true;
+                        //     if ext == "sock" {
+                        //         mode = "socket";
+                        //         simulate_latency = false;
+                        //     }
+                        //
+                        //     let filename_1 = _input_path_buf_1.as_ref().map(|_input_path_buf_1| {
+                        //         _input_path_buf_1
+                        //             .file_name()
+                        //             .expect("File must exist")
+                        //             .to_str()
+                        //             .expect("Bad filename")
+                        //             .to_string()
+                        //     });
+                        //
+                        //     let reconstructor = rt.block_on(Reconstructor::new(
+                        //         dir + "/",
+                        //         filename_0,
+                        //         filename_1.unwrap_or("".to_string()),
+                        //         mode.to_string(), // TODO
+                        //         0.15,
+                        //         ui_state.optimize_c,
+                        //         ui_state.optimize_c_frequency,
+                        //         false,
+                        //         false,
+                        //         false,
+                        //         ui_state.davis_output_fps,
+                        //         deblur_only,
+                        //         events_only,
+                        //         1000.0, // Target latency (not used)
+                        //         simulate_latency,
+                        //     ))?;
+                        //
+                        //     let output_string = output_path_opt
+                        //         .map(|output_path| output_path.to_str().expect("Bad path").to_string());
+                        //
+                        //     let mut davis_source: Davis<BufWriter<File>> =
+                        //         Davis::new(reconstructor, rt, ui_state.davis_mode_radio_state)?
+                        //             .optimize_adder_controller(false) // TODO
+                        //             .mode(ui_state.davis_mode_radio_state)
+                        //             .crf(
+                        //                 ui_state
+                        //                     .encoder_options
+                        //                     .crf
+                        //                     .get_quality()
+                        //                     .unwrap_or(DEFAULT_CRF_QUALITY),
+                        //             )
+                        //             .time_parameters(
+                        //                 20000000_u32,
+                        //                 (1_000_000.0 / ui_state.davis_output_fps)
+                        //                     as adder_codec_rs::adder_codec_core::DeltaT,
+                        //                 20000000_u32,
+                        //                 Some(ui_state.time_mode),
+                        //             )?;
+                        //
+                        //     // Override time parameters if we're in framed mode
+                        //     if ui_state.davis_mode_radio_state == TranscoderMode::Framed {
+                        //         davis_source = davis_source.time_parameters(
+                        //             (255.0 * ui_state.davis_output_fps) as u32,
+                        //             255,
+                        //             255 * ui_state.delta_t_max_mult,
+                        //             Some(ui_state.time_mode),
+                        //         )?;
+                        //     }
+                        //
+                        //     if let Some(output_string) = output_string {
+                        //         let writer = BufWriter::new(File::create(output_string)?);
+                        //         davis_source = *davis_source.write_out(
+                        //             DavisU8,
+                        //             ui_state.time_mode,
+                        //             ui_state.integration_mode_radio_state,
+                        //             Some(ui_state.delta_t_max_mult as usize),
+                        //             ui_state.encoder_type,
+                        //             ui_state.encoder_options,
+                        //             writer,
+                        //         )?;
+                        //     }
+                        //
+                        //     Ok(AdderTranscoder {
+                        //         framed_source: None,
+                        //         davis_source: Some(davis_source),
+                        //         prophesee_source: None,
+                        //         live_image: Default::default(),
+                        //     })
                     }
                 },
                 Err(_) => {

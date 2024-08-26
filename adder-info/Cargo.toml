@@ -15,7 +15,7 @@ categories = ["multimedia::encoding", "multimedia::video", "science"]
 
 [dependencies]
 adder-codec-core = { version = "0.3.3", path = "../adder-codec-core" }
-adder-codec-rs = { version = "0.4.4", path = "../adder-codec-rs", features = [
+adder-codec-rs = { version = "0.4.6", path = "../adder-codec-rs", features = [
     "transcoder",
 ] }
 clap = { version = "4.0.17", features = ["derive"] }
