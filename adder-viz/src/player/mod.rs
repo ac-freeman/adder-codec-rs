@@ -1,3 +1,5 @@
+use adder_codec_rs::transcoder::source::video::FramedViewMode;
+use adder_codec_rs::transcoder::source::video::FramedViewMode::Intensity;
 use adder_codec_rs::utils::viz::ShowFeatureMode;
 use std::path::PathBuf;
 
@@ -29,6 +31,7 @@ pub(crate) struct AdaptiveParams {
     pub detect_features: bool,
     pub show_features: ShowFeatureMode,
     pub buffer_limit: Option<u32>,
+    pub view_mode: FramedViewMode,
 }
 
 impl Default for AdaptiveParams {
@@ -38,6 +41,7 @@ impl Default for AdaptiveParams {
             detect_features: false,
             show_features: ShowFeatureMode::Off,
             buffer_limit: Some(60),
+            view_mode: Intensity,
         }
     }
 }

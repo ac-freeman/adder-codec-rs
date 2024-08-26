@@ -4,6 +4,7 @@ use crate::transcoder::InfoParams;
 use crate::utils::{add_checkbox_row, add_slider_row};
 use crate::{slider_pm, TabState, VizUi};
 use adder_codec_rs::adder_codec_core::PlaneSize;
+use adder_codec_rs::transcoder::source::video::FramedViewMode;
 use eframe::epaint::ColorImage;
 use egui::Ui;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -350,6 +351,19 @@ impl VizUi for PlayerUi {
         if limit_frame_buffer_bool {
             adaptive_params.buffer_limit = Some(buffer_limit);
         }
+
+        crate::add_radio_row(
+            true,
+            "View mode:",
+            vec![
+                ("Intensity", FramedViewMode::Intensity),
+                ("D", FramedViewMode::D),
+                ("Δt", FramedViewMode::DeltaT),
+                ("SAE", FramedViewMode::SAE),
+            ],
+            ui,
+            &mut adaptive_params.view_mode,
+        );
     }
 }
 

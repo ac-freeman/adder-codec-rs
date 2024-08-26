@@ -8,7 +8,7 @@ use crate::transcoder::ui::{TranscoderState, TranscoderStateMsg, TranscoderUi};
 use crate::utils::slider::NotchedSlider;
 use crate::Tabs::Player;
 use eframe::egui;
-use egui::{ColorImage, Widget};
+use egui::{ColorImage, Ui, Widget, WidgetText};
 use std::ops::RangeInclusive;
 use std::sync::Arc;
 use strum::IntoEnumIterator;
@@ -582,32 +582,34 @@ fn slider_pm<Num: egui::emath::Numeric + Pm>(
     *value != start_value
 }
 
-//
+fn add_radio_row<Value: PartialEq + Clone>(
+    enabled: bool,
+    label: impl Into<WidgetText>,
+    options: Vec<(impl Into<WidgetText> + Clone, Value)>,
+    ui: &mut Ui,
+    radio_state: &mut Value,
+) -> bool {
+    ui.label(label);
+    let mut ret = false;
+    ui.add_enabled_ui(enabled, |ui| {
+        ui.horizontal(|ui| {
+            for option in options {
+                ret |= ui
+                    .radio_value(radio_state, option.1.clone(), option.0.clone())
+                    .changed();
+            }
+        });
+    });
+    ui.end_row();
+    ret
+}
 
 //
 
 //
-// fn add_radio_row<Value: PartialEq + Clone>(
-//     enabled: bool,
-//     label: impl Into<WidgetText>,
-//     options: Vec<(impl Into<WidgetText> + Clone, Value)>,
-//     ui: &mut Ui,
-//     radio_state: &mut Value,
-// ) -> bool {
-//     ui.label(label);
-//     let mut ret = false;
-//     ui.add_enabled_ui(enabled, |ui| {
-//         ui.horizontal(|ui| {
-//             for option in options {
-//                 ret |= ui
-//                     .radio_value(radio_state, option.1.clone(), option.0.clone())
-//                     .changed();
-//             }
-//         });
-//     });
-//     ui.end_row();
-//     ret
-// }
+
+//
+//
 //
 trait Pm {
     fn increment(&mut self, bound: &Self, interval: &Self);

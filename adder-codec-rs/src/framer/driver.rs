@@ -246,6 +246,10 @@ impl FrameSequenceState {
     pub fn reset(&mut self) {
         self.frames_written = 0;
     }
+
+    pub fn view_mode(&mut self, view_mode: FramedViewMode) {
+        self.view_mode = view_mode;
+    }
 }
 
 /// Associates detected features with the source time in which they were detected (since ADDER

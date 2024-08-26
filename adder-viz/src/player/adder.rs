@@ -229,6 +229,7 @@ impl AdderPlayer {
         let params = &self.player_state.adaptive_params;
 
         source.buffer_limit = params.buffer_limit;
+        source.state.view_mode(params.view_mode);
 
         // source.get_video_mut().instantaneous_view_mode = params.view_mode_radio_state;
         // source.get_video_mut().update_detect_features(
@@ -271,6 +272,7 @@ impl AdderPlayer {
                                 meta.delta_t_max,
                                 Some(reconstructed_frame_rate),
                             )
+                            .view_mode(player_state.adaptive_params.view_mode)
                             .mode(INSTANTANEOUS)
                             .buffer_limit(player_state.adaptive_params.buffer_limit)
                             // .view_mode(view_mode)
