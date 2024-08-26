@@ -216,7 +216,7 @@ impl AdderTranscoder {
             match self.msg_tx.try_send(TranscoderInfoMsg::EventRateMsg(msg)) {
                 Ok(_) => {}
                 Err(TrySendError::Full(..)) => {
-                    eprintln!("Event rate channel full");
+                    // eprintln!("Event rate channel full");
                 }
                 Err(e) => {
                     // return Err(Box::new(e)); // TODO

@@ -143,6 +143,7 @@ impl<W: Write> WriteCompression<W> for CompressedOutput<W> {
                 // Spawn a thread to compress the ADU and write out the data
 
                 std::thread::spawn(move || {
+                    // TODO: Need to ensure that received messages are placed in correct order
                     adu.compress(&mut temp_stream, parameters.c_thresh_max).ok();
                     let written_data = temp_stream.into_writer();
 

@@ -135,6 +135,7 @@ impl PlayerUi {
             let res = self.player_state_tx.blocking_send(PlayerStateMsg::Set {
                 player_state: self.player_state.clone(),
             });
+
             dbg!(res);
         }
     }
@@ -283,6 +284,7 @@ impl VizUi for PlayerUi {
         // let info_params = &mut self.transcoder_state.info_params;
 
         ui.label("Playback speed:");
+        let playback_speed = core_params.playback_speed;
         slider_pm(
             true,
             true,
@@ -293,6 +295,9 @@ impl VizUi for PlayerUi {
             1.0,
         );
         ui.end_row();
+        if playback_speed != core_params.playback_speed {
+            while self.image_rx.try_recv().is_ok() {} // Drain the image channel
+        }
 
         ui.add_enabled(true, egui::Label::new("Playback controls:"));
         ui.horizontal(|ui| {

@@ -6,9 +6,10 @@ use crate::utils::prep_epaint_image;
 use adder_codec_rs::adder_codec_core::bitstream_io::{BigEndian, BitReader};
 use adder_codec_rs::adder_codec_core::codec::decoder::Decoder;
 use adder_codec_rs::adder_codec_core::codec::{CodecError, EncoderType};
-use adder_codec_rs::adder_codec_core::{is_framed, open_file_decoder, Event};
+use adder_codec_rs::adder_codec_core::{is_framed, open_file_decoder, Event, PlaneSize};
 use adder_codec_rs::framer::driver::FramerMode::INSTANTANEOUS;
 use adder_codec_rs::framer::driver::{FrameSequence, Framer, FramerBuilder};
+use async_recursion::async_recursion;
 use eframe::epaint::ColorImage;
 use ndarray::Array3;
 use std::fs::File;
@@ -56,6 +57,7 @@ pub struct AdderPlayer {
     input_stream: Option<InputStream>,
     running_frame: Frame,
     pub image_tx: Sender<ColorImage>,
+    framer_builder: FramerBuilder,
 }
 
 impl AdderPlayer {
@@ -77,6 +79,7 @@ impl AdderPlayer {
             msg_tx,
             input_stream: None,
             running_frame: Frame::zeros((0, 0, 0)),
+            framer_builder: FramerBuilder::new(PlaneSize::default(), 0),
         }
     }
 
@@ -163,8 +166,11 @@ impl AdderPlayer {
             if res.is_ok() {
                 // Send a message with the frame length of the reconstructed sequence
                 let framer_state = &self.framer.as_ref().unwrap().state;
-                let frame_length =
-                    Duration::from_secs_f64(framer_state.tpf as f64 / framer_state.tps as f64);
+                let frame_length = Duration::from_secs_f64(
+                    framer_state.tpf as f64
+                        / framer_state.tps as f64
+                        / self.player_state.core_params.playback_speed as f64,
+                );
 
                 match self
                     .msg_tx
@@ -280,6 +286,7 @@ impl AdderPlayer {
 
                         let mut frame_sequence: FrameSequence<u8> = framer_builder.clone().finish();
                         self.framer = Some(frame_sequence);
+                        self.framer_builder = framer_builder;
 
                         let mut stream = InputStream {
                             decoder: stream,
@@ -308,6 +315,9 @@ impl AdderPlayer {
         self.player_state.core_params = player_state.core_params;
         Ok(())
     }
+
+    #[async_recursion]
+
     async fn consume(
         &mut self,
         // stream: &mut InputStream,
@@ -396,7 +406,7 @@ impl AdderPlayer {
 
             // return Ok(());
         }
-        let meta = stream.decoder.meta();
+        let meta = stream.decoder.meta().clone();
 
         let mut last_event: Option<Event> = None;
         loop {
@@ -414,37 +424,37 @@ impl AdderPlayer {
                     }
                 }
                 Err(e) => {
-                    todo!("handle codec error (e.g., restart playback)");
-                    // if !frame_sequence.flush_frame_buffer() {
-                    //     eprintln!("Player error: {}", e);
-                    //     eprintln!("Completely done");
-                    //     // TODO: Need to reset the UI event count events_ppc count when looping back here
-                    //     // Loop/restart back to the beginning
-                    //     if stream.decoder.get_compression_type() == EncoderType::Raw {
-                    //         stream.decoder.set_input_stream_position(
-                    //             &mut stream.bitreader,
-                    //             meta.header_size as u64,
-                    //         )?;
-                    //     } else {
-                    //         stream
-                    //             .decoder
-                    //             .set_input_stream_position(&mut stream.bitreader, 1)?;
-                    //     }
-                    //
-                    //     frame_sequence =
-                    //         self.framer_builder.clone().map(|builder| builder.finish());
-                    //     self.stream_state.last_timestamps = Array::zeros((
-                    //         meta.plane.h_usize(),
-                    //         meta.plane.w_usize(),
-                    //         meta.plane.c_usize(),
-                    //     ));
-                    //     self.stream_state.current_t_ticks = 0;
-                    //     self.current_frame = 0;
-                    //
-                    //     return Err(Box::try_from(CodecError::Eof).unwrap());
-                    // } else {
-                    //     return self.consume_source_accurate();
-                    // }
+                    // todo!("handle codec error (e.g., restart playback)");
+                    if !frame_sequence.flush_frame_buffer() {
+                        eprintln!("Player error: {}", e);
+                        eprintln!("Completely done");
+                        // TODO: Need to reset the UI event count events_ppc count when looping back here
+                        // Loop/restart back to the beginning
+                        if stream.decoder.get_compression_type() == EncoderType::Raw {
+                            stream.decoder.set_input_stream_position(
+                                &mut stream.bitreader,
+                                meta.header_size as u64,
+                            )?;
+                        } else {
+                            stream
+                                .decoder
+                                .set_input_stream_position(&mut stream.bitreader, 1)?;
+                        }
+
+                        *frame_sequence = self.framer_builder.clone().finish();
+                        // self.framer_builder.clone().map(|builder| builder.finish());
+                        // self.stream_state.last_timestamps = Array::zeros((
+                        //     meta.plane.h_usize(),
+                        //     meta.plane.w_usize(),
+                        //     meta.plane.c_usize(),
+                        // ));
+                        // self.stream_state.current_t_ticks = 0;
+                        // self.current_frame = 0;
+
+                        return Err(AdderPlayerError::from(CodecError::Eof));
+                    } else {
+                        return Ok(self.consume().await?);
+                    }
                 }
             }
         }
