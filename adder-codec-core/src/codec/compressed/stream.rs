@@ -13,6 +13,8 @@ pub struct CompressedOutput<W: Write> {
     pub(crate) adu: EventAdu,
     pub(crate) stream: Option<BitWriter<W, BigEndian>>,
     pub(crate) options: EncoderOptions,
+    written_bytes_rx: std::sync::mpsc::Receiver<Vec<u8>>,
+    written_bytes_tx: std::sync::mpsc::Sender<Vec<u8>>,
 }
 
 /// Read compressed ADΔER data from a stream.
@@ -28,7 +30,7 @@ impl<W: Write> CompressedOutput<W> {
     /// Create a new compressed output stream.
     pub fn new(meta: CodecMetadata, writer: W) -> Self {
         let adu = EventAdu::new(meta.plane, 0, meta.ref_interval, meta.adu_interval as usize);
-
+        let (written_bytes_tx, written_bytes_rx) = std::sync::mpsc::channel();
         Self {
             meta,
             adu,
@@ -36,6 +38,8 @@ impl<W: Write> CompressedOutput<W> {
             // contexts: Some(contexts),
             stream: Some(BitWriter::endian(writer, BigEndian)),
             options: EncoderOptions::default(meta.plane),
+            written_bytes_rx,
+            written_bytes_tx,
         }
     }
 
@@ -116,22 +120,36 @@ impl<W: Write> WriteCompression<W> for CompressedOutput<W> {
             // dbg!("compressing adu");
             // If it doesn't, compress the events and reset the Adu
             if let Some(stream) = &mut self.stream {
+                while let Ok(written_data) = self.written_bytes_rx.try_recv() {
+                    // Clear any queue'd up compressed ADUs
+                    // Write the number of bytes in the compressed Adu as the 32-bit header for this Adu
+                    stream
+                        .write_bytes(&(written_data.len() as u32).to_be_bytes())
+                        .unwrap();
+
+                    // Write the temporary stream to the actual stream
+                    stream.write_bytes(&written_data).unwrap();
+                }
+
                 // Create a temporary u8 stream to write the arithmetic-coded data to
                 let mut temp_stream = BitWriter::endian(Vec::new(), BigEndian);
 
-                let parameters = self.options.crf.get_parameters();
+                let parameters = self.options.crf.get_parameters().clone();
 
                 // Compress the Adu. This also writes the EOF symbol and flushes the encoder
-                self.adu
-                    .compress(&mut temp_stream, parameters.c_thresh_max)?;
+                // First, clone the ADU
+                let mut adu = self.adu.clone();
+                let tx = self.written_bytes_tx.clone();
+                // Spawn a thread to compress the ADU and write out the data
 
-                let written_data = temp_stream.into_writer();
+                std::thread::spawn(move || {
+                    adu.compress(&mut temp_stream, parameters.c_thresh_max).ok();
+                    let written_data = temp_stream.into_writer();
 
-                // Write the number of bytes in the compressed Adu as the 32-bit header for this Adu
-                stream.write_bytes(&(written_data.len() as u32).to_be_bytes())?;
+                    tx.send(written_data).unwrap();
+                });
 
-                // Write the temporary stream to the actual stream
-                stream.write_bytes(&written_data)?;
+                self.adu.clear_compression();
             }
         }
 
