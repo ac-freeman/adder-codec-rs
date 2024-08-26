@@ -778,7 +778,7 @@ impl TranscoderUi {
         #[cfg(feature = "open-cv")]
         {
             ui.label("DAVIS mode:");
-            ui.add_enabled_ui(!enabled, |ui| {
+            ui.add_enabled_ui(enabled, |ui| {
                 ui.horizontal(|ui| {
                     ui.radio_value(
                         &mut core_params.davis_mode_radio_state,
@@ -802,7 +802,7 @@ impl TranscoderUi {
             ui.label("DAVIS deblurred FPS:");
 
             slider_pm(
-                !enabled,
+                enabled,
                 true,
                 ui,
                 &mut core_params.davis_output_fps,
@@ -816,7 +816,7 @@ impl TranscoderUi {
             ui.end_row();
 
             let enable_optimize =
-                !enabled && core_params.davis_mode_radio_state != TranscoderMode::RawDvs;
+                enabled && core_params.davis_mode_radio_state != TranscoderMode::RawDvs;
             ui.label("Optimize:");
             ui.add_enabled(
                 enable_optimize,

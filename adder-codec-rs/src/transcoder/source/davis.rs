@@ -87,9 +87,6 @@ pub struct Davis<W: Write> {
 
     integration: Integration<W>,
 
-    /// The tokio runtime
-    pub rt: Runtime,
-
     /// The latency between a DAVIS/DVS packet being sent by the camera and read by the reconstructor
     latency: u128,
 
@@ -109,11 +106,7 @@ unsafe impl<W: Write> Sync for Davis<W> {}
 
 impl<W: Write + 'static> Davis<W> {
     /// Create a new `Davis` transcoder
-    pub fn new(
-        reconstructor: Reconstructor,
-        rt: Runtime,
-        mode: TranscoderMode,
-    ) -> Result<Self, Box<dyn Error>> {
+    pub fn new(reconstructor: Reconstructor, mode: TranscoderMode) -> Result<Self, Box<dyn Error>> {
         let plane = PlaneSize::new(reconstructor.width, reconstructor.height, 1)?;
 
         let video = Video::new(
@@ -166,7 +159,6 @@ impl<W: Write + 'static> Davis<W> {
                 dvs_last_ln_val,
                 phantom: std::marker::PhantomData,
             },
-            rt,
             latency: 0,
             cached_mat_opt: None,
 

@@ -507,10 +507,10 @@ impl AdderTranscoder {
             TranscoderMode::RawDvs => true,
         };
 
-        let rt = tokio::runtime::Builder::new_multi_thread()
-            .worker_threads(8) // TODO: get from a slider
-            .enable_time()
-            .build()?;
+        // let rt = tokio::runtime::Builder::new_multi_thread()
+        //     .worker_threads(8) // TODO: get from a slider
+        //     .enable_time()
+        //     .build()?;
         let dir = core_params
             .input_path_buf_0
             .clone()
@@ -572,7 +572,7 @@ impl AdderTranscoder {
             .map(|output_path| output_path.to_str().expect("Bad path").to_string());
 
         let mut davis_source: Davis<BufWriter<File>> =
-            Davis::new(reconstructor, rt, core_params.davis_mode_radio_state)?
+            Davis::new(reconstructor, core_params.davis_mode_radio_state)?
                 .optimize_adder_controller(false) // TODO
                 .mode(core_params.davis_mode_radio_state)
                 .crf(
