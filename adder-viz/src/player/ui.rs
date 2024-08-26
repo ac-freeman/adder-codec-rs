@@ -6,6 +6,8 @@ use crate::{slider_pm, TabState, VizUi};
 use adder_codec_rs::adder_codec_core::PlaneSize;
 use eframe::epaint::ColorImage;
 use egui::Ui;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::error::TryRecvError;
@@ -65,6 +67,7 @@ pub struct PlayerUi {
     pub image_rx: Receiver<ColorImage>,
     pub last_frame_display_time: Option<Instant>,
     pub frame_length: Duration,
+    pub paused: Arc<AtomicBool>,
 }
 
 impl PlayerUi {
@@ -86,6 +89,7 @@ impl PlayerUi {
             image_rx,
             last_frame_display_time: None,
             frame_length: Duration::from_secs_f32(1.0 / 30.0),
+            paused: Arc::new(false.into()),
         };
 
         player_ui.spawn_tab_runner(rx, msg_tx, image_tx);
@@ -244,7 +248,7 @@ impl VizUi for PlayerUi {
             Some(a) => a.elapsed(),
         };
 
-        if time_since_last_displayed >= self.frame_length {
+        if !self.paused.load(Ordering::Relaxed) && time_since_last_displayed >= self.frame_length {
             // Get the next image
             match self.image_rx.try_recv() {
                 Ok(image) => {
@@ -255,8 +259,15 @@ impl VizUi for PlayerUi {
                     // If we don't have a new image to display, sleep this thread (buffered pause)
                     // Sleep 1 second
                     if self.last_frame_display_time.is_some() {
-                        dbg!("Sleeping 3 seconds...");
-                        std::thread::sleep(Duration::from_secs(3));
+                        self.paused.store(true, Ordering::Relaxed);
+
+                        // Spawn a thread to mark the player as unpaused after 3 seconds
+                        let paused = self.paused.clone();
+                        std::thread::spawn(move || {
+                            dbg!("Sleeping 3 seconds...");
+                            std::thread::sleep(Duration::from_secs(3));
+                            paused.store(false, Ordering::Relaxed);
+                        });
                     }
                 }
             }
@@ -281,26 +292,26 @@ impl VizUi for PlayerUi {
         ui.end_row();
 
         ui.add_enabled(true, egui::Label::new("Playback controls:"));
-        // ui.horizontal(|ui| {
-        //     if self.ui_state.playing {
-        //         if ui.button("⏸").clicked() {
-        //             self.ui_state.playing = false;
-        //         }
-        //     } else if ui.button("▶").clicked() {
-        //         self.ui_state.playing = true;
-        //     }
-        //     // TODO: remove this?
-        //     if ui.button("⏹").clicked() {
-        //         self.ui_state.playing = false;
-        //         need_to_update = true;
-        //     }
-        //
-        //     if ui.button("⏮").clicked() {
-        //         self.ui_state.playing = true;
-        //         self.ui_info_state.stream_state.file_pos = 0; // To force the player to restart
-        //         need_to_update = true;
-        //     }
-        // });
+        ui.horizontal(|ui| {
+            if !self.paused.load(Ordering::Relaxed) {
+                if ui.button("⏸").clicked() {
+                    self.paused.store(true, Ordering::Relaxed);
+                }
+            } else if ui.button("▶").clicked() {
+                self.paused.store(false, Ordering::Relaxed);
+            }
+            // TODO: remove this?
+            // if ui.button("⏹").clicked() {
+            //     self.ui_state.playing = false;
+            //     need_to_update = true;
+            // }
+
+            // if ui.button("⏮").clicked() {
+            //     self.ui_state.playing = true;
+            //     self.ui_info_state.stream_state.file_pos = 0; // To force the player to restart
+            //     need_to_update = true;
+            // }
+        });
         ui.end_row();
 
         let mut limit_frame_buffer_bool = adaptive_params.buffer_limit.is_some();
