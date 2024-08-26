@@ -156,6 +156,24 @@ impl AdderPlayer {
 
             let res = self.core_state_update(player_state);
             if res.is_ok() {
+                // Send a message with the frame length of the reconstructed sequence
+                let framer_state = &self.framer.as_ref().unwrap().state;
+                let frame_length =
+                    Duration::from_secs_f64(framer_state.tpf as f64 / framer_state.tps as f64);
+
+                match self
+                    .msg_tx
+                    .try_send(PlayerInfoMsg::FrameLength(frame_length))
+                {
+                    Ok(_) => {}
+                    Err(TrySendError::Full(..)) => {
+                        eprintln!("Metrics channel full");
+                    }
+                    Err(e) => {
+                        panic!("todo");
+                    }
+                };
+
                 // Send a message with the plane size of the video
                 // let plane = self
                 //     .source

@@ -8,6 +8,7 @@ use eframe::epaint::ColorImage;
 use egui::Ui;
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc;
+use tokio::sync::mpsc::error::TryRecvError;
 use tokio::sync::mpsc::{Receiver, Sender};
 
 #[derive(Debug, Clone)]
@@ -19,6 +20,7 @@ pub enum PlayerStateMsg {
 #[derive(Debug, Clone)]
 pub enum PlayerInfoMsg {
     Plane((PlaneSize, bool)),
+    FrameLength(Duration),
     // EventRateMsg(EventRateMsg),
     // Image(ColorImage),
     Error(String),
@@ -117,7 +119,7 @@ impl PlayerUi {
         // Collect dropped files
         self.handle_file_drop(ctx);
 
-        // self.handle_info_messages();
+        self.handle_info_messages();
 
         self.draw_ui(ctx);
 
@@ -138,6 +140,24 @@ impl PlayerUi {
                     i.raw.dropped_files[0].path.clone();
             }
         });
+    }
+
+    fn handle_info_messages(&mut self) {
+        loop {
+            match self.msg_rx.try_recv() {
+                Ok(PlayerInfoMsg::Plane((plane, _))) => {
+                    // self.player_state.info_params.plane = plane;
+                }
+                Ok(PlayerInfoMsg::FrameLength(frame_length)) => {
+                    eprintln!("Setting new frame length: {:?}", frame_length);
+                    self.frame_length = frame_length;
+                }
+                Ok(PlayerInfoMsg::Error(e)) => {
+                    eprintln!("Error: {}", e);
+                }
+                _ => break,
+            }
+        }
     }
 }
 
@@ -220,10 +240,7 @@ impl VizUi for PlayerUi {
         ui.add(image);
 
         let time_since_last_displayed = match self.last_frame_display_time {
-            None => {
-                self.last_frame_display_time = Some(Instant::now());
-                Duration::from_secs(0)
-            }
+            None => self.frame_length,
             Some(a) => a.elapsed(),
         };
 
@@ -234,7 +251,14 @@ impl VizUi for PlayerUi {
                     self.adder_image_handle.set(image, Default::default());
                     self.last_frame_display_time = Some(Instant::now());
                 }
-                Err(_) => {}
+                Err(_) => {
+                    // If we don't have a new image to display, sleep this thread (buffered pause)
+                    // Sleep 1 second
+                    if self.last_frame_display_time.is_some() {
+                        dbg!("Sleeping 3 seconds...");
+                        std::thread::sleep(Duration::from_secs(3));
+                    }
+                }
             }
         }
     }
@@ -254,6 +278,29 @@ impl VizUi for PlayerUi {
             vec![0.25, 0.5, 1.0, 5.0, 10.0],
             1.0,
         );
+        ui.end_row();
+
+        ui.add_enabled(true, egui::Label::new("Playback controls:"));
+        // ui.horizontal(|ui| {
+        //     if self.ui_state.playing {
+        //         if ui.button("⏸").clicked() {
+        //             self.ui_state.playing = false;
+        //         }
+        //     } else if ui.button("▶").clicked() {
+        //         self.ui_state.playing = true;
+        //     }
+        //     // TODO: remove this?
+        //     if ui.button("⏹").clicked() {
+        //         self.ui_state.playing = false;
+        //         need_to_update = true;
+        //     }
+        //
+        //     if ui.button("⏮").clicked() {
+        //         self.ui_state.playing = true;
+        //         self.ui_info_state.stream_state.file_pos = 0; // To force the player to restart
+        //         need_to_update = true;
+        //     }
+        // });
         ui.end_row();
 
         let mut limit_frame_buffer_bool = adaptive_params.buffer_limit.is_some();

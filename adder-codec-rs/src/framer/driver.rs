@@ -230,6 +230,9 @@ pub struct FrameSequenceState {
 
     /// Ticks per output frame
     pub tpf: DeltaT,
+
+    /// Ticks per second
+    pub tps: DeltaT,
     pub(crate) source: SourceType,
     codec_version: u8,
     source_camera: SourceCamera,
@@ -362,6 +365,7 @@ impl<
                 frames_written: 0,
                 view_mode: builder.view_mode,
                 tpf,
+                tps: builder.tps,
                 source: builder.source,
                 codec_version: builder.codec_version,
                 source_camera: builder.source_camera,
