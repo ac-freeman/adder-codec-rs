@@ -247,7 +247,7 @@ impl AdderPlayer {
                                 Some(reconstructed_frame_rate),
                             )
                             .mode(INSTANTANEOUS)
-                            // .buffer_limit(buffer_limit)
+                            .buffer_limit(player_state.adaptive_params.buffer_limit)
                             // .view_mode(view_mode)
                             // .detect_features(detect_features)
                             .source(stream.get_source_type(), meta.source_camera);

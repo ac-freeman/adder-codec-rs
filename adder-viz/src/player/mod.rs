@@ -37,7 +37,7 @@ impl Default for AdaptiveParams {
             thread_count: 1,
             detect_features: false,
             show_features: ShowFeatureMode::Off,
-            buffer_limit: None,
+            buffer_limit: Some(60),
         }
     }
 }
