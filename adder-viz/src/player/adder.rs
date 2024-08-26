@@ -202,6 +202,8 @@ impl AdderPlayer {
                 // };
             } else {
                 eprintln!("Error creating new transcoder: {:?}", res);
+                self.framer = None;
+                self.player_state = PlayerState::default();
                 return res;
             }
             return res;
