@@ -17,6 +17,7 @@ use tokio::sync::mpsc::{Receiver, Sender};
 pub enum PlayerStateMsg {
     Terminate,
     Set { player_state: PlayerState },
+    Loop { player_state: PlayerState },
 }
 
 #[derive(Debug, Clone)]
@@ -275,6 +276,7 @@ impl VizUi for PlayerUi {
     }
 
     fn side_panel_grid_contents(&mut self, ui: &mut Ui) {
+        let player_state_copy = self.player_state.clone();
         let core_params = &mut self.player_state.core_params;
         let adaptive_params = &mut self.player_state.adaptive_params;
         // let info_params = &mut self.transcoder_state.info_params;
@@ -301,16 +303,19 @@ impl VizUi for PlayerUi {
                 self.paused.store(false, Ordering::Relaxed);
             }
             // TODO: remove this?
-            // if ui.button("⏹").clicked() {
-            //     self.ui_state.playing = false;
-            //     need_to_update = true;
-            // }
+            if ui.button("⏹").clicked() {
+                self.paused.store(false, Ordering::Relaxed);
+                core_params.input_path_buf_0 = None;
+            }
 
-            // if ui.button("⏮").clicked() {
-            //     self.ui_state.playing = true;
-            //     self.ui_info_state.stream_state.file_pos = 0; // To force the player to restart
-            //     need_to_update = true;
-            // }
+            if ui.button("⏮").clicked() {
+                self.paused.store(false, Ordering::Relaxed);
+                // Send a Loop message
+                let res = self.player_state_tx.blocking_send(PlayerStateMsg::Loop {
+                    player_state: player_state_copy,
+                });
+                while self.image_rx.try_recv().is_ok() {} // Drain the image channel
+            }
         });
         ui.end_row();
 

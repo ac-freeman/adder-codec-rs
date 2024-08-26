@@ -88,6 +88,11 @@ impl AdderPlayer {
                         eprintln!("Resetting video");
                         todo!();
                     }
+                    PlayerStateMsg::Loop { player_state } => {
+                        eprintln!("Looping video");
+                        let result = self.state_update(player_state, true);
+                        self.handle_error(result);
+                    }
                     PlayerStateMsg::Set { player_state } => {
                         eprintln!("Received player state");
                         let result = self.state_update(player_state, false);
