@@ -173,6 +173,8 @@ pub trait Framer {
     ///
     /// Returns `true` if there are frames now ready to write out
     fn flush_frame_buffer(&mut self) -> bool;
+
+    fn detect_features(&mut self, detect_features: bool);
 }
 
 #[derive(Debug, Clone, Default)]
@@ -401,6 +403,10 @@ impl<
         }
     }
 
+    fn detect_features(&mut self, detect_features: bool) {
+        self.detect_features = detect_features;
+    }
+
     ///
     ///
     /// # Examples
@@ -540,7 +546,11 @@ impl<
 
                         // dbg!(self.features.len());
                         // dbg!(self.features[idx].end_ts);
-                        assert!(self.features[idx].end_ts >= time as BigT);
+                        if self.features[idx].end_ts < time as BigT {
+                            // Allow the player to enable feature detection on the fly
+                            self.features[idx].end_ts = time as BigT;
+                        }
+                        // assert!(self.features[idx].end_ts >= time as BigT);
                         self.features[idx].features.push(event.coord);
                     }
                 }

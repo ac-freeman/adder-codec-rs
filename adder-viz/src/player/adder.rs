@@ -230,6 +230,7 @@ impl AdderPlayer {
 
         source.buffer_limit = params.buffer_limit;
         source.state.view_mode(params.view_mode);
+        source.detect_features(params.detect_features);
 
         // source.get_video_mut().instantaneous_view_mode = params.view_mode_radio_state;
         // source.get_video_mut().update_detect_features(
@@ -275,8 +276,7 @@ impl AdderPlayer {
                             .view_mode(player_state.adaptive_params.view_mode)
                             .mode(INSTANTANEOUS)
                             .buffer_limit(player_state.adaptive_params.buffer_limit)
-                            // .view_mode(view_mode)
-                            // .detect_features(detect_features)
+                            .detect_features(player_state.adaptive_params.detect_features)
                             .source(stream.get_source_type(), meta.source_camera);
 
                         let mut frame_sequence: FrameSequence<u8> = framer_builder.clone().finish();
@@ -333,6 +333,11 @@ impl AdderPlayer {
         // let width = image_mat.shape()[1];
         // let height = image_mat.shape()[0];
 
+        let is_color = self.running_frame.shape()[2] == 3;
+        let color_channels = self.running_frame.shape()[2];
+        let width = self.running_frame.shape()[1];
+        let height = self.running_frame.shape()[0];
+
         while frame_sequence.is_frame_0_filled() {
             let mut idx = 0;
             unsafe {
@@ -351,45 +356,41 @@ impl AdderPlayer {
                         }
                     }
                 }
+
+                // TODO: Reenable the below
+                if let Some(feature_interval) = frame_sequence.pop_features() {
+                    for feature in feature_interval.features {
+                        // let db = display_mat.as_slice_mut().unwrap();
+
+                        let color: u8 = 255;
+                        let radius = 2;
+                        for i in -radius..=radius {
+                            let idx =
+                                ((feature.y as i32 + i) * width as i32 * color_channels as i32
+                                    + (feature.x as i32) * color_channels as i32)
+                                    as usize;
+                            db[idx] = color;
+
+                            if is_color {
+                                db[idx + 1] = color;
+                                db[idx + 2] = color;
+                            }
+
+                            let idx = (feature.y as i32 * width as i32 * color_channels as i32
+                                + (feature.x as i32 + i) * color_channels as i32)
+                                as usize;
+                            db[idx] = color;
+
+                            if is_color {
+                                db[idx + 1] = color;
+                                db[idx + 2] = color;
+                            }
+                        }
+                    }
+                }
             }
 
-            let color = self.running_frame.shape()[2] == 3;
-            let width = self.running_frame.shape()[1];
-            let height = self.running_frame.shape()[0];
-
-            let image = prep_epaint_image(&self.running_frame, color, width, height).unwrap();
-
-            // TODO: Reenable the below
-            // if let Some(feature_interval) = frame_sequence.pop_features() {
-            //     for feature in feature_interval.features {
-            //         // let db = display_mat.as_slice_mut().unwrap();
-            //
-            //         let color: u8 = 255;
-            //         let radius = 2;
-            //         for i in -radius..=radius {
-            //             let idx =
-            //                 ((feature.y as i32 + i) * meta.plane.w() as i32 * meta.plane.c() as i32
-            //                     + (feature.x as i32) * meta.plane.c() as i32)
-            //                     as usize;
-            //             db[idx] = color;
-            //
-            //             if meta.plane.c() > 1 {
-            //                 db[idx + 1] = color;
-            //                 db[idx + 2] = color;
-            //             }
-            //
-            //             let idx = (feature.y as i32 * meta.plane.w() as i32 * meta.plane.c() as i32
-            //                 + (feature.x as i32 + i) * meta.plane.c() as i32)
-            //                 as usize;
-            //             db[idx] = color;
-            //
-            //             if meta.plane.c() > 1 {
-            //                 db[idx + 1] = color;
-            //                 db[idx + 2] = color;
-            //             }
-            //         }
-            //     }
-            // }
+            let image = prep_epaint_image(&self.running_frame, is_color, width, height).unwrap();
 
             // self.stream_state.current_t_ticks += frame_sequence.state.tpf;
 

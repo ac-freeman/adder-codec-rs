@@ -364,6 +364,13 @@ impl VizUi for PlayerUi {
             ui,
             &mut adaptive_params.view_mode,
         );
+
+        ui.label("Processing:");
+        ui.add_enabled(
+            true,
+            egui::Checkbox::new(&mut adaptive_params.detect_features, "Detect features"),
+        );
+        ui.end_row();
     }
 }
 
