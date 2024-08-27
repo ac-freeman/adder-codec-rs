@@ -105,7 +105,7 @@ impl Default for CoreParams {
             davis_mode_radio_state: TranscoderMode::RawDavis,
             input_path_buf_0: None,
             output_path: None,
-            davis_output_fps: 30.0,
+            davis_output_fps: 100.0,
         }
     }
 }

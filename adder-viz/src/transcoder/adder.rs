@@ -31,7 +31,7 @@ use adder_codec_rs::adder_codec_core::SourceCamera::{DavisU8, Dvs, FramedU8};
 use adder_codec_rs::adder_codec_core::{Event, PlaneError};
 use adder_codec_rs::davis_edi_rs::util::reconstructor::ReconstructorError;
 use adder_codec_rs::transcoder::source::prophesee::Prophesee;
-use adder_codec_rs::transcoder::source::video::SourceError::VideoError;
+use adder_codec_rs::transcoder::source::video::SourceError::{NoData, VideoError};
 use adder_codec_rs::transcoder::source::video::{Source, SourceError, VideoBuilder};
 use adder_codec_rs::transcoder::source::AdderSource;
 use adder_codec_rs::utils::cv::{calculate_quality_metrics, QualityMetrics};
@@ -92,7 +92,7 @@ impl AdderTranscoder {
         input_image_handle: egui::TextureHandle,
         adder_image_handle: egui::TextureHandle,
     ) -> Self {
-        let threaded_rt = tokio::runtime::Runtime::new().unwrap();
+        let threaded_rt = tokio::runtime::Builder::new_multi_thread().build().unwrap();
 
         AdderTranscoder {
             pool: threaded_rt,
@@ -135,14 +135,14 @@ impl AdderTranscoder {
                     TranscoderStateMsg::Set { transcoder_state } => {
                         eprintln!("Received transcoder state");
                         let result = self.state_update(transcoder_state, false).await;
-                        self.handle_error(result);
+                        self.handle_error(result).await;
                     }
                 },
                 Err(_) => {
                     // Received no data, so consume the transcoder source if it exists
                     if self.source.is_some() {
                         let result = self.consume();
-                        self.handle_error(result);
+                        self.handle_error(result).await;
                     }
                 }
             }
@@ -158,7 +158,9 @@ impl AdderTranscoder {
                     NoFileSelected => {}
                     AdderTranscoderError::SourceError(VideoError(
                         video_rs_adder_dep::Error::ReadExhausted,
-                    )) => {
+                    ))
+                    | AdderTranscoderError::SourceError(NoData) => {
+                        eprintln!("Creating new");
                         let mut state = self.transcoder_state.clone();
                         self.source
                             .as_mut()

@@ -615,6 +615,10 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Davis<W> {
             TranscoderMode::RawDavis | TranscoderMode::RawDvs => true,
         };
 
+        if self.reconstructor.is_none() {
+            return Err(SourceError::NoData);
+        }
+
         let mut reconstructor_holder = None;
         swap(&mut self.reconstructor, &mut reconstructor_holder);
         let mut thread_pool_holder = None;
