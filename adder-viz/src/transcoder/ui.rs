@@ -1,5 +1,5 @@
 use adder_codec_rs::adder_codec_core::codec::rate_controller::{Crf, CRF, DEFAULT_CRF_QUALITY};
-use adder_codec_rs::adder_codec_core::codec::{EncoderOptions, EncoderType};
+use adder_codec_rs::adder_codec_core::codec::{EncoderOptions, EncoderType, EventOrder};
 use adder_codec_rs::adder_codec_core::{PixelMultiMode, PlaneSize, TimeMode};
 use adder_codec_rs::transcoder::source::davis::TranscoderMode;
 use adder_codec_rs::transcoder::source::video::FramedViewMode;
@@ -249,7 +249,6 @@ impl TranscoderUi {
                             .update(Some(raw_source_bitrate));
                     }
                     TranscoderInfoMsg::Plane((plane, finish)) => {
-                        dbg!("Got plane");
                         // Received when we have created a new video
                         if finish {
                             self.transcoder_state.core_params.output_path = None;
@@ -835,26 +834,28 @@ impl TranscoderUi {
                 1,
             );
             ui.end_row();
+
+            let enable_encoder_options = core_params.encoder_type != EncoderType::Empty;
+
+            ui.label("Event output order:");
+            ui.add_enabled_ui(enable_encoder_options, |ui| {
+                ui.horizontal(|ui| {
+                    ui.radio_value(
+                        &mut adaptive_params.encoder_options.event_order,
+                        EventOrder::Unchanged,
+                        "Unchanged",
+                    );
+                    ui.radio_value(
+                        &mut adaptive_paramsng.encoder_options.event_order,
+                        EventOrder::Interleaved,
+                        "Interleaved",
+                    );
+                });
+            });
+            ui.end_row();
         }
         //
-        // let enable_encoder_options = params.encoder_type != EncoderType::Empty;
-        //
-        // ui.label("Event output order:");
-        // ui.add_enabled_ui(enable_encoder_options, |ui| {
-        //     ui.horizontal(|ui| {
-        //         ui.radio_value(
-        //             &mut params.encoder_options.event_order,
-        //             EventOrder::Unchanged,
-        //             "Unchanged",
-        //         );
-        //         ui.radio_value(
-        //             &mut params.encoder_options.event_order,
-        //             EventOrder::Interleaved,
-        //             "Interleaved",
-        //         );
-        //     });
-        // });
-        // ui.end_row();
+
         //
         // ui.label("Bandwidth limiting:");
         // ui.add_enabled(
