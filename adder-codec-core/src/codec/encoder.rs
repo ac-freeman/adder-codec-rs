@@ -53,7 +53,7 @@ impl Default for EncoderState {
 }
 
 #[allow(dead_code)]
-impl<W: Write + 'static> Encoder<W> {
+impl<W: Write + 'static + std::marker::Send + std::marker::Sync> Encoder<W> {
     /// Create a new [`Encoder`] with an empty compression scheme
     pub fn new_empty(compression: EmptyOutput<Sink>, options: EncoderOptions) -> Self
     where
@@ -451,7 +451,7 @@ mod tests {
     fn compressed() {
         let output = Vec::new();
         let bufwriter = BufWriter::new(output);
-        let (written_bytes_tx, written_bytes_rx) = std::sync::mpsc::channel();
+        let (bytes_to_compress_tx, bytes_to_compress_rx) = std::sync::mpsc::channel();
 
         let compression = CompressedOutput {
             meta: CodecMetadata {
@@ -472,8 +472,8 @@ mod tests {
             adu: Default::default(),
             stream: Some(BitWriter::endian(bufwriter, BigEndian)),
             options: EncoderOptions::default(PlaneSize::default()),
-            written_bytes_rx,
-            written_bytes_tx,
+            bytes_to_compress_rx,
+            bytes_to_compress_tx,
         };
         let _encoder = Encoder {
             output: WriteCompressionEnum::CompressedOutput(compression),
