@@ -378,6 +378,9 @@ impl AdderTranscoder {
             quality_parameters.c_increase_velocity,
             quality_parameters.feature_c_radius as f32,
         );
+        source
+            .get_video_mut()
+            .update_encoder_options(params.encoder_options);
 
         Ok(())
     }
@@ -538,15 +541,17 @@ impl AdderTranscoder {
             simulate_latency = false;
         }
 
-        // let filename_1 = _input_path_buf_1.as_ref().map(|_input_path_buf_1| {
-        //     _input_path_buf_1
-        //         .file_name()
-        //         .expect("File must exist")
-        //         .to_str()
-        //         .expect("Bad filename")
-        //         .to_string()
-        // });
-        let filename_1 = None;
+        let filename_1 = core_params
+            .input_path_buf_1
+            .as_ref()
+            .map(|_input_path_buf_1| {
+                _input_path_buf_1
+                    .file_name()
+                    .expect("File must exist")
+                    .to_str()
+                    .expect("Bad filename")
+                    .to_string()
+            });
 
         let reconstructor: Reconstructor = Reconstructor::new(
             dir + "/",

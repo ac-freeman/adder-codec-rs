@@ -1,5 +1,5 @@
 use adder_codec_rs::adder_codec_core::codec::rate_controller::{Crf, CRF, DEFAULT_CRF_QUALITY};
-use adder_codec_rs::adder_codec_core::codec::{EncoderOptions, EncoderType, EventOrder};
+use adder_codec_rs::adder_codec_core::codec::{EncoderOptions, EncoderType, EventDrop, EventOrder};
 use adder_codec_rs::adder_codec_core::{PixelMultiMode, PlaneSize, TimeMode};
 use adder_codec_rs::transcoder::source::davis::TranscoderMode;
 use adder_codec_rs::transcoder::source::video::FramedViewMode;
@@ -385,6 +385,41 @@ impl TranscoderUi {
                 ),
             );
         });
+
+        ui.horizontal(|ui| {
+            if ui.button("Open DVS socket").clicked() {
+                if let Some(path) = rfd::FileDialog::new()
+                    .set_directory("/tmp")
+                    .add_filter("DVS/DAVIS video", &["sock"])
+                    .pick_file()
+                {
+                    self.transcoder_state.core_params.input_path_buf_0 = Some(path.clone());
+                }
+            }
+            if ui.button("Open APS socket").clicked() {
+                if let Some(path) = rfd::FileDialog::new()
+                    .set_directory("/tmp")
+                    .add_filter("DVS/DAVIS video", &["sock"])
+                    .pick_file()
+                {
+                    self.transcoder_state.core_params.input_path_buf_1 = Some(path.clone());
+                }
+            }
+            // if ui.button("Go!").clicked()
+            //     && self.transcoder_state.core_params.input_path_buf_0.is_some()
+            //     && self.transcoder_state.core_params.input_path_buf_1.is_some()
+            // {
+            //     replace_adder_transcoder(
+            //         self,
+            //         self.ui_info_state.input_path_0.clone(),
+            //         self.ui_info_state.input_path_1.clone(),
+            //         self.ui_info_state.output_path.clone(),
+            //         0,
+            //     );
+            // }
+        });
+        // ui.label(self.ui_info_state.source_name.clone());
+
         ui.horizontal(|ui| {
             if ui.button("Save file").clicked() {
                 // Check if 'empty' compression is selected, warn user if so
@@ -834,81 +869,99 @@ impl TranscoderUi {
                 1,
             );
             ui.end_row();
+        }
 
-            let enable_encoder_options = core_params.encoder_type != EncoderType::Empty;
+        let enable_encoder_options = core_params.encoder_type != EncoderType::Empty;
 
-            ui.label("Event output order:");
-            ui.add_enabled_ui(enable_encoder_options, |ui| {
-                ui.horizontal(|ui| {
-                    ui.radio_value(
-                        &mut adaptive_params.encoder_options.event_order,
-                        EventOrder::Unchanged,
-                        "Unchanged",
-                    );
-                    ui.radio_value(
-                        &mut adaptive_paramsng.encoder_options.event_order,
-                        EventOrder::Interleaved,
-                        "Interleaved",
-                    );
-                });
+        ui.label("Event output order:");
+        ui.add_enabled_ui(enable_encoder_options, |ui| {
+            ui.horizontal(|ui| {
+                ui.radio_value(
+                    &mut adaptive_params.encoder_options.event_order,
+                    EventOrder::Unchanged,
+                    "Unchanged",
+                );
+                ui.radio_value(
+                    &mut adaptive_params.encoder_options.event_order,
+                    EventOrder::Interleaved,
+                    "Interleaved",
+                );
             });
+        });
+        ui.end_row();
+
+        ui.label("Bandwidth limiting:");
+        ui.add_enabled_ui(true, |ui| {
+            ui.horizontal(|ui| {
+                ui.radio_value(
+                    &mut adaptive_params.encoder_options.event_drop,
+                    EventDrop::None,
+                    "None",
+                );
+                if let EventDrop::Manual {
+                    target_event_rate,
+                    alpha,
+                } = adaptive_params.encoder_options.event_drop
+                {
+                    ui.radio_value(
+                        &mut adaptive_params.encoder_options.event_drop,
+                        EventDrop::Manual {
+                            target_event_rate,
+                            alpha,
+                        },
+                        "Manual",
+                    );
+                } else {
+                    ui.radio_value(
+                        &mut adaptive_params.encoder_options.event_drop,
+                        EventDrop::Manual {
+                            target_event_rate: Default::default(),
+                            alpha: Default::default(),
+                        },
+                        "Manual",
+                    );
+                }
+            });
+        });
+        ui.end_row();
+
+        if let EventDrop::Manual {
+            target_event_rate,
+            alpha,
+        } = &mut adaptive_params.encoder_options.event_drop
+        {
+            ui.label("Bandwidth limiting rate:");
+            slider_pm(
+                true,
+                true,
+                ui,
+                target_event_rate,
+                1_000.0..=100_000_000.0,
+                vec![
+                    1_000_000.0,
+                    2_500_000.0,
+                    5_000_000.0,
+                    7_500_000.0,
+                    10_000_000.0,
+                ],
+                50_000.0,
+            );
+            ui.end_row();
+
+            ui.label("Bandwidth limiting alpha:");
+
+            slider_pm(
+                true,
+                false,
+                ui,
+                alpha,
+                0.0..=1.0,
+                vec![0.5, 0.8, 0.9, 0.999, 0.99999, 1.0],
+                0.001,
+            );
             ui.end_row();
         }
-        //
 
-        //
-        // ui.label("Bandwidth limiting:");
-        // ui.add_enabled(
-        //     enable_encoder_options,
-        //     egui::Checkbox::new(&mut params.limit_bandwidth, "Limit bandwidth?"),
-        // );
-        // ui.end_row();
-        //
-        // ui.label("Bandwidth limiting rate:");
-        //
-        // slider_pm(
-        //     params.limit_bandwidth,
-        //     true,
-        //     ui,
-        //     &mut params.bandwidth_target_event_rate,
-        //     &mut params.bandwidth_target_event_rate_slider,
-        //     1_000_000.0..=100_000_000.0,
-        //     vec![
-        //         1_000_000.0,
-        //         2_500_000.0,
-        //         5_000_000.0,
-        //         7_500_000.0,
-        //         10_000_000.0,
-        //     ],
-        //     50_000.0,
-        // );
-        // ui.end_row();
-        //
-        // ui.label("Bandwidth limiting alpha:");
-        //
-        // slider_pm(
-        //     params.limit_bandwidth,
-        //     false,
-        //     ui,
-        //     &mut params.bandwidth_alpha,
-        //     &mut params.alpha_slider,
-        //     0.0..=1.0,
-        //     vec![0.5, 0.8, 0.9, 0.999, 0.99999, 1.0],
-        //     0.001,
-        // );
-        // ui.end_row();
-        //
-        // /* Update the bandwidth options in the UI state. If there's a change, it will later get reflected
-        // by updating the encoder options in the transcoder.*/
-        // if params.limit_bandwidth {
-        //     params.encoder_options.event_drop = EventDrop::Manual {
-        //         target_event_rate: params.bandwidth_target_event_rate,
-        //         alpha: params.bandwidth_alpha,
-        //     };
-        // } else {
-        //     params.encoder_options.event_drop = EventDrop::None;
-        // }
-        //
         ui.label("Processing:");
         ui.vertical(|ui| {
             ui.add_enabled(
@@ -962,39 +1015,7 @@ impl TranscoderUi {
     }
 
     //
-    //         ui.horizontal(|ui| {
-    //             if ui.button("Open DVS socket").clicked() {
-    //                 if let Some(path) = rfd::FileDialog::new()
-    //                     .set_directory("/tmp")
-    //                     .add_filter("DVS/DAVIS video", &["sock"])
-    //                     .pick_file()
-    //                 {
-    //                     self.ui_info_state.input_path_0 = Some(path.clone());
-    //                 }
-    //             }
-    //             if ui.button("Open APS socket").clicked() {
-    //                 if let Some(path) = rfd::FileDialog::new()
-    //                     .set_directory("/tmp")
-    //                     .add_filter("DVS/DAVIS video", &["sock"])
-    //                     .pick_file()
-    //                 {
-    //                     self.ui_info_state.input_path_1 = Some(path.clone());
-    //                 }
-    //             }
-    //             if ui.button("Go!").clicked()
-    //                 && self.ui_info_state.input_path_0.is_some()
-    //                 && self.ui_info_state.input_path_1.is_some()
-    //             {
-    //                 replace_adder_transcoder(
-    //                     self,
-    //                     self.ui_info_state.input_path_0.clone(),
-    //                     self.ui_info_state.input_path_1.clone(),
-    //                     self.ui_info_state.output_path.clone(),
-    //                     0,
-    //                 );
-    //             }
-    //         });
-    //         ui.label(self.ui_info_state.source_name.clone());
+
     //
     //
     //

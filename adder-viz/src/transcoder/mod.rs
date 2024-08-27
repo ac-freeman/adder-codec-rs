@@ -46,6 +46,7 @@ pub(crate) struct CoreParams {
     pub(crate) integration_mode_radio_state: PixelMultiMode,
     davis_mode_radio_state: TranscoderMode,
     davis_output_fps: f64,
+    input_path_buf_1: Option<PathBuf>,
 }
 
 /// These are not passed along to the transcoder, but are used to store settings for quality metrics
@@ -106,6 +107,7 @@ impl Default for CoreParams {
             input_path_buf_0: None,
             output_path: None,
             davis_output_fps: 100.0,
+            input_path_buf_1: None,
         }
     }
 }

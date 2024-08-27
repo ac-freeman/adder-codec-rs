@@ -1258,6 +1258,10 @@ impl<W: Write + 'static> Video<W> {
         }
     }
 
+    pub fn update_encoder_options(&mut self, options: EncoderOptions) {
+        self.encoder.options = options;
+    }
+
     /// Get the size of the raw events (in bytes)
     pub fn get_event_size(&self) -> u8 {
         self.encoder.meta().event_size
