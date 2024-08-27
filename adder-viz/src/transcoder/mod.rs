@@ -2,6 +2,7 @@ use crate::utils::PlotY;
 use adder_codec_rs::adder_codec_core::codec::rate_controller::{Crf, DEFAULT_CRF_QUALITY};
 use adder_codec_rs::adder_codec_core::codec::{EncoderOptions, EncoderType};
 use adder_codec_rs::adder_codec_core::{PixelMultiMode, TimeMode};
+#[cfg(feature = "open-cv")]
 use adder_codec_rs::transcoder::source::davis::TranscoderMode;
 use adder_codec_rs::transcoder::source::video::FramedViewMode;
 use adder_codec_rs::utils::viz::ShowFeatureMode;
@@ -44,6 +45,7 @@ pub(crate) struct CoreParams {
     pub input_path_buf_0: Option<PathBuf>,
     pub output_path: Option<PathBuf>,
     pub(crate) integration_mode_radio_state: PixelMultiMode,
+    #[cfg(feature = "open-cv")]
     davis_mode_radio_state: TranscoderMode,
     davis_output_fps: f64,
     input_path_buf_1: Option<PathBuf>,
@@ -103,6 +105,7 @@ impl Default for CoreParams {
             time_mode: Default::default(),
             encoder_type: Default::default(),
             integration_mode_radio_state: Default::default(),
+            #[cfg(feature = "open-cv")]
             davis_mode_radio_state: TranscoderMode::RawDavis,
             input_path_buf_0: None,
             output_path: None,

@@ -1,6 +1,6 @@
 <component name="ProjectRunConfigurationManager">
   <configuration default="false" name="Check" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
-    <option name="command" value="check -p adder-codec-core -p adder-codec-rs -p adder-info -p adder-to-dvs -p adder-viz --features &quot;compression open-cv&quot;" />
+    <option name="command" value="check -p adder-codec-core -p adder-codec-rs -p adder-info -p adder-to-dvs -p adder-viz --features &quot;compression&quot;" />
     <option name="workingDirectory" value="file://$PROJECT_DIR$" />
     <envs />
     <option name="emulateTerminal" value="false" />

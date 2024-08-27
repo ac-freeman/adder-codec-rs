@@ -29,6 +29,7 @@ use crate::Images;
 use adder_codec_rs::adder_codec_core::codec::rate_controller::DEFAULT_CRF_QUALITY;
 use adder_codec_rs::adder_codec_core::SourceCamera::{DavisU8, Dvs, FramedU8};
 use adder_codec_rs::adder_codec_core::{Event, PlaneError};
+#[cfg(feature = "open-cv")]
 use adder_codec_rs::davis_edi_rs::util::reconstructor::ReconstructorError;
 use adder_codec_rs::transcoder::source::prophesee::Prophesee;
 use adder_codec_rs::transcoder::source::video::SourceError::{NoData, VideoError};
@@ -77,6 +78,7 @@ pub enum AdderTranscoderError {
     #[error("Other error")]
     OtherError(#[from] Box<dyn Error>),
 
+    #[cfg(feature = "open-cv")]
     #[error(transparent)]
     ReconstructorError(#[from] ReconstructorError),
 
@@ -399,10 +401,10 @@ impl AdderTranscoder {
                         // Framed video
                         self.create_framed(transcoder_state)
                     }
+                    #[cfg(feature = "open-cv")]
                     "aedat4" | "sock" => {
                         // Davis video
                         let ext = ext.to_os_string();
-                        #[cfg(feature = "open-cv")]
                         self.create_davis(transcoder_state, ext).await
                     }
                     "dat" => {
@@ -491,6 +493,7 @@ impl AdderTranscoder {
         Ok(())
     }
 
+    #[cfg(feature = "open-cv")]
     async fn create_davis(
         &mut self,
         transcoder_state: TranscoderState,
