@@ -135,8 +135,6 @@ impl PlayerUi {
             let res = self.player_state_tx.blocking_send(PlayerStateMsg::Set {
                 player_state: self.player_state.clone(),
             });
-
-            dbg!(res);
         }
     }
 
