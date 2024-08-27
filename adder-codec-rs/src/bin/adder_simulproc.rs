@@ -69,7 +69,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     //////////////////////////////////////////////////////
 
     let mut source: Framed<BufWriter<File>> =
-        Framed::new(args.input_filename, args.color_input, args.scale)?
+        Framed::new(args.input_filename.into(), args.color_input, args.scale)?
             // .chunk_rows(64)
             .frame_start(args.frame_idx_start)?
             .crf(args.crf)

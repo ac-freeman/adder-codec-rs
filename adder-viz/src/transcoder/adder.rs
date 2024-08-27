@@ -405,9 +405,10 @@ impl AdderTranscoder {
                         #[cfg(feature = "open-cv")]
                         self.create_davis(transcoder_state, ext).await
                     }
-                    // "dat" => {
-                    //     // Prophesee video
-                    // }
+                    "dat" => {
+                        // Prophesee video
+                        self.create_prophesee(transcoder_state).await
+                    }
                     _ => Err(InvalidFileType),
                 },
             },
@@ -625,6 +626,65 @@ impl AdderTranscoder {
         self.last_consume_time = std::time::Instant::now();
 
         eprintln!("Davis source created!");
+        Ok(())
+    }
+    async fn create_prophesee(
+        &mut self,
+        transcoder_state: TranscoderState,
+    ) -> Result<(), AdderTranscoderError> {
+        self.update_params(transcoder_state);
+
+        let core_params = &mut self.transcoder_state.core_params;
+        let adaptive_params = &self.transcoder_state.adaptive_params;
+
+        let output_string = core_params
+            .output_path
+            .clone()
+            .map(|output_path| output_path.to_str().expect("Bad path").to_string());
+
+        let mut prophesee_source: Prophesee<BufWriter<File>> = Prophesee::new(
+            core_params.delta_t_ref as u32,
+            core_params
+                .input_path_buf_0
+                .clone()
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .to_string(),
+        )?
+        .crf(
+            adaptive_params
+                .encoder_options
+                .crf
+                .get_quality()
+                .unwrap_or(DEFAULT_CRF_QUALITY),
+        );
+        let adu_interval = (prophesee_source.get_video_ref().state.tps as f32
+            / core_params.delta_t_ref as f32) as usize;
+
+        if let Some(output_string) = output_string {
+            let writer = BufWriter::new(File::create(output_string)?);
+            prophesee_source = *prophesee_source.write_out(
+                Dvs,
+                core_params.time_mode,
+                core_params.integration_mode_radio_state,
+                Some(adu_interval),
+                core_params.encoder_type,
+                adaptive_params.encoder_options,
+                writer,
+            )?;
+        }
+
+        core_params.delta_t_max_mult = prophesee_source.get_video_ref().get_delta_t_max()
+            / prophesee_source.get_video_ref().state.params.ref_time as u32;
+
+        self.source = Some(AdderSource::Prophesee(prophesee_source));
+
+        self.adaptive_state_update()?;
+        self.last_consume_time = std::time::Instant::now();
+
+        eprintln!("Davis source created!");
+
         Ok(())
     }
 }
