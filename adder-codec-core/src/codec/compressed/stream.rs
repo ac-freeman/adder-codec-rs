@@ -13,8 +13,8 @@ pub struct CompressedOutput<W: Write> {
     pub(crate) adu: EventAdu,
     pub(crate) stream: Option<BitWriter<W, BigEndian>>,
     pub(crate) options: EncoderOptions,
-    written_bytes_rx: std::sync::mpsc::Receiver<Vec<u8>>,
-    written_bytes_tx: std::sync::mpsc::Sender<Vec<u8>>,
+    pub(crate) written_bytes_rx: std::sync::mpsc::Receiver<Vec<u8>>,
+    pub(crate) written_bytes_tx: std::sync::mpsc::Sender<Vec<u8>>,
 }
 
 /// Read compressed ADΔER data from a stream.
@@ -79,6 +79,17 @@ impl<W: Write> WriteCompression<W> for CompressedOutput<W> {
     fn into_writer(&mut self) -> Option<W> {
         if !self.adu.skip_adu {
             if let Some(stream) = &mut self.stream {
+                while let Ok(written_data) = self.written_bytes_rx.try_recv() {
+                    // Clear any queue'd up compressed ADUs
+                    // Write the number of bytes in the compressed Adu as the 32-bit header for this Adu
+                    stream
+                        .write_bytes(&(written_data.len() as u32).to_be_bytes())
+                        .unwrap();
+
+                    // Write the temporary stream to the actual stream
+                    stream.write_bytes(&written_data).unwrap();
+                }
+
                 dbg!("compressing partial last adu");
                 let mut temp_stream = BitWriter::endian(Vec::new(), BigEndian);
 
@@ -421,9 +432,13 @@ mod tests {
             .unwrap();
         counter += 1;
 
+        // Sleep for 3 seconds to give the writer thread time to catch up
+        std::thread::sleep(std::time::Duration::from_secs(3));
+
         let output = compressed_output.into_writer().unwrap().into_inner();
         assert!(!output.is_empty());
         dbg!(counter);
+        dbg!(output.len());
         // Check that the size is less than the raw events
         assert!((output.len() as u32) < counter * 9);
 
@@ -434,8 +449,12 @@ mod tests {
         );
         compressed_input.meta.plane = plane;
         let mut stream = BitReader::endian(Cursor::new(output), BigEndian);
-        for _ in 0..counter - 1 {
-            let event = compressed_input.digest_event(&mut stream)?;
+        for i in 0..counter - 1 {
+            let event = compressed_input.digest_event(&mut stream);
+            if event.is_err() {
+                dbg!(i);
+            }
+            let event = event.unwrap();
             if event.coord.y == candidate_px_idx.0 && event.coord.x == candidate_px_idx.1 {
                 output_px_events.push(event);
             }
@@ -500,6 +519,9 @@ mod tests {
                 }
             }
         }
+
+        // Sleep for 3 seconds to give the writer thread time to catch up
+        std::thread::sleep(std::time::Duration::from_secs(3));
 
         let output = compressed_output.into_writer().unwrap().into_inner();
         assert!(!output.is_empty());
@@ -618,6 +640,9 @@ mod tests {
 
             counter += 1;
         }
+
+        // Sleep for 3 seconds to give the writer thread time to catch up
+        std::thread::sleep(std::time::Duration::from_secs(3));
 
         let output = compressed_output.into_writer().unwrap().into_inner();
         assert!(!output.is_empty());
@@ -739,6 +764,9 @@ mod tests {
                 }
             }
         }
+
+        // Sleep for 3 seconds to give the writer thread time to catch up
+        std::thread::sleep(std::time::Duration::from_secs(10));
 
         let output = compressed_output.into_writer().unwrap().into_inner();
         assert!(!output.is_empty());

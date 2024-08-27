@@ -190,7 +190,7 @@ mod tests {
             crf: 0,
             integration_mode: "".to_string(),
         };
-        let mut source = Framed::new(args.input_filename, args.color_input, args.scale)?
+        let mut source = Framed::new(args.input_filename.into(), args.color_input, args.scale)?
             // .chunk_rows(64)
             .crf(0)
             .frame_start(args.frame_idx_start)?;

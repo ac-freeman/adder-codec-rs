@@ -451,6 +451,8 @@ mod tests {
     fn compressed() {
         let output = Vec::new();
         let bufwriter = BufWriter::new(output);
+        let (written_bytes_tx, written_bytes_rx) = std::sync::mpsc::channel();
+
         let compression = CompressedOutput {
             meta: CodecMetadata {
                 codec_version: 0,
@@ -470,6 +472,8 @@ mod tests {
             adu: Default::default(),
             stream: Some(BitWriter::endian(bufwriter, BigEndian)),
             options: EncoderOptions::default(PlaneSize::default()),
+            written_bytes_rx,
+            written_bytes_tx,
         };
         let _encoder = Encoder {
             output: WriteCompressionEnum::CompressedOutput(compression),
