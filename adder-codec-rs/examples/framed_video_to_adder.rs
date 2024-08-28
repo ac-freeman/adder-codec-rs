@@ -12,12 +12,16 @@ use std::io;
 use std::io::{BufWriter, Write};
 use std::time::Instant;
 
-fn main() -> Result<(), Box<dyn Error>> {
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn Error>> {
     let file = File::create("/home/andrew/Downloads/events.adder")?;
     let writer = BufWriter::new(file);
 
     let mut source: Framed<BufWriter<File>> = Framed::new(
-        "/media/andrew/ExternalM2/LAS/GH010017.mp4".to_string(),
+        "/media/andrew/ExternalM2/LAS/GH010017.mp4"
+            .to_string()
+            .parse()
+            .unwrap(),
         false,
         0.5,
     )?;
@@ -44,7 +48,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let frame_max = 500;
 
     loop {
-        match source.consume(&pool) {
+        match source.consume() {
             Ok(_) => {} // Returns Vec<Vec<Event>>, but we're just writing the events out in this example
             Err(e) => {
                 println!("Err: {e:?}");

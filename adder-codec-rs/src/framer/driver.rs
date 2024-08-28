@@ -173,6 +173,8 @@ pub trait Framer {
     ///
     /// Returns `true` if there are frames now ready to write out
     fn flush_frame_buffer(&mut self) -> bool;
+
+    fn detect_features(&mut self, detect_features: bool);
 }
 
 #[derive(Debug, Clone, Default)]
@@ -230,6 +232,9 @@ pub struct FrameSequenceState {
 
     /// Ticks per output frame
     pub tpf: DeltaT,
+
+    /// Ticks per second
+    pub tps: DeltaT,
     pub(crate) source: SourceType,
     codec_version: u8,
     source_camera: SourceCamera,
@@ -242,6 +247,10 @@ pub struct FrameSequenceState {
 impl FrameSequenceState {
     pub fn reset(&mut self) {
         self.frames_written = 0;
+    }
+
+    pub fn view_mode(&mut self, view_mode: FramedViewMode) {
+        self.view_mode = view_mode;
     }
 }
 
@@ -266,7 +275,7 @@ pub struct FrameSequence<T> {
     pub(crate) mode: FramerMode,
     pub(crate) detect_features: bool,
     pub(crate) features: VecDeque<FeatureInterval>,
-    buffer_limit: Option<u32>,
+    pub buffer_limit: Option<u32>,
 
     pub(crate) running_intensities: Array3<u8>,
 
@@ -362,6 +371,7 @@ impl<
                 frames_written: 0,
                 view_mode: builder.view_mode,
                 tpf,
+                tps: builder.tps,
                 source: builder.source,
                 codec_version: builder.codec_version,
                 source_camera: builder.source_camera,
@@ -391,6 +401,10 @@ impl<
                 .with_fixint_encoding()
                 .with_big_endian(),
         }
+    }
+
+    fn detect_features(&mut self, detect_features: bool) {
+        self.detect_features = detect_features;
     }
 
     ///
@@ -532,7 +546,11 @@ impl<
 
                         // dbg!(self.features.len());
                         // dbg!(self.features[idx].end_ts);
-                        assert!(self.features[idx].end_ts >= time as BigT);
+                        if self.features[idx].end_ts < time as BigT {
+                            // Allow the player to enable feature detection on the fly
+                            self.features[idx].end_ts = time as BigT;
+                        }
+                        // assert!(self.features[idx].end_ts >= time as BigT);
                         self.features[idx].features.push(event.coord);
                     }
                 }
@@ -617,8 +635,14 @@ impl<
     ///
     /// Returns `true` if there are frames now ready to write out
     fn flush_frame_buffer(&mut self) -> bool {
-        let _all_filled = true;
-        if self.frames[0].len() > 1 {
+        let mut any_nonempty = false;
+        // Check if ANY of the frame arrays are nonempty
+        for chunk in &self.frames {
+            if chunk.len() > 1 {
+                any_nonempty = true;
+            }
+        }
+        if any_nonempty {
             for (chunk_num, chunk) in self.frames.iter_mut().enumerate() {
                 let frame_chunk = &mut chunk[0];
                 // for frame_chunk in chunk.iter_mut() {

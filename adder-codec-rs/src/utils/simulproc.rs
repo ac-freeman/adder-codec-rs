@@ -87,14 +87,14 @@ pub struct SimulProcArgs {
 
 /// A struct for simultaneously transcoding a video source to ADΔER and reconstructing a framed
 /// video from ADΔER
-pub struct SimulProcessor<W: Write + 'static> {
+pub struct SimulProcessor<W: Write + std::marker::Send + std::marker::Sync + 'static> {
     /// Framed transcoder hook
     pub source: Framed<W>,
-    thread_pool: ThreadPool,
+    thread_pool: tokio::runtime::Runtime,
     events_tx: Sender<Vec<Vec<Event>>>,
 }
 
-impl<W: Write + 'static> SimulProcessor<W> {
+impl<W: Write + std::marker::Send + std::marker::Sync + 'static> SimulProcessor<W> {
     /// Create a new SimulProcessor
     ///
     /// # Arguments
@@ -136,8 +136,8 @@ impl<W: Write + 'static> SimulProcessor<W> {
         let thread_pool_framer = rayon::ThreadPoolBuilder::new()
             .num_threads(max(num_threads / 2, 1))
             .build()?;
-        let thread_pool_transcoder = rayon::ThreadPoolBuilder::new()
-            .num_threads(max(num_threads, 1))
+        let thread_pool_transcoder = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(max(num_threads, 1))
             .build()?;
         let reconstructed_frame_rate = source.source_fps;
         // For instantaneous reconstruction, make sure the frame rate matches the source video rate
@@ -231,7 +231,7 @@ impl<W: Write + 'static> SimulProcessor<W> {
         let mut now = Instant::now();
 
         loop {
-            match self.source.consume(&self.thread_pool) {
+            match self.source.consume() {
                 Ok(events) => {
                     match self.events_tx.send(events) {
                         Ok(_) => {}

@@ -8,41 +8,43 @@ use crate::{AbsoluteT, DeltaT, Event, PlaneSize};
 use arithmetic_coding_adder_dep::{Decoder, Encoder};
 use bitstream_io::{BigEndian, BitReader, BitWriter};
 use ndarray::Array2;
+use nestify::nest;
 use std::io::Cursor;
 use std::mem::size_of;
 
-#[derive(Clone, Debug, Default)]
-pub struct EventAdu {
-    /// Contains the sparse events in the cube. The index is the relative interval of dt_ref from the start
-    event_cubes: Array2<EventCube>,
+nest! {
+    #[derive(Clone, Debug, Default)]
+    pub struct EventAdu {
+        /// Contains the sparse events in the cube. The index is the relative interval of dt_ref from the start
+        event_cubes: Array2<EventCube>,
 
-    /// The absolute time of the Adu's beginning (not necessarily aligned to an event. We structure
-    /// cubes to be in temporal lockstep at the beginning.)
-    pub(crate) start_t: AbsoluteT,
+        /// The absolute time of the Adu's beginning (not necessarily aligned to an event. We structure
+        /// cubes to be in temporal lockstep at the beginning.)
+        pub(crate) start_t: AbsoluteT,
 
-    /// How many ticks each input interval spans
-    pub(crate) dt_ref: DeltaT,
+        /// How many ticks each input interval spans
+        pub(crate) dt_ref: DeltaT,
 
-    /// How many dt_ref intervals the whole adu spans
-    pub(crate) num_intervals: usize,
+        /// How many dt_ref intervals the whole adu spans
+        pub(crate) num_intervals: usize,
 
-    pub(crate) skip_adu: bool,
+        pub(crate) skip_adu: bool,
 
-    cube_to_write_count: u16,
+        cube_to_write_count: u16,
 
-    pub(crate) state: AduState,
+        pub(crate) state:
+            #[derive(Clone, Debug, Default, PartialEq)]
+            pub enum AduState {
+                Compressed,
+                Decompressed,
+                #[default]
+                Empty,
+            },
 
-    first_run: bool,
+        first_run: bool,
 
-    decompress_block_idx: (usize, usize), // decompressed_event_queue: VecDeque<Event>,
-}
-
-#[derive(Clone, Debug, Default, PartialEq)]
-pub enum AduState {
-    Compressed,
-    Decompressed,
-    #[default]
-    Empty,
+        decompress_block_idx: (usize, usize), // decompressed_event_queue: VecDeque<Event>,
+    }
 }
 
 impl EventAdu {

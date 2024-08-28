@@ -21,7 +21,9 @@ impl<W: Write> EmptyOutput<W> {
     }
 }
 
-impl<W: std::io::Write> WriteCompression<W> for EmptyOutput<Sink> {
+impl<W: std::io::Write + std::marker::Send + std::marker::Sync + 'static> WriteCompression<W>
+    for EmptyOutput<Sink>
+{
     fn magic(&self) -> Magic {
         MAGIC_RAW
     }

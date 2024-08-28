@@ -18,13 +18,14 @@ use std::fs::File;
 use std::io::{self, BufRead, BufReader, Read, Seek, SeekFrom, Write};
 use std::path::PathBuf;
 use std::str::FromStr;
+use tokio::runtime::Runtime;
 use video_rs_adder_dep::Frame;
 
 /// The temporal granularity of the source (ticks per second)
 const PROPHESEE_SOURCE_TPS: u32 = 1000000;
 
 /// Attributes of a framed video -> ADΔER transcode
-pub struct Prophesee<W: Write> {
+pub struct Prophesee<W: Write + std::marker::Send + std::marker::Sync + 'static> {
     pub(crate) video: Video<W>,
 
     input_reader: BufReader<File>,
@@ -51,9 +52,9 @@ pub struct DvsEvent {
     p: u8,
 }
 
-unsafe impl<W: Write> Sync for Prophesee<W> {}
+unsafe impl<W: Write + std::marker::Send + std::marker::Sync + 'static> Sync for Prophesee<W> {}
 
-impl<W: Write + 'static> Prophesee<W> {
+impl<W: Write + std::marker::Send + std::marker::Sync + 'static> Prophesee<W> {
     /// Create a new `Prophesee` transcoder
     pub fn new(ref_time: u32, input_filename: String) -> Result<Self, Box<dyn Error>> {
         let source = File::open(PathBuf::from(input_filename))?;
@@ -114,11 +115,8 @@ impl<W: Write + 'static> Prophesee<W> {
     }
 }
 
-impl<W: Write + 'static + std::marker::Send> Source<W> for Prophesee<W> {
-    fn consume(
-        &mut self,
-        _thread_pool: &ThreadPool,
-    ) -> Result<Vec<Vec<Event>>, SourceError> {
+impl<W: Write + std::marker::Send + std::marker::Sync + 'static> Source<W> for Prophesee<W> {
+    fn consume(&mut self) -> Result<Vec<Vec<Event>>, SourceError> {
         if self.running_t == 0 {
             self.video.integrate_matrix(
                 self.video.state.running_intensities.clone(),
@@ -327,7 +325,9 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Prophesee<W> {
     }
 }
 
-fn end_events<W: Write + 'static + std::marker::Send>(prophesee: &mut Prophesee<W>) {
+fn end_events<W: Write + std::marker::Send + std::marker::Sync + 'static>(
+    prophesee: &mut Prophesee<W>,
+) {
     let mut events: Vec<Event> = Vec::new();
     let crf_parameters = *prophesee.video.encoder.options.crf.get_parameters();
 
@@ -425,7 +425,7 @@ fn parse_header(file: &mut BufReader<File>) -> io::Result<(u64, u8, u8, (u32, u3
 }
 
 fn line_to_hw(words: Vec<&[u8]>) -> Option<u32> {
-    let  word = words.get(2).unwrap();
+    let word = words.get(2).unwrap();
     let mut new_word = *word;
     if *word.last().unwrap() == '\n' as u8 {
         // Remove the trailing newline
@@ -453,8 +453,7 @@ fn decode_event(reader: &mut BufReader<File>) -> io::Result<DvsEvent> {
     Ok(DvsEvent { t, x, y, p })
 }
 
-impl<W: Write + 'static> VideoBuilder<W> for Prophesee<W> {
-
+impl<W: Write + std::marker::Send + std::marker::Sync + 'static> VideoBuilder<W> for Prophesee<W> {
     fn crf(mut self, crf: u8) -> Self {
         self.video.update_crf(crf);
         self

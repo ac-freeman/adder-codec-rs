@@ -1,6 +1,6 @@
 [package]
 name = "adder-viz"
-version = "0.3.8"
+version = "0.4.0"
 edition = "2021"
 resolver = "2"
 authors = ["Andrew C. Freeman"]
@@ -23,22 +23,31 @@ open-cv = ["opencv", "adder-codec-rs/open-cv", "adder-codec-rs/transcoder" ]
 compression = ["adder-codec-rs/compression"]
 
 [dependencies]
-adder-codec-rs = { version = "0.4.7", path = "../adder-codec-rs", features = [
+adder-codec-rs = { version = "0.4.8", path = "../adder-codec-rs", features = [
     "transcoder",
 ] }
-bevy = "0.11"
-bevy_egui = "0.21.0"
 crossbeam-channel = "0.5.6"
-egui_file = "0.11.0"
+egui = "0.26.2"
+eframe = { version = "0.26.2", default-features = false, features = [
+    "default_fonts", # Embed the default egui fonts.
+    "glow",          # Use the glow rendering backend. Alternative: "wgpu".
+    "persistence",   # Enable restoring app state when restarting the app.
+] }
+egui_file = "0.16.3"
+egui_plot = "0.26.2"
 futures = "0.3.26"
 rayon = "1.5.3"
 rfd = "0.10.0"
 strum = "0.24.1"
 strum_macros = "0.24.3"
-tokio = { version = "1.20.1", features = ["full"] }
+thiserror = "1.0.58"
+tokio = { version = "1.36.0", features = ["full", "rt-multi-thread"] }
 ndarray = "0.15.6"
 video-rs-adder-dep = { version = "0.4.1", features = ["ndarray"] }
 ndarray-image = "0.3.0"
+rand = "0.8.5"
+anyhow = "1.0.82"
+async-recursion = "1.1.1"
 
 [dependencies.opencv]
 version = "0.84.5"

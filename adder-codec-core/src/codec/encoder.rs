@@ -26,7 +26,7 @@ use bincode::config::{FixintEncoding, WithOtherEndian, WithOtherIntEncoding};
 use bincode::{DefaultOptions, Options};
 
 /// Struct for encoding [`Event`]s to a stream
-pub struct Encoder<W: Write> {
+pub struct Encoder<W: Write + std::marker::Send + std::marker::Sync + 'static> {
     output: WriteCompressionEnum<W>,
     bincode: WithOtherEndian<
         WithOtherIntEncoding<DefaultOptions, FixintEncoding>,
@@ -53,7 +53,7 @@ impl Default for EncoderState {
 }
 
 #[allow(dead_code)]
-impl<W: Write + 'static> Encoder<W> {
+impl<W: Write + 'static + std::marker::Send + std::marker::Sync> Encoder<W> {
     /// Create a new [`Encoder`] with an empty compression scheme
     pub fn new_empty(compression: EmptyOutput<Sink>, options: EncoderOptions) -> Self
     where
@@ -321,6 +321,7 @@ mod tests {
     use crate::{Coord, PlaneSize};
     use bitstream_io::{BigEndian, BitWriter};
     use std::io::BufWriter;
+    use std::sync::{Arc, RwLock};
 
     #[test]
     fn raw() {
@@ -451,6 +452,8 @@ mod tests {
     fn compressed() {
         let output = Vec::new();
         let bufwriter = BufWriter::new(output);
+        let (written_bytes_tx, written_bytes_rx) = std::sync::mpsc::channel();
+
         let compression = CompressedOutput {
             meta: CodecMetadata {
                 codec_version: 0,
@@ -468,8 +471,14 @@ mod tests {
             // adu: Adu::new(),
             // contexts: None,
             adu: Default::default(),
-            stream: Some(BitWriter::endian(bufwriter, BigEndian)),
+            stream: Some(Arc::new(RwLock::new(BitWriter::endian(
+                bufwriter, BigEndian,
+            )))),
             options: EncoderOptions::default(PlaneSize::default()),
+            written_bytes_tx: Some(written_bytes_tx),
+            last_message_sent: 0,
+            last_message_written: Arc::new(RwLock::new(0)),
+            _phantom: Default::default(),
         };
         let _encoder = Encoder {
             output: WriteCompressionEnum::CompressedOutput(compression),

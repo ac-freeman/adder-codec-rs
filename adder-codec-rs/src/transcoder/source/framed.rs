@@ -17,10 +17,11 @@ use std::path::PathBuf;
 
 #[cfg(feature = "feature-logging")]
 use chrono::Local;
+use tokio::runtime::Runtime;
 use video_rs_adder_dep::{self, Decoder, Frame, Locator, Options, Resize};
 
 /// Attributes of a framed video -> ADΔER transcode
-pub struct Framed<W: Write + 'static> {
+pub struct Framed<W: Write + 'static + std::marker::Send + std::marker::Sync> {
     cap: Decoder,
     pub(crate) input_frame: Frame,
 
@@ -38,16 +39,16 @@ pub struct Framed<W: Write + 'static> {
 
     pub(crate) video: Video<W>,
 }
-unsafe impl<W: Write> Sync for Framed<W> {}
+unsafe impl<W: Write + std::marker::Send + std::marker::Sync> Sync for Framed<W> {}
 
-impl<W: Write + 'static> Framed<W> {
+impl<W: Write + 'static + std::marker::Send + std::marker::Sync> Framed<W> {
     /// Create a new `Framed` source
     pub fn new(
-        input_filename: String,
+        input_path: PathBuf,
         color_input: bool,
         scale: f64,
     ) -> Result<Framed<W>, SourceError> {
-        let source = Locator::Path(PathBuf::from(input_filename));
+        let source = Locator::Path(input_path);
         let mut cap = Decoder::new(&source)?;
         let (width, height) = cap.size();
         let width = ((width as f64) * scale) as u32;
@@ -122,22 +123,17 @@ impl<W: Write + 'static> Framed<W> {
     }
 }
 
-impl<W: Write + 'static> Source<W> for Framed<W> {
+impl<W: Write + 'static + std::marker::Send + std::marker::Sync> Source<W> for Framed<W> {
     /// Get pixel-wise intensities directly from source frame, and integrate them with
     /// `ref_time` (the number of ticks each frame is said to span)
-    fn consume(
-        &mut self,
-        thread_pool: &ThreadPool,
-    ) -> Result<Vec<Vec<Event>>, SourceError> {
+    fn consume(&mut self) -> Result<Vec<Vec<Event>>, SourceError> {
         let (_, frame) = self.cap.decode()?;
         self.input_frame = handle_color(frame, self.color_input)?;
 
-        let res = thread_pool.install(|| {
-            self.video.integrate_matrix(
-                self.input_frame.clone(),
-                self.video.state.params.ref_time as f32,
-            )
-        });
+        let res = self.video.integrate_matrix(
+            self.input_frame.clone(),
+            self.video.state.params.ref_time as f32,
+        );
         #[cfg(feature = "feature-logging")]
         {
             if let Some(handle) = &mut self.video.state.feature_log_handle {
@@ -190,7 +186,7 @@ impl<W: Write + 'static> Source<W> for Framed<W> {
     }
 }
 
-impl<W: Write + 'static> VideoBuilder<W> for Framed<W> {
+impl<W: Write + 'static + std::marker::Send + std::marker::Sync> VideoBuilder<W> for Framed<W> {
     fn crf(mut self, crf: u8) -> Self {
         self.video.update_crf(crf);
         self

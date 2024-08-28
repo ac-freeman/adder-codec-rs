@@ -1,10 +1,11 @@
-use bevy::prelude::Image;
-
-use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
-use bevy_egui::egui::plot::{Line, PlotPoints};
-
+use crate::Pm;
+use eframe::emath;
+use eframe::epaint::ColorImage;
+use egui::{Ui, WidgetText};
+use egui_plot::{Line, PlotPoints};
 use std::collections::VecDeque;
 use std::error::Error;
+use std::ops::RangeInclusive;
 use video_rs_adder_dep::Frame;
 
 pub(crate) mod slider;
@@ -44,70 +45,61 @@ impl PlotY {
     }
 }
 
-pub fn prep_bevy_image(
-    image_mat: Frame,
+#[inline]
+pub fn prep_epaint_image(
+    image_mat: &Frame,
     color: bool,
-    width: u16,
-    height: u16,
-) -> Result<Image, Box<dyn Error>> {
-    // let view = Assets::get_mut(last_view)?;
-    let image_mat = image_mat.as_standard_layout();
-
-    // Preallocate space for the new vector
-    let mut new_image_mat = Vec::with_capacity(width as usize * height as usize * 4);
-
-    let image_mat = image_mat.into_owned().into_raw_vec();
-    if color {
-        // Iterate over chunks of 3 elements and insert the value after each chunk
-        for chunk in image_mat.chunks(3) {
-            new_image_mat.extend(chunk.iter().cloned());
-            new_image_mat.push(255);
-        }
+    width: usize,
+    height: usize,
+) -> Result<ColorImage, Box<dyn Error>> {
+    if !color {
+        return Ok(ColorImage::from_gray(
+            [width, height],
+            image_mat.as_standard_layout().as_slice().unwrap(),
+        ));
     } else {
-        for chunk in image_mat.chunks(1) {
-            new_image_mat.extend(chunk.iter().cloned());
-            new_image_mat.extend(chunk.iter().cloned());
-            new_image_mat.extend(chunk.iter().cloned());
-            new_image_mat.push(255);
-        }
+        return Ok(ColorImage::from_rgb(
+            [width, height],
+            image_mat.as_standard_layout().as_slice().unwrap(),
+        ));
     }
-
-    Ok(Image::new(
-        Extent3d {
-            width: width.into(),
-            height: height.into(),
-            depth_or_array_layers: 1,
-        },
-        TextureDimension::D2,
-        new_image_mat,
-        TextureFormat::Rgba8UnormSrgb,
-    ))
 }
 
-pub fn prep_bevy_image_mut(
-    image_mat: Frame,
-    color: bool,
-    new_image: &mut Image,
-) -> Result<(), Box<dyn Error>> {
-    let image_mat = image_mat.as_standard_layout().as_ptr();
+pub fn add_checkbox_row(
+    enabled: bool,
+    label_1: impl Into<WidgetText>,
+    label_2: impl Into<WidgetText>,
+    ui: &mut Ui,
+    checkbox_value: &mut bool,
+) -> bool {
+    ui.add_enabled(enabled, egui::Label::new(label_1));
+    let ret = ui
+        .add_enabled(enabled, egui::Checkbox::new(checkbox_value, label_2))
+        .changed();
+    ui.end_row();
+    ret
+}
 
-    let mut ref_idx = 0;
-    unsafe {
-        for (index, element) in new_image.data.iter_mut().enumerate() {
-            // Skip every 4th element
-            if (index + 1) % 4 == 0 {
-                if !color {
-                    ref_idx += 1;
-                }
-                continue;
-            }
-
-            *element = *image_mat.offset(ref_idx);
-            if color {
-                ref_idx += 1;
-            }
-        }
-    }
-
-    Ok(())
+pub fn add_slider_row<Num: emath::Numeric + Pm>(
+    enabled: bool,
+    logarithmic: bool,
+    label: impl Into<WidgetText>,
+    ui: &mut Ui,
+    instant_value: &mut Num,
+    range: RangeInclusive<Num>,
+    notches: Vec<Num>,
+    interval: Num,
+) -> bool {
+    ui.add_enabled(enabled, egui::Label::new(label));
+    let ret = crate::slider_pm(
+        enabled,
+        logarithmic,
+        ui,
+        instant_value,
+        range,
+        notches,
+        interval,
+    );
+    ui.end_row();
+    ret
 }

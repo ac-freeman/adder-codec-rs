@@ -35,7 +35,7 @@ use tokio::runtime::Runtime;
 use video_rs_adder_dep::Frame;
 
 /// The EDI reconstruction mode, determining how intensities are integrated for the ADΔER model
-#[derive(PartialEq, Eq, Clone, Copy)]
+#[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub enum TranscoderMode {
     /// Perform a framed EDI reconstruction at a given (constant) frame rate. Each frame is
     /// integrated in the ADΔER model with a [Framed](crate::transcoder::source::framed::Framed) source.
@@ -78,7 +78,7 @@ struct Integration<W> {
 }
 
 /// Attributes of a framed video -> ADΔER transcode
-pub struct Davis<W: Write> {
+pub struct Davis<W: Write + std::marker::Send + std::marker::Sync + 'static> {
     reconstructor: Option<Reconstructor>,
     pub(crate) input_frame_scaled: Mat,
     pub(crate) video: Video<W>,
@@ -86,9 +86,6 @@ pub struct Davis<W: Write> {
     thread_pool_edi: Option<ThreadPool>,
 
     integration: Integration<W>,
-
-    /// The tokio runtime
-    pub rt: Runtime,
 
     /// The latency between a DAVIS/DVS packet being sent by the camera and read by the reconstructor
     latency: u128,
@@ -105,15 +102,11 @@ pub struct Davis<W: Write> {
     ref_time_divisor: f64,
 }
 
-unsafe impl<W: Write> Sync for Davis<W> {}
+unsafe impl<W: Write + std::marker::Send + std::marker::Sync> Sync for Davis<W> {}
 
-impl<W: Write + 'static> Davis<W> {
+impl<W: Write + 'static + std::marker::Send + std::marker::Sync> Davis<W> {
     /// Create a new `Davis` transcoder
-    pub fn new(
-        reconstructor: Reconstructor,
-        rt: Runtime,
-        mode: TranscoderMode,
-    ) -> Result<Self, Box<dyn Error>> {
+    pub fn new(reconstructor: Reconstructor, mode: TranscoderMode) -> Result<Self, Box<dyn Error>> {
         let plane = PlaneSize::new(reconstructor.width, reconstructor.height, 1)?;
 
         let video = Video::new(
@@ -166,7 +159,6 @@ impl<W: Write + 'static> Davis<W> {
                 dvs_last_ln_val,
                 phantom: std::marker::PhantomData,
             },
-            rt,
             latency: 0,
             cached_mat_opt: None,
 
@@ -237,7 +229,7 @@ impl<W: Write + 'static> Davis<W> {
     }
 }
 
-impl<W: Write + 'static> Integration<W> {
+impl<W: Write + 'static + std::marker::Send + std::marker::Sync> Integration<W> {
     /// Integrate a sequence of [DVS events](DvsEvent) into the ADΔER video model
     #[allow(clippy::cast_sign_loss)]
     pub fn integrate_dvs_events<
@@ -605,8 +597,8 @@ impl<W: Write + 'static> Integration<W> {
     }
 }
 
-impl<W: Write + 'static + std::marker::Send> Source<W> for Davis<W> {
-    fn consume(&mut self, thread_pool: &ThreadPool) -> Result<Vec<Vec<Event>>, SourceError> {
+impl<W: Write + 'static + std::marker::Send + std::marker::Sync> Source<W> for Davis<W> {
+    fn consume(&mut self) -> Result<Vec<Vec<Event>>, SourceError> {
         // Attempting new method for integration without requiring a buffer. Could be implemented
         // for framed source just as easily
         // Keep running integration starting at D=log_2(current_frame) + 1
@@ -622,6 +614,10 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Davis<W> {
             TranscoderMode::Framed => false,
             TranscoderMode::RawDavis | TranscoderMode::RawDvs => true,
         };
+
+        if self.reconstructor.is_none() {
+            return Err(SourceError::NoData);
+        }
 
         let mut reconstructor_holder = None;
         swap(&mut self.reconstructor, &mut reconstructor_holder);
@@ -836,7 +832,7 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Davis<W> {
                 )
             };
 
-            ret = thread_pool.install(|| self.video.integrate_matrix(frame, mat_integration_time));
+            ret = self.video.integrate_matrix(frame, mat_integration_time);
 
             #[allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
             for (idx, val) in self.integration.dvs_last_ln_val.iter_mut().enumerate() {
@@ -946,7 +942,7 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Davis<W> {
     }
 }
 
-impl<W: Write + 'static> VideoBuilder<W> for Davis<W> {
+impl<W: Write + 'static + std::marker::Send + std::marker::Sync> VideoBuilder<W> for Davis<W> {
     fn crf(mut self, crf: u8) -> Self {
         self.video.update_crf(crf);
         self

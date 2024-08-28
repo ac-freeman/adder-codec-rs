@@ -42,7 +42,8 @@ pub struct MyArgs {
     pub features: bool,
 }
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut args: MyArgs = MyArgs::parse();
 
     let mut prophesee_source: Prophesee<BufWriter<File>> =
@@ -65,9 +66,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         },
         writer,
     )?;
-    prophesee_source
-        .get_video_mut()
-        .update_detect_features(args.features, ShowFeatureMode::Off, true, true);
+    prophesee_source.get_video_mut().update_detect_features(
+        args.features,
+        ShowFeatureMode::Off,
+        true,
+        true,
+    );
     // prophesee_source
     //     .get_video_mut()
     //     .encoder
@@ -81,7 +85,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .unwrap();
 
     loop {
-        match prophesee_source.consume( &pool) {
+        match prophesee_source.consume() {
             Ok(_) => {}
             Err(SourceError::Open) => return Ok(()),
             Err(e) => {

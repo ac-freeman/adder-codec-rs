@@ -3,7 +3,7 @@ This was manually copied from egui/src/widgets/slider.rs. I modified it to add "
 to the slider. This will be removed in the future, if egui adds an equivalent feature.
  */
 
-use bevy_egui::egui::{
+use egui::{
     emath, epaint, lerp, pos2, remap, remap_clamp, vec2, Color32, DragValue, Key, Label, NumExt,
     Pos2, Rect, Response, Sense, SliderOrientation, Stroke, TextStyle, Ui, Vec2, Widget,
     WidgetInfo, WidgetText,
@@ -627,6 +627,11 @@ impl<'a> NotchedSlider<'a> {
                 },
                 // stroke: visuals.bg_stroke,
                 // stroke: ui.visuals().widgets.inactive.bg_stroke,
+                fill_texture_id: Default::default(),
+                uv: Rect {
+                    min: Default::default(),
+                    max: Default::default(),
+                },
             });
 
             for notch in &self.notches {

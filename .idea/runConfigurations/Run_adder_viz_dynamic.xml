@@ -2,6 +2,9 @@
   <configuration default="false" name="Run adder-viz dynamic" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
     <option name="command" value="run -p adder-viz --features &quot;compression open-cv&quot;" />
     <option name="workingDirectory" value="file://$PROJECT_DIR$" />
+    <envs>
+      <env name="LD_LIBRARY_PATH" value="$PROJECT_DIR$/target/debug/deps/:$PROJECT_DIR$/target/debug/libbevy_dylib.so:$LD_LIBRARY_PATH" />
+    </envs>
     <option name="emulateTerminal" value="false" />
     <option name="channel" value="DEFAULT" />
     <option name="requiredFeatures" value="true" />
@@ -9,9 +12,6 @@
     <option name="withSudo" value="false" />
     <option name="buildTarget" value="REMOTE" />
     <option name="backtrace" value="SHORT" />
-    <envs>
-      <env name="LD_LIBRARY_PATH" value="$PROJECT_DIR$/target/debug/deps/:$PROJECT_DIR$/target/debug/libbevy_dylib.so:$LD_LIBRARY_PATH" />
-    </envs>
     <option name="isRedirectInput" value="false" />
     <option name="redirectInputPath" value="" />
     <method v="2">
