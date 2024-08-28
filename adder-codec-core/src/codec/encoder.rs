@@ -26,7 +26,7 @@ use bincode::config::{FixintEncoding, WithOtherEndian, WithOtherIntEncoding};
 use bincode::{DefaultOptions, Options};
 
 /// Struct for encoding [`Event`]s to a stream
-pub struct Encoder<W: Write> {
+pub struct Encoder<W: Write + std::marker::Send + std::marker::Sync + 'static> {
     output: WriteCompressionEnum<W>,
     bincode: WithOtherEndian<
         WithOtherIntEncoding<DefaultOptions, FixintEncoding>,
@@ -53,7 +53,7 @@ impl Default for EncoderState {
 }
 
 #[allow(dead_code)]
-impl<W: Write + 'static> Encoder<W> {
+impl<W: Write + 'static + std::marker::Send + std::marker::Sync> Encoder<W> {
     /// Create a new [`Encoder`] with an empty compression scheme
     pub fn new_empty(compression: EmptyOutput<Sink>, options: EncoderOptions) -> Self
     where

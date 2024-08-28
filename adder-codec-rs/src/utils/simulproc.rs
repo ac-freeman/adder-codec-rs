@@ -87,14 +87,14 @@ pub struct SimulProcArgs {
 
 /// A struct for simultaneously transcoding a video source to ADΔER and reconstructing a framed
 /// video from ADΔER
-pub struct SimulProcessor<W: Write + 'static> {
+pub struct SimulProcessor<W: Write + std::marker::Send + std::marker::Sync + 'static> {
     /// Framed transcoder hook
     pub source: Framed<W>,
     thread_pool: tokio::runtime::Runtime,
     events_tx: Sender<Vec<Vec<Event>>>,
 }
 
-impl<W: Write + 'static> SimulProcessor<W> {
+impl<W: Write + std::marker::Send + std::marker::Sync + 'static> SimulProcessor<W> {
     /// Create a new SimulProcessor
     ///
     /// # Arguments

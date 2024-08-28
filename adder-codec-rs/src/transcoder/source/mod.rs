@@ -26,7 +26,7 @@ pub mod video;
 pub mod prophesee;
 
 #[enum_dispatch(Source<W>)]
-pub enum AdderSource<W: Write + 'static + std::marker::Send> {
+pub enum AdderSource<W: Write + 'static + std::marker::Send + std::marker::Sync> {
     Framed(Framed<W>),
     #[cfg(feature = "open-cv")]
     Davis(Davis<W>),

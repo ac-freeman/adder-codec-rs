@@ -9,7 +9,7 @@ use std::io::{Read, Seek, Sink, Write};
 
 /// Different options for what to with the events we're given
 #[enum_dispatch(WriteCompression<W>)]
-pub enum WriteCompressionEnum<W: Write> {
+pub enum WriteCompressionEnum<W: Write + std::marker::Send + std::marker::Sync + 'static> {
     /// Perform (possibly lossy) compression on the ADΔER stream, and arithmetic coding
     #[cfg(feature = "compression")]
     CompressedOutput(CompressedOutput<W>),
@@ -108,7 +108,7 @@ impl Default for CodecMetadata {
 
 /// A trait for writing ADΔER data to a stream.
 #[enum_dispatch]
-pub trait WriteCompression<W: Write> {
+pub trait WriteCompression<W: Write + std::marker::Send + std::marker::Sync + 'static> {
     // /// A struct implementing `WriteCompression` should take ownership of the `writer`.
     // fn new(meta: CodecMetadata, writer: W) -> Self
     // where

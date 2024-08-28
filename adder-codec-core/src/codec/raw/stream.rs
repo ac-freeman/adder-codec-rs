@@ -50,7 +50,9 @@ impl<W: Write> RawOutput<W> {
     }
 }
 
-impl<W: Write> WriteCompression<W> for RawOutput<W> {
+impl<W: Write + std::marker::Send + std::marker::Sync + 'static> WriteCompression<W>
+    for RawOutput<W>
+{
     fn magic(&self) -> Magic {
         MAGIC_RAW
     }

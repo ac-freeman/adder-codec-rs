@@ -311,7 +311,7 @@ pub trait VideoBuilder<W> {
 // impl VideoBuilder for Video {}
 
 /// Attributes common to ADΔER transcode process
-pub struct Video<W: Write> {
+pub struct Video<W: Write + std::marker::Send + std::marker::Sync + 'static> {
     /// The current state of the video transcode
     pub state: VideoState,
     pub(crate) event_pixel_trees: Array3<PixelArena>,
@@ -335,9 +335,9 @@ pub struct Video<W: Write> {
     // Also hold a state for whether or not to write out events at all, so that a null writer isn't required.
     // Eric: this is somewhat addressed above
 }
-unsafe impl<W: Write> Send for Video<W> {}
+unsafe impl<W: Write + std::marker::Send + std::marker::Sync + 'static> Send for Video<W> {}
 
-impl<W: Write + 'static> Video<W> {
+impl<W: Write + 'static + std::marker::Send + std::marker::Sync + 'static> Video<W> {
     /// Initialize the Video with default parameters.
     pub(crate) fn new(
         plane: PlaneSize,
@@ -1384,7 +1384,7 @@ use enum_dispatch::enum_dispatch;
 
 /// A trait for objects that can be used as a source of data for the ADΔER transcode model.
 #[enum_dispatch]
-pub trait Source<W: Write> {
+pub trait Source<W: Write + std::marker::Send + std::marker::Sync + 'static> {
     /// Intake one input interval worth of data from the source stream into the ADΔER model as
     /// intensities.
     fn consume(&mut self) -> Result<Vec<Vec<Event>>, SourceError>;
