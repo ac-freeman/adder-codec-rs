@@ -77,8 +77,6 @@ impl<W: Write> CompressedOutput<W> {
                         .unwrap();
                     stream.write_bytes(&bytes_message.bytes).unwrap();
                     self.last_message_written += 1;
-
-                    dbg!("Wrote message {}", bytes_message.message_id);
                 } else {
                     self.bytes_writer_queue
                         .push(bytes_message.bytes, Reverse(bytes_message.message_id));
@@ -111,7 +109,14 @@ impl<W: Write> WriteCompression<W> for CompressedOutput<W> {
 
     fn into_writer(&mut self) -> Option<W> {
         if !self.adu.skip_adu {
-            self.flush_bytes_queue();
+            while self.last_message_sent
+                != self.last_message_written + self.bytes_writer_queue.len() as u32
+            {
+                self.flush_bytes_queue();
+
+                // Sleep 1 second
+                std::thread::sleep(std::time::Duration::from_secs(1));
+            }
 
             if let Some(stream) = &mut self.stream {
                 while let Some((bytes, message_id)) = self.bytes_writer_queue.pop() {
@@ -121,10 +126,8 @@ impl<W: Write> WriteCompression<W> for CompressedOutput<W> {
                             .write_bytes(&(bytes.len() as u32).to_be_bytes())
                             .unwrap();
                         stream.write_bytes(&bytes).unwrap();
-                        dbg!("Wrote message {}", message_id);
                         self.last_message_written += 1;
                     } else {
-                        dbg!("Breaking...");
                         break;
                     }
                 }
@@ -201,10 +204,8 @@ impl<W: Write> WriteCompression<W> for CompressedOutput<W> {
                 self.last_message_sent += 1;
 
                 std::thread::spawn(move || {
-                    // TODO: Need to ensure that received messages are placed in correct order
                     adu.compress(&mut temp_stream, parameters.c_thresh_max).ok();
                     let written_data = temp_stream.into_writer();
-                    dbg!("Sending message {}", message_id_to_send);
 
                     tx.send(BytesMessage {
                         message_id: message_id_to_send,
