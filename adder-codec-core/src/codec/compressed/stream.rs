@@ -9,6 +9,8 @@ use crate::codec::compressed::source_model::HandleEvent;
 use crate::codec::header::{Magic, MAGIC_COMPRESSED};
 use crate::{DeltaT, Event};
 
+/// A message to send to the writer thread (that is, the main thread) to write out the compressed
+/// ADΔER data to the stream
 pub(crate) struct BytesMessage {
     message_id: u32,
     bytes: Vec<u8>,
@@ -23,7 +25,11 @@ pub struct CompressedOutput<W: Write> {
     pub(crate) written_bytes_rx: std::sync::mpsc::Receiver<BytesMessage>,
     pub(crate) written_bytes_tx: std::sync::mpsc::Sender<BytesMessage>,
     pub(crate) bytes_writer_queue: PriorityQueue<Vec<u8>, Reverse<u32>>,
+
+    /// The ID of the last message sent from a spawned compressor thread
     pub(crate) last_message_sent: u32,
+
+    /// The ID of the last message received in the writer thread and actually written out the stream
     pub(crate) last_message_written: u32,
 }
 
