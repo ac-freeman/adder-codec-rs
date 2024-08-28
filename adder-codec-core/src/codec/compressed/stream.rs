@@ -77,9 +77,8 @@ fn flush_bytes_queue_worker<W: Write>(
     mut bytes_writer_queue: PriorityQueue<Vec<u8>, Reverse<u32>>,
 ) {
     while let Ok(bytes_message) = written_bytes_rx.recv() {
-        eprintln!("received message");
         // Blocking recv
-        // if let Some(stream) = &mut self.stream {
+        // eprintln!("received message");
 
         let mut last_message_written = last_message_written.write().unwrap();
         if bytes_message.message_id == last_message_written.add(1) {

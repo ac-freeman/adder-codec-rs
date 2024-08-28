@@ -160,7 +160,7 @@ impl AdderPlayer {
         dbg!(player_state.core_params.clone());
         dbg!(self.player_state.core_params.clone());
         if force_new || player_state.core_params != self.player_state.core_params {
-            eprintln!("Create new transcoder");
+            // eprintln!("Create new player");
 
             let res = self.core_state_update(player_state);
             if res.is_ok() {
