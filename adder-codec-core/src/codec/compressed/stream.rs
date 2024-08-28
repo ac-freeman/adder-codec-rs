@@ -26,7 +26,7 @@ pub struct CompressedOutput<W: Write> {
     pub(crate) stream: Option<Arc<RwLock<BitWriter<W, BigEndian>>>>,
     pub(crate) options: EncoderOptions,
     // pub(crate) written_bytes_rx: std::sync::mpsc::Receiver<BytesMessage>,
-    pub(crate) written_bytes_tx: std::sync::mpsc::Sender<BytesMessage>,
+    pub(crate) written_bytes_tx: Option<std::sync::mpsc::Sender<BytesMessage>>,
     // pub(crate) bytes_writer_queue: PriorityQueue<Vec<u8>, Reverse<u32>>,
     /// The ID of the last message sent from a spawned compressor thread
     pub(crate) last_message_sent: u32,
@@ -77,6 +77,7 @@ fn flush_bytes_queue_worker<W: Write>(
     mut bytes_writer_queue: PriorityQueue<Vec<u8>, Reverse<u32>>,
 ) {
     while let Ok(bytes_message) = written_bytes_rx.recv() {
+        eprintln!("received message");
         // Blocking recv
         // if let Some(stream) = &mut self.stream {
 
@@ -95,6 +96,7 @@ fn flush_bytes_queue_worker<W: Write>(
         }
         // }
     }
+    eprintln!("Exiting writer thread...");
 }
 
 impl<W: Write + std::marker::Send + std::marker::Sync + 'static> CompressedOutput<W> {
@@ -126,7 +128,7 @@ impl<W: Write + std::marker::Send + std::marker::Sync + 'static> CompressedOutpu
             stream: Some(stream_lock_arc),
             options: EncoderOptions::default(meta.plane),
             // written_bytes_rx,
-            written_bytes_tx,
+            written_bytes_tx: Some(written_bytes_tx),
             // bytes_writer_queue: PriorityQueue::new(),
             last_message_sent: 0,
             last_message_written,
@@ -199,7 +201,7 @@ impl<W: Write + std::marker::Send + std::marker::Sync + 'static + 'static + 'sta
 
             let parameters = self.options.crf.get_parameters().clone();
             let mut adu = self.adu.clone();
-            let tx = self.written_bytes_tx.clone();
+            let tx = self.written_bytes_tx.as_ref().unwrap().clone();
             // Spawn a thread to compress the ADU and write out the data
 
             let message_id_to_send = self.last_message_sent + 1;
@@ -221,11 +223,20 @@ impl<W: Write + std::marker::Send + std::marker::Sync + 'static + 'static + 'sta
         // Wait for the partial ADU to be written...
         while self.last_message_sent != *self.last_message_written.read().unwrap() {
             // Sleep 1 second
+            eprintln!(
+                "Sleeping. {} messages sent, {} messages written",
+                self.last_message_sent,
+                *self.last_message_written.read().unwrap()
+            );
             std::thread::sleep(std::time::Duration::from_secs(1));
         }
 
         dbg!("All ADUs written.");
+        // Kill the written_bytes_tx, so that the Arc only has one reference
+        self.written_bytes_tx = None; // This will cause the flush_bytes_queue_worker() thread to
+                                      // error out from the receiver, because the communication channel is severed
 
+        std::thread::sleep(std::time::Duration::from_secs(1)); // Wait for the thread to exit. TODO: Make this deterministic, wait on the thread handle
         let arc = self.stream.take()?;
 
         let lock = Arc::into_inner(arc).unwrap();
@@ -278,7 +289,7 @@ impl<W: Write + std::marker::Send + std::marker::Sync + 'static + 'static + 'sta
                 // Compress the Adu. This also writes the EOF symbol and flushes the encoder
                 // First, clone the ADU
                 let mut adu = self.adu.clone();
-                let tx = self.written_bytes_tx.clone();
+                let tx = self.written_bytes_tx.as_ref().unwrap().clone();
                 // Spawn a thread to compress the ADU and write out the data
 
                 let message_id_to_send = self.last_message_sent + 1;
