@@ -34,7 +34,7 @@ pub struct CompressedOutput<W: Write> {
     /// The ID of the last message received in the writer thread and actually written out the stream
     pub(crate) last_message_written: Arc<RwLock<u32>>,
 
-    _phantom: std::marker::PhantomData<W>,
+    pub(crate) _phantom: std::marker::PhantomData<W>,
 }
 
 /// Read compressed ADΔER data from a stream.

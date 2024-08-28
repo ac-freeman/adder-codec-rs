@@ -321,6 +321,7 @@ mod tests {
     use crate::{Coord, PlaneSize};
     use bitstream_io::{BigEndian, BitWriter};
     use std::io::BufWriter;
+    use std::sync::{Arc, RwLock};
 
     #[test]
     fn raw() {
@@ -470,13 +471,14 @@ mod tests {
             // adu: Adu::new(),
             // contexts: None,
             adu: Default::default(),
-            stream: Some(BitWriter::endian(bufwriter, BigEndian)),
+            stream: Some(Arc::new(RwLock::new(BitWriter::endian(
+                bufwriter, BigEndian,
+            )))),
             options: EncoderOptions::default(PlaneSize::default()),
-            written_bytes_rx,
-            written_bytes_tx,
-            bytes_writer_queue: Default::default(),
+            written_bytes_tx: Some(written_bytes_tx),
             last_message_sent: 0,
-            last_message_written: 0,
+            last_message_written: Arc::new(RwLock::new(0)),
+            _phantom: Default::default(),
         };
         let _encoder = Encoder {
             output: WriteCompressionEnum::CompressedOutput(compression),
