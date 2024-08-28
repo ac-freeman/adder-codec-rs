@@ -78,22 +78,26 @@ fn flush_bytes_queue_worker<W: Write>(
 ) {
     while let Ok(bytes_message) = written_bytes_rx.recv() {
         // Blocking recv
-        // eprintln!("received message");
+        eprintln!("received message");
+
+        bytes_writer_queue.push(bytes_message.bytes, Reverse(bytes_message.message_id));
 
         let mut last_message_written = last_message_written.write().unwrap();
-        if bytes_message.message_id == last_message_written.add(1) {
-            let mut stream_write = stream.write().unwrap();
+        while let Some((bytes, message_id)) = bytes_writer_queue.pop() {
+            if message_id == Reverse(*last_message_written + 1) {
+                let mut stream_write = stream.write().unwrap();
 
-            // Write the number of bytes in the compressed Adu as the 32-bit header for this Adu
-            stream_write
-                .write_bytes(&(bytes_message.bytes.len() as u32).to_be_bytes())
-                .unwrap();
-            stream_write.write_bytes(&bytes_message.bytes).unwrap();
-            last_message_written.add_assign(1);
-        } else {
-            bytes_writer_queue.push(bytes_message.bytes, Reverse(bytes_message.message_id));
+                // Write the number of bytes in the compressed Adu as the 32-bit header for this Adu
+                stream_write
+                    .write_bytes(&(bytes.len() as u32).to_be_bytes())
+                    .unwrap();
+                stream_write.write_bytes(&bytes).unwrap();
+                *last_message_written += 1;
+            } else {
+                bytes_writer_queue.push(bytes, message_id); // message_id here is already Reversed
+                break;
+            }
         }
-        // }
     }
     eprintln!("Exiting writer thread...");
 }
@@ -118,6 +122,7 @@ impl<W: Write + std::marker::Send + std::marker::Sync + 'static> CompressedOutpu
                 last_message_written_clone,
                 PriorityQueue::new(),
             );
+            eprintln!("Exiting writer thread...");
         });
         Self {
             meta,
