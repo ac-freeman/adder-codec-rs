@@ -1,5 +1,7 @@
 use crate::codec::{CodecError, CodecMetadata, EncoderOptions, ReadCompression, WriteCompression};
 use bitstream_io::{BigEndian, BitRead, BitReader, BitWrite, BitWriter};
+use priority_queue::PriorityQueue;
+use std::cmp::Reverse;
 use std::io::{Cursor, Read, Seek, SeekFrom, Write};
 
 use crate::codec::compressed::source_model::event_structure::event_adu::EventAdu;
@@ -7,14 +9,22 @@ use crate::codec::compressed::source_model::HandleEvent;
 use crate::codec::header::{Magic, MAGIC_COMPRESSED};
 use crate::{DeltaT, Event};
 
+pub(crate) struct BytesMessage {
+    message_id: u32,
+    bytes: Vec<u8>,
+}
+
 /// Write compressed ADΔER data to a stream.
 pub struct CompressedOutput<W: Write> {
     pub(crate) meta: CodecMetadata,
     pub(crate) adu: EventAdu,
     pub(crate) stream: Option<BitWriter<W, BigEndian>>,
     pub(crate) options: EncoderOptions,
-    pub(crate) written_bytes_rx: std::sync::mpsc::Receiver<Vec<u8>>,
-    pub(crate) written_bytes_tx: std::sync::mpsc::Sender<Vec<u8>>,
+    pub(crate) written_bytes_rx: std::sync::mpsc::Receiver<BytesMessage>,
+    pub(crate) written_bytes_tx: std::sync::mpsc::Sender<BytesMessage>,
+    pub(crate) bytes_writer_queue: PriorityQueue<Vec<u8>, Reverse<u32>>,
+    pub(crate) last_message_sent: u32,
+    pub(crate) last_message_written: u32,
 }
 
 /// Read compressed ADΔER data from a stream.
@@ -40,6 +50,9 @@ impl<W: Write> CompressedOutput<W> {
             options: EncoderOptions::default(meta.plane),
             written_bytes_rx,
             written_bytes_tx,
+            bytes_writer_queue: PriorityQueue::new(),
+            last_message_sent: 0,
+            last_message_written: 0,
         }
     }
 
@@ -52,6 +65,26 @@ impl<W: Write> CompressedOutput<W> {
     #[inline(always)]
     pub(crate) fn stream(&mut self) -> &mut BitWriter<W, BigEndian> {
         self.stream.as_mut().unwrap()
+    }
+
+    fn flush_bytes_queue(&mut self) {
+        if let Some(stream) = &mut self.stream {
+            while let Ok(bytes_message) = self.written_bytes_rx.try_recv() {
+                if bytes_message.message_id == self.last_message_written + 1 {
+                    // Write the number of bytes in the compressed Adu as the 32-bit header for this Adu
+                    stream
+                        .write_bytes(&(bytes_message.bytes.len() as u32).to_be_bytes())
+                        .unwrap();
+                    stream.write_bytes(&bytes_message.bytes).unwrap();
+                    self.last_message_written += 1;
+
+                    dbg!("Wrote message {}", bytes_message.message_id);
+                } else {
+                    self.bytes_writer_queue
+                        .push(bytes_message.bytes, Reverse(bytes_message.message_id));
+                }
+            }
+        }
     }
 }
 
@@ -78,16 +111,22 @@ impl<W: Write> WriteCompression<W> for CompressedOutput<W> {
 
     fn into_writer(&mut self) -> Option<W> {
         if !self.adu.skip_adu {
-            if let Some(stream) = &mut self.stream {
-                while let Ok(written_data) = self.written_bytes_rx.try_recv() {
-                    // Clear any queue'd up compressed ADUs
-                    // Write the number of bytes in the compressed Adu as the 32-bit header for this Adu
-                    stream
-                        .write_bytes(&(written_data.len() as u32).to_be_bytes())
-                        .unwrap();
+            self.flush_bytes_queue();
 
-                    // Write the temporary stream to the actual stream
-                    stream.write_bytes(&written_data).unwrap();
+            if let Some(stream) = &mut self.stream {
+                while let Some((bytes, message_id)) = self.bytes_writer_queue.pop() {
+                    if message_id == Reverse(self.last_message_written + 1) {
+                        // Write the number of bytes in the compressed Adu as the 32-bit header for this Adu
+                        stream
+                            .write_bytes(&(bytes.len() as u32).to_be_bytes())
+                            .unwrap();
+                        stream.write_bytes(&bytes).unwrap();
+                        dbg!("Wrote message {}", message_id);
+                        self.last_message_written += 1;
+                    } else {
+                        dbg!("Breaking...");
+                        break;
+                    }
                 }
 
                 dbg!("compressing partial last adu");
@@ -130,16 +169,21 @@ impl<W: Write> WriteCompression<W> for CompressedOutput<W> {
         if event.t > self.adu.start_t + (self.adu.dt_ref * self.adu.num_intervals as DeltaT) {
             // dbg!("compressing adu");
             // If it doesn't, compress the events and reset the Adu
-            if let Some(stream) = &mut self.stream {
-                while let Ok(written_data) = self.written_bytes_rx.try_recv() {
-                    // Clear any queue'd up compressed ADUs
-                    // Write the number of bytes in the compressed Adu as the 32-bit header for this Adu
-                    stream
-                        .write_bytes(&(written_data.len() as u32).to_be_bytes())
-                        .unwrap();
 
-                    // Write the temporary stream to the actual stream
-                    stream.write_bytes(&written_data).unwrap();
+            self.flush_bytes_queue();
+            if let Some(stream) = &mut self.stream {
+                while let Some((bytes, message_id)) = self.bytes_writer_queue.pop() {
+                    if message_id == Reverse(self.last_message_written + 1) {
+                        // Write the number of bytes in the compressed Adu as the 32-bit header for this Adu
+                        stream
+                            .write_bytes(&(bytes.len() as u32).to_be_bytes())
+                            .unwrap();
+                        stream.write_bytes(&bytes).unwrap();
+                        self.last_message_written += 1;
+                    } else {
+                        self.bytes_writer_queue.push(bytes, message_id); // message_id here is already Reversed
+                        break;
+                    }
                 }
 
                 // Create a temporary u8 stream to write the arithmetic-coded data to
@@ -153,12 +197,20 @@ impl<W: Write> WriteCompression<W> for CompressedOutput<W> {
                 let tx = self.written_bytes_tx.clone();
                 // Spawn a thread to compress the ADU and write out the data
 
+                let message_id_to_send = self.last_message_sent + 1;
+                self.last_message_sent += 1;
+
                 std::thread::spawn(move || {
                     // TODO: Need to ensure that received messages are placed in correct order
                     adu.compress(&mut temp_stream, parameters.c_thresh_max).ok();
                     let written_data = temp_stream.into_writer();
+                    dbg!("Sending message {}", message_id_to_send);
 
-                    tx.send(written_data).unwrap();
+                    tx.send(BytesMessage {
+                        message_id: message_id_to_send,
+                        bytes: written_data,
+                    })
+                    .unwrap();
                 });
 
                 self.adu.clear_compression();
@@ -519,9 +571,6 @@ mod tests {
                 }
             }
         }
-
-        // Sleep for 3 seconds to give the writer thread time to catch up
-        std::thread::sleep(std::time::Duration::from_secs(3));
 
         let output = compressed_output.into_writer().unwrap().into_inner();
         assert!(!output.is_empty());

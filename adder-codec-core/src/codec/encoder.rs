@@ -474,6 +474,9 @@ mod tests {
             options: EncoderOptions::default(PlaneSize::default()),
             written_bytes_rx,
             written_bytes_tx,
+            bytes_writer_queue: Default::default(),
+            last_message_sent: 0,
+            last_message_written: 0,
         };
         let _encoder = Encoder {
             output: WriteCompressionEnum::CompressedOutput(compression),
