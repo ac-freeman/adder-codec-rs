@@ -78,7 +78,7 @@ fn flush_bytes_queue_worker<W: Write>(
 ) {
     while let Ok(bytes_message) = written_bytes_rx.recv() {
         // Blocking recv
-        eprintln!("received message");
+        // eprintln!("received message");
 
         bytes_writer_queue.push(bytes_message.bytes, Reverse(bytes_message.message_id));
 
