@@ -29,7 +29,7 @@ pub fn absolute_event_to_dt_event(mut event: Event, last_t: DeltaT) -> Event {
 /// * `output_stream`: output stream to be written to
 ///
 /// returns: `Result<Encoder<W>, Box<dyn Error, Global>>` where `W` is the type of the output stream
-pub fn migrate_v2<W: Write + 'static, R: Read + Seek>(
+pub fn migrate_v2<W: Write + std::marker::Send + std::marker::Sync + 'static, R: Read + Seek>(
     mut input_stream: Decoder<R>,
     bitreader: &mut bitstream_io::BitReader<R, BigEndian>,
     mut output_stream: Encoder<W>,

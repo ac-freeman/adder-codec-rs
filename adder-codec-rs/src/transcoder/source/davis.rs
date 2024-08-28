@@ -78,7 +78,7 @@ struct Integration<W> {
 }
 
 /// Attributes of a framed video -> ADΔER transcode
-pub struct Davis<W: Write> {
+pub struct Davis<W: Write + std::marker::Send + std::marker::Sync + 'static> {
     reconstructor: Option<Reconstructor>,
     pub(crate) input_frame_scaled: Mat,
     pub(crate) video: Video<W>,
@@ -102,9 +102,9 @@ pub struct Davis<W: Write> {
     ref_time_divisor: f64,
 }
 
-unsafe impl<W: Write> Sync for Davis<W> {}
+unsafe impl<W: Write + std::marker::Send + std::marker::Sync> Sync for Davis<W> {}
 
-impl<W: Write + 'static> Davis<W> {
+impl<W: Write + 'static + std::marker::Send + std::marker::Sync> Davis<W> {
     /// Create a new `Davis` transcoder
     pub fn new(reconstructor: Reconstructor, mode: TranscoderMode) -> Result<Self, Box<dyn Error>> {
         let plane = PlaneSize::new(reconstructor.width, reconstructor.height, 1)?;
@@ -229,7 +229,7 @@ impl<W: Write + 'static> Davis<W> {
     }
 }
 
-impl<W: Write + 'static> Integration<W> {
+impl<W: Write + 'static + std::marker::Send + std::marker::Sync> Integration<W> {
     /// Integrate a sequence of [DVS events](DvsEvent) into the ADΔER video model
     #[allow(clippy::cast_sign_loss)]
     pub fn integrate_dvs_events<
@@ -597,7 +597,7 @@ impl<W: Write + 'static> Integration<W> {
     }
 }
 
-impl<W: Write + 'static + std::marker::Send> Source<W> for Davis<W> {
+impl<W: Write + 'static + std::marker::Send + std::marker::Sync> Source<W> for Davis<W> {
     fn consume(&mut self) -> Result<Vec<Vec<Event>>, SourceError> {
         // Attempting new method for integration without requiring a buffer. Could be implemented
         // for framed source just as easily
@@ -942,7 +942,7 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Davis<W> {
     }
 }
 
-impl<W: Write + 'static> VideoBuilder<W> for Davis<W> {
+impl<W: Write + 'static + std::marker::Send + std::marker::Sync> VideoBuilder<W> for Davis<W> {
     fn crf(mut self, crf: u8) -> Self {
         self.video.update_crf(crf);
         self

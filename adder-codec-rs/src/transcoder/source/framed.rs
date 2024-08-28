@@ -21,7 +21,7 @@ use tokio::runtime::Runtime;
 use video_rs_adder_dep::{self, Decoder, Frame, Locator, Options, Resize};
 
 /// Attributes of a framed video -> ADΔER transcode
-pub struct Framed<W: Write + 'static> {
+pub struct Framed<W: Write + 'static + std::marker::Send + std::marker::Sync> {
     cap: Decoder,
     pub(crate) input_frame: Frame,
 
@@ -39,9 +39,9 @@ pub struct Framed<W: Write + 'static> {
 
     pub(crate) video: Video<W>,
 }
-unsafe impl<W: Write> Sync for Framed<W> {}
+unsafe impl<W: Write + std::marker::Send + std::marker::Sync> Sync for Framed<W> {}
 
-impl<W: Write + 'static> Framed<W> {
+impl<W: Write + 'static + std::marker::Send + std::marker::Sync> Framed<W> {
     /// Create a new `Framed` source
     pub fn new(
         input_path: PathBuf,
@@ -123,7 +123,7 @@ impl<W: Write + 'static> Framed<W> {
     }
 }
 
-impl<W: Write + 'static> Source<W> for Framed<W> {
+impl<W: Write + 'static + std::marker::Send + std::marker::Sync> Source<W> for Framed<W> {
     /// Get pixel-wise intensities directly from source frame, and integrate them with
     /// `ref_time` (the number of ticks each frame is said to span)
     fn consume(&mut self) -> Result<Vec<Vec<Event>>, SourceError> {
@@ -186,7 +186,7 @@ impl<W: Write + 'static> Source<W> for Framed<W> {
     }
 }
 
-impl<W: Write + 'static> VideoBuilder<W> for Framed<W> {
+impl<W: Write + 'static + std::marker::Send + std::marker::Sync> VideoBuilder<W> for Framed<W> {
     fn crf(mut self, crf: u8) -> Self {
         self.video.update_crf(crf);
         self

@@ -282,7 +282,7 @@ impl AdderTranscoder {
         force_new: bool,
     ) -> Result<(), AdderTranscoderError> {
         if force_new || transcoder_state.core_params != self.transcoder_state.core_params {
-            eprintln!("Create new transcoder");
+            // eprintln!("Create new transcoder");
             let res = self.core_state_update(transcoder_state).await;
             if res.is_ok() {
                 // Send a message with the plane size of the video
@@ -489,7 +489,7 @@ impl AdderTranscoder {
         self.adaptive_state_update()?;
         self.last_consume_time = std::time::Instant::now();
 
-        eprintln!("Framed source created!");
+        // eprintln!("Framed source created!");
         Ok(())
     }
 

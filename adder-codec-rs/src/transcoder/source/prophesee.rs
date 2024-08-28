@@ -25,7 +25,7 @@ use video_rs_adder_dep::Frame;
 const PROPHESEE_SOURCE_TPS: u32 = 1000000;
 
 /// Attributes of a framed video -> ADΔER transcode
-pub struct Prophesee<W: Write> {
+pub struct Prophesee<W: Write + std::marker::Send + std::marker::Sync + 'static> {
     pub(crate) video: Video<W>,
 
     input_reader: BufReader<File>,
@@ -52,9 +52,9 @@ pub struct DvsEvent {
     p: u8,
 }
 
-unsafe impl<W: Write> Sync for Prophesee<W> {}
+unsafe impl<W: Write + std::marker::Send + std::marker::Sync + 'static> Sync for Prophesee<W> {}
 
-impl<W: Write + 'static> Prophesee<W> {
+impl<W: Write + std::marker::Send + std::marker::Sync + 'static> Prophesee<W> {
     /// Create a new `Prophesee` transcoder
     pub fn new(ref_time: u32, input_filename: String) -> Result<Self, Box<dyn Error>> {
         let source = File::open(PathBuf::from(input_filename))?;
@@ -115,7 +115,7 @@ impl<W: Write + 'static> Prophesee<W> {
     }
 }
 
-impl<W: Write + 'static + std::marker::Send> Source<W> for Prophesee<W> {
+impl<W: Write + std::marker::Send + std::marker::Sync + 'static> Source<W> for Prophesee<W> {
     fn consume(&mut self) -> Result<Vec<Vec<Event>>, SourceError> {
         if self.running_t == 0 {
             self.video.integrate_matrix(
@@ -325,7 +325,9 @@ impl<W: Write + 'static + std::marker::Send> Source<W> for Prophesee<W> {
     }
 }
 
-fn end_events<W: Write + 'static + std::marker::Send>(prophesee: &mut Prophesee<W>) {
+fn end_events<W: Write + std::marker::Send + std::marker::Sync + 'static>(
+    prophesee: &mut Prophesee<W>,
+) {
     let mut events: Vec<Event> = Vec::new();
     let crf_parameters = *prophesee.video.encoder.options.crf.get_parameters();
 
@@ -451,7 +453,7 @@ fn decode_event(reader: &mut BufReader<File>) -> io::Result<DvsEvent> {
     Ok(DvsEvent { t, x, y, p })
 }
 
-impl<W: Write + 'static> VideoBuilder<W> for Prophesee<W> {
+impl<W: Write + std::marker::Send + std::marker::Sync + 'static> VideoBuilder<W> for Prophesee<W> {
     fn crf(mut self, crf: u8) -> Self {
         self.video.update_crf(crf);
         self
