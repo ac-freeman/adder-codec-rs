@@ -20,7 +20,7 @@ use tokio::sync::mpsc::Sender;
 // use crate::utils::prep_bevy_image;
 use crate::transcoder::adder::AdderTranscoder;
 use crate::transcoder::{AdaptiveParams, CoreParams, EventRateMsg, InfoParams, InfoUiState};
-use crate::{slider_pm, App, Images, TabState, Tabs};
+use crate::{App, Images, TabState, Tabs};
 // #[cfg(feature = "open-cv")]
 // use adder_codec_rs::transcoder::source::davis::TranscoderMode;
 // use adder_codec_rs::transcoder::source::video::{FramedViewMode, Source, SourceError};
@@ -28,7 +28,7 @@ use crate::{slider_pm, App, Images, TabState, Tabs};
 // use std::collections::VecDeque;
 // use std::error::Error;
 //
-use crate::utils::PlotY;
+use crate::utils::{slider_pm, PlotY};
 // use adder_codec_rs::adder_codec_core::codec::rate_controller::{Crf, CRF, DEFAULT_CRF_QUALITY};
 // use adder_codec_rs::adder_codec_core::codec::{EncoderOptions, EncoderType, EventDrop, EventOrder};
 // use adder_codec_rs::adder_codec_core::TimeMode;
@@ -141,12 +141,14 @@ pub enum TranscoderInfoMsg {
 
 pub struct TranscoderUi {
     pub transcoder_state: TranscoderState,
+    pub transcoder_state_last_sent: TranscoderState,
     pub info_ui_state: InfoUiState,
     msg_rx: mpsc::Receiver<TranscoderInfoMsg>,
     pub transcoder_state_tx: Sender<TranscoderStateMsg>,
     adder_image_handle: egui::TextureHandle,
     input_image_handle: egui::TextureHandle,
     last_frame_time: std::time::Instant,
+    slider_button_down: bool,
 }
 
 impl TranscoderUi {
@@ -156,6 +158,7 @@ impl TranscoderUi {
 
         let mut transcoder_ui = TranscoderUi {
             transcoder_state: Default::default(),
+            transcoder_state_last_sent: Default::default(),
             info_ui_state: InfoUiState::default(),
             msg_rx,
             transcoder_state_tx: tx,
@@ -170,6 +173,7 @@ impl TranscoderUi {
                 Default::default(),
             ),
             last_frame_time: std::time::Instant::now(),
+            slider_button_down: false,
         };
         transcoder_ui.spawn_transcoder(rx, msg_tx);
         transcoder_ui
@@ -197,7 +201,7 @@ impl TranscoderUi {
     }
     pub fn update(&mut self, ctx: &egui::Context) {
         // Store a copy of the params to compare against later
-        let old_params = self.transcoder_state.clone();
+        let old_params = self.transcoder_state_last_sent.clone();
 
         // Collect dropped files
         self.handle_file_drop(ctx);
@@ -207,13 +211,13 @@ impl TranscoderUi {
         self.draw_ui(ctx);
 
         // This should always be the very last thing we do in this function
-        if old_params != self.transcoder_state {
-            eprintln!("Sending new transcoder state");
+        if old_params != self.transcoder_state && !self.slider_button_down {
             self.transcoder_state_tx
                 .blocking_send(TranscoderStateMsg::Set {
                     transcoder_state: self.transcoder_state.clone(),
                 })
                 .unwrap();
+            self.transcoder_state_last_sent = self.transcoder_state.clone();
         }
     }
 
@@ -564,6 +568,8 @@ impl TranscoderUi {
         let adaptive_params = &mut self.transcoder_state.adaptive_params;
         let info_params = &mut self.transcoder_state.info_params;
 
+        let mut slider_button_down = false;
+
         #[allow(dead_code, unused_mut)]
         let mut enabled = true;
         #[cfg(feature = "open-cv")]
@@ -571,7 +577,7 @@ impl TranscoderUi {
             // enabled = _transcoder.davis_source.is_none();
         }
         ui.add_enabled(enabled, egui::Label::new("Δt_ref:"));
-        slider_pm(
+        slider_button_down |= slider_pm(
             enabled,
             false,
             ui,
@@ -591,7 +597,7 @@ impl TranscoderUi {
         ui.end_row();
 
         ui.label("CRF quality:");
-        slider_pm(
+        slider_button_down |= slider_pm(
             adaptive_params.auto_quality,
             false,
             ui,
@@ -616,7 +622,7 @@ impl TranscoderUi {
         ui.end_row();
 
         ui.label("Δt_max multiplier:");
-        slider_pm(
+        slider_button_down |= slider_pm(
             !adaptive_params.auto_quality,
             false,
             ui,
@@ -628,7 +634,7 @@ impl TranscoderUi {
         ui.end_row();
 
         ui.label("ADU interval:");
-        slider_pm(
+        slider_button_down |= slider_pm(
             true,
             false,
             ui,
@@ -641,7 +647,7 @@ impl TranscoderUi {
 
         let parameters = adaptive_params.encoder_options.crf.get_parameters_mut();
         ui.label("Threshold baseline:");
-        slider_pm(
+        slider_button_down |= slider_pm(
             !adaptive_params.auto_quality,
             false,
             ui,
@@ -653,7 +659,7 @@ impl TranscoderUi {
         ui.end_row();
 
         ui.label("Threshold max:");
-        slider_pm(
+        slider_button_down |= slider_pm(
             !adaptive_params.auto_quality,
             false,
             ui,
@@ -665,7 +671,7 @@ impl TranscoderUi {
         ui.end_row();
 
         ui.label("Threshold velocity:");
-        slider_pm(
+        slider_button_down |= slider_pm(
             !adaptive_params.auto_quality,
             false,
             ui,
@@ -677,7 +683,7 @@ impl TranscoderUi {
         ui.end_row();
 
         ui.label("Feature radius:");
-        slider_pm(
+        slider_button_down |= slider_pm(
             !adaptive_params.auto_quality,
             false,
             ui,
@@ -702,7 +708,7 @@ impl TranscoderUi {
         // ui.end_row();
         //
         ui.label("Video scale:");
-        slider_pm(
+        slider_button_down |= slider_pm(
             enabled,
             false,
             ui,
@@ -836,7 +842,7 @@ impl TranscoderUi {
 
             ui.label("DAVIS deblurred FPS:");
 
-            slider_pm(
+            slider_button_down |= slider_pm(
                 enabled,
                 true,
                 ui,
@@ -860,7 +866,7 @@ impl TranscoderUi {
             ui.end_row();
 
             ui.label("Optimize frequency:");
-            slider_pm(
+            slider_button_down |= slider_pm(
                 enable_optimize,
                 true,
                 ui,
@@ -932,7 +938,7 @@ impl TranscoderUi {
         } = &mut adaptive_params.encoder_options.event_drop
         {
             ui.label("Bandwidth limiting rate:");
-            slider_pm(
+            slider_button_down |= slider_pm(
                 true,
                 true,
                 ui,
@@ -951,7 +957,7 @@ impl TranscoderUi {
 
             ui.label("Bandwidth limiting alpha:");
 
-            slider_pm(
+            slider_button_down |= slider_pm(
                 true,
                 false,
                 ui,
@@ -1013,6 +1019,8 @@ impl TranscoderUi {
             );
         });
         ui.end_row();
+
+        self.slider_button_down = slider_button_down;
     }
 
     //

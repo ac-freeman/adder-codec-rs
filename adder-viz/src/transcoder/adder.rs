@@ -135,7 +135,7 @@ impl AdderTranscoder {
                     }
 
                     TranscoderStateMsg::Set { transcoder_state } => {
-                        eprintln!("Received transcoder state");
+                        // eprintln!("Received transcoder state");
                         let result = self.state_update(transcoder_state, false).await;
                         self.handle_error(result).await;
                     }
@@ -309,7 +309,7 @@ impl AdderTranscoder {
             }
             return res;
         } else if transcoder_state.adaptive_params != self.transcoder_state.adaptive_params {
-            eprintln!("Modify existing transcoder");
+            // eprintln!("Modify existing transcoder");
             self.update_params(transcoder_state);
             return self.adaptive_state_update();
         } else {

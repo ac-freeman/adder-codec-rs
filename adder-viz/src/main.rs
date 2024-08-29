@@ -8,7 +8,7 @@ use crate::transcoder::ui::{TranscoderState, TranscoderStateMsg, TranscoderUi};
 use crate::utils::slider::NotchedSlider;
 use crate::Tabs::Player;
 use eframe::egui;
-use egui::{ColorImage, Ui, Widget, WidgetText};
+use egui::{ColorImage, Response, Ui, Widget, WidgetText};
 use std::ops::RangeInclusive;
 use std::sync::Arc;
 use strum::IntoEnumIterator;
@@ -548,39 +548,6 @@ Images in the central panel are common to both visualization tabs, so we can do 
 //     }
 // }
 //
-/// A slider with +/- buttons. Returns true if the value was changed.
-fn slider_pm<Num: egui::emath::Numeric + Pm>(
-    enabled: bool,
-    logarithmic: bool,
-    ui: &mut egui::Ui,
-    value: &mut Num,
-    range: RangeInclusive<Num>,
-    notches: Vec<Num>,
-    interval: Num,
-) -> bool {
-    let start_value = *value;
-    ui.add_enabled_ui(enabled, |ui| {
-        ui.horizontal(|ui| {
-            if ui.button("-").clicked() {
-                value.decrement(range.start(), &interval);
-            }
-            let slider =
-                ui.add(NotchedSlider::new(value, range.clone(), notches).logarithmic(logarithmic));
-            // if slider.drag_released() {
-            //     *instant_value = *drag_value;
-            // }
-            // if slider.lost_focus() {
-            //     *instant_value = *drag_value;
-            // }
-
-            if ui.button("+").clicked() {
-                value.increment(range.end(), &interval);
-            }
-        });
-    });
-
-    *value != start_value
-}
 
 fn add_radio_row<Value: PartialEq + Clone>(
     enabled: bool,

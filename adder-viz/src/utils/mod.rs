@@ -1,3 +1,4 @@
+use crate::utils::slider::NotchedSlider;
 use crate::Pm;
 use eframe::emath;
 use eframe::epaint::ColorImage;
@@ -91,7 +92,7 @@ pub fn add_slider_row<Num: emath::Numeric + Pm>(
     interval: Num,
 ) -> bool {
     ui.add_enabled(enabled, egui::Label::new(label));
-    let ret = crate::slider_pm(
+    let ret = slider_pm(
         enabled,
         logarithmic,
         ui,
@@ -102,4 +103,38 @@ pub fn add_slider_row<Num: emath::Numeric + Pm>(
     );
     ui.end_row();
     ret
+}
+
+/// A slider with +/- buttons. Returns true if the value was changed.
+pub fn slider_pm<Num: egui::emath::Numeric + Pm>(
+    enabled: bool,
+    logarithmic: bool,
+    ui: &mut egui::Ui,
+    value: &mut Num,
+    range: RangeInclusive<Num>,
+    notches: Vec<Num>,
+    interval: Num,
+) -> bool {
+    let start_value = *value;
+    let mut button_down = false;
+    ui.add_enabled_ui(enabled, |ui| {
+        ui.horizontal(|ui| {
+            if ui.button("-").clicked() {
+                value.decrement(range.start(), &interval);
+            }
+
+            let response =
+                ui.add(NotchedSlider::new(value, range.clone(), notches).logarithmic(logarithmic));
+
+            if response.is_pointer_button_down_on() {
+                button_down = true;
+            }
+
+            if ui.button("+").clicked() {
+                value.increment(range.end(), &interval);
+            }
+        });
+    });
+
+    button_down
 }

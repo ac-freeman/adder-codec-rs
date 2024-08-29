@@ -1,12 +1,13 @@
 use crate::player::adder::AdderPlayer;
 use crate::player::{AdaptiveParams, CoreParams};
 use crate::transcoder::InfoParams;
-use crate::utils::{add_checkbox_row, add_slider_row};
-use crate::{slider_pm, TabState, VizUi};
+use crate::utils::{add_checkbox_row, add_slider_row, slider_pm};
+use crate::{TabState, VizUi};
 use adder_codec_rs::adder_codec_core::PlaneSize;
 use adder_codec_rs::transcoder::source::video::FramedViewMode;
 use eframe::epaint::ColorImage;
 use egui::Ui;
+use std::ops::RangeInclusive;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
