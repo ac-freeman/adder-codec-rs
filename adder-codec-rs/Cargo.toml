@@ -39,7 +39,7 @@ bitvec = "1.0.1"
 bumpalo = "3.11.0"
 chrono = "0.4.31"
 clap = { version = "4.0.17", features = ["derive"] }
-davis-edi-rs = {version = "0.2.5", optional = true}
+davis-edi-rs = {version = "0.2.6", optional = true}
 duplicate = "0.4.1"
 enum_dispatch = "0.3.12"
 fast-math = { version = "0.1", optional = true }
@@ -73,7 +73,7 @@ indicatif = "0.17.7"
 const_for = "0.1.2"
 
 [dependencies.opencv]
-version = "0.84.5"
+version = "0.92.3"
 package = 'opencv'
 default-features = false
 features = ['videoio', 'imgproc', 'highgui', 'clang-runtime']

@@ -2,7 +2,7 @@ use crate::codec::compressed::fenwick::context_switching::FenwickModel;
 use crate::codec::compressed::source_model::cabac_contexts::Contexts;
 use crate::codec::CodecError;
 use crate::{AbsoluteT, Event};
-use arithmetic_coding_adder_dep::{Decoder, Encoder};
+use arithmetic_coding::{Decoder, Encoder};
 use bitstream_io::{BigEndian, BitReader, BitWriter};
 use std::io::Cursor;
 
