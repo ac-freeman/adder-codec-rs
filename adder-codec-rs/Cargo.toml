@@ -65,7 +65,7 @@ smallvec = "1.9.0"
 thiserror = "1.0.34"
 tokio = { version = "1.20.1", features = ["full"] }
 toml = "0.5.8"
-bitstream-io = "1.6.0"
+bitstream-io = "2.5.3"
 video-rs-adder-dep = { version = "0.4.1", features = ["ndarray"] }
 ndarray-image = "0.3.0"
 raw-parts = "2.0.0"

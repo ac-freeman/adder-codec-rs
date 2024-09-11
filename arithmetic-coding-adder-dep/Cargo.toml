@@ -10,7 +10,7 @@ repository = "https://github.com/danieleades/arithmetic-coding"
 
 [dependencies]
 arithmetic-coding-core-adder-dep = { path = "arithmetic-coding-core-adder-dep", version = "0.3.0" }
-bitstream-io = "1.2.0"
+bitstream-io = "2.5.3"
 thiserror = "1.0.30"
 
 [dev-dependencies]

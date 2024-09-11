@@ -7,7 +7,7 @@ use crate::codec::compressed::source_model::{ComponentCompression, HandleEvent};
 use crate::codec::compressed::{DResidual, TResidual, DRESIDUAL_NO_EVENT, DRESIDUAL_SKIP_CUBE};
 use crate::codec::CodecError;
 use crate::{AbsoluteT, Coord, DeltaT, Event, EventCoordless, PixelAddress, D, D_EMPTY};
-use arithmetic_coding::{Decoder, Encoder};
+use arithmetic_coding_adder_dep::{Decoder, Encoder};
 use bitstream_io::{BigEndian, BitReader, BitWriter};
 use std::cmp::{max, min};
 use std::collections::VecDeque;

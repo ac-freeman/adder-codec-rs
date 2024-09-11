@@ -67,7 +67,7 @@ pub trait Model {
     type ValueError: std::error::Error;
 
     /// The internal representation to use for storing integers
-    type B: BitStore = u32;
+    type B: BitStore;
 
     /// Given a symbol, return an interval representing the probability of that
     /// symbol occurring.

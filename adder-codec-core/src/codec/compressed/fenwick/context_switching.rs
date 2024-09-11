@@ -1,7 +1,7 @@
 // From https://github.com/danieleades/arithmetic-coding. Only temporary, for initial testing.
 //! Fenwick tree based context-switching model
 
-use arithmetic_coding::Model;
+use arithmetic_coding_adder_dep::Model;
 
 use super::Weights;
 use crate::codec::compressed::fenwick::ValueError;
