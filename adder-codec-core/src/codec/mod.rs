@@ -245,7 +245,7 @@ pub enum CodecError {
     // BlockError(#[from] crate::codec::compressed::blocks::block::BlockError),
     #[cfg(feature = "compression")]
     #[error("Arithmetic coding error")]
-    ArithmeticCodingError(#[from] arithmetic_coding_adder_dep::Error),
+    ArithmeticCodingError(Box<dyn std::error::Error>),
 
     /// Vision application error
     #[error("Vision application error")]

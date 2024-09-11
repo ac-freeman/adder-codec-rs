@@ -2,6 +2,7 @@
 //! [`Models`](crate::Model) implemented using Fenwick trees
 
 use std::ops::Range;
+use crate::codec::compressed::fenwick::context_switching::Input;
 
 pub mod context_switching;
 pub mod simple;
@@ -47,7 +48,7 @@ impl Weights {
         weights
     }
 
-    fn update(&mut self, i: Option<usize>, delta: u64) {
+    fn update(&mut self, i: Option<Input>, delta: u64) {
         let index = i.map(|i| i + 1).unwrap_or_default();
         fenwick::array::update(&mut self.fenwick_counts, index, delta);
         self.total += delta;
@@ -59,7 +60,7 @@ impl Weights {
     }
 
     /// Returns the probability range for the given symbol
-    pub(crate) fn range(&self, i: Option<usize>) -> Range<u64> {
+    pub(crate) fn range(&self, i: Option<Input>) -> Range<u64> {
         // Increment the symbol index by one to account for the EOF?
         let index = i.map(|i| i + 1).unwrap_or_default();
 
@@ -78,7 +79,7 @@ impl Weights {
     }
 
     /// Used for decoding. Find the symbol index for the given `prefix_sum`
-    fn symbol(&self, prefix_sum: u64) -> Option<usize> {
+    fn symbol(&self, prefix_sum: u64) -> Option<Input> {
         if prefix_sum < self.prefix_sum(None) {
             return None;
         }

@@ -231,9 +231,9 @@ pub fn eof_context(
 ) {
     // THIS IS CRUCIAL FOR TESTING
     let eof_context = contexts.eof_context;
-    encoder.model.set_context(eof_context);
-    encoder.encode(None, stream).unwrap();
-    encoder.flush(stream).unwrap();
+    encoder.set_context(eof_context);
+    encoder.encode(None).unwrap();
+    encoder.flush().unwrap();
     stream.byte_align().unwrap();
     stream.flush().unwrap();
 }

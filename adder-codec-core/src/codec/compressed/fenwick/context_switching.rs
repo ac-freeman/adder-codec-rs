@@ -6,6 +6,15 @@ use arithmetic_coding::Model;
 use super::Weights;
 use crate::codec::compressed::fenwick::ValueError;
 
+#[derive(Clone, Copy)]
+pub enum Input {
+    D(usize),
+    T(usize),
+    T_Residual(i64),
+    Eof(usize),
+    Bitshift(usize),
+}
+
 #[derive(Debug, Clone)]
 pub struct FenwickModel {
     contexts: Vec<Weights>,
@@ -60,10 +69,10 @@ impl FenwickModel {
 
 impl Model for FenwickModel {
     type B = u64;
-    type Symbol = usize;
+    type Symbol = Input;
     type ValueError = ValueError;
 
-    fn probability(&self, symbol: Option<&usize>) -> Result<std::ops::Range<u64>, ValueError> {
+    fn probability(&self, symbol: Option<&Input>) -> Result<std::ops::Range<u64>, ValueError> {
         Ok(self.context().range(symbol.copied()))
     }
 
@@ -75,11 +84,11 @@ impl Model for FenwickModel {
         self.max_denominator
     }
 
-    fn symbol(&self, value: u64) -> Option<usize> {
+    fn symbol(&self, value: u64) -> Option<Input> {
         self.context().symbol(value)
     }
 
-    fn update(&mut self, symbol: Option<&usize>) {
+    fn update(&mut self, symbol: Option<&Input>) {
         debug_assert!(
             self.denominator() < self.max_denominator,
             "hit max denominator!"

@@ -89,12 +89,12 @@ impl EventAdu {
         let mut source_model = FenwickModel::with_symbols(u16::MAX as usize, 1 << 30);
         let contexts = Contexts::new(&mut source_model, self.dt_ref);
 
-        let mut encoder = Encoder::new(source_model);
+        let mut encoder = Encoder::new(source_model, stream);
 
         // Write out the starting timestamp of the Adu
-        encoder.model.set_context(contexts.t_context);
+        // encoder.model.set_context(contexts.t_context);
         for byte in self.start_t.to_be_bytes().iter() {
-            encoder.encode(Some(&(*byte as usize)), stream).unwrap();
+            encoder.encode(Some(&(*byte as usize))).unwrap();
         }
 
         for cube in self.event_cubes.iter_mut() {
@@ -126,7 +126,7 @@ impl EventAdu {
         let mut decoder = Decoder::new(source_model);
 
         // Read the starting timestamp of the Adu
-        decoder.model.set_context(contexts.t_context);
+        decoder.set_context(contexts.t_context);
         let mut start_t = [0u8; size_of::<AbsoluteT>()];
 
         for byte in start_t.iter_mut() {
