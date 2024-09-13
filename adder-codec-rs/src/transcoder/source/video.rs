@@ -679,13 +679,13 @@ impl<W: Write + 'static + std::marker::Send + std::marker::Sync + 'static> Video
                         features.push(opencv::core::Point2f::new(x as f32, y as f32));
                     }
                 }
-                eprintln!(
-                    "{}, {}, {}",
-                    matrix_mat.rows(),
-                    matrix_mat.cols(),
-                    matrix_mat.dims()
-                );
-                eprintln!("{}, {}, {}", mat.rows(), mat.cols(), mat.dims());
+                // eprintln!(
+                //     "{}, {}, {}",
+                //     matrix_mat.rows(),
+                //     matrix_mat.cols(),
+                //     matrix_mat.dims()
+                // );
+                // eprintln!("{}, {}, {}", mat.rows(), mat.cols(), mat.dims());
                 let mut draw_copy = matrix_mat.try_clone()?;
 
                 // Perform optical flow between the two matrices
@@ -705,8 +705,6 @@ impl<W: Write + 'static + std::marker::Send + std::marker::Sync + 'static> Video
                 //     0,
                 // )
                 // .unwrap();
-
-                eprintln!("About to calculate");
 
                 // Calculate the optical flow using the SparsePyrLK method
                 opencv::video::calc_optical_flow_pyr_lk(
