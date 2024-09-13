@@ -651,7 +651,7 @@ impl<W: Write + 'static + std::marker::Send + std::marker::Sync + 'static> Video
 
         #[cfg(feature = "open-cv")]
         {
-            if self.state.in_interval_count > 100 {
+            if self.state.in_interval_count > 0 {
                 // Copy the running intensities
                 let mut running_intensities = self.state.running_intensities.clone();
 
@@ -676,7 +676,7 @@ impl<W: Write + 'static + std::marker::Send + std::marker::Sync + 'static> Video
                     for x in
                         (BLOCK_SIZE as usize / 2..self.state.plane.w_usize()).step_by(BLOCK_SIZE)
                     {
-                        features.push(opencv::core::Point2f::new(y as f32, x as f32));
+                        features.push(opencv::core::Point2f::new(x as f32, y as f32));
                     }
                 }
                 eprintln!(
@@ -686,6 +686,7 @@ impl<W: Write + 'static + std::marker::Send + std::marker::Sync + 'static> Video
                     matrix_mat.dims()
                 );
                 eprintln!("{}, {}, {}", mat.rows(), mat.cols(), mat.dims());
+                let mut draw_copy = matrix_mat.try_clone()?;
 
                 // Perform optical flow between the two matrices
                 let mut points2 = opencv::core::Vector::<opencv::core::Point2f>::new();
@@ -726,7 +727,27 @@ impl<W: Write + 'static + std::marker::Send + std::marker::Sync + 'static> Video
                     0.0001,            // min eigen threshold
                 )
                 .unwrap();
-                eprintln!("Optical flow calculated");
+
+                // Draw the optical flow vectors on the matrix_mat image
+                for i in 0..features.len() {
+                    if *status.at::<u8>(i as i32)? == 1 {
+                        let p1 = features.get(i)?;
+                        let p2 = points2.get(i)?;
+                        line(
+                            &mut draw_copy,
+                            opencv::core::Point2i::new(p1.x as i32, p1.y as i32),
+                            opencv::core::Point2i::new(p2.x as i32, p2.y as i32),
+                            Scalar::new(0.0, 255.0, 0.0, 0.0),
+                            2,
+                            opencv::imgproc::LINE_AA,
+                            0,
+                        )?;
+                    }
+                }
+
+                // Display the image with the optical flow vectors
+                opencv::highgui::imshow("Optical Flow", &draw_copy)?;
+                opencv::highgui::wait_key(1)?;
             }
         }
 
@@ -1463,6 +1484,8 @@ pub fn show_display_force(window_name: &str, mat: &Mat, wait: i32) -> opencv::Re
 
 use adder_codec_core::codec::compressed::source_model::event_structure::BLOCK_SIZE;
 use enum_dispatch::enum_dispatch;
+use opencv::core::Scalar;
+use opencv::imgproc::line;
 use opencv::types::VectorOfPoint2f;
 
 /// A trait for objects that can be used as a source of data for the ADΔER transcode model.
