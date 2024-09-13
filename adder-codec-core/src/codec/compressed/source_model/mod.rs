@@ -1,9 +1,9 @@
 use crate::codec::compressed::fenwick::context_switching::FenwickModel;
 use crate::codec::compressed::source_model::cabac_contexts::Contexts;
 use crate::codec::CodecError;
-use crate::{AbsoluteT, Event};
+use crate::{AbsoluteT, Event, EventCoordless};
 use arithmetic_coding_adder_dep::{Decoder, Encoder};
-use bitstream_io::{BitWriter, BitWrite, BigEndian, BitReader};
+use bitstream_io::{BigEndian, BitReader, BitWrite, BitWriter};
 use std::io::Cursor;
 
 pub trait HandleEvent {
@@ -21,6 +21,7 @@ trait ComponentCompression {
         encoder: &mut Encoder<FenwickModel, BitWriter<Vec<u8>, BigEndian>>,
         contexts: &Contexts,
         stream: &mut BitWriter<Vec<u8>, BigEndian>,
+        init_event: &mut Option<EventCoordless>,
         threshold_option: Option<u8>,
     ) -> Result<(), CodecError>;
     fn decompress_intra(
@@ -29,6 +30,7 @@ trait ComponentCompression {
         contexts: &Contexts,
         stream: &mut BitReader<Cursor<Vec<u8>>, BigEndian>,
         start_t: AbsoluteT,
+        init_event: &mut Option<EventCoordless>,
     );
     fn decompress_inter(
         &mut self,

@@ -311,6 +311,7 @@ impl ComponentCompression for EventCube {
         encoder: &mut Encoder<FenwickModel, BitWriter<Vec<u8>, BigEndian>>,
         contexts: &Contexts,
         stream: &mut BitWriter<Vec<u8>, BigEndian>,
+        init_event: &mut Option<EventCoordless>,
         _: Option<u8>,
     ) -> Result<(), CodecError> {
         encoder.model.set_context(contexts.d_context);
@@ -324,7 +325,7 @@ impl ComponentCompression for EventCube {
             return Ok(()); // We're done
         }
 
-        let mut init_event: Option<EventCoordless> = None;
+        // let mut init_event: Option<EventCoordless> = None;
         let mut d_residual = 0;
 
         // Intra-code the first event (if present) for each pixel in row-major order
@@ -336,7 +337,7 @@ impl ComponentCompression for EventCube {
                     if !pixel.is_empty() {
                         let event = pixel.first_mut().unwrap();
 
-                        if let Some(init) = &mut init_event {
+                        if let Some(init) = init_event {
                             d_residual = event.d as DResidual - init.d as DResidual;
                             // Write the D residual (relative to the start_d for the first event)
 
@@ -354,13 +355,13 @@ impl ComponentCompression for EventCube {
                             // }
 
                             // Create the init event with t being the start_t of the cube
-                            init_event = Some(EventCoordless {
+                            *init_event = Some(EventCoordless {
                                 d: event.d,
                                 t: self.start_t,
                             })
                         }
 
-                        if let Some(init) = &mut init_event {
+                        if let Some(init) = init_event {
                             // Don't do any special prediction here (yet). Just predict the same t as previously found.
                             let t_residual_i64 = event.t as i64 - init.t as i64;
                             let (bitshift_amt, t_residual) =
@@ -522,11 +523,11 @@ impl ComponentCompression for EventCube {
         contexts: &Contexts,
         stream: &mut BitReader<Cursor<Vec<u8>>, BigEndian>,
         start_t: AbsoluteT,
+        init_event: &mut Option<EventCoordless>,
     ) {
         let mut bitshift_buffer = [0u8; 1];
         let mut t_residual_buffer = [0u8; size_of::<TResidual>()];
         let mut t_residual_full_buffer = [0u8; size_of::<i64>()];
-        let mut init_event: Option<EventCoordless> = None;
 
         for c in 0..self.num_channels {
             for y in 0..BLOCK_SIZE {
@@ -545,16 +546,16 @@ impl ComponentCompression for EventCube {
                     } else if d_residual == DRESIDUAL_NO_EVENT {
                         pixel.clear(); // So we can skip it for intra-coding
                     } else {
-                        let d = if let Some(init) = &mut init_event {
+                        let d = if let Some(init) = init_event {
                             (init.d as DResidual + d_residual) as D
                         } else {
                             // There is no init event
-                            init_event = Some(EventCoordless { d: 0, t: start_t });
+                            *init_event = Some(EventCoordless { d: 0, t: start_t });
                             self.skip_cube = false;
                             d_residual as D
                         };
 
-                        if let Some(init) = &mut init_event {
+                        if let Some(init) = init_event {
                             // decoder.model.set_context(contexts.dtref_context);
                             // for byte in dtref_residual_buffer.iter_mut() {
                             //     *byte = decoder.decode(stream).unwrap().unwrap() as u8;

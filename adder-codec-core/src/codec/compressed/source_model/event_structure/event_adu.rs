@@ -4,7 +4,7 @@ use crate::codec::compressed::source_model::event_structure::event_cube::EventCu
 use crate::codec::compressed::source_model::event_structure::BLOCK_SIZE;
 use crate::codec::compressed::source_model::{ComponentCompression, HandleEvent};
 use crate::codec::CodecError;
-use crate::{AbsoluteT, DeltaT, Event, PlaneSize};
+use crate::{AbsoluteT, DeltaT, Event, EventCoordless, PlaneSize};
 use arithmetic_coding_adder_dep::{Decoder, Encoder};
 use bitstream_io::{BigEndian, BitReader, BitWriter};
 use ndarray::Array2;
@@ -97,9 +97,16 @@ impl EventAdu {
             encoder.encode(Some(&(*byte as usize)), stream).unwrap();
         }
 
+        let mut init_event = None;
         for cube in self.event_cubes.iter_mut() {
             debug_assert_eq!(cube.start_t, self.start_t);
-            cube.compress_intra(&mut encoder, &contexts, stream, Some(c_thresh_max))?;
+            cube.compress_intra(
+                &mut encoder,
+                &contexts,
+                stream,
+                &mut init_event,
+                Some(c_thresh_max),
+            )?;
         }
 
         for cube in self.event_cubes.iter_mut() {
@@ -133,6 +140,8 @@ impl EventAdu {
             *byte = decoder.decode(stream).unwrap().unwrap() as u8;
         }
 
+        let mut init_event: Option<EventCoordless> = None;
+
         for block_idx_y in 0..self.event_cubes.nrows() {
             for block_idx_x in 0..self.event_cubes.ncols() {
                 self.event_cubes[[block_idx_y, block_idx_x]].decompress_intra(
@@ -140,6 +149,7 @@ impl EventAdu {
                     &contexts,
                     stream,
                     self.start_t,
+                    &mut init_event,
                 );
                 debug_assert_eq!(
                     self.event_cubes[[block_idx_y, block_idx_x]].start_t,
