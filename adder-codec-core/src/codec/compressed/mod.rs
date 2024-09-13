@@ -1,5 +1,5 @@
 pub mod fenwick;
-mod source_model;
+pub mod source_model;
 /// Compressed codec
 pub mod stream;
 

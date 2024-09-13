@@ -649,6 +649,87 @@ impl<W: Write + 'static + std::marker::Send + std::marker::Sync + 'static> Video
             self.set_initial_d(&matrix);
         }
 
+        #[cfg(feature = "open-cv")]
+        {
+            if self.state.in_interval_count > 100 {
+                // Copy the running intensities
+                let mut running_intensities = self.state.running_intensities.clone();
+
+                let mut mat = Mat::from_slice(running_intensities.as_slice().unwrap())
+                    .expect("Could not create Mat from slice");
+
+                // Resize the matrix to the same size as the running intensities
+                let mat = mat.reshape(self.state.plane.c() as i32, self.state.plane.h() as i32)?;
+
+                // Cast the input Frame to a Mat
+
+                // let mut matrix_mat = matrix.to_shape_order();
+                //iterate through matrix_flow and copy the values to matrix_mat
+
+                let mut matrix_mat = Mat::from_exact_iter(matrix.iter().cloned())?;
+                let mut matrix_mat =
+                    matrix_mat.reshape(self.state.plane.c() as i32, self.state.plane.h() as i32)?;
+
+                // Create a sparse feature set, in the middle of each block
+                let mut features = opencv::core::Vector::<opencv::core::Point2f>::new();
+                for y in (BLOCK_SIZE as usize / 2..self.state.plane.h_usize()).step_by(BLOCK_SIZE) {
+                    for x in
+                        (BLOCK_SIZE as usize / 2..self.state.plane.w_usize()).step_by(BLOCK_SIZE)
+                    {
+                        features.push(opencv::core::Point2f::new(y as f32, x as f32));
+                    }
+                }
+                eprintln!(
+                    "{}, {}, {}",
+                    matrix_mat.rows(),
+                    matrix_mat.cols(),
+                    matrix_mat.dims()
+                );
+                eprintln!("{}, {}, {}", mat.rows(), mat.cols(), mat.dims());
+
+                // Perform optical flow between the two matrices
+                let mut points2 = opencv::core::Vector::<opencv::core::Point2f>::new();
+                let mut status = Mat::default();
+                let mut err = Mat::default();
+
+                // let mut gray1 = Mat::default();
+                // let mut gray2 = Mat::default();
+                //
+                // opencv::imgproc::cvt_color(&mat, &mut gray1, opencv::imgproc::COLOR_BGR2GRAY, 0)
+                //     .unwrap();
+                // opencv::imgproc::cvt_color(
+                //     &matrix_mat,
+                //     &mut gray2,
+                //     opencv::imgproc::COLOR_BGR2GRAY,
+                //     0,
+                // )
+                // .unwrap();
+
+                eprintln!("About to calculate");
+
+                // Calculate the optical flow using the SparsePyrLK method
+                opencv::video::calc_optical_flow_pyr_lk(
+                    &mat,
+                    &matrix_mat,
+                    &features,
+                    &mut points2,
+                    &mut status,
+                    &mut err,
+                    Size::new(21, 21), // window size
+                    1,                 // max level
+                    opencv::core::TermCriteria::new(
+                        opencv::core::TermCriteria_EPS | opencv::core::TermCriteria_COUNT,
+                        30,
+                        0.01,
+                    )?, // criteria
+                    0,                 // flags
+                    0.0001,            // min eigen threshold
+                )
+                .unwrap();
+                eprintln!("Optical flow calculated");
+            }
+        }
+
         let parameters = *self.encoder.options.crf.get_parameters();
 
         self.state.in_interval_count += 1;
@@ -1380,7 +1461,9 @@ pub fn show_display_force(window_name: &str, mat: &Mat, wait: i32) -> opencv::Re
     Ok(())
 }
 
+use adder_codec_core::codec::compressed::source_model::event_structure::BLOCK_SIZE;
 use enum_dispatch::enum_dispatch;
+use opencv::types::VectorOfPoint2f;
 
 /// A trait for objects that can be used as a source of data for the ADΔER transcode model.
 #[enum_dispatch]
