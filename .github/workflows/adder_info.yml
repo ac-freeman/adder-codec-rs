@@ -44,10 +44,9 @@ jobs:
         shell: bash
 
       - name: Install Rust
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ matrix.rust }}
-          default: true
           
       - name: Test project
         run: adder-info/ci/script.sh
@@ -89,10 +88,10 @@ jobs:
         shell: bash
 
       - name: Install Rust
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ matrix.rust }}
-          default: true
+
       - name: Test project
         run: adder-info/ci/script.sh
         shell: bash
