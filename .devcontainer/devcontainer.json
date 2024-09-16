@@ -1,6 +1,15 @@
 {
 	"name": "Rust",
 	"image": "mcr.microsoft.com/devcontainers/rust:1-1-bullseye",
+	"features": {
+		"ghcr.io/devcontainers/features/common-utils:2": {
+			"upgradePackages": true,
+			"installZsh": true,
+			"configureZshAsDefaultShell": true,
+			"installOhMyZsh": true,
+			"installOhMyZshConfig": true
+		}
+	},
 
 	// Use 'mounts' to make the cargo cache persistent in a Docker Volume.
 	"mounts": [
