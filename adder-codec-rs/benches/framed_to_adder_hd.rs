@@ -13,7 +13,6 @@ use std::path::PathBuf;
 
 use adder_codec_core::TimeMode::DeltaT;
 use adder_codec_rs::transcoder::source::framed::Framed;
-use adder_codec_rs::transcoder::source::video::VideoBuilder;
 use adder_codec_rs::utils::viz::download_file;
 use std::thread::sleep;
 use std::time::Duration;

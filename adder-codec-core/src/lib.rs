@@ -511,8 +511,8 @@ pub struct EventCoordlessRelative {
     pub delta_t: DeltaT,
 }
 
-impl Into<f64> for EventCoordless {
-    fn into(self) -> f64 {
+impl From<EventCoordless> for f64 {
+    fn from(val: EventCoordless) -> Self {
         panic!("Not implemented")
     }
 }

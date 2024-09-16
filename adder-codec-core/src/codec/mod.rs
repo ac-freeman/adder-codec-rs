@@ -132,7 +132,7 @@ pub trait WriteCompression<W: Write + std::marker::Send + std::marker::Sync + 's
     fn byte_align(&mut self) -> io::Result<()>;
 
     /// Consumes the compression stream and returns the underlying writer.
-    fn into_writer(&mut self) -> Option<W>;
+    fn into_writer(self) -> Option<W>;
 
     /// Flush the `BitWriter`. Does not flush the internal `BufWriter`.
     fn flush_writer(&mut self) -> io::Result<()>;

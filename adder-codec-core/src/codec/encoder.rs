@@ -149,7 +149,7 @@ impl<W: Write + 'static + std::marker::Send + std::marker::Sync> Encoder<W> {
     }
 
     /// Close the encoder's writer and return it, consuming the encoder in the process.
-    pub fn close_writer(mut self) -> Result<Option<W>, CodecError> {
+    pub fn close_writer(self) -> Result<Option<W>, CodecError> {
         // self.output.byte_align()?;
         // self.write_eof()?;
         // self.flush_writer()?;

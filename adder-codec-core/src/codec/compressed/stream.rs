@@ -3,13 +3,11 @@ use bitstream_io::{BigEndian, BitRead, BitReader, BitWrite, BitWriter};
 use priority_queue::PriorityQueue;
 use std::cmp::Reverse;
 use std::io::{Cursor, Read, Seek, SeekFrom, Write};
-use std::ops::{Add, AddAssign};
 use std::sync::{Arc, RwLock};
 
 use crate::codec::compressed::source_model::event_structure::event_adu::EventAdu;
 use crate::codec::compressed::source_model::HandleEvent;
 use crate::codec::header::{Magic, MAGIC_COMPRESSED};
-use crate::codec::rate_controller::CrfParameters;
 use crate::{DeltaT, Event};
 
 /// A message to send to the writer thread (that is, the main thread) to write out the compressed
@@ -71,7 +69,7 @@ pub struct CompressedInput<R: Read> {
 // }
 
 fn flush_bytes_queue_worker<W: Write>(
-    mut stream: Arc<RwLock<BitWriter<W, BigEndian>>>,
+    stream: Arc<RwLock<BitWriter<W, BigEndian>>>,
     written_bytes_rx: std::sync::mpsc::Receiver<BytesMessage>,
     last_message_written: Arc<RwLock<u32>>,
     mut bytes_writer_queue: PriorityQueue<Vec<u8>, Reverse<u32>>,
@@ -105,7 +103,7 @@ fn flush_bytes_queue_worker<W: Write>(
 impl<W: Write + std::marker::Send + std::marker::Sync + 'static> CompressedOutput<W> {
     /// Create a new compressed output stream.
     pub fn new(meta: CodecMetadata, writer: W) -> Self {
-        let adu = EventAdu::new(meta.plane, 0, meta.ref_interval, meta.adu_interval as usize);
+        let adu = EventAdu::new(meta.plane, 0, meta.ref_interval, meta.adu_interval);
         let (written_bytes_tx, written_bytes_rx) = std::sync::mpsc::channel();
 
         let stream_lock = RwLock::new(BitWriter::endian(writer, BigEndian));
@@ -175,7 +173,7 @@ impl<W: Write + std::marker::Send + std::marker::Sync + 'static + 'static + 'sta
         self.stream().write().unwrap().byte_align()
     }
 
-    fn into_writer(&mut self) -> Option<W> {
+    fn into_writer(mut self) -> Option<W> {
         if !self.adu.skip_adu {
             // while self.last_message_sent
             //     != self.last_message_written + self.bytes_writer_queue.len() as u32
@@ -203,7 +201,7 @@ impl<W: Write + std::marker::Send + std::marker::Sync + 'static + 'static + 'sta
             dbg!("compressing partial last adu");
             let mut temp_stream = BitWriter::endian(Vec::new(), BigEndian);
 
-            let parameters = self.options.crf.get_parameters().clone();
+            let parameters = *self.options.crf.get_parameters();
             let mut adu = self.adu.clone();
             let tx = self.written_bytes_tx.as_ref().unwrap().clone();
             // Spawn a thread to compress the ADU and write out the data
@@ -288,7 +286,7 @@ impl<W: Write + std::marker::Send + std::marker::Sync + 'static + 'static + 'sta
                 // Create a temporary u8 stream to write the arithmetic-coded data to
                 let mut temp_stream = BitWriter::endian(Vec::new(), BigEndian);
 
-                let parameters = self.options.crf.get_parameters().clone();
+                let parameters = *self.options.crf.get_parameters();
 
                 // Compress the Adu. This also writes the EOF symbol and flushes the encoder
                 // First, clone the ADU
@@ -492,11 +490,11 @@ mod tests {
                 compressed_output
                     .ingest_event(Event {
                         coord: Coord { x, y, c: None },
-                        t: min(280 + counter, start_t + dt_ref * num_intervals as u32),
+                        t: min(280 + counter, start_t + dt_ref * num_intervals),
                         d: 7,
                     })
                     .unwrap();
-                if 280 + counter > start_t + dt_ref * num_intervals as u32 {
+                if 280 + counter > start_t + dt_ref * num_intervals {
                     break;
                 } else {
                     counter += 1;
@@ -552,14 +550,14 @@ mod tests {
             for x in 0..16 {
                 let event = Event {
                     coord: Coord { x, y, c: None },
-                    t: min(280 + counter, start_t + dt_ref * num_intervals as u32),
+                    t: min(280 + counter, start_t + dt_ref * num_intervals),
                     d: 7,
                 };
                 if y == candidate_px_idx.0 && x == candidate_px_idx.1 {
                     input_px_events.push(event);
                 }
                 compressed_output.ingest_event(event).unwrap();
-                if 280 + counter > start_t + dt_ref * num_intervals as u32 {
+                if 280 + counter > start_t + dt_ref * num_intervals {
                     break;
                 } else {
                     counter += 1;
@@ -575,7 +573,7 @@ mod tests {
                     y: 0,
                     c: None,
                 },
-                t: start_t + dt_ref * num_intervals as u32 + 1,
+                t: start_t + dt_ref * num_intervals + 1,
                 d: 7,
             })
             .unwrap();
@@ -591,11 +589,8 @@ mod tests {
         // Check that the size is less than the raw events
         assert!((output.len() as u32) < counter * 9);
 
-        let mut compressed_input = CompressedInput::new(
-            dt_ref * num_intervals as u32,
-            dt_ref,
-            num_intervals as usize,
-        );
+        let mut compressed_input =
+            CompressedInput::new(dt_ref * num_intervals, dt_ref, num_intervals as usize);
         compressed_input.meta.plane = plane;
         let mut stream = BitReader::endian(Cursor::new(output), BigEndian);
         for i in 0..counter - 1 {

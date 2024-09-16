@@ -1,24 +1,13 @@
-use adder_codec_core::codec::compressed::stream::CompressedInput;
-use adder_codec_core::codec::decoder::Decoder;
-use adder_codec_core::codec::rate_controller::Crf;
-use adder_codec_core::codec::raw::stream::RawInput;
-use adder_codec_core::codec::{EncoderOptions, EncoderType};
-use adder_codec_core::SourceCamera::{DavisU8, Dvs, FramedU8};
+use adder_codec_core::open_file_decoder;
 use adder_codec_core::SourceType::U8;
-use adder_codec_core::{open_file_decoder, PixelMultiMode, TimeMode};
 use adder_codec_rs::framer::driver::FramerMode::INSTANTANEOUS;
 use adder_codec_rs::framer::driver::{FrameSequence, Framer, FramerBuilder};
-use adder_codec_rs::transcoder::source::prophesee::Prophesee;
-use adder_codec_rs::transcoder::source::video::SourceError;
-use adder_codec_rs::utils::viz::ShowFeatureMode;
-use bitstream_io::{BigEndian, BitReader};
 use clap::Parser;
 use std::fs::File;
 use std::io;
-use std::io::{BufReader, BufWriter, Write};
+use std::io::{BufWriter, Write};
 use std::process::Command;
 use std::time::Instant;
-use video_rs_adder_dep::Locator;
 
 #[derive(Parser, Debug, Default, serde::Deserialize)]
 #[clap(author, version, about, long_about = None)]
@@ -59,7 +48,7 @@ pub struct MyArgs {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mut args: MyArgs = MyArgs::parse();
+    let args: MyArgs = MyArgs::parse();
 
     // Set up the adder file reader
     let (mut reader, mut bitreader) = open_file_decoder(&args.input)?;

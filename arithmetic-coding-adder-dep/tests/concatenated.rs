@@ -1,4 +1,3 @@
-#![feature(exclusive_range_pattern)]
 #![feature(never_type)]
 
 use arithmetic_coding_adder_dep::{Decoder, Encoder, Model};
