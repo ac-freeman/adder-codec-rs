@@ -1,5 +1,3 @@
-#![feature(exclusive_range_pattern)]
-
 use std::ops::Range;
 
 use arithmetic_coding_adder_dep::Model;

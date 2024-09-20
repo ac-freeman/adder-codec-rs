@@ -246,7 +246,7 @@ impl PixelArena {
             }
         }
 
-        if self.popped_dtm && multi_mode == PixelMultiMode::Collapse && local_buffer.len() >= 1 {
+        if self.popped_dtm && multi_mode == PixelMultiMode::Collapse && !local_buffer.is_empty() {
             // Then discard all the events except the first two, and mark the second of these as an EMPTY event
             // (carrying no intensity info)
 

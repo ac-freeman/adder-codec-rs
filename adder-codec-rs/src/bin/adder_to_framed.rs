@@ -53,7 +53,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Set up the adder file reader
     let (mut reader, mut bitreader) = open_file_decoder(&args.input)?;
 
-    let meta = reader.meta().clone();
+    let meta = *reader.meta();
 
     let mut framer: FrameSequence<u8> = FramerBuilder::new(meta.plane, 1)
         .codec_version(meta.codec_version, meta.time_mode)
@@ -145,10 +145,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     dbg!(frame_count);
 
     // Use ffmpeg to encode the raw frame data as an mp4
-    let color_str = match meta.plane.c() != 1 {
-        true => "rgb24",
-        _ => "gray",
-    };
+    let color_str = if meta.plane.c() != 1 { "rgb24" } else { "gray" };
 
     let mut ffmpeg = Command::new("sh")
         .arg("-c")

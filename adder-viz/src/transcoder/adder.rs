@@ -179,18 +179,14 @@ impl AdderTranscoder {
                     AdderTranscoderError::IoError(_) => {}
                     AdderTranscoderError::OtherError(_) => {}
                     Uninitialized => {}
-                    _ => {}
                 }
 
-                match self
+                if let Err(TrySendError::Full(..)) = self
                     .msg_tx
                     .try_send(TranscoderInfoMsg::Error(e.to_string()))
                 {
-                    Err(TrySendError::Full(..)) => {
-                        dbg!(e);
-                        eprintln!("Msg channel full");
-                    }
-                    _ => {}
+                    dbg!(e);
+                    eprintln!("Msg channel full");
                 };
             }
         }
@@ -286,14 +282,7 @@ impl AdderTranscoder {
             let res = self.core_state_update(transcoder_state).await;
             if res.is_ok() {
                 // Send a message with the plane size of the video
-                let plane = self
-                    .source
-                    .as_ref()
-                    .unwrap()
-                    .get_video_ref()
-                    .state
-                    .plane
-                    .clone();
+                let plane = self.source.as_ref().unwrap().get_video_ref().state.plane;
                 match self
                     .msg_tx
                     .try_send(TranscoderInfoMsg::Plane((plane, force_new)))
@@ -460,7 +449,7 @@ impl AdderTranscoder {
         .chunk_rows(1)
         .auto_time_parameters(
             core_params.delta_t_ref as u32,
-            core_params.delta_t_max_mult * core_params.delta_t_ref as u32,
+            core_params.delta_t_max_mult * core_params.delta_t_ref,
             Some(core_params.time_mode),
         )?;
 
@@ -646,7 +635,7 @@ impl AdderTranscoder {
             .map(|output_path| output_path.to_str().expect("Bad path").to_string());
 
         let mut prophesee_source: Prophesee<BufWriter<File>> = Prophesee::new(
-            core_params.delta_t_ref as u32,
+            core_params.delta_t_ref,
             core_params
                 .input_path_buf_0
                 .clone()

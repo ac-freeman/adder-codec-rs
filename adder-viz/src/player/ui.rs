@@ -31,21 +31,11 @@ pub enum PlayerInfoMsg {
     Error(String),
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct PlayerState {
     pub adaptive_params: AdaptiveParams,
     pub core_params: CoreParams,
     // pub info_params: InfoParams,
-}
-
-impl Default for PlayerState {
-    fn default() -> Self {
-        Self {
-            adaptive_params: Default::default(),
-            core_params: Default::default(),
-            // info_params: Default::default(),
-        }
-    }
 }
 
 impl TabState for PlayerState {

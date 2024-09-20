@@ -53,13 +53,13 @@ pub fn prep_epaint_image(
     width: usize,
     height: usize,
 ) -> Result<ColorImage, Box<dyn Error>> {
-    if !color {
-        return Ok(ColorImage::from_gray(
+    if color {
+        return Ok(ColorImage::from_rgb(
             [width, height],
             image_mat.as_standard_layout().as_slice().unwrap(),
         ));
     } else {
-        return Ok(ColorImage::from_rgb(
+        return Ok(ColorImage::from_gray(
             [width, height],
             image_mat.as_standard_layout().as_slice().unwrap(),
         ));

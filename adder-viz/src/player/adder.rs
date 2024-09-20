@@ -142,12 +142,11 @@ impl AdderPlayer {
                     AdderPlayerError::CodecError(_) => {}
                 }
 
-                match self.msg_tx.try_send(PlayerInfoMsg::Error(e.to_string())) {
-                    Err(TrySendError::Full(..)) => {
-                        dbg!(e);
-                        eprintln!("Msg channel full");
-                    }
-                    _ => {}
+                if let Err(TrySendError::Full(..)) =
+                    self.msg_tx.try_send(PlayerInfoMsg::Error(e.to_string()))
+                {
+                    dbg!(e);
+                    eprintln!("Msg channel full");
                 };
             }
         }
@@ -288,7 +287,7 @@ impl AdderPlayer {
                         self.framer = Some(frame_sequence);
                         self.framer_builder = framer_builder;
 
-                        let mut stream = InputStream {
+                        let stream = InputStream {
                             decoder: stream,
                             bitreader,
                         };
@@ -406,7 +405,7 @@ impl AdderPlayer {
 
             // return Ok(());
         }
-        let meta = stream.decoder.meta().clone();
+        let meta = *stream.decoder.meta();
 
         let mut last_event: Option<Event> = None;
         loop {
@@ -434,7 +433,7 @@ impl AdderPlayer {
 
                         return Err(AdderPlayerError::from(CodecError::Eof));
                     } else {
-                        return Ok(self.consume().await?);
+                        return self.consume().await;
                     }
                 }
             }

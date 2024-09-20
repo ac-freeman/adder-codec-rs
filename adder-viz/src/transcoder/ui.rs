@@ -153,8 +153,8 @@ pub struct TranscoderUi {
 
 impl TranscoderUi {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
-        let (tx, mut rx) = mpsc::channel(5);
-        let (msg_tx, mut msg_rx) = mpsc::channel(30);
+        let (tx, rx) = mpsc::channel(5);
+        let (msg_tx, msg_rx) = mpsc::channel(30);
 
         let mut transcoder_ui = TranscoderUi {
             transcoder_state: Default::default(),
@@ -363,7 +363,7 @@ impl TranscoderUi {
             self.info_ui_state
                 .error_string
                 .as_ref()
-                .unwrap_or(&"".to_string()),
+                .unwrap_or(&String::new()),
         );
         ui.horizontal(|ui| {
             if ui.button("Open file").clicked() {
@@ -373,7 +373,7 @@ impl TranscoderUi {
                     .add_filter("Prophesee video", &["dat"])
                     .pick_file()
                 {
-                    eprintln!("Updating input path: {:?}", path);
+                    eprintln!("Updating input path: {path:?}");
                     self.transcoder_state.core_params.input_path_buf_0 = Some(path.clone());
                 }
             }
@@ -516,7 +516,7 @@ impl TranscoderUi {
 
         let mut avail_size = ui.available_size();
         if self.transcoder_state.adaptive_params.show_original {
-            avail_size.x = avail_size.x / 2.0;
+            avail_size.x /= 2.0;
         }
         // let images = images.lock().unwrap();
 

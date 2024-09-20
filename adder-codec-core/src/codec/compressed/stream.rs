@@ -796,7 +796,7 @@ mod tests {
         );
         compressed_input.meta.plane = plane;
         let mut stream = BitReader::endian(Cursor::new(output), BigEndian);
-        for _ in 0..counter + 1 {
+        for _ in 0..=counter {
             match compressed_input.digest_event(&mut stream) {
                 Ok(event) => {
                     if event.coord.y == candidate_px_idx.0 && event.coord.x == candidate_px_idx.1 {
