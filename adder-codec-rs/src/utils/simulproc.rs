@@ -6,7 +6,6 @@ use crate::transcoder::source::framed::Framed;
 use crate::transcoder::source::video::Source;
 use adder_codec_core::DeltaT;
 use clap::Parser;
-use rayon::ThreadPool;
 use serde::Serialize;
 use std::cmp::max;
 use std::error::Error;

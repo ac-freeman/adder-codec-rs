@@ -9,8 +9,7 @@ use video_rs_adder_dep::Frame;
 use crate::transcoder::source::davis::Davis;
 use crate::transcoder::source::framed::Framed;
 use crate::transcoder::source::prophesee::Prophesee;
-use std::fs::File;
-use std::io::{BufWriter, Write};
+use std::io::Write;
 
 /// Tools for transcoding from a DVS/DAVIS video source to ADΔER
 #[cfg(feature = "open-cv")]

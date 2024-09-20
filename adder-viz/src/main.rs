@@ -3,9 +3,9 @@ mod transcoder;
 mod utils;
 
 use crate::player::ui::PlayerUi;
-use crate::transcoder::ui::{TranscoderState, TranscoderStateMsg, TranscoderUi};
+use crate::transcoder::ui::TranscoderUi;
 use eframe::egui;
-use egui::{ColorImage, Response, Ui, Widget, WidgetText};
+use egui::{ColorImage, Ui, Widget, WidgetText};
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 

@@ -1,12 +1,11 @@
 use adder_codec_core::{Event, PixelAddress};
 #[cfg(feature = "open-cv")]
 use opencv::core::{Mat, MatTraitConst, MatTraitConstManual};
-use std::error::Error;
 use std::fs::File;
 use std::io;
 #[cfg(feature = "open-cv")]
 use std::io::BufWriter;
-use std::io::{Cursor, Write};
+use std::io::Cursor;
 use std::path::Path;
 use std::process::{Command, Output};
 use video_rs_adder_dep::Frame;
@@ -99,18 +98,16 @@ pub fn draw_feature_coord(
     three_color: bool,
     color: Option<[u8; 3]>,
 ) {
-    let draw_color: [u8; 3] = color.unwrap_or_else(|| [255, 255, 255]);
+    let draw_color: [u8; 3] = color.unwrap_or([255, 255, 255]);
 
     let radius = 2;
 
     unsafe {
         if three_color {
             for i in -radius..=radius {
-                for c in 0..3 {
-                    *img.uget_mut(((y as i32 + i) as usize, (x as i32) as usize, c)) =
-                        draw_color[c];
-                    *img.uget_mut(((y as i32) as usize, (x as i32 + i) as usize, c)) =
-                        draw_color[c];
+                for (c, color) in draw_color.iter().enumerate() {
+                    *img.uget_mut(((y as i32 + i) as usize, (x as i32) as usize, c)) = *color;
+                    *img.uget_mut(((y as i32) as usize, (x as i32 + i) as usize, c)) = *color;
                 }
             }
         } else {
@@ -132,20 +129,20 @@ pub fn draw_rect(
     three_color: bool,
     color: Option<[u8; 3]>,
 ) {
-    let draw_color: [u8; 3] = color.unwrap_or_else(|| [255, 255, 255]);
+    let draw_color: [u8; 3] = color.unwrap_or([255, 255, 255]);
 
     unsafe {
         if three_color {
             for i in x1..=x2 {
-                for c in 0..3 {
-                    *img.uget_mut((y1 as usize, i as usize, c)) = draw_color[c];
-                    *img.uget_mut((y2 as usize, i as usize, c)) = draw_color[c];
+                for (c, color) in draw_color.iter().enumerate() {
+                    *img.uget_mut((y1 as usize, i as usize, c)) = *color;
+                    *img.uget_mut((y2 as usize, i as usize, c)) = *color;
                 }
             }
             for i in y1..=y2 {
-                for c in 0..3 {
-                    *img.uget_mut((i as usize, x1 as usize, c)) = draw_color[c];
-                    *img.uget_mut((i as usize, x2 as usize, c)) = draw_color[c];
+                for (c, color) in draw_color.iter().enumerate() {
+                    *img.uget_mut((i as usize, x1 as usize, c)) = *color;
+                    *img.uget_mut((i as usize, x2 as usize, c)) = *color;
                 }
             }
         } else {

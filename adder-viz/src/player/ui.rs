@@ -1,18 +1,15 @@
 use crate::player::adder::AdderPlayer;
 use crate::player::{AdaptiveParams, CoreParams};
-use crate::transcoder::InfoParams;
 use crate::utils::{add_checkbox_row, add_slider_row, slider_pm};
 use crate::{TabState, VizUi};
 use adder_codec_rs::adder_codec_core::PlaneSize;
 use adder_codec_rs::transcoder::source::video::FramedViewMode;
 use eframe::epaint::ColorImage;
 use egui::Ui;
-use std::ops::RangeInclusive;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc;
-use tokio::sync::mpsc::error::TryRecvError;
 use tokio::sync::mpsc::{Receiver, Sender};
 
 #[derive(Debug, Clone)]
@@ -65,9 +62,9 @@ pub struct PlayerUi {
 
 impl PlayerUi {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
-        let (tx, mut rx) = mpsc::channel::<PlayerStateMsg>(5);
-        let (msg_tx, mut msg_rx) = mpsc::channel::<PlayerInfoMsg>(30);
-        let (image_tx, mut image_rx) = mpsc::channel::<ColorImage>(500);
+        let (tx, rx) = mpsc::channel::<PlayerStateMsg>(5);
+        let (msg_tx, msg_rx) = mpsc::channel::<PlayerInfoMsg>(30);
+        let (image_tx, image_rx) = mpsc::channel::<ColorImage>(500);
 
         let mut player_ui = PlayerUi {
             player_state: PlayerState::default(),
@@ -201,7 +198,7 @@ impl VizUi for PlayerUi {
     }
 
     fn central_panel_ui(&mut self, ui: &mut egui::Ui) {
-        let mut avail_size = ui.available_size();
+        let avail_size = ui.available_size();
 
         let size = match (
             self.adder_image_handle.size()[0] as f32,

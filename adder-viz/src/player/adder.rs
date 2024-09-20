@@ -5,16 +5,15 @@ use crate::player::ui::{PlayerInfoMsg, PlayerStateMsg};
 use crate::utils::prep_epaint_image;
 use adder_codec_rs::adder_codec_core::bitstream_io::{BigEndian, BitReader};
 use adder_codec_rs::adder_codec_core::codec::decoder::Decoder;
-use adder_codec_rs::adder_codec_core::codec::{CodecError, EncoderType};
+use adder_codec_rs::adder_codec_core::codec::CodecError;
 use adder_codec_rs::adder_codec_core::{is_framed, open_file_decoder, Event, PlaneSize};
 use adder_codec_rs::framer::driver::FramerMode::INSTANTANEOUS;
 use adder_codec_rs::framer::driver::{FrameSequence, Framer, FramerBuilder};
 use async_recursion::async_recursion;
 use eframe::epaint::ColorImage;
-use ndarray::Array3;
 use std::fs::File;
 use std::io::BufReader;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use thiserror::Error;
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::error::TrySendError;
@@ -283,7 +282,7 @@ impl AdderPlayer {
                             .detect_features(player_state.adaptive_params.detect_features)
                             .source(stream.get_source_type(), meta.source_camera);
 
-                        let mut frame_sequence: FrameSequence<u8> = framer_builder.clone().finish();
+                        let frame_sequence: FrameSequence<u8> = framer_builder.clone().finish();
                         self.framer = Some(frame_sequence);
                         self.framer_builder = framer_builder;
 

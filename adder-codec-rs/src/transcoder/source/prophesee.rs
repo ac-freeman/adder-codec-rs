@@ -3,7 +3,7 @@ use crate::transcoder::source::video::FramedViewMode::SAE;
 use crate::transcoder::source::video::{
     integrate_for_px, Source, SourceError, Video, VideoBuilder,
 };
-use crate::utils::cv::{clamp_u8, mid_clamp_u8};
+use crate::utils::cv::mid_clamp_u8;
 use crate::utils::viz::ShowFeatureMode;
 use adder_codec_core::codec::{EncoderOptions, EncoderType};
 use adder_codec_core::Mode::Continuous;
@@ -11,14 +11,11 @@ use adder_codec_core::{
     DeltaT, Event, PixelMultiMode, PlaneSize, SourceCamera, SourceType, TimeMode,
 };
 use ndarray::Array3;
-use rayon::ThreadPool;
 use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::fs::File;
 use std::io::{self, BufRead, BufReader, Read, Seek, SeekFrom, Write};
 use std::path::PathBuf;
-use std::str::FromStr;
-use tokio::runtime::Runtime;
 use video_rs_adder_dep::Frame;
 
 /// The temporal granularity of the source (ticks per second)
@@ -376,7 +373,7 @@ fn parse_header(file: &mut BufReader<File>) -> io::Result<(u64, u8, u8, (u32, u3
 
     // Parse header
     while !end_of_header {
-        bod = file.seek(SeekFrom::Current(0))?; // Get the current position
+        bod = file.stream_position()?; // Get the current position
         let mut line = Vec::new(); // Change to Vec<u8>
         file.read_until(b'\n', &mut line)?; // Read until newline as binary data
         if line.is_empty() || line[0] != b'%' {
@@ -415,7 +412,7 @@ fn parse_header(file: &mut BufReader<File>) -> io::Result<(u64, u8, u8, (u32, u3
     } else {
         (0, 0) // Placeholder values, replace with actual logic
     };
-    bod = file.seek(SeekFrom::Current(0))?;
+    bod = file.stream_position()?;
     Ok((
         bod,
         ev_type,
@@ -427,7 +424,7 @@ fn parse_header(file: &mut BufReader<File>) -> io::Result<(u64, u8, u8, (u32, u3
 fn line_to_hw(words: Vec<&[u8]>) -> Option<u32> {
     let word = words.get(2).unwrap();
     let mut new_word = *word;
-    if *word.last().unwrap() == '\n' as u8 {
+    if *word.last().unwrap() == b'\n' {
         // Remove the trailing newline
         new_word = &word[..word.len() - 1];
     }
