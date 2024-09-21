@@ -35,7 +35,7 @@ jobs:
         run: sudo apt-get install -y portaudio19-dev build-essential libpulse-dev libdbus-1-dev pkg-config libx11-dev libatk1.0-dev libgtk-3-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libwayland-dev libxkbcommon-dev ffmpeg
 
       - name: Check project
-        run: cargo check -p adder-codec-core -p adder-codec-rs -p adder-info -p adder-to-dvs -p adder-viz --features "compression"
+        run: cargo check --all-targets -p adder-codec-core -p adder-codec-rs -p adder-info -p adder-to-dvs -p adder-viz --features "compression"
 
       - name: Build binaries for testing
         run: cargo build -p adder-info
