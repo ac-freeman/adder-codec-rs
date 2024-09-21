@@ -91,7 +91,7 @@ pub struct CodecMetadata {
 
 impl Default for CodecMetadata {
     fn default() -> Self {
-        CodecMetadata {
+        Self {
             codec_version: LATEST_CODEC_VERSION,
             header_size: 24,
             time_mode: Default::default(),

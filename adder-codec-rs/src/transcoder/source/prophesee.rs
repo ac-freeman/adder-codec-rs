@@ -98,7 +98,7 @@ impl<W: Write + std::marker::Send + std::marker::Sync + 'static> Prophesee<W> {
             start_vals,
         )?;
 
-        let prophesee_source = Prophesee {
+        let prophesee_source = Self {
             video,
             input_reader,
             running_t: 0,
@@ -423,11 +423,12 @@ fn parse_header(file: &mut BufReader<File>) -> io::Result<(u64, u8, u8, (u32, u3
 
 fn line_to_hw(words: Vec<&[u8]>) -> Option<u32> {
     let word = words.get(2).unwrap();
-    let mut new_word = *word;
-    if *word.last().unwrap() == b'\n' {
+    let new_word = if *word.last().unwrap() == b'\n' {
         // Remove the trailing newline
-        new_word = &word[..word.len() - 1];
-    }
+        &word[..word.len() - 1]
+    } else {
+        *word
+    };
     std::str::from_utf8(new_word)
         .ok()
         .and_then(|s| s.parse().ok())

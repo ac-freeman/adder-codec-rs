@@ -32,6 +32,7 @@ pub enum FramerMode {
 
 /// Builder for a Framer.
 #[derive(Clone)]
+#[must_use]
 pub struct FramerBuilder {
     plane: PlaneSize,
     tps: DeltaT,
@@ -52,10 +53,9 @@ pub struct FramerBuilder {
 }
 
 impl FramerBuilder {
-    /// Create a new FramerBuilder.
-    #[must_use]
-    pub fn new(plane: PlaneSize, chunk_rows: usize) -> FramerBuilder {
-        FramerBuilder {
+    /// Create a new [`FramerBuilder`].
+    pub fn new(plane: PlaneSize, chunk_rows: usize) -> Self {
+        Self {
             plane,
             chunk_rows,
             tps: 150_000,
@@ -74,14 +74,13 @@ impl FramerBuilder {
     }
 
     /// Set the time parameters.
-    #[must_use]
     pub fn time_parameters(
         mut self,
         tps: DeltaT,
         ref_interval: DeltaT,
         delta_t_max: DeltaT,
         output_fps: Option<f32>,
-    ) -> FramerBuilder {
+    ) -> Self {
         self.tps = tps;
         self.ref_interval = ref_interval;
         self.delta_t_max = delta_t_max;
@@ -90,36 +89,32 @@ impl FramerBuilder {
     }
 
     /// Limit the size of the reconstruction frame buffer (for speed/latency)
-    pub fn buffer_limit(mut self, buffer_limit: Option<u32>) -> FramerBuilder {
+    pub fn buffer_limit(mut self, buffer_limit: Option<u32>) -> Self {
         self.buffer_limit = buffer_limit;
         self
     }
 
     /// Set the framer mode.
-    #[must_use]
-    pub fn mode(mut self, mode: FramerMode) -> FramerBuilder {
+    pub fn mode(mut self, mode: FramerMode) -> Self {
         self.mode = mode;
         self
     }
 
     /// Set the view mode.
-    #[must_use]
-    pub fn view_mode(mut self, mode: FramedViewMode) -> FramerBuilder {
+    pub fn view_mode(mut self, mode: FramedViewMode) -> Self {
         self.view_mode = mode;
         self
     }
 
     /// Set the source type and camera.
-    #[must_use]
-    pub fn source(mut self, source: SourceType, source_camera: SourceCamera) -> FramerBuilder {
+    pub fn source(mut self, source: SourceType, source_camera: SourceCamera) -> Self {
         self.source_camera = source_camera;
         self.source = source;
         self
     }
 
     /// Set the codec version and time mode.
-    #[must_use]
-    pub fn codec_version(mut self, codec_version: u8, time_mode: TimeMode) -> FramerBuilder {
+    pub fn codec_version(mut self, codec_version: u8, time_mode: TimeMode) -> Self {
         self.codec_version = codec_version;
         self.time_mode = time_mode;
         self
@@ -143,7 +138,7 @@ impl FramerBuilder {
     }
 
     /// Set whether to detect features.
-    pub fn detect_features(mut self, detect_features: bool) -> FramerBuilder {
+    pub fn detect_features(mut self, detect_features: bool) -> Self {
         self.detect_features = detect_features;
         self
     }

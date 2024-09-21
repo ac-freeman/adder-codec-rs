@@ -1293,11 +1293,12 @@ pub fn integrate_for_px(
     parameters: &CrfParameters,
 ) -> bool {
     let _start_len = buffer.len();
-    let mut grew_buffer = false;
-    if px.need_to_pop_top {
+    let mut grew_buffer = if px.need_to_pop_top {
         buffer.push(px.pop_top_event(intensity, params.pixel_tree_mode, params.ref_time));
-        grew_buffer = true;
-    }
+        true
+    } else {
+        false
+    };
 
     *base_val = px.base_val;
 
@@ -1316,10 +1317,9 @@ pub fn integrate_for_px(
         px.base_val = frame_val;
 
         // If continuous mode and the D value needs to be different now
-        if let Continuous = params.pixel_tree_mode {
-            match px.set_d_for_continuous(intensity, params.ref_time) {
-                None => {}
-                Some(event) => buffer.push(event),
+        if params.pixel_tree_mode == Continuous {
+            if let Some(event) = px.set_d_for_continuous(intensity, params.ref_time) {
+                buffer.push(event)
             };
         }
     }

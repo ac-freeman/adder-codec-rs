@@ -61,7 +61,7 @@ impl EventCube {
             .try_into()
             .unwrap();
         let square: [[Pixel; BLOCK_SIZE]; BLOCK_SIZE] = vec![row; BLOCK_SIZE].try_into().unwrap();
-        let lists = [square.clone(), square.clone(), square.clone()];
+        let lists = [square.clone(), square.clone(), square];
 
         Self {
             start_y,
@@ -567,14 +567,13 @@ impl ComponentCompression for EventCube {
                             }
                             let bitshift_amt = bitshift_buffer[0];
 
+                            decoder.model.set_context(contexts.t_context);
                             let t_residual = if bitshift_amt == BITSHIFT_ENCODE_FULL {
-                                decoder.model.set_context(contexts.t_context);
                                 for byte in t_residual_full_buffer.iter_mut() {
                                     *byte = decoder.decode(stream).unwrap().unwrap() as u8;
                                 }
                                 i64::from_be_bytes(t_residual_full_buffer)
                             } else {
-                                decoder.model.set_context(contexts.t_context);
                                 for byte in t_residual_buffer.iter_mut() {
                                     *byte = decoder.decode(stream).unwrap().unwrap() as u8;
                                 }
@@ -651,14 +650,13 @@ impl ComponentCompression for EventCube {
                             }
                             let bitshift_amt = bitshift_buffer[0];
 
+                            decoder.model.set_context(contexts.t_context);
                             let t_residual = if bitshift_amt == BITSHIFT_ENCODE_FULL {
-                                decoder.model.set_context(contexts.t_context);
                                 for byte in t_residual_full_buffer.iter_mut() {
                                     *byte = decoder.decode(stream).unwrap().unwrap() as u8;
                                 }
                                 i64::from_be_bytes(t_residual_full_buffer)
                             } else {
-                                decoder.model.set_context(contexts.t_context);
                                 for byte in t_residual_buffer.iter_mut() {
                                     *byte = decoder.decode(stream).unwrap().unwrap() as u8;
                                 }

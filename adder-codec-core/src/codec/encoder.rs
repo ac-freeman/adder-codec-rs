@@ -44,7 +44,7 @@ struct EncoderState {
 
 impl Default for EncoderState {
     fn default() -> Self {
-        EncoderState {
+        Self {
             current_event_rate: 0.0,
             last_event_ts: Instant::now(),
             queue: BinaryHeap::new(),

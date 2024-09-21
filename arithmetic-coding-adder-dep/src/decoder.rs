@@ -255,7 +255,7 @@ where
             self.high = (self.high - self.quarter()) << 1;
             self.x = (self.x - self.quarter()) << 1;
 
-            if let Some(true) = input.next_bit()? {
+            if input.next_bit()? == Some(true) {
                 self.x += B::ONE;
             }
         }
@@ -280,7 +280,7 @@ where
     fn fill(&mut self, input: &mut R) -> io::Result<()> {
         for _ in 0..self.precision {
             self.x <<= 1;
-            if let Some(true) = input.next_bit()? {
+            if input.next_bit()? == Some(true) {
                 self.x += B::ONE;
             }
         }
