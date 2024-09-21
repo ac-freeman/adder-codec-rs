@@ -34,10 +34,10 @@ fn simul_proc(video_path: &str, scale: f64, thread_count: u8, _chunk_rows: usize
         output_events_filename: "".parse().unwrap(),
         output_raw_video_filename: manifest_path_str + "/benches/run/bench_out",
         scale,
-        c_thresh_pos: 0,
-        c_thresh_neg: 0,
         thread_count, // Multithreading causes some issues in testing
         time_mode: "delta_t".to_string(),
+        crf: todo!(),
+        integration_mode: todo!(),
     };
     let source: Framed<BufWriter<File>> =
         Framed::new(args.input_filename, args.color_input, args.scale)
@@ -62,8 +62,8 @@ fn simul_proc(video_path: &str, scale: f64, thread_count: u8, _chunk_rows: usize
         DeltaT,
     )
     .unwrap();
-
-    simul_processor.run().unwrap();
+    let frame_max = todo!();
+    simul_processor.run(frame_max).unwrap();
     sleep(Duration::from_secs(2));
 
     let output_path = "./benches/run/bench_out";

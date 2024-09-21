@@ -13,6 +13,7 @@ use std::error::Error;
 use std::fs::File;
 use std::io;
 use std::io::{BufWriter, Write};
+use std::path::PathBuf;
 
 use adder_codec_core::SourceCamera::FramedU8;
 use adder_codec_core::SourceType::U8;
@@ -54,7 +55,7 @@ pub struct SimulProcArgs {
 
     /// Path to input file
     #[clap(short, long, default_value = "./in.mp4")]
-    pub input_filename: String,
+    pub input_filename: PathBuf,
 
     /// Path to output events file
     #[clap(long, default_value = "")]
