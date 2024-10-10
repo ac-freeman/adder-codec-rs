@@ -663,6 +663,10 @@ impl<W: Write + 'static + std::marker::Send + std::marker::Sync + 'static> Video
 
         let tpf = self.state.params.ref_time as f64;
 
+        // TEMPORARY: Set all the pixels to white
+        self.state
+            .running_intensities.fill(255);
+
         let params = &self.state.params;
         // Important: if framing the events simultaneously, then the chunk division must be
         // exactly the same as it is for the framer
@@ -691,6 +695,7 @@ impl<W: Write + 'static + std::marker::Send + std::marker::Sync + 'static> Video
                     .zip(matrix_chunk.iter())
                     .zip(running_chunk.iter_mut())
                 {
+                    let tmp_len = buffer.len();
                     integrate_for_px(
                         px,
                         base_val,
@@ -702,23 +707,25 @@ impl<W: Write + 'static + std::marker::Send + std::marker::Sync + 'static> Video
                         &parameters,
                     );
 
-                    if let Some(event) = px.arena[0].best_event {
-                        *running = u8::get_frame_value(
-                            &event.into(),
-                            SourceType::U8,
-                            tpf,
-                            practical_d_max,
-                            self.state.params.delta_t_max,
-                            self.instantaneous_view_mode,
-                            if self.instantaneous_view_mode == SAE {
-                                Some(SaeTime {
-                                    running_t: px.running_t as DeltaT,
-                                    last_fired_t: px.last_fired_t as DeltaT,
-                                })
-                            } else {
-                                None
-                            },
-                        );
+                    if let Some(event) = px.arena[0].best_event  {
+                        if buffer.len() > tmp_len {
+                            *running = u8::get_frame_value(
+                                &event.into(),
+                                SourceType::U8,
+                                tpf,
+                                practical_d_max,
+                                self.state.params.delta_t_max,
+                                self.instantaneous_view_mode,
+                                if self.instantaneous_view_mode == SAE {
+                                    Some(SaeTime {
+                                        running_t: px.running_t as DeltaT,
+                                        last_fired_t: px.last_fired_t as DeltaT,
+                                    })
+                                } else {
+                                    None
+                                },
+                            );
+                        }
                     };
                 }
                 buffer
@@ -732,6 +739,7 @@ impl<W: Write + 'static + std::marker::Send + std::marker::Sync + 'static> Video
         }
 
         self.display_frame_features = self.state.running_intensities.clone();
+
 
         self.handle_features(&big_buffer)?;
 
