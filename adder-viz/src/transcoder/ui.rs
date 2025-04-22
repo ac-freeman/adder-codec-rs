@@ -576,7 +576,9 @@ impl TranscoderUi {
         {
             // enabled = _transcoder.davis_source.is_none();
         }
-        ui.add_enabled(enabled, egui::Label::new("Δt_ref:"));
+        ui.button("Δt_ref:").on_hover_text(
+            "The number of ticks for a standard length integration (e.g. exposure 
+             time for a framed video).");
         slider_button_down |= slider_pm(
             enabled,
             false,
@@ -585,7 +587,7 @@ impl TranscoderUi {
             1..=255,
             vec![],
             10,
-        );
+        );       
         ui.end_row();
 
         ui.label("Quality parameters:");
@@ -596,7 +598,11 @@ impl TranscoderUi {
         // ui.toggle_value(&mut ui_state.auto_quality, "Auto mode?");
         ui.end_row();
 
-        ui.label("CRF quality:");
+        ui.button("CRF Quality:").on_hover_text(
+            "Constant Rate Factor is a metaparameter that controls data rate and 
+            loss by adjusting mutiple variables. Setting a high value will produce 
+            greater loss but a lower data rate. CRF values 0, 3, 6, & 9 are 
+            lossless, high, medium, & low quality, respectively.");
         slider_button_down |= slider_pm(
             adaptive_params.auto_quality,
             false,
@@ -606,6 +612,7 @@ impl TranscoderUi {
             vec![],
             1,
         );
+        
         if adaptive_params.auto_quality
             && adaptive_params.crf_number
                 != adaptive_params
@@ -619,9 +626,15 @@ impl TranscoderUi {
                 .crf
                 .update_quality(adaptive_params.crf_number);
         }
+        //add informational hover button       
+        
         ui.end_row();
+        
 
-        ui.label("Δt_max multiplier:");
+        ui.button("Δt_max multiplier:").on_hover_text(
+            "The maximum Δt that any static event can span before an update 
+            is internally fired. Ensures static scenes are still firing events
+            from time to time.");
         slider_button_down |= slider_pm(
             !adaptive_params.auto_quality,
             false,
@@ -630,10 +643,12 @@ impl TranscoderUi {
             1..=900,
             vec![],
             1,
-        );
+        );       
         ui.end_row();
 
-        ui.label("ADU interval:");
+        ui.button("ADU interval:").on_hover_text(
+            "Determines the size of spatial regions of pixels which make up 
+            cubes that are encoded in row-major order.");
         slider_button_down |= slider_pm(
             true,
             false,
@@ -646,7 +661,9 @@ impl TranscoderUi {
         ui.end_row();
 
         let parameters = adaptive_params.encoder_options.crf.get_parameters_mut();
-        ui.label("Threshold baseline:");
+        ui.button("Threshold baseline:").on_hover_text(
+            "The value that pixel threshold values cannot be lower than. 
+            Applicable in static regions.");
         slider_button_down |= slider_pm(
             !adaptive_params.auto_quality,
             false,
@@ -655,10 +672,11 @@ impl TranscoderUi {
             0..=255,
             vec![],
             1,
-        );
+        );        
         ui.end_row();
-
-        ui.label("Threshold max:");
+        ui.button("Threshold max:").on_hover_text(
+            "The value that pixel threshold values cannot be higher than. 
+            Applicable for active regions.");
         slider_button_down |= slider_pm(
             !adaptive_params.auto_quality,
             false,
@@ -668,9 +686,16 @@ impl TranscoderUi {
             vec![],
             1,
         );
+        ui.add_space(-80.0);   
+        ui.button("Threshold?").on_hover_text(
+            "The amount of variation in intensity allowed, affecting length
+            of integration until an event queue is fired and pixel is reset.");       
+ 
         ui.end_row();
 
-        ui.label("Threshold velocity:");
+        ui.button("Threshold velocity").on_hover_text(
+            "The rate at which pixel's threshold values are updated as intensities
+            are processed.");
         slider_button_down |= slider_pm(
             !adaptive_params.auto_quality,
             false,
@@ -682,7 +707,7 @@ impl TranscoderUi {
         );
         ui.end_row();
 
-        ui.label("Feature radius:");
+        ui.button("Feature radius:");
         slider_button_down |= slider_pm(
             !adaptive_params.auto_quality,
             false,
@@ -692,7 +717,9 @@ impl TranscoderUi {
             vec![],
             1,
         );
+        //add informational hover button
         ui.end_row();
+    
 
         // ui.label("Thread count:");
         // slider_pm(
@@ -724,8 +751,8 @@ impl TranscoderUi {
             egui::Checkbox::new(&mut core_params.color, "Color?"),
         );
         ui.end_row();
-
-        ui.label("Integration mode:");
+        //TODO: Describe integration mode
+        ui.button("Integration mode:").on_hover_text("Integration mode");
         ui.horizontal(|ui| {
             ui.radio_value(
                 &mut core_params.integration_mode_radio_state,
@@ -740,7 +767,7 @@ impl TranscoderUi {
         });
         ui.end_row();
 
-        ui.label("View mode:");
+        ui.button("View mode");
         ui.vertical(|ui| {
             ui.horizontal(|ui| {
                 ui.radio_value(
@@ -768,24 +795,26 @@ impl TranscoderUi {
                 enabled,
                 egui::Checkbox::new(&mut adaptive_params.show_original, "Show original?"),
             );
-        });
+        });        
         ui.end_row();
 
-        ui.label("Time mode:");
+        ui.button("Time mode:");
         ui.add_enabled_ui(true, |ui| {
             ui.horizontal(|ui| {
                 ui.radio_value(
                     &mut core_params.time_mode,
                     TimeMode::DeltaT,
                     "Δt (time change)",
-                );
+                ).on_hover_text("measures temporal values based 
+                on previous data");
                 ui.radio_value(
                     &mut core_params.time_mode,
                     TimeMode::AbsoluteT,
                     "t (absolute time)",
-                );
+                ).on_hover_text("measures temporal values independent 
+                of previous data");
             });
-        });
+        });         
         ui.end_row();
 
         ui.label("Compression mode:");
@@ -879,8 +908,8 @@ impl TranscoderUi {
         }
 
         let enable_encoder_options = core_params.encoder_type != EncoderType::Empty;
-
-        ui.label("Event output order:");
+        //TODO: Event Output Order
+        ui.button("Event output order").on_hover_text("Event output order ");
         ui.add_enabled_ui(enable_encoder_options, |ui| {
             ui.horizontal(|ui| {
                 ui.radio_value(
@@ -894,7 +923,7 @@ impl TranscoderUi {
                     "Interleaved",
                 );
             });
-        });
+        });           
         ui.end_row();
 
         ui.label("Bandwidth limiting:");
