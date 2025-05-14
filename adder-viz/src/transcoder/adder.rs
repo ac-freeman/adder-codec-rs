@@ -1,16 +1,11 @@
 use std::error::Error;
-use std::ffi::{OsStr, OsString};
 
 #[cfg(feature = "open-cv")]
 use adder_codec_rs::transcoder::source::davis::Davis;
 use adder_codec_rs::transcoder::source::framed::Framed;
 use eframe::epaint::ColorImage;
-use egui::Color32;
-use std::fmt;
 use std::fs::File;
 use std::io::BufWriter;
-use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 #[cfg(feature = "open-cv")]
@@ -23,12 +18,11 @@ use crate::transcoder::adder::AdderTranscoderError::{
     InvalidFileType, NoFileSelected, Uninitialized,
 };
 use crate::transcoder::ui::{TranscoderInfoMsg, TranscoderState, TranscoderStateMsg};
-use crate::transcoder::{EventRateMsg, InfoUiState};
+use crate::transcoder::EventRateMsg;
 use crate::utils::prep_epaint_image;
-use crate::Images;
 use adder_codec_rs::adder_codec_core::codec::rate_controller::DEFAULT_CRF_QUALITY;
-use adder_codec_rs::adder_codec_core::SourceCamera::{DavisU8, Dvs, FramedU8};
-use adder_codec_rs::adder_codec_core::{Event, PlaneError};
+use adder_codec_rs::adder_codec_core::Event;
+use adder_codec_rs::adder_codec_core::SourceCamera::{Dvs, FramedU8};
 #[cfg(feature = "open-cv")]
 use adder_codec_rs::davis_edi_rs::util::reconstructor::ReconstructorError;
 use adder_codec_rs::transcoder::source::prophesee::Prophesee;
@@ -40,9 +34,8 @@ use adder_codec_rs::utils::cv::{calculate_quality_metrics, QualityMetrics};
 use opencv::Result;
 use thiserror::Error;
 use tokio::sync::mpsc;
-use tokio::sync::mpsc::error::{TryRecvError, TrySendError};
+use tokio::sync::mpsc::error::TrySendError;
 use tokio::sync::mpsc::Receiver;
-use video_rs_adder_dep::Frame;
 
 pub struct AdderTranscoder {
     pool: tokio::runtime::Runtime,
@@ -179,18 +172,14 @@ impl AdderTranscoder {
                     AdderTranscoderError::IoError(_) => {}
                     AdderTranscoderError::OtherError(_) => {}
                     Uninitialized => {}
-                    _ => {}
                 }
 
-                match self
+                if let Err(TrySendError::Full(..)) = self
                     .msg_tx
                     .try_send(TranscoderInfoMsg::Error(e.to_string()))
                 {
-                    Err(TrySendError::Full(..)) => {
-                        dbg!(e);
-                        eprintln!("Msg channel full");
-                    }
-                    _ => {}
+                    dbg!(e);
+                    eprintln!("Msg channel full");
                 };
             }
         }
@@ -286,14 +275,7 @@ impl AdderTranscoder {
             let res = self.core_state_update(transcoder_state).await;
             if res.is_ok() {
                 // Send a message with the plane size of the video
-                let plane = self
-                    .source
-                    .as_ref()
-                    .unwrap()
-                    .get_video_ref()
-                    .state
-                    .plane
-                    .clone();
+                let plane = self.source.as_ref().unwrap().get_video_ref().state.plane;
                 match self
                     .msg_tx
                     .try_send(TranscoderInfoMsg::Plane((plane, force_new)))
@@ -459,8 +441,8 @@ impl AdderTranscoder {
         .frame_start(current_frame)?
         .chunk_rows(1)
         .auto_time_parameters(
-            core_params.delta_t_ref as u32,
-            core_params.delta_t_max_mult * core_params.delta_t_ref as u32,
+            core_params.delta_t_ref,
+            core_params.delta_t_max_mult * core_params.delta_t_ref,
             Some(core_params.time_mode),
         )?;
 
@@ -646,7 +628,7 @@ impl AdderTranscoder {
             .map(|output_path| output_path.to_str().expect("Bad path").to_string());
 
         let mut prophesee_source: Prophesee<BufWriter<File>> = Prophesee::new(
-            core_params.delta_t_ref as u32,
+            core_params.delta_t_ref,
             core_params
                 .input_path_buf_0
                 .clone()
@@ -679,7 +661,7 @@ impl AdderTranscoder {
         }
 
         core_params.delta_t_max_mult = prophesee_source.get_video_ref().get_delta_t_max()
-            / prophesee_source.get_video_ref().state.params.ref_time as u32;
+            / prophesee_source.get_video_ref().state.params.ref_time;
 
         self.source = Some(AdderSource::Prophesee(prophesee_source));
 

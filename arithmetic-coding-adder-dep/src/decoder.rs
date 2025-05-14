@@ -104,7 +104,7 @@ where
     /// Return an iterator over the decoded symbols.
     ///
     /// The iterator will continue returning symbols until EOF is reached
-    pub fn decode_all<'a>(&'a mut self, input: &'a mut R) -> DecodeIter<M, R> {
+    pub fn decode_all<'a>(&'a mut self, input: &'a mut R) -> DecodeIter<'a, M, R> {
         DecodeIter {
             decoder: self,
             input,
@@ -245,11 +245,8 @@ where
                 self.x = (self.x - self.half()) << 1;
             }
 
-            match input.next_bit()? {
-                Some(true) => {
-                    self.x += B::ONE;
-                }
-                Some(false) | None => (),
+            if let Some(true) = input.next_bit()? {
+                self.x += B::ONE;
             }
         }
 
@@ -258,11 +255,8 @@ where
             self.high = (self.high - self.quarter()) << 1;
             self.x = (self.x - self.quarter()) << 1;
 
-            match input.next_bit()? {
-                Some(true) => {
-                    self.x += B::ONE;
-                }
-                Some(false) | None => (),
+            if input.next_bit()? == Some(true) {
+                self.x += B::ONE;
             }
         }
 
@@ -286,11 +280,8 @@ where
     fn fill(&mut self, input: &mut R) -> io::Result<()> {
         for _ in 0..self.precision {
             self.x <<= 1;
-            match input.next_bit()? {
-                Some(true) => {
-                    self.x += B::ONE;
-                }
-                Some(false) | None => (),
+            if input.next_bit()? == Some(true) {
+                self.x += B::ONE;
             }
         }
         Ok(())

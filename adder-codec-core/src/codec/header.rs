@@ -56,14 +56,14 @@ impl EventStreamHeader {
         ref_interval: u32,
         delta_t_max: u32,
         codec_version: u8,
-    ) -> EventStreamHeader {
+    ) -> Self {
         assert!(plane_size.channels > 0);
         assert!(delta_t_max > 0);
         assert!(plane_size.width > 0);
         assert!(plane_size.height > 0);
         assert!(magic == MAGIC_RAW || magic == MAGIC_COMPRESSED);
 
-        EventStreamHeader {
+        Self {
             magic,
             version: codec_version,
             endianness: 98, // 'b' in ASCII, for big-endian

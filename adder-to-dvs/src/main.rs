@@ -1,6 +1,6 @@
 use adder_codec_core::codec::CodecMetadata;
 use adder_codec_core::*;
-use chrono::{DateTime, Local};
+use chrono::Local;
 use clap::{Parser, ValueEnum};
 use ndarray::Array3;
 use serde::{Deserialize, Serialize};
@@ -11,7 +11,6 @@ use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::option::Option;
 use std::path::PathBuf;
-use std::time::Instant;
 use std::{error, io};
 use video_rs::{Encoder, EncoderSettings, Options, PixelFormat};
 
@@ -149,18 +148,18 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         //     .write(dims_str.as_ref())
         //     .expect("Could not write");
 
-        write!(output_events_writer, "% Height {}\n", meta.plane.h())?;
-        write!(output_events_writer, "% Width {}\n", meta.plane.w())?;
-        write!(output_events_writer, "% Version 2\n")?;
+        writeln!(output_events_writer, "% Height {}", meta.plane.h())?;
+        writeln!(output_events_writer, "% Width {}", meta.plane.w())?;
+        writeln!(output_events_writer, "% Version 2")?;
         // Write the date and time
         let now = Local::now();
         let date_time_str = now.format("%Y-%m-%d %H:%M:%S").to_string();
-        write!(output_events_writer, "% Date {}\n", date_time_str)?;
-        write!(output_events_writer, "% end\n")?;
+        writeln!(output_events_writer, "% Date {}", date_time_str)?;
+        writeln!(output_events_writer, "% end")?;
 
         if args.output_mode == WriteMode::Binary {
             let event_type_size: [u8; 2] = [0, 8];
-            output_events_writer.write(&event_type_size)?;
+            output_events_writer.write_all(&event_type_size)?;
         }
     }
 
@@ -434,7 +433,7 @@ fn set_instant_dvs_pixel(
     let grow_len = frame_idx as i32 - frame_count as i32 - frames.len() as i32 + 1;
 
     for _ in 0..grow_len {
-        frames.push_back(create_blank_dvs_frame(&meta)?);
+        frames.push_back(create_blank_dvs_frame(meta)?);
     }
 
     if frame_idx >= frame_count {
@@ -472,7 +471,7 @@ pub fn write_frame_to_video(
     encoder: &mut video_rs::Encoder,
     timestamp: video_rs::Time,
 ) -> Result<(), Box<dyn Error>> {
-    encoder.encode(&frame, &timestamp).map_err(|e| e.into())
+    encoder.encode(frame, &timestamp).map_err(|e| e.into())
 }
 
 fn fire_dvs_event(
@@ -502,8 +501,8 @@ fn fire_dvs_event(
         WriteMode::Binary => {
             let event = DvsEvent {
                 t: t as u32,
-                x: x as u16,
-                y: y as u16,
+                x,
+                y,
                 p: if polarity { 1 } else { 0 },
             };
 
@@ -535,7 +534,7 @@ fn write_event_binary(event: &DvsEvent, writer: &mut BufWriter<File>) -> io::Res
     let mut buffer = [0; 8];
 
     // t as u32 into the first four bytes of the buffer
-    buffer[0..4].copy_from_slice(&(event.t as u32).to_le_bytes());
+    buffer[0..4].copy_from_slice(&(event.t).to_le_bytes());
 
     let mut data: u32 = 0;
 

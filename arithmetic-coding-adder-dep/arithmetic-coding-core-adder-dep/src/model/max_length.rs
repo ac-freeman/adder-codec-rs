@@ -5,7 +5,9 @@ use std::ops::Range;
 use crate::BitStore;
 
 /// A [`Model`] is used to calculate the probability of a given symbol occuring
-/// in a sequence. The [`Model`] is used both for encoding and decoding. A
+/// in a sequence.
+///
+/// The [`Model`] is used both for encoding and decoding. A
 /// 'max-length' model has a maximum length. The compressed size of a message
 /// equal to the maximum length is larger than with a
 /// [`fixed_length::Model`](crate::fixed_length::Model), but smaller than with a

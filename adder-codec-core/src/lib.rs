@@ -396,7 +396,7 @@ pub struct EventSingle {
 
 impl From<&Event> for EventSingle {
     fn from(event: &Event) -> Self {
-        EventSingle {
+        Self {
             coord: CoordSingle {
                 x: event.coord.x,
                 y: event.coord.y,
@@ -409,7 +409,7 @@ impl From<&Event> for EventSingle {
 
 impl From<EventSingle> for Event {
     fn from(event: EventSingle) -> Self {
-        Event {
+        Self {
             coord: Coord {
                 x: event.coord.x,
                 y: event.coord.y,
@@ -511,8 +511,8 @@ pub struct EventCoordlessRelative {
     pub delta_t: DeltaT,
 }
 
-impl Into<f64> for EventCoordless {
-    fn into(self) -> f64 {
+impl From<EventCoordless> for f64 {
+    fn from(val: EventCoordless) -> Self {
         panic!("Not implemented")
     }
 }

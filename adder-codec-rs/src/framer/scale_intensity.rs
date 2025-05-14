@@ -68,7 +68,7 @@ impl FrameValue for u8 {
             FramedViewMode::Intensity => {
                 let intensity = event_to_intensity(event);
                 match source_type {
-                    SourceType::U8 => ((intensity * tpf)) as u8,
+                    SourceType::U8 => (intensity * tpf) as u8,
                     SourceType::U16 => {
                         (intensity / f64::from(u16::MAX) * tpf * f64::from(u8::MAX)) as u8
                     }
@@ -125,13 +125,11 @@ impl FrameValue for u16 {
                 let intensity = event_to_intensity(event);
                 match source_type {
                     SourceType::U8 => {
-                        (intensity / f64::from(u8::MAX) * tpf * f64::from(u16::MAX))
-                            as u16
+                        (intensity / f64::from(u8::MAX) * tpf * f64::from(u16::MAX)) as u16
                     }
                     SourceType::U16 => (intensity * tpf) as u16,
                     SourceType::U32 => {
-                        (intensity / f64::from(u32::MAX) * tpf * f64::from(u16::MAX))
-                            as u16
+                        (intensity / f64::from(u32::MAX) * tpf * f64::from(u16::MAX)) as u16
                     }
                     SourceType::U64 => {
                         (intensity / u64::MAX as f64 * tpf * f64::from(u16::MAX)) as u16
@@ -178,12 +176,10 @@ impl FrameValue for u32 {
                 let intensity = event_to_intensity(event);
                 match source_type {
                     SourceType::U8 => {
-                        (intensity / f64::from(u8::MAX) * tpf * f64::from(u32::MAX))
-                            as u32
+                        (intensity / f64::from(u8::MAX) * tpf * f64::from(u32::MAX)) as u32
                     }
                     SourceType::U16 => {
-                        (intensity / f64::from(u16::MAX) * tpf * f64::from(u32::MAX))
-                            as u32
+                        (intensity / f64::from(u16::MAX) * tpf * f64::from(u32::MAX)) as u32
                     }
                     SourceType::U32 => (intensity * tpf) as u32,
                     SourceType::U64 => {

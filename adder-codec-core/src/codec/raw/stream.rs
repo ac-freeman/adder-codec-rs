@@ -76,7 +76,7 @@ impl<W: Write + std::marker::Send + std::marker::Sync + 'static> WriteCompressio
     }
 
     // If `self.writer` is a `BufWriter`, you'll need to flush it yourself after this.
-    fn into_writer(&mut self) -> Option<W> {
+    fn into_writer(mut self) -> Option<W> {
         let eof = Event {
             coord: Coord {
                 x: EOF_PX_ADDRESS,

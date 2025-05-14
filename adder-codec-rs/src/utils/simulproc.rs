@@ -6,7 +6,6 @@ use crate::transcoder::source::framed::Framed;
 use crate::transcoder::source::video::Source;
 use adder_codec_core::DeltaT;
 use clap::Parser;
-use rayon::ThreadPool;
 use serde::Serialize;
 use std::cmp::max;
 use std::error::Error;
@@ -119,7 +118,7 @@ impl<W: Write + std::marker::Send + std::marker::Sync + 'static> SimulProcessor<
         num_threads: usize,
         codec_version: u8,
         time_mode: TimeMode,
-    ) -> Result<SimulProcessor<W>, Box<dyn Error>>
+    ) -> Result<Self, Box<dyn Error>>
     where
         T: Clone
             + std::marker::Sync
@@ -218,7 +217,7 @@ impl<W: Write + std::marker::Send + std::marker::Sync + 'static> SimulProcessor<
             }
         });
 
-        Ok(SimulProcessor {
+        Ok(Self {
             source,
             thread_pool: thread_pool_transcoder,
             events_tx,

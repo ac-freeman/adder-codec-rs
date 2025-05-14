@@ -44,7 +44,7 @@ impl<W: std::io::Write + std::marker::Send + std::marker::Sync + 'static> WriteC
         Ok(())
     }
 
-    fn into_writer(&mut self) -> Option<W> {
+    fn into_writer(self) -> Option<W> {
         None
     }
 
