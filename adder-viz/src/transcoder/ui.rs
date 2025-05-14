@@ -632,9 +632,8 @@ impl TranscoderUi {
         
 
         ui.button("Δt_max multiplier:").on_hover_text(
-            "The maximum Δt that any static event can span before an update 
-            is internally fired. Ensures static scenes are still firing events
-            from time to time.");
+            "The maximum Δt that an event can span before the first update 
+            is internally fired.");
         slider_button_down |= slider_pm(
             !adaptive_params.auto_quality,
             false,
@@ -647,8 +646,7 @@ impl TranscoderUi {
         ui.end_row();
 
         ui.button("ADU interval:").on_hover_text(
-            "Determines the size of spatial regions of pixels which make up 
-            cubes that are encoded in row-major order.");
+            "The number of Δt_ref intervals spanned by an ADU when compression is enabled.");
         slider_button_down |= slider_pm(
             true,
             false,
@@ -662,8 +660,7 @@ impl TranscoderUi {
 
         let parameters = adaptive_params.encoder_options.crf.get_parameters_mut();
         ui.button("Threshold baseline:").on_hover_text(
-            "The value that pixel threshold values cannot be lower than. 
-            Applicable in static regions.");
+            "Default contrast threshold.");
         slider_button_down |= slider_pm(
             !adaptive_params.auto_quality,
             false,
@@ -675,8 +672,7 @@ impl TranscoderUi {
         );        
         ui.end_row();
         ui.button("Threshold max:").on_hover_text(
-            "The value that pixel threshold values cannot be higher than. 
-            Applicable for active regions.");
+            "Maximum contrast threshold.");
         slider_button_down |= slider_pm(
             !adaptive_params.auto_quality,
             false,
@@ -694,8 +690,7 @@ impl TranscoderUi {
         ui.end_row();
 
         ui.button("Threshold velocity").on_hover_text(
-            "The rate at which pixel's threshold values are updated as intensities
-            are processed.");
+            "The frequency at which pixels' threshold values increase.");
         slider_button_down |= slider_pm(
             !adaptive_params.auto_quality,
             false,
