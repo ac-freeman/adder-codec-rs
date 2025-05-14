@@ -249,7 +249,7 @@ impl<R: Read + Seek> Decoder<R> {
             reader.seek_bits(SeekFrom::End(
                 i * self.input.meta().plane.volume() as i64 * 8,
             ))?;
-            if let Err(CodecError::Eof) = self.digest_event(reader) {
+            if matches!(self.digest_event(reader), Err(CodecError::Eof)) {
                 break;
             }
         }

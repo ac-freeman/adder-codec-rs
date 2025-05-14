@@ -56,7 +56,7 @@ impl Crf {
     pub fn new(crf: Option<u8>, plane: PlaneSize) -> Self {
         let default_crf = crf.unwrap_or(DEFAULT_CRF_QUALITY);
 
-        Crf {
+        Self {
             crf_quality: crf,
             plane,
             parameters: CrfParameters {

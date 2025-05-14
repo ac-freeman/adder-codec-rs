@@ -5,7 +5,9 @@ use std::ops::Range;
 use crate::BitStore;
 
 /// A [`Model`] is used to calculate the probability of a given symbol occuring
-/// in a sequence. The [`Model`] is used both for encoding and decoding. A
+/// in a sequence.
+///
+/// The [`Model`] is used both for encoding and decoding. A
 /// 'fixed-length' model always expects an exact number of symbols, and so does
 /// not need to encode an EOF symbol.
 ///

@@ -12,9 +12,9 @@ env:
 jobs:
   check_and_test_ubuntu:
     name: Check and test on Ubuntu
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - name: Add public keys
         run: sudo apt-get update && sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 40976EAF437D05B5 &&
           sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 3B4FE6ACC0B21F32
@@ -26,10 +26,10 @@ jobs:
           override: true
 
       - name: Install AV dependencies
-        run: sudo apt-get install -y --fix-missing libgdal26 libodbc1 libssl-dev alsa-utils libasound2-dev portaudio19-dev build-essential libpulse-dev libdbus-1-dev libudev-dev libatk1.0-dev libgtk-3-dev libavfilter-dev libavdevice-dev
+        run: sudo apt-get install -y --fix-missing libodbccr2 libodbc2 libssl-dev alsa-utils libasound2-dev portaudio19-dev build-essential libpulse-dev libdbus-1-dev libudev-dev libatk1.0-dev libgtk-3-dev libavfilter-dev libavdevice-dev
 
       - name: Clang
-        run: sudo apt-get install -y clang && sudo ln -s libclang.so.1 /usr/lib/llvm-10/lib/libclang.so
+        run: sudo bash -c "$(wget -O - https://apt.llvm.org/llvm.sh)"
 
       - name: Install alsa and udev
         run: sudo apt-get update; sudo apt-get install -y --no-install-recommends libasound2-dev libudev-dev
@@ -56,13 +56,10 @@ jobs:
     env:
       OPENCV_VERSION: 4.6.0
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: nightly
-          override: true
+        uses: dtolnay/rust-toolchain@nightly
 
       - name: Install LLVM/clang
         run: choco install -y llvm

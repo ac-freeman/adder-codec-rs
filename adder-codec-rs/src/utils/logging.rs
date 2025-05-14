@@ -1,4 +1,3 @@
-
 use adder_codec_core::Coord;
 use opencv::core::KeyPoint;
 use serde::ser::SerializeStruct;

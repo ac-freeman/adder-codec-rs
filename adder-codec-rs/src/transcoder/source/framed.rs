@@ -11,13 +11,11 @@ use crate::utils::cv::handle_color;
 #[cfg(feature = "feature-logging")]
 use crate::utils::cv::{calculate_quality_metrics, QualityMetrics};
 
-use rayon::ThreadPool;
 use std::io::Write;
 use std::path::PathBuf;
 
 #[cfg(feature = "feature-logging")]
 use chrono::Local;
-use tokio::runtime::Runtime;
 use video_rs_adder_dep::{self, Decoder, Frame, Locator, Options, Resize};
 
 /// Attributes of a framed video -> ADΔER transcode

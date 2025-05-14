@@ -845,8 +845,6 @@ impl<'a> Widget for NotchedSlider<'a> {
 // Logarithmic sliders are allowed to include zero and infinity,
 // even though mathematically it doesn't make sense.
 
-use std::f64::INFINITY;
-
 /// When the user asks for an infinitely large range (e.g. logarithmic from zero),
 /// give a scale that this many orders of magnitude in size.
 const INF_RANGE_MAGNITUDE: f64 = 10.0;
@@ -953,7 +951,7 @@ fn range_log10(min: f64, max: f64, spec: &SliderSpec) -> (f64, f64) {
     assert!(spec.logarithmic);
     assert!(min <= max);
 
-    if min == 0.0 && max == INFINITY {
+    if min == 0.0 && max == f64::INFINITY {
         (spec.smallest_positive.log10(), INF_RANGE_MAGNITUDE)
     } else if min == 0.0 {
         if spec.smallest_positive < max {
@@ -961,7 +959,7 @@ fn range_log10(min: f64, max: f64, spec: &SliderSpec) -> (f64, f64) {
         } else {
             (max.log10() - INF_RANGE_MAGNITUDE, max.log10())
         }
-    } else if max == INFINITY {
+    } else if max == f64::INFINITY {
         if min < spec.largest_finite {
             (min.log10(), spec.largest_finite.log10())
         } else {
@@ -977,12 +975,12 @@ fn range_log10(min: f64, max: f64, spec: &SliderSpec) -> (f64, f64) {
 fn logaritmic_zero_cutoff(min: f64, max: f64) -> f64 {
     assert!(min < 0.0 && 0.0 < max);
 
-    let min_magnitude = if min == -INFINITY {
+    let min_magnitude = if min == -f64::INFINITY {
         INF_RANGE_MAGNITUDE
     } else {
         min.abs().log10().abs()
     };
-    let max_magnitude = if max == INFINITY {
+    let max_magnitude = if max == f64::INFINITY {
         INF_RANGE_MAGNITUDE
     } else {
         max.log10().abs()

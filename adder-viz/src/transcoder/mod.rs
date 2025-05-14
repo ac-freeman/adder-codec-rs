@@ -8,7 +8,6 @@ use adder_codec_rs::transcoder::source::video::FramedViewMode;
 use adder_codec_rs::utils::viz::ShowFeatureMode;
 use std::collections::VecDeque;
 use std::path::PathBuf;
-use tokio::sync::Mutex;
 
 pub mod adder;
 pub mod ui;
