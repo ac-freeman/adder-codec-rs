@@ -366,6 +366,14 @@ impl AdderTranscoder {
             .get_video_mut()
             .update_encoder_options(params.encoder_options);
 
+        // If the source is a DAVIS type, then update those parameters
+        #[cfg(feature = "open-cv")]
+        if let AdderSource::Davis(davis) = source {
+            eprintln!("Change optimize c");
+            let tmp = davis.get_reconstructor_mut().as_mut().unwrap();
+            tmp.set_optimize_c(params.optimize_c, params.optimize_c_frequency);
+        }
+
         Ok(())
     }
 

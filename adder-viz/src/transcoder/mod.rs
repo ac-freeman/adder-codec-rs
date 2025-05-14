@@ -87,7 +87,7 @@ impl Default for AdaptiveParams {
             show_features: ShowFeatureMode::Off,
             feature_rate_adjustment: false,
             feature_cluster: false,
-            optimize_c: false,
+            optimize_c: true,
             optimize_c_frequency: 10,
         }
     }

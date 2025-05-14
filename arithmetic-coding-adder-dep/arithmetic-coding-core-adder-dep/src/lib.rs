@@ -2,7 +2,6 @@
 
 #![deny(missing_docs, clippy::all, missing_debug_implementations)]
 #![warn(clippy::pedantic)]
-#![feature(associated_type_defaults)]
 
 mod bitstore;
 pub use bitstore::BitStore;
