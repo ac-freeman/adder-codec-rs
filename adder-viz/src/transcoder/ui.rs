@@ -600,7 +600,7 @@ impl TranscoderUi {
 
         ui.button("CRF Quality:").on_hover_text(
             "Constant Rate Factor is a metaparameter that controls data rate and 
-            loss by adjusting mutiple variables. Setting a high value will produce 
+            loss by adjusting multiple variables. Setting a high value will produce 
             greater loss but a lower data rate. CRF values 0, 3, 6, & 9 are 
             lossless, high, medium, & low quality, respectively.");
         slider_button_down |= slider_pm(
