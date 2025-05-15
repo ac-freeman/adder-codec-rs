@@ -69,6 +69,7 @@ impl TranscoderUi {
         let (tx, rx) = mpsc::channel(5);
         let (msg_tx, msg_rx) = mpsc::channel(30);
 
+
         let mut transcoder_ui = TranscoderUi {
             transcoder_state: Default::default(),
             transcoder_state_last_sent: Default::default(),
@@ -115,6 +116,10 @@ impl TranscoderUi {
     pub fn update(&mut self, ctx: &egui::Context) {
         // Store a copy of the params to compare against later
         let old_params = self.transcoder_state_last_sent.clone();
+
+        let mut style = (*ctx.style()).clone(); // Clone the current style
+        style.interaction.tooltip_delay = 0.05;
+        ctx.set_style(style);
 
         // Collect dropped files
         self.handle_file_drop(ctx);
@@ -484,9 +489,15 @@ impl TranscoderUi {
         {
             // enabled = _transcoder.davis_source.is_none();
         }
-        ui.button("Δt_ref:").on_hover_text(
-            "The number of ticks for a standard length integration (e.g. exposure 
-             time for a framed video).");
+        // ui.label("Δt_ref:").on_hover_text(
+        //     "The number of ticks for a standard length integration (e.g. exposure
+        //      time for a framed video).");
+        label_with_help_cursor(
+            ui,
+            "Δt_ref:",
+            Some("The number of ticks for a standard length integration (e.g. exposure
+             time for a framed video)."),
+        );
         slider_button_down |= slider_pm(
             enabled,
             false,
@@ -953,5 +964,15 @@ impl TranscoderUi {
         ui.end_row();
 
         self.slider_button_down = slider_button_down;
+    }
+}
+
+fn label_with_help_cursor(ui: &mut egui::Ui, text: &str, hover_text: Option<&str>) {
+    let label = ui.label(text);
+    if let Some(hover) = hover_text {
+        if label.hovered() {
+            ui.ctx().set_cursor_icon(egui::CursorIcon::Help);
+        }
+        label.on_hover_text(hover);
     }
 }

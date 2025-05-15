@@ -54,8 +54,8 @@ impl EventAdu {
         dt_ref: DeltaT,
         num_intervals: usize,
     ) -> Self {
-        let blocks_y = (plane.h_usize() + BLOCK_SIZE - 1) / BLOCK_SIZE;
-        let blocks_x = (plane.w_usize() + BLOCK_SIZE - 1) / BLOCK_SIZE;
+        let blocks_y = plane.h_usize().div_ceil(BLOCK_SIZE);
+        let blocks_x = plane.w_usize().div_ceil(BLOCK_SIZE);
 
         Self {
             event_cubes: Array2::from_shape_fn((blocks_y, blocks_x), |(y, x)| {

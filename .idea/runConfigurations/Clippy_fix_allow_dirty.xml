@@ -1,6 +1,6 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="Clippy" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
-    <option name="command" value="clippy --all-targets --features &quot;compression open-cv feature-logging&quot; --fix" />
+  <configuration default="false" name="Clippy fix allow dirty" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
+    <option name="command" value="clippy --all-targets --features &quot;compression open-cv feature-logging&quot; --fix --allow-dirty" />
     <option name="workingDirectory" value="file://$PROJECT_DIR$" />
     <envs />
     <option name="emulateTerminal" value="false" />

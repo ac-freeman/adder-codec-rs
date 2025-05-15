@@ -3,7 +3,7 @@ use crate::codec::compressed::source_model::cabac_contexts::Contexts;
 use crate::codec::CodecError;
 use crate::{AbsoluteT, Event};
 use arithmetic_coding_adder_dep::{Decoder, Encoder};
-use bitstream_io::{BitWriter, BitWrite, BigEndian, BitReader};
+use bitstream_io::{BitWriter, BigEndian, BitReader};
 use std::io::Cursor;
 
 pub trait HandleEvent {
