@@ -139,8 +139,8 @@ pub fn is_feature(
             let vt = candidate - INTENSITY_THRESHOLD;
             let mut count = 0;
 
-            for k in 0..16 {
-                let x = *ptr.offset((y + CIRCLE3[k][1]) * width + (x + CIRCLE3[k][0]) * c) as i16;
+            for [a, b] in CIRCLE3 {
+                let x = *ptr.offset((y + b) * width + (x + a) * c) as i16;
                 if x < vt {
                     count += 1;
                     if count == STREAK_SIZE {
@@ -173,8 +173,8 @@ pub fn is_feature(
             // It's a bright streak
             let vt = candidate + INTENSITY_THRESHOLD;
             let mut count = 0;
-            for k in 0..16 {
-                let x = *ptr.offset((y + CIRCLE3[k][1]) * width + (x + CIRCLE3[k][0]) * c) as i16;
+            for [a, b] in CIRCLE3 {
+                let x = *ptr.offset((y + b) * width + (x + a) * c) as i16;
                 if x > vt {
                     count += 1;
                     if count == STREAK_SIZE {

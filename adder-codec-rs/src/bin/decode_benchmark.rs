@@ -1,6 +1,6 @@
-use adder_codec_core::*;
+use adder_codec_core::open_file_decoder;
 use clap::Parser;
-use std::{error, io};
+use std::error;
 
 /// Command line argument parser
 #[derive(Parser, Debug, Default)]
@@ -26,7 +26,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let data = vec![0_u32; meta.plane.volume()];
 
     let start_time = std::time::Instant::now();
-    while let Ok(_) = stream.digest_event(&mut bitreader) {}
+    while stream.digest_event(&mut bitreader).is_ok() {}
     let duration = start_time.elapsed();
     println!("Time to digest all events: {:?}", duration);
 

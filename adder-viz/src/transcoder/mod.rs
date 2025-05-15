@@ -8,7 +8,6 @@ use adder_codec_rs::transcoder::source::video::FramedViewMode;
 use adder_codec_rs::utils::viz::ShowFeatureMode;
 use std::collections::VecDeque;
 use std::path::PathBuf;
-use tokio::sync::Mutex;
 
 pub mod adder;
 pub mod ui;
@@ -88,7 +87,7 @@ impl Default for AdaptiveParams {
             show_features: ShowFeatureMode::Off,
             feature_rate_adjustment: false,
             feature_cluster: false,
-            optimize_c: false,
+            optimize_c: true,
             optimize_c_frequency: 10,
         }
     }

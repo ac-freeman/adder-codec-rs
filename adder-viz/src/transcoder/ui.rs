@@ -1,26 +1,22 @@
-use adder_codec_rs::adder_codec_core::codec::rate_controller::{Crf, CRF, DEFAULT_CRF_QUALITY};
-use adder_codec_rs::adder_codec_core::codec::{EncoderOptions, EncoderType, EventDrop, EventOrder};
+use adder_codec_rs::adder_codec_core::codec::rate_controller::{CRF, DEFAULT_CRF_QUALITY};
+use adder_codec_rs::adder_codec_core::codec::{EncoderType, EventDrop, EventOrder};
 use adder_codec_rs::adder_codec_core::{PixelMultiMode, PlaneSize, TimeMode};
 #[cfg(feature = "open-cv")]
 use adder_codec_rs::transcoder::source::davis::TranscoderMode;
 use adder_codec_rs::transcoder::source::video::FramedViewMode;
 use adder_codec_rs::utils::cv::QualityMetrics;
 use adder_codec_rs::utils::viz::ShowFeatureMode;
-use eframe::epaint::{ColorImage, ImageDelta};
-use egui::epaint::TextureManager;
-use egui::{ImageSource, TextureOptions, Vec2b};
+use eframe::epaint::ColorImage;
+use egui::Vec2b;
 use egui_plot::Corner::LeftTop;
 use egui_plot::{Legend, Plot};
-use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc;
-use tokio::sync::mpsc::error::TryRecvError;
 use tokio::sync::mpsc::Sender;
 // use crate::transcoder::adder::{replace_adder_transcoder, AdderTranscoder};
 // use crate::utils::prep_bevy_image;
 use crate::transcoder::adder::AdderTranscoder;
 use crate::transcoder::{AdaptiveParams, CoreParams, EventRateMsg, InfoParams, InfoUiState};
-use crate::{App, Images, TabState, Tabs};
+use crate::TabState;
 // #[cfg(feature = "open-cv")]
 // use adder_codec_rs::transcoder::source::davis::TranscoderMode;
 // use adder_codec_rs::transcoder::source::video::{FramedViewMode, Source, SourceError};
@@ -28,7 +24,7 @@ use crate::{App, Images, TabState, Tabs};
 // use std::collections::VecDeque;
 // use std::error::Error;
 //
-use crate::utils::{slider_pm, PlotY};
+use crate::utils::slider_pm;
 // use adder_codec_rs::adder_codec_core::codec::rate_controller::{Crf, CRF, DEFAULT_CRF_QUALITY};
 // use adder_codec_rs::adder_codec_core::codec::{EncoderOptions, EncoderType, EventDrop, EventOrder};
 // use adder_codec_rs::adder_codec_core::TimeMode;
@@ -153,8 +149,8 @@ pub struct TranscoderUi {
 
 impl TranscoderUi {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
-        let (tx, mut rx) = mpsc::channel(5);
-        let (msg_tx, mut msg_rx) = mpsc::channel(30);
+        let (tx, rx) = mpsc::channel(5);
+        let (msg_tx, msg_rx) = mpsc::channel(30);
 
         let mut transcoder_ui = TranscoderUi {
             transcoder_state: Default::default(),
@@ -222,58 +218,53 @@ impl TranscoderUi {
     }
 
     fn handle_info_messages(&mut self) {
-        loop {
-            match self.msg_rx.try_recv() {
-                Ok(message) => match message {
-                    TranscoderInfoMsg::QualityMetrics(metrics) => self.handle_metrics(metrics),
-                    TranscoderInfoMsg::Error(error_string) => {
-                        self.info_ui_state.error_string = Some(error_string);
-                    }
-                    TranscoderInfoMsg::EventRateMsg(msg) => {
-                        self.info_ui_state.total_events = msg.total_events;
-                        self.info_ui_state.events_per_sec = msg.events_per_sec;
-                        self.info_ui_state.events_ppc_total = msg.events_ppc_total;
-                        self.info_ui_state.events_ppc_per_sec = msg.events_ppc_per_sec;
-                        self.info_ui_state.transcoded_fps = msg.transcoded_fps;
+        while let Ok(message) = self.msg_rx.try_recv() {
+            match message {
+                TranscoderInfoMsg::QualityMetrics(metrics) => self.handle_metrics(metrics),
+                TranscoderInfoMsg::Error(error_string) => {
+                    self.info_ui_state.error_string = Some(error_string);
+                }
+                TranscoderInfoMsg::EventRateMsg(msg) => {
+                    self.info_ui_state.total_events = msg.total_events;
+                    self.info_ui_state.events_per_sec = msg.events_per_sec;
+                    self.info_ui_state.events_ppc_total = msg.events_ppc_total;
+                    self.info_ui_state.events_ppc_per_sec = msg.events_ppc_per_sec;
+                    self.info_ui_state.transcoded_fps = msg.transcoded_fps;
 
-                        #[rustfmt::skip]
+                    #[rustfmt::skip]
                         let event_size = if self.transcoder_state.core_params.color { 11} else {9};
 
-                        let bitrate = self.info_ui_state.events_ppc_per_sec
-                            * event_size as f64
-                            * msg.num_pixels as f64
-                            / 1024.0
-                            / 1024.0; // transcoded raw in megabytes per sec
-                        self.info_ui_state
-                            .plot_points_raw_adder_bitrate_y
-                            .update(Some(bitrate));
+                    let bitrate = self.info_ui_state.events_ppc_per_sec
+                        * event_size as f64
+                        * msg.num_pixels as f64
+                        / 1024.0
+                        / 1024.0; // transcoded raw in megabytes per sec
+                    self.info_ui_state
+                        .plot_points_raw_adder_bitrate_y
+                        .update(Some(bitrate));
 
-                        let raw_source_bitrate = msg.running_input_bitrate / 8.0 / 1024.0 / 1024.0; // source in megabytes per sec
-                        self.info_ui_state
-                            .plot_points_raw_source_bitrate_y
-                            .update(Some(raw_source_bitrate));
+                    let raw_source_bitrate = msg.running_input_bitrate / 8.0 / 1024.0 / 1024.0; // source in megabytes per sec
+                    self.info_ui_state
+                        .plot_points_raw_source_bitrate_y
+                        .update(Some(raw_source_bitrate));
+                }
+                TranscoderInfoMsg::Plane((plane, finish)) => {
+                    // Received when we have created a new video
+                    if finish {
+                        self.transcoder_state.core_params.output_path = None;
                     }
-                    TranscoderInfoMsg::Plane((plane, finish)) => {
-                        // Received when we have created a new video
-                        if finish {
-                            self.transcoder_state.core_params.output_path = None;
-                        }
+                    self.transcoder_state
+                        .adaptive_params
+                        .encoder_options
+                        .crf
+                        .plane = plane;
+                    if self.transcoder_state.adaptive_params.auto_quality {
                         self.transcoder_state
                             .adaptive_params
                             .encoder_options
                             .crf
-                            .plane = plane;
-                        if self.transcoder_state.adaptive_params.auto_quality {
-                            self.transcoder_state
-                                .adaptive_params
-                                .encoder_options
-                                .crf
-                                .update_quality(self.transcoder_state.adaptive_params.crf_number);
-                        }
+                            .update_quality(self.transcoder_state.adaptive_params.crf_number);
                     }
-                },
-                Err(_) => {
-                    break;
                 }
             }
         }
@@ -363,7 +354,7 @@ impl TranscoderUi {
             self.info_ui_state
                 .error_string
                 .as_ref()
-                .unwrap_or(&"".to_string()),
+                .unwrap_or(&String::new()),
         );
         ui.horizontal(|ui| {
             if ui.button("Open file").clicked() {
@@ -373,7 +364,7 @@ impl TranscoderUi {
                     .add_filter("Prophesee video", &["dat"])
                     .pick_file()
                 {
-                    eprintln!("Updating input path: {:?}", path);
+                    eprintln!("Updating input path: {path:?}");
                     self.transcoder_state.core_params.input_path_buf_0 = Some(path.clone());
                 }
             }
@@ -516,7 +507,7 @@ impl TranscoderUi {
 
         let mut avail_size = ui.available_size();
         if self.transcoder_state.adaptive_params.show_original {
-            avail_size.x = avail_size.x / 2.0;
+            avail_size.x /= 2.0;
         }
         // let images = images.lock().unwrap();
 

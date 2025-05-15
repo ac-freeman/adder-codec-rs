@@ -1,13 +1,11 @@
-use adder_codec_core::codec::rate_controller::{Crf, DEFAULT_CRF_QUALITY};
+use adder_codec_core::codec::rate_controller::Crf;
 use adder_codec_core::codec::{EncoderOptions, EncoderType};
 use adder_codec_core::SourceCamera::Dvs;
-use adder_codec_core::{PixelMultiMode, PlaneSize, TimeMode};
+use adder_codec_core::{PixelMultiMode, TimeMode};
 use adder_codec_rs::transcoder::source::prophesee::Prophesee;
 use adder_codec_rs::transcoder::source::video::{Source, SourceError, VideoBuilder};
-use adder_codec_rs::utils::simulproc::SimulProcArgs;
 use adder_codec_rs::utils::viz::ShowFeatureMode;
 use clap::Parser;
-use rayon::current_num_threads;
 use std::fs::File;
 use std::io::BufWriter;
 
@@ -44,7 +42,7 @@ pub struct MyArgs {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mut args: MyArgs = MyArgs::parse();
+    let args: MyArgs = MyArgs::parse();
 
     let mut prophesee_source: Prophesee<BufWriter<File>> =
         Prophesee::new(args.ref_time, args.input)?.crf(args.crf);
@@ -89,7 +87,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             Ok(_) => {}
             Err(SourceError::Open) => return Ok(()),
             Err(e) => {
-                eprintln!("Consume Error: {:?}", e);
+                eprintln!("Consume Error: {e:?}");
                 prophesee_source.get_video_mut().end_write_stream()?;
                 return Ok(());
             }

@@ -24,7 +24,7 @@ pub const D_RESIDUAL_OFFSET: i16 = 255;
 pub const BITSHIFT_ENCODE_FULL: u8 = 15;
 
 impl Contexts {
-    pub fn new(source_model: &mut FenwickModel, dt_ref: DeltaT) -> Contexts {
+    pub fn new(source_model: &mut FenwickModel, dt_ref: DeltaT) -> Self {
         let d_context = source_model.push_context_with_weights(d_residual_default_weights());
 
         // TODO: Configure this based on the delta_t_max parameter!!
@@ -36,7 +36,7 @@ impl Contexts {
         let bitshift_context =
             source_model.push_context_with_weights(Weights::new_with_counts(16, &[1; 16]));
 
-        Contexts {
+        Self {
             d_context,
             t_context,
             t_residual_max,

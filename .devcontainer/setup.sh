@@ -1,4 +1,5 @@
 rustup install nightly
+rustup component add clippy
 sudo apt-get update && sudo apt-get install -y \
     clang \
     libavdevice-dev \

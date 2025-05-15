@@ -1,5 +1,4 @@
-use arithmetic_coding_adder_dep::{Model};
-
+use arithmetic_coding_adder_dep::Model;
 
 pub fn round_trip<M>(model: M, input: &[M::Symbol])
 where

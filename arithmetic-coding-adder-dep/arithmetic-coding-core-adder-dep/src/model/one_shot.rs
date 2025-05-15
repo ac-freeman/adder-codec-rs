@@ -6,7 +6,9 @@ pub use crate::fixed_length::Wrapper;
 use crate::{fixed_length, BitStore};
 
 /// A [`Model`] is used to calculate the probability of a given symbol occuring
-/// in a sequence. The [`Model`] is used both for encoding and decoding. A
+/// in a sequence.
+///
+/// The [`Model`] is used both for encoding and decoding. A
 /// 'fixed-length' model always expects an exact number of symbols, and so does
 /// not need to encode an EOF symbol.
 ///
@@ -67,7 +69,7 @@ pub trait Model {
     type ValueError: std::error::Error;
 
     /// The internal representation to use for storing integers
-    type B: BitStore = u32;
+    type B: BitStore;
 
     /// Given a symbol, return an interval representing the probability of that
     /// symbol occurring.

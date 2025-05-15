@@ -3,19 +3,11 @@ mod transcoder;
 mod utils;
 
 use crate::player::ui::PlayerUi;
-use crate::transcoder::adder::AdderTranscoder;
-use crate::transcoder::ui::{TranscoderState, TranscoderStateMsg, TranscoderUi};
-use crate::utils::slider::NotchedSlider;
-use crate::Tabs::Player;
+use crate::transcoder::ui::TranscoderUi;
 use eframe::egui;
-use egui::{ColorImage, Response, Ui, Widget, WidgetText};
-use std::ops::RangeInclusive;
-use std::sync::Arc;
+use egui::{ColorImage, Ui, Widget, WidgetText};
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
-use tokio::sync::broadcast;
-use tokio::sync::mpsc;
-use tokio::sync::mpsc::Sender;
 
 fn main() {
     let native_options = eframe::NativeOptions::default();
@@ -44,15 +36,13 @@ impl App {
             ..Default::default()
         });
 
-        let mut app = App {
+        Self {
             view: Default::default(),
             error_msg: None,
 
             transcoder_ui: TranscoderUi::new(cc),
             player_ui: PlayerUi::new(cc),
-        };
-
-        app
+        }
     }
 }
 

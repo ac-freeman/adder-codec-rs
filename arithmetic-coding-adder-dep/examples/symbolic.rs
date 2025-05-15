@@ -1,4 +1,3 @@
-#![feature(exclusive_range_pattern)]
 #![feature(never_type)]
 
 use std::ops::Range;

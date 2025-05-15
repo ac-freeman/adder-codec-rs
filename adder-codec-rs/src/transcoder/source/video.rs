@@ -40,7 +40,6 @@ use ndarray::{Array, Array3, Axis, ShapeError};
 use rayon::iter::IndexedParallelIterator;
 use rayon::iter::IntoParallelIterator;
 use rayon::iter::ParallelIterator;
-use rayon::ThreadPool;
 
 use crate::transcoder::source::video::FramedViewMode::SAE;
 use crate::utils::cv::is_feature;
@@ -785,7 +784,7 @@ impl<W: Write + 'static + std::marker::Send + std::marker::Sync + 'static> Video
                     };
 
                     px.arena[0].set_d(d_start);
-                    px.base_val = *frame_val as u8;
+                    px.base_val = *frame_val;
                 }
             });
     }
@@ -1085,7 +1084,7 @@ impl<W: Write + 'static + std::marker::Send + std::marker::Sync + 'static> Video
 
     fn cluster(&mut self, set: &HashSet<[u16; 2]>) {
         let points: Vec<[f32; 2]> = set
-            .into_iter()
+            .iter()
             .map(|coord| [coord[0] as f32, coord[1] as f32])
             .collect();
         let tree: KdTree<f32, 2> = (&points).into();
@@ -1275,7 +1274,7 @@ impl<W: Write + 'static + std::marker::Send + std::marker::Sync + 'static> Video
 /// * `px`: the pixel to integrate
 /// * `base_val`: holder for the base intensity value of the pixel
 /// * `frame_val`: the intensity value, normalized to a fixed-length period defined by `ref_time`.
-/// Used for determining if the pixel must pop its events.
+///   Used for determining if the pixel must pop its events.
 /// * `intensity`: the intensity to integrate
 /// * `time_spanned`: the time spanned by the intensity value
 /// * `buffer`: the buffer to push events to
@@ -1286,19 +1285,20 @@ impl<W: Write + 'static + std::marker::Send + std::marker::Sync + 'static> Video
 pub fn integrate_for_px(
     px: &mut PixelArena,
     base_val: &mut u8,
-    mut frame_val: u8,
-    mut intensity: Intensity32,
+    frame_val: u8,
+    intensity: Intensity32,
     time_spanned: f32,
     buffer: &mut Vec<Event>,
     params: &VideoStateParams,
     parameters: &CrfParameters,
 ) -> bool {
     let _start_len = buffer.len();
-    let mut grew_buffer = false;
-    if px.need_to_pop_top {
+    let mut grew_buffer = if px.need_to_pop_top {
         buffer.push(px.pop_top_event(intensity, params.pixel_tree_mode, params.ref_time));
-        grew_buffer = true;
-    }
+        true
+    } else {
+        false
+    };
 
     *base_val = px.base_val;
 
@@ -1317,10 +1317,9 @@ pub fn integrate_for_px(
         px.base_val = frame_val;
 
         // If continuous mode and the D value needs to be different now
-        if let Continuous = params.pixel_tree_mode {
-            match px.set_d_for_continuous(intensity, params.ref_time) {
-                None => {}
-                Some(event) => buffer.push(event),
+        if params.pixel_tree_mode == Continuous {
+            if let Some(event) = px.set_d_for_continuous(intensity, params.ref_time) {
+                buffer.push(event)
             };
         }
     }
