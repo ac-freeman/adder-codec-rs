@@ -2,9 +2,10 @@ use crate::transcoder::adder::AdderTranscoder;
 use crate::transcoder::{AdaptiveParams, CoreParams, EventRateMsg, InfoParams, InfoUiState};
 use crate::utils::slider_pm;
 use crate::TabState;
+use adder_codec_rs::adder_codec_core;
 use adder_codec_rs::adder_codec_core::codec::rate_controller::{CRF, DEFAULT_CRF_QUALITY};
 use adder_codec_rs::adder_codec_core::codec::{EncoderType, EventDrop, EventOrder};
-use adder_codec_rs::adder_codec_core::{PixelMultiMode, PlaneSize, TimeMode};
+use adder_codec_rs::adder_codec_core::{Coord, PixelMultiMode, PlaneSize, TimeMode};
 #[cfg(feature = "open-cv")]
 use adder_codec_rs::transcoder::source::davis::TranscoderMode;
 use adder_codec_rs::transcoder::source::video::FramedViewMode;
@@ -52,7 +53,7 @@ pub enum TranscoderInfoMsg {
     Error(String),
 }
 
-#[derive(Default, Debug, Clone, PartialEq)]
+#[derive(Default, Debug, Clone, PartialEq, Copy)]
 pub struct Roi {
     pub start: Option<egui::Pos2>,
     pub end: Option<egui::Pos2>,
@@ -535,6 +536,20 @@ impl TranscoderUi {
                             y: (roi_end.y * scale_y).round(),
                         };
                         println!("Scaled ROI start: {:?}, end: {:?}", roi_start, roi_end);
+
+                        self.transcoder_state.adaptive_params.roi =
+                            Some(adder_codec_rs::transcoder::source::video::Roi {
+                                start: Coord {
+                                    x: roi_start.x as u16,
+                                    y: roi_start.y as u16,
+                                    c: None,
+                                },
+                                end: Coord {
+                                    x: roi_end.x as u16,
+                                    y: roi_end.y as u16,
+                                    c: None,
+                                },
+                            })
                     }
                 }
             });

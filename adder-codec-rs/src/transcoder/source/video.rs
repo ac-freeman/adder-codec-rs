@@ -1,11 +1,10 @@
 #[cfg(feature = "open-cv")]
 use {
+    davis_edi_rs::util::reconstructor::ReconstructionError,
     opencv::core::{Mat, Size},
     opencv::prelude::*,
-    davis_edi_rs::util::reconstructor::ReconstructionError,
     opencv::{highgui, imgproc::resize},
 };
-
 
 use std::cmp::min;
 use std::collections::HashSet;
@@ -32,8 +31,6 @@ use std::time::Instant;
 use crate::framer::scale_intensity::{FrameValue, SaeTime};
 use crate::transcoder::event_pixel_tree::{Intensity32, PixelArena};
 use adder_codec_core::D;
-
-
 
 #[cfg(feature = "compression")]
 use adder_codec_core::codec::compressed::stream::CompressedOutput;
@@ -215,6 +212,14 @@ pub struct VideoState {
     pub feature_log_handle: Option<std::fs::File>,
     feature_rate_adjustment: bool,
     feature_cluster: bool,
+
+    roi: Option<Roi>,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub struct Roi {
+    pub start: Coord,
+    pub end: Coord,
 }
 
 impl Default for VideoState {
@@ -232,6 +237,7 @@ impl Default for VideoState {
             feature_log_handle: None,
             feature_rate_adjustment: false,
             feature_cluster: false,
+            roi: None,
         }
     }
 }
@@ -1262,6 +1268,10 @@ impl<W: Write + 'static + std::marker::Send + std::marker::Sync + 'static> Video
 
     pub fn update_encoder_options(&mut self, options: EncoderOptions) {
         self.encoder.options = options;
+    }
+
+    pub fn update_roi(&mut self, roi: Option<Roi>) {
+        self.state.roi = roi;
     }
 
     /// Get the size of the raw events (in bytes)
