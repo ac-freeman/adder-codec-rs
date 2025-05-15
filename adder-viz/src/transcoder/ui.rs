@@ -918,7 +918,14 @@ impl TranscoderUi {
         });           
         ui.end_row();
 
-        ui.label("Bandwidth limiting:");
+        label_with_help_cursor(
+            ui,
+            "Bandwidth limiting:",
+            Some("The rate is the maximum number of events per second that will be sent to the encoder.\
+            The alpha is the decay rate of the bandwidth limiting with an exponential smoothing function.
+            A value of 1.0 means that the bandwidth limiting will be instantaneous, while lower
+            values will give more weight in the rate estimation to the previous measure rate.")
+        );
         ui.add_enabled_ui(true, |ui| {
             ui.horizontal(|ui| {
                 ui.radio_value(
