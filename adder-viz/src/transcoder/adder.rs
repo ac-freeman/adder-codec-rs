@@ -172,6 +172,7 @@ impl AdderTranscoder {
                     AdderTranscoderError::IoError(_) => {}
                     AdderTranscoderError::OtherError(_) => {}
                     Uninitialized => {}
+                    #[cfg(feature = "open-cv")]
                     AdderTranscoderError::ReconstructorError(_) => {}
                 }
 
