@@ -489,9 +489,6 @@ impl TranscoderUi {
         {
             // enabled = _transcoder.davis_source.is_none();
         }
-        // ui.label("Δt_ref:").on_hover_text(
-        //     "The number of ticks for a standard length integration (e.g. exposure
-        //      time for a framed video).");
         label_with_help_cursor(
             ui,
             "Δt_ref:",
@@ -514,14 +511,16 @@ impl TranscoderUi {
             true,
             egui::Checkbox::new(&mut adaptive_params.auto_quality, "Auto mode?"),
         );
-        // ui.toggle_value(&mut ui_state.auto_quality, "Auto mode?");
         ui.end_row();
 
-        ui.button("CRF Quality:").on_hover_text(
-            "Constant Rate Factor is a metaparameter that controls data rate and 
+        label_with_help_cursor(
+            ui,
+            "CRF Quality:",
+            Some("Constant Rate Factor is a metaparameter that controls data rate and
             loss by adjusting multiple variables. Setting a high value will produce 
             greater loss but a lower data rate. CRF values 0, 3, 6, & 9 are 
-            lossless, high, medium, & low quality, respectively.");
+            lossless, high, medium, & low quality, respectively.")
+        );
         slider_button_down |= slider_pm(
             adaptive_params.auto_quality,
             false,
@@ -550,9 +549,12 @@ impl TranscoderUi {
         ui.end_row();
         
 
-        ui.button("Δt_max multiplier:").on_hover_text(
-            "The maximum Δt that an event can span before the first update 
-            is internally fired.");
+        label_with_help_cursor(
+            ui,
+            "Δt_max multiplier:",
+            Some("The maximum Δt that an event can span before the first update
+            is internally fired.")
+        );
         slider_button_down |= slider_pm(
             !adaptive_params.auto_quality,
             false,
@@ -564,8 +566,11 @@ impl TranscoderUi {
         );       
         ui.end_row();
 
-        ui.button("ADU interval:").on_hover_text(
-            "The number of Δt_ref intervals spanned by an ADU when compression is enabled.");
+        label_with_help_cursor(
+            ui,
+            "ADU interval:",
+            Some("The number of Δt_ref intervals spanned by an ADU when compression is enabled.")
+        );
         slider_button_down |= slider_pm(
             true,
             false,
@@ -578,8 +583,11 @@ impl TranscoderUi {
         ui.end_row();
 
         let parameters = adaptive_params.encoder_options.crf.get_parameters_mut();
-        ui.button("Threshold baseline:").on_hover_text(
-            "Default contrast threshold.");
+        label_with_help_cursor(
+            ui,
+            "Threshold baseline:",
+            Some("Default contrast threshold.")
+        );
         slider_button_down |= slider_pm(
             !adaptive_params.auto_quality,
             false,
@@ -590,8 +598,11 @@ impl TranscoderUi {
             1,
         );        
         ui.end_row();
-        ui.button("Threshold max:").on_hover_text(
-            "Maximum contrast threshold.");
+        label_with_help_cursor(
+            ui,
+            "Threshold max:",
+            Some("Maximum contrast threshold.")
+        );
         slider_button_down |= slider_pm(
             !adaptive_params.auto_quality,
             false,
@@ -602,14 +613,20 @@ impl TranscoderUi {
             1,
         );
         ui.add_space(-80.0);   
-        ui.button("Threshold?").on_hover_text(
-            "The amount of variation in intensity allowed, affecting length
-            of integration until an event queue is fired and pixel is reset.");       
+        label_with_help_cursor(
+            ui,
+            "Threshold?",
+            Some("The amount of variation in intensity allowed, affecting length
+            of integration until an event queue is fired and pixel is reset.")
+        );
  
         ui.end_row();
 
-        ui.button("Threshold velocity").on_hover_text(
-            "The frequency at which pixels' threshold values increase.");
+        label_with_help_cursor(
+            ui,
+            "Threshold velocity",
+            Some("The frequency at which pixels' threshold values increase.")
+        );
         slider_button_down |= slider_pm(
             !adaptive_params.auto_quality,
             false,
@@ -621,7 +638,11 @@ impl TranscoderUi {
         );
         ui.end_row();
 
-        ui.button("Feature radius:");
+        label_with_help_cursor(
+            ui,
+            "Feature radius:",
+            None
+        );
         slider_button_down |= slider_pm(
             !adaptive_params.auto_quality,
             false,
@@ -665,8 +686,11 @@ impl TranscoderUi {
             egui::Checkbox::new(&mut core_params.color, "Color?"),
         );
         ui.end_row();
-        //TODO: Describe integration mode
-        ui.button("Integration mode:").on_hover_text("Integration mode");
+        label_with_help_cursor(
+            ui,
+            "Integration mode:",
+            Some("Integration mode")
+        );
         ui.horizontal(|ui| {
             ui.radio_value(
                 &mut core_params.integration_mode_radio_state,
@@ -681,7 +705,11 @@ impl TranscoderUi {
         });
         ui.end_row();
 
-        ui.button("View mode");
+        label_with_help_cursor(
+            ui,
+            "View mode",
+            None
+        );
         ui.vertical(|ui| {
             ui.horizontal(|ui| {
                 ui.radio_value(
@@ -712,7 +740,11 @@ impl TranscoderUi {
         });        
         ui.end_row();
 
-        ui.button("Time mode:");
+        label_with_help_cursor(
+            ui,
+            "Time mode:",
+            None
+        );
         ui.add_enabled_ui(true, |ui| {
             ui.horizontal(|ui| {
                 ui.radio_value(
@@ -758,7 +790,6 @@ impl TranscoderUi {
             self.info_ui_state.error_string = None;
         }
         ui.end_row();
-        //
         #[cfg(feature = "open-cv")]
         {
             ui.label("DAVIS mode:");
@@ -822,8 +853,11 @@ impl TranscoderUi {
         }
 
         let enable_encoder_options = core_params.encoder_type != EncoderType::Empty;
-        //TODO: Event Output Order
-        ui.button("Event output order").on_hover_text("Event output order ");
+        label_with_help_cursor(
+            ui,
+            "Event output order",
+            Some("Event output order ")
+        );
         ui.add_enabled_ui(enable_encoder_options, |ui| {
             ui.horizontal(|ui| {
                 ui.radio_value(
@@ -976,3 +1010,4 @@ fn label_with_help_cursor(ui: &mut egui::Ui, text: &str, hover_text: Option<&str
         label.on_hover_text(hover);
     }
 }
+
