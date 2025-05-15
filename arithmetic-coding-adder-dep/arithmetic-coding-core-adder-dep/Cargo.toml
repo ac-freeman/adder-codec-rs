@@ -1,7 +1,7 @@
 [package]
 name = "arithmetic-coding-core-adder-dep"
 description = "core traits for the 'arithmetic-coding' crate"
-version = "0.3.0"
+version = "0.3.3"
 edition = "2021"
 license = "MIT"
 keywords = ["compression", "encoding", "arithmetic-coding", "lossless"]

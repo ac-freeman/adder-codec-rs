@@ -1,6 +1,6 @@
 [package]
 name = "adder-viz"
-version = "0.4.1"
+version = "0.4.2"
 edition = "2021"
 resolver = "2"
 authors = ["Andrew C. Freeman"]
@@ -19,19 +19,19 @@ default-run = "adder-viz"
 default = ["adder-codec-rs/transcoder"]
 feature-logging = ["open-cv", "adder-codec-rs/feature-logging"]
 feature-logging-nonmaxsuppression = ["open-cv", "adder-codec-rs/feature-logging-nonmaxsuppression"]
-open-cv = ["opencv", "adder-codec-rs/open-cv", "adder-codec-rs/transcoder" ]
+open-cv = ["opencv", "adder-codec-rs/open-cv", "adder-codec-rs/transcoder"]
 compression = ["adder-codec-rs/compression"]
 
 [dependencies]
-adder-codec-rs = { version = "0.4.8", path = "../adder-codec-rs", features = [
+adder-codec-rs = { version = "0.4.9", path = "../adder-codec-rs", features = [
     "transcoder",
 ] }
 crossbeam-channel = "0.5.6"
 egui = "0.26.2"
 eframe = { version = "0.26.2", default-features = false, features = [
     "default_fonts", # Embed the default egui fonts.
-    "glow",          # Use the glow rendering backend. Alternative: "wgpu".
-    "persistence",   # Enable restoring app state when restarting the app.
+    "glow", # Use the glow rendering backend. Alternative: "wgpu".
+    "persistence", # Enable restoring app state when restarting the app.
 ] }
 egui_file = "0.16.3"
 egui_plot = "0.26.2"
