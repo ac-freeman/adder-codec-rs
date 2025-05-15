@@ -772,6 +772,8 @@ impl<W: Write + 'static + std::marker::Send + std::marker::Sync + 'static> Video
             }
         }
 
+        self.handle_roi();
+
         Ok(big_buffer)
     }
 
@@ -858,6 +860,24 @@ impl<W: Write + 'static + std::marker::Send + std::marker::Sync + 'static> Video
         //     px.c_thresh = c;
         // }
         // self.state.c_thresh_neg = c;
+    }
+
+    fn handle_roi(&mut self) {
+        if self.state.roi.is_none() {
+            return;
+        }
+        let roi = self.state.roi.unwrap();
+
+        // For each pixel within the roi, set a low c_thresh
+        let parameters = self.encoder.options.crf.get_parameters();
+        for y in roi.start.y as usize..=roi.end.y as usize {
+            for x in roi.start.x as usize..=roi.end.x as usize {
+                for c in 0..self.state.plane.c_usize() {
+                    self.event_pixel_trees[[y, x, c]].c_thresh =
+                        min(parameters.c_thresh_baseline, 2);
+                }
+            }
+        }
     }
 
     pub(crate) fn handle_features(&mut self, big_buffer: &[Vec<Event>]) -> Result<(), SourceError> {
