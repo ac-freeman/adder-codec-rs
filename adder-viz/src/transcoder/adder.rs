@@ -8,15 +8,12 @@ use std::time::Instant;
 
 #[cfg(feature = "open-cv")]
 use {
-    adder_codec_rs::transcoder::source::davis::TranscoderMode,
-    adder_codec_rs::davis_edi_rs::util::reconstructor::Reconstructor,
-    adder_codec_rs::transcoder::source::davis::Davis,
-    adder_codec_rs::davis_edi_rs::util::reconstructor::ReconstructorError,
-    opencv::Result,
-    std::ffi::OsString,
     adder_codec_rs::adder_codec_core::SourceCamera::DavisU8,
+    adder_codec_rs::davis_edi_rs::util::reconstructor::Reconstructor,
+    adder_codec_rs::davis_edi_rs::util::reconstructor::ReconstructorError,
+    adder_codec_rs::transcoder::source::davis::Davis,
+    adder_codec_rs::transcoder::source::davis::TranscoderMode, opencv::Result, std::ffi::OsString,
 };
-
 
 use crate::transcoder::adder::AdderTranscoderError::{
     InvalidFileType, NoFileSelected, Uninitialized,
@@ -26,7 +23,7 @@ use crate::transcoder::EventRateMsg;
 use crate::utils::prep_epaint_image;
 use adder_codec_rs::adder_codec_core::codec::rate_controller::DEFAULT_CRF_QUALITY;
 use adder_codec_rs::adder_codec_core::Event;
-use adder_codec_rs::adder_codec_core::SourceCamera::{ Dvs, FramedU8};
+use adder_codec_rs::adder_codec_core::SourceCamera::{Dvs, FramedU8};
 use adder_codec_rs::transcoder::source::prophesee::Prophesee;
 use adder_codec_rs::transcoder::source::video::SourceError::{NoData, VideoError};
 use adder_codec_rs::transcoder::source::video::{Source, SourceError, VideoBuilder};
@@ -274,6 +271,8 @@ impl AdderTranscoder {
     ) -> Result<(), AdderTranscoderError> {
         if force_new || transcoder_state.core_params != self.transcoder_state.core_params {
             // eprintln!("Create new transcoder");
+            self.transcoder_state.adaptive_params.roi = None; // Reset any ROI
+
             let res = self.core_state_update(transcoder_state).await;
             if res.is_ok() {
                 // Send a message with the plane size of the video
@@ -367,6 +366,7 @@ impl AdderTranscoder {
         source
             .get_video_mut()
             .update_encoder_options(params.encoder_options);
+        source.get_video_mut().update_roi(params.roi);
 
         // If the source is a DAVIS type, then update those parameters
         #[cfg(feature = "open-cv")]

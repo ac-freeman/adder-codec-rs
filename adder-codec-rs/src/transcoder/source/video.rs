@@ -1,11 +1,10 @@
 #[cfg(feature = "open-cv")]
 use {
+    davis_edi_rs::util::reconstructor::ReconstructionError,
     opencv::core::{Mat, Size},
     opencv::prelude::*,
-    davis_edi_rs::util::reconstructor::ReconstructionError,
     opencv::{highgui, imgproc::resize},
 };
-
 
 use std::cmp::min;
 use std::collections::HashSet;
@@ -32,8 +31,6 @@ use std::time::Instant;
 use crate::framer::scale_intensity::{FrameValue, SaeTime};
 use crate::transcoder::event_pixel_tree::{Intensity32, PixelArena};
 use adder_codec_core::D;
-
-
 
 #[cfg(feature = "compression")]
 use adder_codec_core::codec::compressed::stream::CompressedOutput;
@@ -215,6 +212,14 @@ pub struct VideoState {
     pub feature_log_handle: Option<std::fs::File>,
     feature_rate_adjustment: bool,
     feature_cluster: bool,
+
+    roi: Option<Roi>,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub struct Roi {
+    pub start: Coord,
+    pub end: Coord,
 }
 
 impl Default for VideoState {
@@ -232,6 +237,7 @@ impl Default for VideoState {
             feature_log_handle: None,
             feature_rate_adjustment: false,
             feature_cluster: false,
+            roi: None,
         }
     }
 }
@@ -766,6 +772,8 @@ impl<W: Write + 'static + std::marker::Send + std::marker::Sync + 'static> Video
             }
         }
 
+        self.handle_roi();
+
         Ok(big_buffer)
     }
 
@@ -852,6 +860,24 @@ impl<W: Write + 'static + std::marker::Send + std::marker::Sync + 'static> Video
         //     px.c_thresh = c;
         // }
         // self.state.c_thresh_neg = c;
+    }
+
+    fn handle_roi(&mut self) {
+        if self.state.roi.is_none() {
+            return;
+        }
+        let roi = self.state.roi.unwrap();
+
+        // For each pixel within the roi, set a low c_thresh
+        let parameters = self.encoder.options.crf.get_parameters();
+        for y in roi.start.y as usize..=roi.end.y as usize {
+            for x in roi.start.x as usize..=roi.end.x as usize {
+                for c in 0..self.state.plane.c_usize() {
+                    self.event_pixel_trees[[y, x, c]].c_thresh =
+                        min(parameters.c_thresh_baseline, 2);
+                }
+            }
+        }
     }
 
     pub(crate) fn handle_features(&mut self, big_buffer: &[Vec<Event>]) -> Result<(), SourceError> {
@@ -1262,6 +1288,10 @@ impl<W: Write + 'static + std::marker::Send + std::marker::Sync + 'static> Video
 
     pub fn update_encoder_options(&mut self, options: EncoderOptions) {
         self.encoder.options = options;
+    }
+
+    pub fn update_roi(&mut self, roi: Option<Roi>) {
+        self.state.roi = roi;
     }
 
     /// Get the size of the raw events (in bytes)

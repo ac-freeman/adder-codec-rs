@@ -4,7 +4,7 @@ use adder_codec_rs::adder_codec_core::codec::{EncoderOptions, EncoderType};
 use adder_codec_rs::adder_codec_core::{PixelMultiMode, TimeMode};
 #[cfg(feature = "open-cv")]
 use adder_codec_rs::transcoder::source::davis::TranscoderMode;
-use adder_codec_rs::transcoder::source::video::FramedViewMode;
+use adder_codec_rs::transcoder::source::video::{FramedViewMode, Roi};
 use adder_codec_rs::utils::viz::ShowFeatureMode;
 use std::collections::VecDeque;
 use std::path::PathBuf;
@@ -28,6 +28,7 @@ pub(crate) struct AdaptiveParams {
     pub feature_cluster: bool,
     optimize_c: bool,
     optimize_c_frequency: u32,
+    pub roi: Option<Roi>,
 }
 
 /// Core parameters which require a total reset of the transcoder. These parameters
@@ -89,6 +90,7 @@ impl Default for AdaptiveParams {
             feature_cluster: false,
             optimize_c: true,
             optimize_c_frequency: 10,
+            roi: Default::default(),
         }
     }
 }
