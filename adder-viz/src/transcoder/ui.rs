@@ -52,6 +52,12 @@ pub enum TranscoderInfoMsg {
     Error(String),
 }
 
+#[derive(Default, Debug, Clone, PartialEq)]
+pub struct Roi {
+    pub start: Option<egui::Pos2>,
+    pub end: Option<egui::Pos2>,
+}
+
 pub struct TranscoderUi {
     pub transcoder_state: TranscoderState,
     pub transcoder_state_last_sent: TranscoderState,
@@ -62,6 +68,8 @@ pub struct TranscoderUi {
     input_image_handle: egui::TextureHandle,
     last_frame_time: std::time::Instant,
     slider_button_down: bool,
+    pub roi: Roi,
+    pub is_drawing_roi: bool,
 }
 
 impl TranscoderUi {
@@ -88,6 +96,8 @@ impl TranscoderUi {
             ),
             last_frame_time: std::time::Instant::now(),
             slider_button_down: false,
+            roi: Default::default(),
+            is_drawing_roi: false,
         };
         transcoder_ui.spawn_transcoder(rx, msg_tx);
         transcoder_ui
@@ -473,6 +483,42 @@ impl TranscoderUi {
                 size,
             ));
             ui.add(image);
+
+            // Handle mouse input for ROI
+            ui.ctx().input(|i| {
+                if i.pointer.any_pressed() {
+                    if let Some(pos) = i.pointer.interact_pos() {
+                        if !self.is_drawing_roi {
+                            self.roi.start = Some(pos);
+                            self.is_drawing_roi = true;
+                            eprintln!("Starting ROI at: {:?}", pos);
+                        }
+                        // self.roi.end = Some(pos);
+                        // eprintln!("Ending ROI at: {:?}", pos);
+                    }
+                } else if i.pointer.any_down() {
+                    // Move the endpoint for live visualization of the ROI
+                    if let Some(pos) = i.pointer.interact_pos() {
+                        self.roi.end = Some(pos);
+                    }
+                }
+                else if i.pointer.any_released() {
+                    if let Some(pos) = i.pointer.interact_pos() {
+                        self.roi.end = Some(pos);
+                        self.is_drawing_roi = false;
+                        eprintln!("Ending ROI at: {:?}", pos);
+
+                        // Send the ROI to the transcoder
+                    }
+                }
+            });
+
+            // Draw the bounding box
+            if let (Some(start), Some(end)) = (self.roi.start, self.roi.end) {
+                let rect = egui::Rect::from_two_pos(start, end);
+                ui.ctx().layer_painter(egui::LayerId::new(egui::Order::Foreground, egui::Id::new("roi")))
+                    .rect_stroke(rect, 0.0, egui::Stroke::new(2.0, egui::Color32::RED));
+            }
         });
     }
 
