@@ -190,6 +190,7 @@ impl TranscoderUi {
                         .encoder_options
                         .crf
                         .plane = plane;
+                    self.roi = Roi::default();
                     if self.transcoder_state.adaptive_params.auto_quality {
                         self.transcoder_state
                             .adaptive_params

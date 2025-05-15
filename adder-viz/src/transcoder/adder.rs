@@ -271,6 +271,8 @@ impl AdderTranscoder {
     ) -> Result<(), AdderTranscoderError> {
         if force_new || transcoder_state.core_params != self.transcoder_state.core_params {
             // eprintln!("Create new transcoder");
+            self.transcoder_state.adaptive_params.roi = None; // Reset any ROI
+
             let res = self.core_state_update(transcoder_state).await;
             if res.is_ok() {
                 // Send a message with the plane size of the video
