@@ -28,9 +28,9 @@ enable the `open-cv` feature:
 cargo install adder-viz -F "compression open-cv"
 ```
 
- Source 8-bit image frame with shadows boosted ([source video](https://www.pexels.com/video/river-between-trees-2126081/)) | Frame reconstructed from ADΔER events, generated from 48 input frames, with shadows boosted. Note the greater dynamic range and temporal denoising in the shadows. 
-:-------------------------------------------------------------------------------------------------------------------------:|:------------------------------------------------------------------------------------------------------------------------------------------------------------------:
-                                          ![](adder-codec-rs/source_frame_0.jpg)                                           |                                                              ![](adder-codec-rs/out_16bit_2_c10.jpg)                                                               
+Source 8-bit image frame with shadows boosted ([source video](https://www.pexels.com/video/river-between-trees-2126081/))      |  Frame reconstructed from ADΔER events, generated from 48 input frames, with shadows boosted. Note the greater dynamic range and temporal denoising in the shadows.
+:-------------------------:|:-------------------------:
+![](adder-codec-rs/source_frame_0.jpg)  |  ![](adder-codec-rs/out_16bit_2_c10.jpg)                                               
 
 ## Included crates
 
