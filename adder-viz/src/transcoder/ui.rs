@@ -641,7 +641,8 @@ impl TranscoderUi {
         label_with_help_cursor(
             ui,
             "Feature radius:",
-            None
+            Some("The radius for which to reset the contrast threshold for neighboring pixels when
+             a feature is detected (if enabled)")
         );
         slider_button_down |= slider_pm(
             !adaptive_params.auto_quality,
@@ -669,7 +670,12 @@ impl TranscoderUi {
         // );
         // ui.end_row();
         //
-        ui.label("Video scale:");
+        label_with_help_cursor(
+            ui,
+            "Video scale:",
+            Some("Spatial resolution, compared to the original video. Input video will be downscaled
+            before transcoding. 1.0 = original resolution, 0.5 = half resolution, etc.")
+        );
         slider_button_down |= slider_pm(
             enabled,
             false,
@@ -680,7 +686,11 @@ impl TranscoderUi {
             0.1,
         );
         ui.end_row();
-        ui.label("Channels:");
+        label_with_help_cursor(
+            ui,
+            "Channels:",
+            Some("Color (if supported) or monochrome?")
+        );
         ui.add_enabled(
             enabled,
             egui::Checkbox::new(&mut core_params.color, "Color?"),
@@ -689,7 +699,9 @@ impl TranscoderUi {
         label_with_help_cursor(
             ui,
             "Integration mode:",
-            Some("Integration mode")
+            Some("Normal mode will produce all events, similar to what an integrating event sensor
+            would capture. Collapse mode will only prouduce the first and last events at a new
+            intensity level, once the contrast threshold is exceeded.")
         );
         ui.horizontal(|ui| {
             ui.radio_value(
@@ -708,7 +720,11 @@ impl TranscoderUi {
         label_with_help_cursor(
             ui,
             "View mode",
-            None
+            Some("The view mode for the video.
+            Intensity will show the intensity of the pixels,
+            D will show the decimation components of events as they fire,
+            DeltaT will show the time since the last event,
+            and SAE is the surface of active events.")
         );
         ui.vertical(|ui| {
             ui.horizontal(|ui| {
@@ -763,7 +779,13 @@ impl TranscoderUi {
         });         
         ui.end_row();
 
-        ui.label("Compression mode:");
+        label_with_help_cursor(
+            ui,
+            "Compression mode:",
+            Some("Empty does not write any data to the output file, which can be faster for viz.
+            Raw writes uncompressed event tuples.
+            Compressed writes compressed events using the bespoke encoder.")
+        );
         let current_encoder_type = core_params.encoder_type;
         ui.add_enabled_ui(true, |ui| {
             ui.vertical(|ui| {
@@ -792,7 +814,13 @@ impl TranscoderUi {
         ui.end_row();
         #[cfg(feature = "open-cv")]
         {
-            ui.label("DAVIS mode:");
+            label_with_help_cursor(
+                ui,
+                "DAVIS mode:",
+                Some("Framed recon performs a framed reconstruction of the events and frames using EDI.
+                Raw DAVIS integrates events onto deblurred frames in the event space (much faster).
+                Raw DVS simply integrates the DVS events alone.")
+            );
             ui.add_enabled_ui(enabled, |ui| {
                 ui.horizontal(|ui| {
                     ui.radio_value(
@@ -814,7 +842,13 @@ impl TranscoderUi {
             });
             ui.end_row();
 
-            ui.label("DAVIS deblurred FPS:");
+            label_with_help_cursor(
+                ui,
+                "DAVIS deblurred FPS:",
+                Some("If DAVIS mode is \"Framed recon\" or \"Raw DAVIS\", this determines the
+                effective shutter speed of the deblurred APS frames. For example, if this parameter
+                is 100, each deblurred frame will span 10ms.")
+            );
 
             slider_button_down |= slider_pm(
                 enabled,
@@ -832,14 +866,22 @@ impl TranscoderUi {
 
             let enable_optimize =
                 enabled && core_params.davis_mode_radio_state != TranscoderMode::RawDvs;
-            ui.label("Optimize:");
+            label_with_help_cursor(
+                ui,
+                "Optimize:",
+                Some("Continually optimize the θ contrast threshold for DVS?")
+            );
             ui.add_enabled(
                 enable_optimize,
                 egui::Checkbox::new(&mut adaptive_params.optimize_c, "Optimize θ?"),
             );
             ui.end_row();
 
-            ui.label("Optimize frequency:");
+            label_with_help_cursor(
+                ui,
+                "Optimize frequency:",
+                Some("How many input APS frames between each θ optimization (if enabled)")
+            );
             slider_button_down |= slider_pm(
                 enable_optimize,
                 true,
@@ -855,8 +897,10 @@ impl TranscoderUi {
         let enable_encoder_options = core_params.encoder_type != EncoderType::Empty;
         label_with_help_cursor(
             ui,
-            "Event output order",
-            Some("Event output order ")
+            "Event output order:",
+            Some("Unchanged may produce events from different pixels that are not temporally sorted,
+            relative to each other. Interleaved will temporally sort the events of all pixels, but
+            it will be slightly slower.")
         );
         ui.add_enabled_ui(enable_encoder_options, |ui| {
             ui.horizontal(|ui| {
