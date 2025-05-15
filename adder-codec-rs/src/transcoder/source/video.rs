@@ -1,7 +1,12 @@
 #[cfg(feature = "open-cv")]
-use opencv::core::{Mat, Size};
-#[cfg(feature = "opencv")]
-use opencv::prelude::*;
+use {
+    opencv::core::{Mat, Size},
+    opencv::prelude::*,
+    davis_edi_rs::util::reconstructor::ReconstructionError,
+    opencv::{highgui, imgproc::resize},
+};
+
+
 use std::cmp::min;
 use std::collections::HashSet;
 #[cfg(feature = "feature-logging")]
@@ -27,10 +32,8 @@ use std::time::Instant;
 use crate::framer::scale_intensity::{FrameValue, SaeTime};
 use crate::transcoder::event_pixel_tree::{Intensity32, PixelArena};
 use adder_codec_core::D;
-#[cfg(feature = "opencv")]
-use davis_edi_rs::util::reconstructor::ReconstructionError;
-#[cfg(feature = "opencv")]
-use opencv::{highgui, imgproc::resize};
+
+
 
 #[cfg(feature = "compression")]
 use adder_codec_core::codec::compressed::stream::CompressedOutput;

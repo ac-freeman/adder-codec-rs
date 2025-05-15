@@ -12,94 +12,11 @@ use egui_plot::Corner::LeftTop;
 use egui_plot::{Legend, Plot};
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::Sender;
-// use crate::transcoder::adder::{replace_adder_transcoder, AdderTranscoder};
-// use crate::utils::prep_bevy_image;
 use crate::transcoder::adder::AdderTranscoder;
 use crate::transcoder::{AdaptiveParams, CoreParams, EventRateMsg, InfoParams, InfoUiState};
 use crate::TabState;
-// #[cfg(feature = "open-cv")]
-// use adder_codec_rs::transcoder::source::davis::TranscoderMode;
-// use adder_codec_rs::transcoder::source::video::{FramedViewMode, Source, SourceError};
-// use rayon::current_num_threads;
-// use std::collections::VecDeque;
-// use std::error::Error;
-//
 use crate::utils::slider_pm;
-// use adder_codec_rs::adder_codec_core::codec::rate_controller::{Crf, CRF, DEFAULT_CRF_QUALITY};
-// use adder_codec_rs::adder_codec_core::codec::{EncoderOptions, EncoderType, EventDrop, EventOrder};
-// use adder_codec_rs::adder_codec_core::TimeMode;
-// use adder_codec_rs::adder_codec_core::{PixelMultiMode, PlaneSize};
-// #[cfg(feature = "open-cv")]
-// use adder_codec_rs::transcoder::source::davis::TranscoderMode::RawDvs;
-// use adder_codec_rs::utils::cv::{calculate_quality_metrics, QualityMetrics};
-// use adder_codec_rs::utils::viz::ShowFeatureMode;
-// use std::default::Default;
-// use std::fs::File;
-// use std::io::{BufWriter, Write};
-// use std::path::PathBuf;
-//
 
-//
-
-//
-// pub struct OutputName {
-//     pub text: RichText,
-// }
-//
-// impl Default for OutputName {
-//     fn default() -> Self {
-//         OutputName {
-//             text: RichText::new("No output selected yet"),
-//         }
-//     }
-// }
-//
-// impl Default for InfoUiState {
-//     fn default() -> Self {
-//         let plot_points: VecDeque<Option<f64>> = (0..1000).map(|_| None).collect();
-//
-//         InfoUiState {
-//             events_per_sec: 0.,
-//             events_ppc_per_sec: 0.,
-//             events_ppc_total: 0.0,
-//             events_total: 0,
-//             event_size: 0,
-//             source_samples_per_sec: 0.0,
-//             plane: Default::default(),
-//             source_name: RichText::new("No input file selected yet"),
-//             output_name: Default::default(),
-//             davis_latency: None,
-//             input_path_0: None,
-//             input_path_1: None,
-//             output_path: None,
-//             plot_points_eventrate_y: PlotY {
-//                 points: plot_points.clone(),
-//             },
-//             plot_points_raw_adder_bitrate_y: PlotY {
-//                 points: plot_points.clone(),
-//             },
-//             plot_points_raw_source_bitrate_y: PlotY {
-//                 points: plot_points.clone(),
-//             },
-//             plot_points_psnr_y: PlotY {
-//                 points: plot_points.clone(),
-//             },
-//             plot_points_mse_y: PlotY {
-//                 points: plot_points.clone(),
-//             },
-//             plot_points_ssim_y: PlotY {
-//                 points: plot_points.clone(),
-//             },
-//             plot_points_latency_y: PlotY {
-//                 points: plot_points,
-//             },
-//             view_mode_radio_state: FramedViewMode::Intensity,
-//         }
-//     }
-// }
-//
-// unsafe impl Sync for InfoUiState {}
-//
 #[derive(Default, Debug, Clone, PartialEq)]
 pub struct TranscoderState {
     pub adaptive_params: AdaptiveParams,
@@ -152,6 +69,7 @@ impl TranscoderUi {
         let (tx, rx) = mpsc::channel(5);
         let (msg_tx, msg_rx) = mpsc::channel(30);
 
+
         let mut transcoder_ui = TranscoderUi {
             transcoder_state: Default::default(),
             transcoder_state_last_sent: Default::default(),
@@ -198,6 +116,10 @@ impl TranscoderUi {
     pub fn update(&mut self, ctx: &egui::Context) {
         // Store a copy of the params to compare against later
         let old_params = self.transcoder_state_last_sent.clone();
+
+        let mut style = (*ctx.style()).clone(); // Clone the current style
+        style.interaction.tooltip_delay = 0.05;
+        ctx.set_style(style);
 
         // Collect dropped files
         self.handle_file_drop(ctx);
@@ -567,7 +489,12 @@ impl TranscoderUi {
         {
             // enabled = _transcoder.davis_source.is_none();
         }
-        ui.add_enabled(enabled, egui::Label::new("Δt_ref:"));
+        label_with_help_cursor(
+            ui,
+            "Δt_ref:",
+            Some("The number of ticks for a standard length integration (e.g. exposure
+             time for a framed video)."),
+        );
         slider_button_down |= slider_pm(
             enabled,
             false,
@@ -576,7 +503,7 @@ impl TranscoderUi {
             1..=255,
             vec![],
             10,
-        );
+        );       
         ui.end_row();
 
         ui.label("Quality parameters:");
@@ -584,10 +511,16 @@ impl TranscoderUi {
             true,
             egui::Checkbox::new(&mut adaptive_params.auto_quality, "Auto mode?"),
         );
-        // ui.toggle_value(&mut ui_state.auto_quality, "Auto mode?");
         ui.end_row();
 
-        ui.label("CRF quality:");
+        label_with_help_cursor(
+            ui,
+            "CRF Quality:",
+            Some("Constant Rate Factor is a metaparameter that controls data rate and
+            loss by adjusting multiple variables. Setting a high value will produce 
+            greater loss but a lower data rate. CRF values 0, 3, 6, & 9 are 
+            lossless, high, medium, & low quality, respectively.")
+        );
         slider_button_down |= slider_pm(
             adaptive_params.auto_quality,
             false,
@@ -597,6 +530,7 @@ impl TranscoderUi {
             vec![],
             1,
         );
+        
         if adaptive_params.auto_quality
             && adaptive_params.crf_number
                 != adaptive_params
@@ -610,9 +544,17 @@ impl TranscoderUi {
                 .crf
                 .update_quality(adaptive_params.crf_number);
         }
+        //add informational hover button       
+        
         ui.end_row();
+        
 
-        ui.label("Δt_max multiplier:");
+        label_with_help_cursor(
+            ui,
+            "Δt_max multiplier:",
+            Some("The maximum Δt that an event can span before the first update
+            is internally fired.")
+        );
         slider_button_down |= slider_pm(
             !adaptive_params.auto_quality,
             false,
@@ -621,10 +563,14 @@ impl TranscoderUi {
             1..=900,
             vec![],
             1,
-        );
+        );       
         ui.end_row();
 
-        ui.label("ADU interval:");
+        label_with_help_cursor(
+            ui,
+            "ADU interval:",
+            Some("The number of Δt_ref intervals spanned by an ADU when compression is enabled.")
+        );
         slider_button_down |= slider_pm(
             true,
             false,
@@ -637,7 +583,11 @@ impl TranscoderUi {
         ui.end_row();
 
         let parameters = adaptive_params.encoder_options.crf.get_parameters_mut();
-        ui.label("Threshold baseline:");
+        label_with_help_cursor(
+            ui,
+            "Threshold baseline:",
+            Some("Default contrast threshold.")
+        );
         slider_button_down |= slider_pm(
             !adaptive_params.auto_quality,
             false,
@@ -646,10 +596,13 @@ impl TranscoderUi {
             0..=255,
             vec![],
             1,
-        );
+        );        
         ui.end_row();
-
-        ui.label("Threshold max:");
+        label_with_help_cursor(
+            ui,
+            "Threshold max:",
+            Some("Maximum contrast threshold.")
+        );
         slider_button_down |= slider_pm(
             !adaptive_params.auto_quality,
             false,
@@ -659,9 +612,21 @@ impl TranscoderUi {
             vec![],
             1,
         );
+        ui.add_space(-80.0);   
+        label_with_help_cursor(
+            ui,
+            "Threshold?",
+            Some("The amount of variation in intensity allowed, affecting length
+            of integration until an event queue is fired and pixel is reset.")
+        );
+ 
         ui.end_row();
 
-        ui.label("Threshold velocity:");
+        label_with_help_cursor(
+            ui,
+            "Threshold velocity",
+            Some("The frequency at which pixels' threshold values increase.")
+        );
         slider_button_down |= slider_pm(
             !adaptive_params.auto_quality,
             false,
@@ -673,7 +638,12 @@ impl TranscoderUi {
         );
         ui.end_row();
 
-        ui.label("Feature radius:");
+        label_with_help_cursor(
+            ui,
+            "Feature radius:",
+            Some("The radius for which to reset the contrast threshold for neighboring pixels when
+             a feature is detected (if enabled)")
+        );
         slider_button_down |= slider_pm(
             !adaptive_params.auto_quality,
             false,
@@ -683,7 +653,9 @@ impl TranscoderUi {
             vec![],
             1,
         );
+        //add informational hover button
         ui.end_row();
+    
 
         // ui.label("Thread count:");
         // slider_pm(
@@ -698,7 +670,12 @@ impl TranscoderUi {
         // );
         // ui.end_row();
         //
-        ui.label("Video scale:");
+        label_with_help_cursor(
+            ui,
+            "Video scale:",
+            Some("Spatial resolution, compared to the original video. Input video will be downscaled
+            before transcoding. 1.0 = original resolution, 0.5 = half resolution, etc.")
+        );
         slider_button_down |= slider_pm(
             enabled,
             false,
@@ -709,14 +686,23 @@ impl TranscoderUi {
             0.1,
         );
         ui.end_row();
-        ui.label("Channels:");
+        label_with_help_cursor(
+            ui,
+            "Channels:",
+            Some("Color (if supported) or monochrome?")
+        );
         ui.add_enabled(
             enabled,
             egui::Checkbox::new(&mut core_params.color, "Color?"),
         );
         ui.end_row();
-
-        ui.label("Integration mode:");
+        label_with_help_cursor(
+            ui,
+            "Integration mode:",
+            Some("Normal mode will produce all events, similar to what an integrating event sensor
+            would capture. Collapse mode will only prouduce the first and last events at a new
+            intensity level, once the contrast threshold is exceeded.")
+        );
         ui.horizontal(|ui| {
             ui.radio_value(
                 &mut core_params.integration_mode_radio_state,
@@ -731,7 +717,15 @@ impl TranscoderUi {
         });
         ui.end_row();
 
-        ui.label("View mode:");
+        label_with_help_cursor(
+            ui,
+            "View mode",
+            Some("The view mode for the video.
+            Intensity will show the intensity of the pixels,
+            D will show the decimation components of events as they fire,
+            DeltaT will show the time since the last event,
+            and SAE is the surface of active events.")
+        );
         ui.vertical(|ui| {
             ui.horizontal(|ui| {
                 ui.radio_value(
@@ -759,27 +753,39 @@ impl TranscoderUi {
                 enabled,
                 egui::Checkbox::new(&mut adaptive_params.show_original, "Show original?"),
             );
-        });
+        });        
         ui.end_row();
 
-        ui.label("Time mode:");
+        label_with_help_cursor(
+            ui,
+            "Time mode:",
+            None
+        );
         ui.add_enabled_ui(true, |ui| {
             ui.horizontal(|ui| {
                 ui.radio_value(
                     &mut core_params.time_mode,
                     TimeMode::DeltaT,
                     "Δt (time change)",
-                );
+                ).on_hover_text("measures temporal values based 
+                on previous data");
                 ui.radio_value(
                     &mut core_params.time_mode,
                     TimeMode::AbsoluteT,
                     "t (absolute time)",
-                );
+                ).on_hover_text("measures temporal values independent 
+                of previous data");
             });
-        });
+        });         
         ui.end_row();
 
-        ui.label("Compression mode:");
+        label_with_help_cursor(
+            ui,
+            "Compression mode:",
+            Some("Empty does not write any data to the output file, which can be faster for viz.
+            Raw writes uncompressed event tuples.
+            Compressed writes compressed events using the bespoke encoder.")
+        );
         let current_encoder_type = core_params.encoder_type;
         ui.add_enabled_ui(true, |ui| {
             ui.vertical(|ui| {
@@ -806,10 +812,15 @@ impl TranscoderUi {
             self.info_ui_state.error_string = None;
         }
         ui.end_row();
-        //
         #[cfg(feature = "open-cv")]
         {
-            ui.label("DAVIS mode:");
+            label_with_help_cursor(
+                ui,
+                "DAVIS mode:",
+                Some("Framed recon performs a framed reconstruction of the events and frames using EDI.
+                Raw DAVIS integrates events onto deblurred frames in the event space (much faster).
+                Raw DVS simply integrates the DVS events alone.")
+            );
             ui.add_enabled_ui(enabled, |ui| {
                 ui.horizontal(|ui| {
                     ui.radio_value(
@@ -831,7 +842,13 @@ impl TranscoderUi {
             });
             ui.end_row();
 
-            ui.label("DAVIS deblurred FPS:");
+            label_with_help_cursor(
+                ui,
+                "DAVIS deblurred FPS:",
+                Some("If DAVIS mode is \"Framed recon\" or \"Raw DAVIS\", this determines the
+                effective shutter speed of the deblurred APS frames. For example, if this parameter
+                is 100, each deblurred frame will span 10ms.")
+            );
 
             slider_button_down |= slider_pm(
                 enabled,
@@ -849,14 +866,22 @@ impl TranscoderUi {
 
             let enable_optimize =
                 enabled && core_params.davis_mode_radio_state != TranscoderMode::RawDvs;
-            ui.label("Optimize:");
+            label_with_help_cursor(
+                ui,
+                "Optimize:",
+                Some("Continually optimize the θ contrast threshold for DVS?")
+            );
             ui.add_enabled(
                 enable_optimize,
                 egui::Checkbox::new(&mut adaptive_params.optimize_c, "Optimize θ?"),
             );
             ui.end_row();
 
-            ui.label("Optimize frequency:");
+            label_with_help_cursor(
+                ui,
+                "Optimize frequency:",
+                Some("How many input APS frames between each θ optimization (if enabled)")
+            );
             slider_button_down |= slider_pm(
                 enable_optimize,
                 true,
@@ -870,8 +895,13 @@ impl TranscoderUi {
         }
 
         let enable_encoder_options = core_params.encoder_type != EncoderType::Empty;
-
-        ui.label("Event output order:");
+        label_with_help_cursor(
+            ui,
+            "Event output order:",
+            Some("Unchanged may produce events from different pixels that are not temporally sorted,
+            relative to each other. Interleaved will temporally sort the events of all pixels, but
+            it will be slightly slower.")
+        );
         ui.add_enabled_ui(enable_encoder_options, |ui| {
             ui.horizontal(|ui| {
                 ui.radio_value(
@@ -885,10 +915,17 @@ impl TranscoderUi {
                     "Interleaved",
                 );
             });
-        });
+        });           
         ui.end_row();
 
-        ui.label("Bandwidth limiting:");
+        label_with_help_cursor(
+            ui,
+            "Bandwidth limiting:",
+            Some("The rate is the maximum number of events per second that will be sent to the encoder.\
+            The alpha is the decay rate of the bandwidth limiting with an exponential smoothing function.
+            A value of 1.0 means that the bandwidth limiting will be instantaneous, while lower
+            values will give more weight in the rate estimation to the previous measure rate.")
+        );
         ui.add_enabled_ui(true, |ui| {
             ui.horizontal(|ui| {
                 ui.radio_value(
@@ -1013,458 +1050,15 @@ impl TranscoderUi {
 
         self.slider_button_down = slider_button_down;
     }
-
-    //
-
-    //
-    //
-    //
-    //         ui.label(format!(
-    //             "{:.2} transcoded FPS\t\
-    //             {:.2} events per source sec\t\
-    //             {:.2} events PPC per source sec\t\
-    //             {:.0} events total\t\
-    //             {:.0} events PPC total",
-    //             1. / time.delta_seconds(),
-    //             self.ui_info_state.events_per_sec,
-    //             self.ui_info_state.events_ppc_per_sec,
-    //             self.ui_info_state.events_total,
-    //             self.ui_info_state.events_ppc_total
-    //         ));
-    //
-    //         if let Some(latency) = self.ui_info_state.davis_latency {
-    //             ui.label(format!("DAVIS/DVS latency: {:} ms", latency));
-    //         }
-    //
-    //         self.ui_info_state
-    //             .plot_points_eventrate_y
-    //             .update(Some(self.ui_info_state.events_ppc_per_sec));
-    //
-    //         if self.ui_info_state.event_size == 0 {
-    //             self.ui_info_state.event_size = if self.ui_info_state.plane.c() == 1 {
-    //                 9
-    //             } else {
-    //                 11
-    //             };
-    //         }
-    //         let bitrate = self.ui_info_state.events_ppc_per_sec
-    //             * self.ui_info_state.event_size as f64
-    //             * self.ui_info_state.plane.volume() as f64
-    //             / 1024.0
-    //             / 1024.0; // transcoded raw in megabytes per sec
-    //         if self.ui_info_state.plane.volume() > 1 {
-    //             self.ui_info_state
-    //                 .plot_points_raw_adder_bitrate_y
-    //                 .update(Some(bitrate));
-    //         } else {
-    //             self.ui_info_state
-    //                 .plot_points_raw_adder_bitrate_y
-    //                 .update(None);
-    //         }
-    //
-    //         self.ui_info_state
-    //             .plot_points_latency_y
-    //             .update(self.ui_info_state.davis_latency);
-    //
-    //         // let line_eventrate = self
-    //         //     .ui_info_state
-    //         //     .plot_points_eventrate_y
-    //         //     .get_plotline("Events PPC per sec");
-    //
-    //         Plot::new("my_plot")
-    //             .height(100.0)
-    //             .allow_drag(true)
-    //             .auto_bounds_y()
-    //             .legend(Legend::default().position(LeftTop))
-    //             .show(ui, |plot_ui| {
-    //                 let metrics = vec![
-    //                     (&self.ui_info_state.plot_points_psnr_y, "PSNR dB"),
-    //                     (&self.ui_info_state.plot_points_mse_y, "MSE"),
-    //                     (&self.ui_info_state.plot_points_ssim_y, "SSIM"),
-    //                 ];
-    //
-    //                 for (line, label) in metrics {
-    //                     if line.points.iter().last().unwrap().is_some() {
-    //                         plot_ui.line(line.get_plotline(label, false));
-    //                     }
-    //                 }
-    //             });
-    //         Plot::new("bitrate_plot")
-    //             .height(100.0)
-    //             .allow_drag(true)
-    //             .auto_bounds_y()
-    //             .legend(Legend::default().position(LeftTop))
-    //             .show(ui, |plot_ui| {
-    //                 let metrics = vec![
-    //                     (
-    //                         &self.ui_info_state.plot_points_raw_adder_bitrate_y,
-    //                         "log10(Raw ADΔER MB/s)",
-    //                     ),
-    //                     (
-    //                         &self.ui_info_state.plot_points_raw_source_bitrate_y,
-    //                         "log10(Raw source MB/s)",
-    //                     ),
-    //                     (&self.ui_info_state.plot_points_latency_y, "Latency"),
-    //                 ];
-    //
-    //                 for (line, label) in metrics {
-    //                     if line.points.iter().last().unwrap().is_some() {
-    //                         plot_ui.line(line.get_plotline(label, true));
-    //                     }
-    //                 }
-    //             });
-    //     }
-    //
-    //     pub fn update_adder_params(&mut self, _: Res<Images>, mut images: ResMut<Assets<Image>>) {
-    //         // TODO: do conditionals on the sliders themselves
-    //
-    //         let source: &mut dyn Source<BufWriter<File>> = {
-    //             match &mut self.transcoder.framed_source {
-    //                 None => {
-    //                     match &mut self.transcoder.prophesee_source {
-    //                         None => {
-    //                             #[cfg(feature = "open-cv")]
-    //                             match &mut self.transcoder.davis_source {
-    //                                 None => {
-    //                                     return;
-    //                                 }
-    //
-    //                                 Some(source) => {
-    //                                     if source.mode != self.ui_state.davis_mode_radio_state
-    //                                         || source.get_reconstructor().as_ref().unwrap().output_fps
-    //                                             != self.ui_state.davis_output_fps
-    //                                         || ((source.get_video_ref().get_time_mode()
-    //                                             != self.ui_state.time_mode
-    //                                             || source.get_video_ref().encoder_type
-    //                                                 != self.ui_state.encoder_type
-    //                                             || source
-    //                                                 .get_video_ref()
-    //                                                 .get_encoder_options()
-    //                                                 .event_drop
-    //                                                 != self.ui_state.encoder_options.event_drop
-    //                                             || source
-    //                                                 .get_video_ref()
-    //                                                 .get_encoder_options()
-    //                                                 .event_order
-    //                                                 != self.ui_state.encoder_options.event_order
-    //                                             || source
-    //                                                 .get_video_ref()
-    //                                                 .state
-    //                                                 .params
-    //                                                 .pixel_multi_mode
-    //                                                 != self.ui_state.integration_mode_radio_state)
-    //                                             && self.ui_info_state.output_path.is_some())
-    //                                     {
-    //                                         if self.ui_state.davis_mode_radio_state == RawDvs {
-    //                                             // self.ui_state.davis_output_fps = 1000000.0;
-    //                                             // self.ui_state.davis_output_fps_slider = 1000000.0;
-    //                                             self.ui_state.optimize_c = false;
-    //                                         }
-    //                                         replace_adder_transcoder(
-    //                                             self,
-    //                                             self.ui_info_state.input_path_0.clone(),
-    //                                             self.ui_info_state.input_path_1.clone(),
-    //                                             self.ui_info_state.output_path.clone(),
-    //                                             0,
-    //                                         );
-    //                                         images.clear();
-    //                                         return;
-    //                                     }
-    //                                     let tmp = source.get_reconstructor_mut().as_mut().unwrap();
-    //                                     tmp.set_optimize_c(
-    //                                         self.ui_state.optimize_c,
-    //                                         self.ui_state.optimize_c_frequency,
-    //                                     );
-    //                                     source
-    //                                 }
-    //                             }
-    //                             #[cfg(not(feature = "open-cv"))]
-    //                             return;
-    //                         }
-    //                         Some(source) => {
-    //                             if source.get_video_ref().get_ref_time()
-    //                                 != self.ui_state.delta_t_ref as u32
-    //                                 || ((source.get_video_ref().get_time_mode()
-    //                                     != self.ui_state.time_mode
-    //                                     || source.get_video_ref().encoder_type
-    //                                         != self.ui_state.encoder_type
-    //                                     || source.get_video_ref().get_encoder_options().event_drop
-    //                                         != self.ui_state.encoder_options.event_drop
-    //                                     || source.get_video_ref().get_encoder_options().event_order
-    //                                         != self.ui_state.encoder_options.event_order)
-    //                                     && self.ui_info_state.output_path.is_some())
-    //                             {
-    //                                 images.clear();
-    //                                 replace_adder_transcoder(
-    //                                     self,
-    //                                     self.ui_info_state.input_path_0.clone(),
-    //                                     self.ui_info_state.input_path_1.clone(),
-    //                                     self.ui_info_state.output_path.clone(),
-    //                                     0,
-    //                                 );
-    //                                 return;
-    //                             }
-    //
-    //                             source
-    //                         }
-    //                     }
-    //                 }
-    //                 Some(source) => {
-    //                     if source.scale != self.ui_state.scale
-    //                         || source.get_ref_time() != self.ui_state.delta_t_ref as u32
-    //                         || ((source.get_video_ref().get_time_mode() != self.ui_state.time_mode
-    //                             || source.get_video_ref().encoder_type != self.ui_state.encoder_type
-    //                             || source.get_video_ref().get_encoder_options().event_drop
-    //                                 != self.ui_state.encoder_options.event_drop
-    //                             || source.get_video_ref().get_encoder_options().event_order
-    //                                 != self.ui_state.encoder_options.event_order)
-    //                             && self.ui_info_state.output_path.is_some())
-    //                         || match source.get_video_ref().state.plane.c() {
-    //                             1 => {
-    //                                 // True if the transcoder is gray, but the user wants color
-    //                                 self.ui_state.color
-    //                             }
-    //                             _ => {
-    //                                 // True if the transcoder is color, but the user wants gray
-    //                                 !self.ui_state.color
-    //                             }
-    //                         }
-    //                     {
-    //                         let current_frame =
-    //                             source.get_video_ref().state.in_interval_count + source.frame_idx_start;
-    //                         images.clear();
-    //                         replace_adder_transcoder(
-    //                             self,
-    //                             self.ui_info_state.input_path_0.clone(),
-    //                             self.ui_info_state.input_path_1.clone(),
-    //                             self.ui_info_state.output_path.clone(),
-    //                             current_frame,
-    //                         );
-    //                         return;
-    //                     }
-    //                     source
-    //                 }
-    //             }
-    //         };
-    //
-    //         let binding = source.get_video_ref().get_encoder_options();
-    //         let _parameters = binding.crf.get_parameters();
-    //
-    //         // TODO: Refactor all this garbage code
-    //         if self.ui_state.auto_quality
-    //             && (!self.ui_state.auto_quality_mirror
-    //                 || self.ui_state.encoder_options.crf.get_quality()
-    //                     != source
-    //                         .get_video_ref()
-    //                         .get_encoder_options()
-    //                         .crf
-    //                         .get_quality())
-    //         {
-    //             self.ui_state.auto_quality_mirror = true;
-    //             source.crf(
-    //                 self.ui_state
-    //                     .encoder_options
-    //                     .crf
-    //                     .get_quality()
-    //                     .unwrap_or(DEFAULT_CRF_QUALITY),
-    //             );
-    //
-    //             let video = source.get_video_ref();
-    //
-    //             let binding = video.get_encoder_options();
-    //             let parameters = binding.crf.get_parameters();
-    //
-    //             self.ui_state.encoder_options = binding;
-    //             // Update ui state to match
-    //             self.ui_state.crf_slider = binding.crf.get_quality().unwrap_or(DEFAULT_CRF_QUALITY);
-    //             self.ui_state.adder_tresh_baseline_slider = parameters.c_thresh_baseline;
-    //             self.ui_state.adder_tresh_max_slider = parameters.c_thresh_max;
-    //             self.ui_state.delta_t_max_mult =
-    //                 video.state.params.delta_t_max / video.state.params.ref_time;
-    //             self.ui_state.delta_t_max_mult_slider = self.ui_state.delta_t_max_mult;
-    //             self.ui_state.adder_tresh_velocity_slider = parameters.c_increase_velocity;
-    //             self.ui_state.feature_radius_slider = parameters.feature_c_radius;
-    //         } else if !self.ui_state.auto_quality
-    //             && (self.ui_state.delta_t_max_mult
-    //                 != source.get_video_ref().state.params.delta_t_max
-    //                     / source.get_video_ref().state.params.ref_time
-    //                 || self.ui_state.encoder_options.crf.get_parameters()
-    //                     != source
-    //                         .get_video_ref()
-    //                         .get_encoder_options()
-    //                         .crf
-    //                         .get_parameters())
-    //         {
-    //             let video = source.get_video_mut();
-    //             let parameters = self.ui_state.encoder_options.crf.get_parameters();
-    //             video.update_quality_manual(
-    //                 parameters.c_thresh_baseline,
-    //                 parameters.c_thresh_max,
-    //                 self.ui_state.delta_t_max_mult,
-    //                 parameters.c_increase_velocity,
-    //                 parameters.feature_c_radius as f32,
-    //             )
-    //         }
-    //
-    //         if !self.ui_state.auto_quality {
-    //             self.ui_state.auto_quality_mirror = false;
-    //         }
-    //         let video = source.get_video_mut();
-    //
-    //         if video.state.params.pixel_multi_mode != self.ui_state.integration_mode_radio_state {
-    //             video.state.params.pixel_multi_mode = self.ui_state.integration_mode_radio_state;
-    //         }
-    //
-    //         self.ui_info_state.event_size = video.get_event_size();
-    //         self.ui_info_state.plane = video.state.plane;
-    //
-    //         video.instantaneous_view_mode = self.ui_state.view_mode_radio_state;
-    //         video.update_detect_features(
-    //             self.ui_state.detect_features,
-    //             self.ui_state.show_features,
-    //             self.ui_state.feature_rate_adjustment,
-    //             self.ui_state.feature_cluster,
-    //         );
-    //     }
-    //
-    //     pub fn consume_source(
-    //         &mut self,
-    //         mut images: ResMut<Assets<Image>>,
-    //         mut handles: ResMut<Images>,
-    //     ) -> Result<(), Box<dyn Error>> {
-    //         let pool = rayon::ThreadPoolBuilder::new()
-    //             .num_threads(self.ui_state.thread_count)
-    //             .build()?;
-    //
-    //         let ui_info_state = &mut self.ui_info_state;
-    //         ui_info_state.events_per_sec = 0.;
-    //
-    //         // TODO: The below code is absolutely horrible.
-    //         let source: &mut dyn Source<BufWriter<File>> = {
-    //             match &mut self.transcoder.framed_source {
-    //                 None => match &mut self.transcoder.prophesee_source {
-    //                     None => {
-    //                         #[cfg(feature = "open-cv")]
-    //                         match &mut self.transcoder.davis_source {
-    //                             None => {
-    //                                 return Ok(());
-    //                             }
-    //                             Some(source) => {
-    //                                 ui_info_state.davis_latency = Some(source.get_latency() as f64);
-    //                                 source
-    //                             }
-    //                         }
-    //                         #[cfg(not(feature = "open-cv"))]
-    //                         return Ok(());
-    //                     }
-    //                     Some(source) => source,
-    //                 },
-    //                 Some(source) => source,
-    //             }
-    //         };
-    //
-    //         match source.consume(&pool) {
-    //             Ok(events_vec_vec) => {
-    //                 for events_vec in events_vec_vec {
-    //                     ui_info_state.events_total += events_vec.len() as u64;
-    //                     ui_info_state.events_per_sec += events_vec.len() as f64;
-    //                 }
-    //                 ui_info_state.events_ppc_total = ui_info_state.events_total as f64
-    //                     / (source.get_video_ref().state.plane.volume() as f64);
-    //                 let source_fps = source.get_video_ref().get_tps() as f64
-    //                     / source.get_video_ref().get_ref_time() as f64;
-    //                 ui_info_state.events_per_sec *= source_fps;
-    //                 ui_info_state.events_ppc_per_sec = ui_info_state.events_per_sec
-    //                     / (source.get_video_ref().state.plane.volume() as f64);
-    //             }
-    //             Err(SourceError::Open) => {}
-    //             Err(e) => {
-    //                 eprintln!("Error: {:?}", e);
-    //                 source.get_video_mut().end_write_stream()?;
-    //                 self.ui_info_state.output_path = None;
-    //                 self.ui_info_state.output_name = Default::default();
-    //
-    //                 // Start video over from the beginning
-    //                 replace_adder_transcoder(
-    //                     self,
-    //                     self.ui_info_state.input_path_0.clone(),
-    //                     self.ui_info_state.input_path_1.clone(),
-    //                     None,
-    //                     0,
-    //                 );
-    //                 return Ok(());
-    //             }
-    //         };
-    //
-    //         // Calculate quality metrics on the running intensity frame (not with features drawn on it)
-    //         let image_mat = &source.get_video_ref().state.running_intensities;
-    //
-    //         if let Some(input) = source.get_input() {
-    //             #[rustfmt::skip]
-    //             let metrics = calculate_quality_metrics(
-    //                 input,
-    //                 image_mat,
-    //                 QualityMetrics {
-    //                     mse: if self.ui_state.metric_mse {Some(0.0)} else {None},
-    //                     psnr: if self.ui_state.metric_psnr {Some(0.0)} else {None},
-    //                     ssim: if self.ui_state.metric_ssim {Some(0.0)} else {None},
-    //                 },
-    //             );
-    //             let metrics = metrics?;
-    //             self.ui_info_state.plot_points_psnr_y.update(metrics.psnr);
-    //             self.ui_info_state.plot_points_mse_y.update(metrics.mse);
-    //             self.ui_info_state.plot_points_ssim_y.update(metrics.ssim);
-    //         }
-    //
-    //         // Display frame
-    //         let image_mat = source.get_video_ref().display_frame_features.clone();
-    //
-    //         let color = image_mat.shape()[2] == 3;
-    //
-    //         if let Some(image) = images.get_mut(&handles.image_view) {
-    //             crate::utils::prep_bevy_image_mut(image_mat, color, image)?;
-    //         } else {
-    //             // dbg!("else");
-    //             let image_bevy = prep_bevy_image(
-    //                 image_mat,
-    //                 color,
-    //                 source.get_video_ref().state.plane.w(),
-    //                 source.get_video_ref().state.plane.h(),
-    //             )?;
-    //             self.transcoder.live_image = image_bevy;
-    //             let handle = images.add(self.transcoder.live_image.clone());
-    //             handles.image_view = handle;
-    //         }
-    //
-    //         // Repeat for the input view
-    //         if self.ui_state.show_original && source.get_input().is_some() {
-    //             let image_mat = source.get_input().unwrap();
-    //             let image_mat = image_mat.clone();
-    //             let color = image_mat.shape()[2] == 3;
-    //
-    //             if let Some(image) = images.get_mut(&handles.input_view) {
-    //                 crate::utils::prep_bevy_image_mut(image_mat, color, image)?;
-    //             } else {
-    //                 let image_bevy = prep_bevy_image(
-    //                     image_mat,
-    //                     color,
-    //                     source.get_video_ref().state.plane.w(),
-    //                     source.get_video_ref().state.plane.h(),
-    //                 )?;
-    //                 let handle = images.add(image_bevy);
-    //                 handles.input_view = handle;
-    //             }
-    //         }
-    //         if !self.ui_state.show_original {
-    //             handles.input_view = Default::default();
-    //         }
-    //
-    //         let raw_source_bitrate = source.get_running_input_bitrate() / 8.0 / 1024.0 / 1024.0; // source in megabytes per sec
-    //         self.ui_info_state
-    //             .plot_points_raw_source_bitrate_y
-    //             .update(Some(raw_source_bitrate));
-    //
-    //         Ok(())
-    //     }
 }
-//
+
+fn label_with_help_cursor(ui: &mut egui::Ui, text: &str, hover_text: Option<&str>) {
+    let label = ui.label(text);
+    if let Some(hover) = hover_text {
+        if label.hovered() {
+            ui.ctx().set_cursor_icon(egui::CursorIcon::Help);
+        }
+        label.on_hover_text(hover);
+    }
+}
+

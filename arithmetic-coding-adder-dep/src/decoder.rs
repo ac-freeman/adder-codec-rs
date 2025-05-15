@@ -171,7 +171,7 @@ where
     input: &'a mut R,
 }
 
-impl<'a, M, R> Iterator for DecodeIter<'a, M, R>
+impl<M, R> Iterator for DecodeIter<'_, M, R>
 where
     M: Model,
     R: BitRead,

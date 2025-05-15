@@ -1,7 +1,5 @@
 use std::error::Error;
 
-#[cfg(feature = "open-cv")]
-use adder_codec_rs::transcoder::source::davis::Davis;
 use adder_codec_rs::transcoder::source::framed::Framed;
 use eframe::epaint::ColorImage;
 use std::fs::File;
@@ -9,10 +7,16 @@ use std::io::BufWriter;
 use std::time::Instant;
 
 #[cfg(feature = "open-cv")]
-use adder_codec_rs::transcoder::source::davis::TranscoderMode;
+use {
+    adder_codec_rs::transcoder::source::davis::TranscoderMode,
+    adder_codec_rs::davis_edi_rs::util::reconstructor::Reconstructor,
+    adder_codec_rs::transcoder::source::davis::Davis,
+    adder_codec_rs::davis_edi_rs::util::reconstructor::ReconstructorError,
+    opencv::Result,
+    std::ffi::OsString,
+    adder_codec_rs::adder_codec_core::SourceCamera::DavisU8,
+};
 
-#[cfg(feature = "open-cv")]
-use adder_codec_rs::davis_edi_rs::util::reconstructor::Reconstructor;
 
 use crate::transcoder::adder::AdderTranscoderError::{
     InvalidFileType, NoFileSelected, Uninitialized,
@@ -22,16 +26,12 @@ use crate::transcoder::EventRateMsg;
 use crate::utils::prep_epaint_image;
 use adder_codec_rs::adder_codec_core::codec::rate_controller::DEFAULT_CRF_QUALITY;
 use adder_codec_rs::adder_codec_core::Event;
-use adder_codec_rs::adder_codec_core::SourceCamera::{Dvs, FramedU8};
-#[cfg(feature = "open-cv")]
-use adder_codec_rs::davis_edi_rs::util::reconstructor::ReconstructorError;
+use adder_codec_rs::adder_codec_core::SourceCamera::{ Dvs, FramedU8};
 use adder_codec_rs::transcoder::source::prophesee::Prophesee;
 use adder_codec_rs::transcoder::source::video::SourceError::{NoData, VideoError};
 use adder_codec_rs::transcoder::source::video::{Source, SourceError, VideoBuilder};
 use adder_codec_rs::transcoder::source::AdderSource;
 use adder_codec_rs::utils::cv::{calculate_quality_metrics, QualityMetrics};
-#[cfg(feature = "open-cv")]
-use opencv::Result;
 use thiserror::Error;
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::error::TrySendError;
@@ -172,6 +172,8 @@ impl AdderTranscoder {
                     AdderTranscoderError::IoError(_) => {}
                     AdderTranscoderError::OtherError(_) => {}
                     Uninitialized => {}
+                    #[cfg(feature = "open-cv")]
+                    AdderTranscoderError::ReconstructorError(_) => {}
                 }
 
                 if let Err(TrySendError::Full(..)) = self
