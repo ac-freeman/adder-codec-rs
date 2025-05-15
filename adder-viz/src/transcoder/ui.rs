@@ -1,3 +1,7 @@
+use crate::transcoder::adder::AdderTranscoder;
+use crate::transcoder::{AdaptiveParams, CoreParams, EventRateMsg, InfoParams, InfoUiState};
+use crate::utils::slider_pm;
+use crate::TabState;
 use adder_codec_rs::adder_codec_core::codec::rate_controller::{CRF, DEFAULT_CRF_QUALITY};
 use adder_codec_rs::adder_codec_core::codec::{EncoderType, EventDrop, EventOrder};
 use adder_codec_rs::adder_codec_core::{PixelMultiMode, PlaneSize, TimeMode};
@@ -12,10 +16,6 @@ use egui_plot::Corner::LeftTop;
 use egui_plot::{Legend, Plot};
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::Sender;
-use crate::transcoder::adder::AdderTranscoder;
-use crate::transcoder::{AdaptiveParams, CoreParams, EventRateMsg, InfoParams, InfoUiState};
-use crate::TabState;
-use crate::utils::slider_pm;
 
 #[derive(Default, Debug, Clone, PartialEq)]
 pub struct TranscoderState {
@@ -76,7 +76,6 @@ impl TranscoderUi {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         let (tx, rx) = mpsc::channel(5);
         let (msg_tx, msg_rx) = mpsc::channel(30);
-
 
         let mut transcoder_ui = TranscoderUi {
             transcoder_state: Default::default(),
@@ -482,33 +481,60 @@ impl TranscoderUi {
                 self.adder_image_handle.id(),
                 size,
             ));
-            ui.add(image);
+            let response = ui.add(image);
+
+            // Get the bounding rectangle of the image view
+            let image_rect = response.rect;
+
+            // If the rect coordinates have NAN values, skip the following
+            if image_rect.min.x.is_nan() || image_rect.min.y.is_nan() {
+                return;
+            }
 
             // Handle mouse input for ROI
             ui.ctx().input(|i| {
-                if i.pointer.any_pressed() {
-                    if let Some(pos) = i.pointer.interact_pos() {
+                if let Some(pos) = i.pointer.interact_pos() {
+                    if i.pointer.any_pressed() && image_rect.contains(pos) {
                         if !self.is_drawing_roi {
                             self.roi.start = Some(pos);
                             self.is_drawing_roi = true;
-                            eprintln!("Starting ROI at: {:?}", pos);
+
+                            // self.roi.end = Some(pos);
+                            // eprintln!("Ending ROI at: {:?}", pos);
                         }
-                        // self.roi.end = Some(pos);
-                        // eprintln!("Ending ROI at: {:?}", pos);
-                    }
-                } else if i.pointer.any_down() {
-                    // Move the endpoint for live visualization of the ROI
-                    if let Some(pos) = i.pointer.interact_pos() {
-                        self.roi.end = Some(pos);
-                    }
-                }
-                else if i.pointer.any_released() {
-                    if let Some(pos) = i.pointer.interact_pos() {
-                        self.roi.end = Some(pos);
+                    } else if i.pointer.any_down() && self.is_drawing_roi {
+                        // Move the endpoint for live visualization of the ROI
+                        let clamped_pos = egui::Pos2 {
+                            x: pos.x.clamp(image_rect.min.x, image_rect.max.x),
+                            y: pos.y.clamp(image_rect.min.y, image_rect.max.y),
+                        };
+                        self.roi.end = Some(clamped_pos);
+                    } else if i.pointer.any_released() && self.is_drawing_roi {
+                        let clamped_pos = egui::Pos2 {
+                            x: pos.x.clamp(image_rect.min.x, image_rect.max.x),
+                            y: pos.y.clamp(image_rect.min.y, image_rect.max.y),
+                        };
+                        self.roi.end = Some(clamped_pos);
                         self.is_drawing_roi = false;
-                        eprintln!("Ending ROI at: {:?}", pos);
 
                         // Send the ROI to the transcoder
+                        // Subtract the image_rect min from the ROI coordinates
+                        let roi_start = self.roi.start.unwrap_or_default() - image_rect.min;
+                        let roi_end = self.roi.end.unwrap_or_default() - image_rect.min;
+                        println!("ROI start: {:?}, end: {:?}", roi_start, roi_end);
+
+                        // Undo the coordinate scaling from size to self.adder_image_handle.size()[0]
+                        let scale_x = self.adder_image_handle.size()[0] as f32 / size.x;
+                        let scale_y = self.adder_image_handle.size()[1] as f32 / size.y;
+                        let roi_start = egui::Pos2 {
+                            x: (roi_start.x * scale_x).round(),
+                            y: (roi_start.y * scale_y).round(),
+                        };
+                        let roi_end = egui::Pos2 {
+                            x: (roi_end.x * scale_x).round(),
+                            y: (roi_end.y * scale_y).round(),
+                        };
+                        println!("Scaled ROI start: {:?}, end: {:?}", roi_start, roi_end);
                     }
                 }
             });
@@ -516,7 +542,11 @@ impl TranscoderUi {
             // Draw the bounding box
             if let (Some(start), Some(end)) = (self.roi.start, self.roi.end) {
                 let rect = egui::Rect::from_two_pos(start, end);
-                ui.ctx().layer_painter(egui::LayerId::new(egui::Order::Foreground, egui::Id::new("roi")))
+                ui.ctx()
+                    .layer_painter(egui::LayerId::new(
+                        egui::Order::Foreground,
+                        egui::Id::new("roi"),
+                    ))
                     .rect_stroke(rect, 0.0, egui::Stroke::new(2.0, egui::Color32::RED));
             }
         });
@@ -538,8 +568,10 @@ impl TranscoderUi {
         label_with_help_cursor(
             ui,
             "Δt_ref:",
-            Some("The number of ticks for a standard length integration (e.g. exposure
-             time for a framed video)."),
+            Some(
+                "The number of ticks for a standard length integration (e.g. exposure
+             time for a framed video).",
+            ),
         );
         slider_button_down |= slider_pm(
             enabled,
@@ -549,7 +581,7 @@ impl TranscoderUi {
             1..=255,
             vec![],
             10,
-        );       
+        );
         ui.end_row();
 
         ui.label("Quality parameters:");
@@ -562,10 +594,12 @@ impl TranscoderUi {
         label_with_help_cursor(
             ui,
             "CRF Quality:",
-            Some("Constant Rate Factor is a metaparameter that controls data rate and
+            Some(
+                "Constant Rate Factor is a metaparameter that controls data rate and
             loss by adjusting multiple variables. Setting a high value will produce 
             greater loss but a lower data rate. CRF values 0, 3, 6, & 9 are 
-            lossless, high, medium, & low quality, respectively.")
+            lossless, high, medium, & low quality, respectively.",
+            ),
         );
         slider_button_down |= slider_pm(
             adaptive_params.auto_quality,
@@ -576,7 +610,7 @@ impl TranscoderUi {
             vec![],
             1,
         );
-        
+
         if adaptive_params.auto_quality
             && adaptive_params.crf_number
                 != adaptive_params
@@ -590,16 +624,17 @@ impl TranscoderUi {
                 .crf
                 .update_quality(adaptive_params.crf_number);
         }
-        //add informational hover button       
-        
+        //add informational hover button
+
         ui.end_row();
-        
 
         label_with_help_cursor(
             ui,
             "Δt_max multiplier:",
-            Some("The maximum Δt that an event can span before the first update
-            is internally fired.")
+            Some(
+                "The maximum Δt that an event can span before the first update
+            is internally fired.",
+            ),
         );
         slider_button_down |= slider_pm(
             !adaptive_params.auto_quality,
@@ -609,13 +644,13 @@ impl TranscoderUi {
             1..=900,
             vec![],
             1,
-        );       
+        );
         ui.end_row();
 
         label_with_help_cursor(
             ui,
             "ADU interval:",
-            Some("The number of Δt_ref intervals spanned by an ADU when compression is enabled.")
+            Some("The number of Δt_ref intervals spanned by an ADU when compression is enabled."),
         );
         slider_button_down |= slider_pm(
             true,
@@ -632,7 +667,7 @@ impl TranscoderUi {
         label_with_help_cursor(
             ui,
             "Threshold baseline:",
-            Some("Default contrast threshold.")
+            Some("Default contrast threshold."),
         );
         slider_button_down |= slider_pm(
             !adaptive_params.auto_quality,
@@ -642,13 +677,9 @@ impl TranscoderUi {
             0..=255,
             vec![],
             1,
-        );        
-        ui.end_row();
-        label_with_help_cursor(
-            ui,
-            "Threshold max:",
-            Some("Maximum contrast threshold.")
         );
+        ui.end_row();
+        label_with_help_cursor(ui, "Threshold max:", Some("Maximum contrast threshold."));
         slider_button_down |= slider_pm(
             !adaptive_params.auto_quality,
             false,
@@ -658,20 +689,22 @@ impl TranscoderUi {
             vec![],
             1,
         );
-        ui.add_space(-80.0);   
+        ui.add_space(-80.0);
         label_with_help_cursor(
             ui,
             "Threshold?",
-            Some("The amount of variation in intensity allowed, affecting length
-            of integration until an event queue is fired and pixel is reset.")
+            Some(
+                "The amount of variation in intensity allowed, affecting length
+            of integration until an event queue is fired and pixel is reset.",
+            ),
         );
- 
+
         ui.end_row();
 
         label_with_help_cursor(
             ui,
             "Threshold velocity",
-            Some("The frequency at which pixels' threshold values increase.")
+            Some("The frequency at which pixels' threshold values increase."),
         );
         slider_button_down |= slider_pm(
             !adaptive_params.auto_quality,
@@ -687,8 +720,10 @@ impl TranscoderUi {
         label_with_help_cursor(
             ui,
             "Feature radius:",
-            Some("The radius for which to reset the contrast threshold for neighboring pixels when
-             a feature is detected (if enabled)")
+            Some(
+                "The radius for which to reset the contrast threshold for neighboring pixels when
+             a feature is detected (if enabled)",
+            ),
         );
         slider_button_down |= slider_pm(
             !adaptive_params.auto_quality,
@@ -701,7 +736,6 @@ impl TranscoderUi {
         );
         //add informational hover button
         ui.end_row();
-    
 
         // ui.label("Thread count:");
         // slider_pm(
@@ -719,8 +753,10 @@ impl TranscoderUi {
         label_with_help_cursor(
             ui,
             "Video scale:",
-            Some("Spatial resolution, compared to the original video. Input video will be downscaled
-            before transcoding. 1.0 = original resolution, 0.5 = half resolution, etc.")
+            Some(
+                "Spatial resolution, compared to the original video. Input video will be downscaled
+            before transcoding. 1.0 = original resolution, 0.5 = half resolution, etc.",
+            ),
         );
         slider_button_down |= slider_pm(
             enabled,
@@ -732,11 +768,7 @@ impl TranscoderUi {
             0.1,
         );
         ui.end_row();
-        label_with_help_cursor(
-            ui,
-            "Channels:",
-            Some("Color (if supported) or monochrome?")
-        );
+        label_with_help_cursor(ui, "Channels:", Some("Color (if supported) or monochrome?"));
         ui.add_enabled(
             enabled,
             egui::Checkbox::new(&mut core_params.color, "Color?"),
@@ -745,9 +777,11 @@ impl TranscoderUi {
         label_with_help_cursor(
             ui,
             "Integration mode:",
-            Some("Normal mode will produce all events, similar to what an integrating event sensor
+            Some(
+                "Normal mode will produce all events, similar to what an integrating event sensor
             would capture. Collapse mode will only prouduce the first and last events at a new
-            intensity level, once the contrast threshold is exceeded.")
+            intensity level, once the contrast threshold is exceeded.",
+            ),
         );
         ui.horizontal(|ui| {
             ui.radio_value(
@@ -766,11 +800,13 @@ impl TranscoderUi {
         label_with_help_cursor(
             ui,
             "View mode",
-            Some("The view mode for the video.
+            Some(
+                "The view mode for the video.
             Intensity will show the intensity of the pixels,
             D will show the decimation components of events as they fire,
             DeltaT will show the time since the last event,
-            and SAE is the surface of active events.")
+            and SAE is the surface of active events.",
+            ),
         );
         ui.vertical(|ui| {
             ui.horizontal(|ui| {
@@ -799,38 +835,42 @@ impl TranscoderUi {
                 enabled,
                 egui::Checkbox::new(&mut adaptive_params.show_original, "Show original?"),
             );
-        });        
+        });
         ui.end_row();
 
-        label_with_help_cursor(
-            ui,
-            "Time mode:",
-            None
-        );
+        label_with_help_cursor(ui, "Time mode:", None);
         ui.add_enabled_ui(true, |ui| {
             ui.horizontal(|ui| {
                 ui.radio_value(
                     &mut core_params.time_mode,
                     TimeMode::DeltaT,
                     "Δt (time change)",
-                ).on_hover_text("measures temporal values based 
-                on previous data");
+                )
+                .on_hover_text(
+                    "measures temporal values based 
+                on previous data",
+                );
                 ui.radio_value(
                     &mut core_params.time_mode,
                     TimeMode::AbsoluteT,
                     "t (absolute time)",
-                ).on_hover_text("measures temporal values independent 
-                of previous data");
+                )
+                .on_hover_text(
+                    "measures temporal values independent 
+                of previous data",
+                );
             });
-        });         
+        });
         ui.end_row();
 
         label_with_help_cursor(
             ui,
             "Compression mode:",
-            Some("Empty does not write any data to the output file, which can be faster for viz.
+            Some(
+                "Empty does not write any data to the output file, which can be faster for viz.
             Raw writes uncompressed event tuples.
-            Compressed writes compressed events using the bespoke encoder.")
+            Compressed writes compressed events using the bespoke encoder.",
+            ),
         );
         let current_encoder_type = core_params.encoder_type;
         ui.add_enabled_ui(true, |ui| {
@@ -891,9 +931,11 @@ impl TranscoderUi {
             label_with_help_cursor(
                 ui,
                 "DAVIS deblurred FPS:",
-                Some("If DAVIS mode is \"Framed recon\" or \"Raw DAVIS\", this determines the
+                Some(
+                    "If DAVIS mode is \"Framed recon\" or \"Raw DAVIS\", this determines the
                 effective shutter speed of the deblurred APS frames. For example, if this parameter
-                is 100, each deblurred frame will span 10ms.")
+                is 100, each deblurred frame will span 10ms.",
+                ),
             );
 
             slider_button_down |= slider_pm(
@@ -915,7 +957,7 @@ impl TranscoderUi {
             label_with_help_cursor(
                 ui,
                 "Optimize:",
-                Some("Continually optimize the θ contrast threshold for DVS?")
+                Some("Continually optimize the θ contrast threshold for DVS?"),
             );
             ui.add_enabled(
                 enable_optimize,
@@ -926,7 +968,7 @@ impl TranscoderUi {
             label_with_help_cursor(
                 ui,
                 "Optimize frequency:",
-                Some("How many input APS frames between each θ optimization (if enabled)")
+                Some("How many input APS frames between each θ optimization (if enabled)"),
             );
             slider_button_down |= slider_pm(
                 enable_optimize,
@@ -944,9 +986,11 @@ impl TranscoderUi {
         label_with_help_cursor(
             ui,
             "Event output order:",
-            Some("Unchanged may produce events from different pixels that are not temporally sorted,
+            Some(
+                "Unchanged may produce events from different pixels that are not temporally sorted,
             relative to each other. Interleaved will temporally sort the events of all pixels, but
-            it will be slightly slower.")
+            it will be slightly slower.",
+            ),
         );
         ui.add_enabled_ui(enable_encoder_options, |ui| {
             ui.horizontal(|ui| {
@@ -961,7 +1005,7 @@ impl TranscoderUi {
                     "Interleaved",
                 );
             });
-        });           
+        });
         ui.end_row();
 
         label_with_help_cursor(
@@ -1107,4 +1151,3 @@ fn label_with_help_cursor(ui: &mut egui::Ui, text: &str, hover_text: Option<&str
         label.on_hover_text(hover);
     }
 }
-
