@@ -1273,7 +1273,7 @@ impl<W: Write + 'static + std::marker::Send + std::marker::Sync + 'static> Video
             let crf = &mut self.encoder.options.crf;
 
             crf.override_c_thresh_baseline(c_thresh_baseline);
-            crf.override_c_thresh_max(c_thresh_max);
+            crf.override_c_thresh_max(c_thresh_baseline);
             crf.override_c_increase_velocity(c_increase_velocity);
             crf.override_feature_c_radius(feature_c_radius as u16); // The absolute pixel count radius
         }
@@ -1281,7 +1281,12 @@ impl<W: Write + 'static + std::marker::Send + std::marker::Sync + 'static> Video
         self.encoder.sync_crf();
 
         for px in self.event_pixel_trees.iter_mut() {
-            px.c_thresh = c_thresh_baseline;
+            if px.c_thresh != c_thresh_baseline {
+                px.c_thresh = c_thresh_baseline;
+            }
+            // if px.c_thresh > c_thresh_baseline {
+            //     px.c_thresh = c_thresh_baseline;
+            // }
             px.c_increase_counter = 0;
         }
     }
