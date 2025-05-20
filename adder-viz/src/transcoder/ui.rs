@@ -315,115 +315,115 @@ impl TranscoderUi {
             );
         });
 
-        ui.horizontal(|ui| {
-            if ui.button("Open DVS socket").clicked() {
-                if let Some(path) = rfd::FileDialog::new()
-                    .set_directory("/tmp")
-                    .add_filter("DVS/DAVIS video", &["sock"])
-                    .pick_file()
-                {
-                    self.transcoder_state.core_params.input_path_buf_0 = Some(path.clone());
-                }
-            }
-            if ui.button("Open APS socket").clicked() {
-                if let Some(path) = rfd::FileDialog::new()
-                    .set_directory("/tmp")
-                    .add_filter("DVS/DAVIS video", &["sock"])
-                    .pick_file()
-                {
-                    self.transcoder_state.core_params.input_path_buf_1 = Some(path.clone());
-                }
-            }
-            // if ui.button("Go!").clicked()
-            //     && self.transcoder_state.core_params.input_path_buf_0.is_some()
-            //     && self.transcoder_state.core_params.input_path_buf_1.is_some()
-            // {
-            //     replace_adder_transcoder(
-            //         self,
-            //         self.ui_info_state.input_path_0.clone(),
-            //         self.ui_info_state.input_path_1.clone(),
-            //         self.ui_info_state.output_path.clone(),
-            //         0,
-            //     );
-            // }
-        });
-        // ui.label(self.ui_info_state.source_name.clone());
-
-        ui.horizontal(|ui| {
-            if ui.button("Save file").clicked() {
-                // Check if 'empty' compression is selected, warn user if so
-                if self.transcoder_state.core_params.encoder_type == EncoderType::Empty {
-                    self.info_ui_state.error_string =
-                        Some("Empty compression selected, no output will be written".to_string());
-                } else if let Some(mut path) = rfd::FileDialog::new()
-                    .add_filter("adder video", &["adder"])
-                    .save_file()
-                {
-                    if !path.ends_with(".adder") {
-                        path = path.with_extension("adder");
-                    };
-                    self.transcoder_state.core_params.output_path = Some(path.clone());
-                    dbg!("saving selected");
-                    self.info_ui_state.error_string = None;
-                }
-            }
-
-            let label_opt = &self.transcoder_state.core_params.output_path;
-
-            ui.colored_label(
-                if label_opt.is_some() {
-                    egui::Color32::GREEN
-                } else {
-                    ui.style().visuals.text_color()
-                },
-                label_opt
-                    .as_ref()
-                    .map_or("No output selected yet", |p| p.to_str().unwrap()),
-            );
-        });
-
-        Plot::new("quality_plot")
-            .height(100.0)
-            .allow_drag(true)
-            .auto_bounds(Vec2b { x: true, y: true })
-            .legend(Legend::default().position(LeftTop))
-            .show(ui, |plot_ui| {
-                let metrics = vec![
-                    (&self.info_ui_state.plot_points_psnr_y, "PSNR dB"),
-                    (&self.info_ui_state.plot_points_mse_y, "MSE"),
-                    (&self.info_ui_state.plot_points_ssim_y, "SSIM"),
-                ];
-
-                for (line, label) in metrics {
-                    if line.points.iter().last().unwrap().is_some() {
-                        plot_ui.line(line.get_plotline(label, true));
-                    }
-                }
-            });
-
-        Plot::new("bitrate_plot")
-            .height(100.0)
-            .allow_drag(true)
-            .auto_bounds(Vec2b { x: true, y: true })
-            .legend(Legend::default().position(LeftTop))
-            .show(ui, |plot_ui| {
-                let metrics = vec![
-                    (
-                        &self.info_ui_state.plot_points_raw_adder_bitrate_y,
-                        "log Raw ADDER MB/s",
-                    ),
-                    (
-                        &self.info_ui_state.plot_points_raw_source_bitrate_y,
-                        "log Raw source MB/s",
-                    ),
-                ];
-
-                for (line, label) in metrics {
-                    if line.points.iter().last().unwrap().is_some() {
-                        plot_ui.line(line.get_plotline(label, false));
-                    }
-                }
-            });
+        // ui.horizontal(|ui| {
+        //     if ui.button("Open DVS socket").clicked() {
+        //         if let Some(path) = rfd::FileDialog::new()
+        //             .set_directory("/tmp")
+        //             .add_filter("DVS/DAVIS video", &["sock"])
+        //             .pick_file()
+        //         {
+        //             self.transcoder_state.core_params.input_path_buf_0 = Some(path.clone());
+        //         }
+        //     }
+        //     if ui.button("Open APS socket").clicked() {
+        //         if let Some(path) = rfd::FileDialog::new()
+        //             .set_directory("/tmp")
+        //             .add_filter("DVS/DAVIS video", &["sock"])
+        //             .pick_file()
+        //         {
+        //             self.transcoder_state.core_params.input_path_buf_1 = Some(path.clone());
+        //         }
+        //     }
+        //     // if ui.button("Go!").clicked()
+        //     //     && self.transcoder_state.core_params.input_path_buf_0.is_some()
+        //     //     && self.transcoder_state.core_params.input_path_buf_1.is_some()
+        //     // {
+        //     //     replace_adder_transcoder(
+        //     //         self,
+        //     //         self.ui_info_state.input_path_0.clone(),
+        //     //         self.ui_info_state.input_path_1.clone(),
+        //     //         self.ui_info_state.output_path.clone(),
+        //     //         0,
+        //     //     );
+        //     // }
+        // });
+        // // ui.label(self.ui_info_state.source_name.clone());
+        //
+        // ui.horizontal(|ui| {
+        //     if ui.button("Save file").clicked() {
+        //         // Check if 'empty' compression is selected, warn user if so
+        //         if self.transcoder_state.core_params.encoder_type == EncoderType::Empty {
+        //             self.info_ui_state.error_string =
+        //                 Some("Empty compression selected, no output will be written".to_string());
+        //         } else if let Some(mut path) = rfd::FileDialog::new()
+        //             .add_filter("adder video", &["adder"])
+        //             .save_file()
+        //         {
+        //             if !path.ends_with(".adder") {
+        //                 path = path.with_extension("adder");
+        //             };
+        //             self.transcoder_state.core_params.output_path = Some(path.clone());
+        //             dbg!("saving selected");
+        //             self.info_ui_state.error_string = None;
+        //         }
+        //     }
+        //
+        //     let label_opt = &self.transcoder_state.core_params.output_path;
+        //
+        //     ui.colored_label(
+        //         if label_opt.is_some() {
+        //             egui::Color32::GREEN
+        //         } else {
+        //             ui.style().visuals.text_color()
+        //         },
+        //         label_opt
+        //             .as_ref()
+        //             .map_or("No output selected yet", |p| p.to_str().unwrap()),
+        //     );
+        // });
+        //
+        // Plot::new("quality_plot")
+        //     .height(100.0)
+        //     .allow_drag(true)
+        //     .auto_bounds(Vec2b { x: true, y: true })
+        //     .legend(Legend::default().position(LeftTop))
+        //     .show(ui, |plot_ui| {
+        //         let metrics = vec![
+        //             (&self.info_ui_state.plot_points_psnr_y, "PSNR dB"),
+        //             (&self.info_ui_state.plot_points_mse_y, "MSE"),
+        //             (&self.info_ui_state.plot_points_ssim_y, "SSIM"),
+        //         ];
+        //
+        //         for (line, label) in metrics {
+        //             if line.points.iter().last().unwrap().is_some() {
+        //                 plot_ui.line(line.get_plotline(label, true));
+        //             }
+        //         }
+        //     });
+        //
+        // Plot::new("bitrate_plot")
+        //     .height(100.0)
+        //     .allow_drag(true)
+        //     .auto_bounds(Vec2b { x: true, y: true })
+        //     .legend(Legend::default().position(LeftTop))
+        //     .show(ui, |plot_ui| {
+        //         let metrics = vec![
+        //             (
+        //                 &self.info_ui_state.plot_points_raw_adder_bitrate_y,
+        //                 "log Raw ADDER MB/s",
+        //             ),
+        //             (
+        //                 &self.info_ui_state.plot_points_raw_source_bitrate_y,
+        //                 "log Raw source MB/s",
+        //             ),
+        //         ];
+        //
+        //         for (line, label) in metrics {
+        //             if line.points.iter().last().unwrap().is_some() {
+        //                 plot_ui.line(line.get_plotline(label, false));
+        //             }
+        //         }
+        //     });
 
         ui.label(format!(
             "{:.2} transcoded FPS\t\
