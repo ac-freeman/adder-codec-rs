@@ -388,7 +388,8 @@ impl AdderPlayer {
                 }
             }
 
-            let image = prep_epaint_image(&self.running_frame, is_color, width, height).unwrap();
+            let image =
+                prep_epaint_image(&mut self.running_frame, is_color, width, height).unwrap();
 
             // self.stream_state.current_t_ticks += frame_sequence.state.tpf;
 

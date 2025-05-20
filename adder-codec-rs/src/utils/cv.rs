@@ -1,18 +1,13 @@
 use crate::transcoder::source::video::SourceError;
-#[cfg(feature = "open-cv")]
-use {
-    adder_codec_core::PixelAddress,
-    opencv::prelude::KeyPointTraitConst,
-    std::collections::HashSet,
-};
 use adder_codec_core::{Coord, PlaneSize};
 use const_for::const_for;
 use ndarray::{Array3, ArrayView, Axis, Ix2};
-
+#[cfg(feature = "open-cv")]
+use {
+    adder_codec_core::PixelAddress, opencv::prelude::KeyPointTraitConst, std::collections::HashSet,
+};
 
 use serde::{Deserialize, Serialize};
-
-
 
 use std::error::Error;
 use video_rs_adder_dep::Frame;
@@ -227,6 +222,24 @@ pub fn handle_color(mut input: Frame, color: bool) -> Result<Frame, SourceError>
 
         // Remove the color channels
         input.collapse_axis(Axis(2), 0);
+    } else {
+        // Map RGB to YUV
+        input
+            .exact_chunks_mut((1, 1, 3))
+            .into_iter()
+            .for_each(|mut v| unsafe {
+                let r = *v.uget((0, 0, 0)) as f32;
+                let g = *v.uget((0, 0, 1)) as f32;
+                let b = *v.uget((0, 0, 2)) as f32;
+
+                let y = (0.299 * r + 0.587 * g + 0.114 * b).clamp(0.0, 255.0) as u8;
+                let u = ((b - y as f32) * 0.492 + 128.0).clamp(0.0, 255.0) as u8;
+                let vv = ((r - y as f32) * 0.877 + 128.0).clamp(0.0, 255.0) as u8;
+
+                *v.uget_mut((0, 0, 0)) = y;
+                *v.uget_mut((0, 0, 1)) = u;
+                *v.uget_mut((0, 0, 2)) = vv;
+            });
     }
     Ok(input)
 }

@@ -4,6 +4,7 @@ use eframe::emath;
 use eframe::epaint::ColorImage;
 use egui::{Ui, WidgetText};
 use egui_plot::{Line, PlotPoints};
+use ndarray::Axis;
 use std::collections::VecDeque;
 use std::error::Error;
 use std::ops::RangeInclusive;
@@ -48,12 +49,33 @@ impl PlotY {
 
 #[inline]
 pub fn prep_epaint_image(
-    image_mat: &Frame,
+    image_mat: &mut Frame,
     color: bool,
     width: usize,
     height: usize,
 ) -> Result<ColorImage, Box<dyn Error>> {
     if color {
+        // Iterate each 3-channel pixel and convert to RGB
+        for (i, mut slice) in image_mat.axis_iter_mut(Axis(0)).enumerate() {
+            // Iterate over the second axis (rows in the 2D slice)
+            for (j, mut row) in slice.axis_iter_mut(Axis(0)).enumerate() {
+                // Convert YUV pixel to RGB
+                let y = row[0] as f32;
+                let u = row[1] as f32 - 128.0;
+                let v = row[2] as f32 - 128.0;
+                // let r = (y + 1.402 * (v - 128.0)).clamp(0.0, 255.0) as u8;
+                // let g =
+                //     (y - 0.344136 * (u - 128.0) - 0.714136 * (v - 128.0)).clamp(0.0, 255.0) as u8;
+                // let b = (y + 1.772 * (u - 128.0)).clamp(0.0, 255.0) as u8;
+                let r = (y + 1.402 * v).clamp(0.0, 255.0) as u8;
+                let g = (y - 0.344136 * u - 0.714136 * v).clamp(0.0, 255.0) as u8;
+                let b = (y + 1.772 * u).clamp(0.0, 255.0) as u8;
+                row[0] = r as u8;
+                row[1] = g as u8;
+                row[2] = b as u8;
+            }
+        }
+
         return Ok(ColorImage::from_rgb(
             [width, height],
             image_mat.as_standard_layout().as_slice().unwrap(),

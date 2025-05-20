@@ -243,24 +243,24 @@ impl AdderTranscoder {
             let width = image_mat.shape()[1];
             let height = image_mat.shape()[0];
 
-            let image = prep_epaint_image(image_mat, color, width, height).unwrap();
+            // let image = prep_epaint_image(image_mat, color, width, height).unwrap();
 
-            self.input_image_handle.set(image, Default::default());
+            // self.input_image_handle.set(image, Default::default());
         }
     }
 
     fn show_display_frame(&mut self) {
-        let image_mat = &self
+        let mut image_mat = &mut self
             .source
-            .as_ref()
+            .as_mut()
             .unwrap()
-            .get_video_ref()
+            .get_video_mut()
             .display_frame_features;
         let color = image_mat.shape()[2] == 3;
         let width = image_mat.shape()[1];
         let height = image_mat.shape()[0];
 
-        let image = prep_epaint_image(image_mat, color, width, height).unwrap();
+        let image = prep_epaint_image(&mut image_mat, color, width, height).unwrap();
 
         self.adder_image_handle.set(image, Default::default());
     }
