@@ -152,6 +152,7 @@ impl AdderTranscoder {
                         video_rs_adder_dep::Error::ReadExhausted,
                     ))
                     | AdderTranscoderError::SourceError(NoData) => {
+                        eprintln!("Source error: {}", e);
                         let mut state = self.transcoder_state.clone();
                         self.source
                             .as_mut()
@@ -272,6 +273,14 @@ impl AdderTranscoder {
         if force_new || transcoder_state.core_params != self.transcoder_state.core_params {
             // eprintln!("Create new transcoder");
             self.transcoder_state.adaptive_params.roi = None; // Reset any ROI
+
+            if force_new {
+                // get the source
+                if let Some(AdderSource::Framed(source)) = &mut self.source {
+                    source.get_video_mut().state.in_interval_count = 0;
+                    source.frame_idx_start = 0;
+                }
+            }
 
             let res = self.core_state_update(transcoder_state).await;
             if res.is_ok() {
