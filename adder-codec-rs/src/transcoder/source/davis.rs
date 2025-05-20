@@ -535,6 +535,7 @@ impl<W: Write + 'static + std::marker::Send + std::marker::Sync> Integration<W> 
                         &mut buffer,
                         &video.state.params,
                         video.encoder.options.crf.get_parameters(),
+                        false,
                     );
                 }
                 buffer

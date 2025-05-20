@@ -693,12 +693,16 @@ impl<W: Write + 'static + std::marker::Send + std::marker::Sync + 'static> Video
                 let mut buffer: Vec<Event> = Vec::with_capacity(10);
                 let bump = Bump::new();
                 let base_val = bump.alloc(0);
+                let mut force_reset = false;
+                let mut buffer_size = 0;
+                let mut tmp = 0;
 
                 for ((px, input), running) in px_chunk
                     .iter_mut()
                     .zip(matrix_chunk.iter())
                     .zip(running_chunk.iter_mut())
                 {
+                    tmp += 1;
                     integrate_for_px(
                         px,
                         base_val,
@@ -708,7 +712,12 @@ impl<W: Write + 'static + std::marker::Send + std::marker::Sync + 'static> Video
                         &mut buffer,
                         params,
                         &parameters,
+                        force_reset,
                     );
+                    if buffer.len() > buffer_size {
+                        force_reset = true;
+                        buffer_size = buffer.len();
+                    }
 
                     if let Some(event) = px.arena[0].best_event {
                         *running = u8::get_frame_value(
@@ -728,6 +737,12 @@ impl<W: Write + 'static + std::marker::Send + std::marker::Sync + 'static> Video
                             },
                         );
                     };
+
+                    if tmp % 3 == 0 {
+                        tmp = 0;
+                        buffer_size = buffer.len();
+                        force_reset = false;
+                    }
                 }
                 buffer
             })
@@ -1329,6 +1344,7 @@ pub fn integrate_for_px(
     buffer: &mut Vec<Event>,
     params: &VideoStateParams,
     parameters: &CrfParameters,
+    force_reset: bool,
 ) -> bool {
     let _start_len = buffer.len();
     let mut grew_buffer = if px.need_to_pop_top {
@@ -1342,6 +1358,7 @@ pub fn integrate_for_px(
 
     if frame_val < base_val.saturating_sub(px.c_thresh)
         || frame_val > base_val.saturating_add(px.c_thresh)
+        || force_reset
     {
         let _tmp = buffer.len();
         px.pop_best_events(

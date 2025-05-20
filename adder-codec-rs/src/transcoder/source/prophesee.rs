@@ -213,6 +213,7 @@ impl<W: Write + std::marker::Send + std::marker::Sync + 'static> Source<W> for P
                     &mut events,
                     &self.video.state.params,
                     &crf_parameters,
+                    false,
                 );
             }
 
@@ -251,6 +252,7 @@ impl<W: Write + std::marker::Send + std::marker::Sync + 'static> Source<W> for P
                     &mut events,
                     &self.video.state.params,
                     &crf_parameters,
+                    false,
                 );
             }
 
@@ -355,6 +357,7 @@ fn end_events<W: Write + std::marker::Send + std::marker::Sync + 'static>(
                 &mut events,
                 &prophesee.video.state.params,
                 &crf_parameters,
+                false,
             );
         }
     }
