@@ -5,11 +5,12 @@ use eframe::epaint::ColorImage;
 use egui::{Ui, WidgetText};
 use egui_plot::{Line, PlotPoints};
 use ndarray::Axis;
+use rayon::iter::IntoParallelIterator;
+use rayon::iter::ParallelIterator;
 use std::collections::VecDeque;
 use std::error::Error;
 use std::ops::RangeInclusive;
 use video_rs_adder_dep::Frame;
-
 pub(crate) mod slider;
 
 pub(crate) struct PlotY {
@@ -55,26 +56,19 @@ pub fn prep_epaint_image(
     height: usize,
 ) -> Result<ColorImage, Box<dyn Error>> {
     if color {
-        // Iterate each 3-channel pixel and convert to RGB
-        for (i, mut slice) in image_mat.axis_iter_mut(Axis(0)).enumerate() {
-            // Iterate over the second axis (rows in the 2D slice)
-            for (j, mut row) in slice.axis_iter_mut(Axis(0)).enumerate() {
-                // Convert YUV pixel to RGB
-                let y = row[0] as f32;
-                let u = row[1] as f32 - 128.0;
-                let v = row[2] as f32 - 128.0;
-                // let r = (y + 1.402 * (v - 128.0)).clamp(0.0, 255.0) as u8;
-                // let g =
-                //     (y - 0.344136 * (u - 128.0) - 0.714136 * (v - 128.0)).clamp(0.0, 255.0) as u8;
-                // let b = (y + 1.772 * (u - 128.0)).clamp(0.0, 255.0) as u8;
-                let r = (y + 1.402 * v).clamp(0.0, 255.0) as u8;
-                let g = (y - 0.344136 * u - 0.714136 * v).clamp(0.0, 255.0) as u8;
-                let b = (y + 1.772 * u).clamp(0.0, 255.0) as u8;
-                row[0] = r as u8;
-                row[1] = g as u8;
-                row[2] = b as u8;
-            }
-        }
+        image_mat
+            .axis_iter_mut(Axis(0))
+            .into_par_iter()
+            .for_each(|mut slice| {
+                slice.axis_iter_mut(Axis(0)).for_each(|mut row| {
+                    let y = row[0] as f32;
+                    let u = row[1] as f32 - 128.0;
+                    let v = row[2] as f32 - 128.0;
+                    row[0] = (y + 1.402 * v).clamp(0.0, 255.0) as u8; // R
+                    row[1] = (y - 0.344136 * u - 0.714136 * v).clamp(0.0, 255.0) as u8; // G
+                    row[2] = (y + 1.772 * u).clamp(0.0, 255.0) as u8; // B
+                });
+            });
 
         return Ok(ColorImage::from_rgb(
             [width, height],
