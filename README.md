@@ -7,64 +7,26 @@
 [![Downloads](https://img.shields.io/crates/dr/adder-codec-rs)](https://crates.io/crates/adder-codec-rs)
 
 A unified framework for event-based video. Encoder/transcoder/decoder for ADΔER (Address, Decimation, Δt Event
-Representation) video streams. Includes a transcoder for casting framed video into an ADΔER representation in a manner
-which preserves the temporal synchronicity of the source, but enables many-frame intensity averaging on a per-pixel
+Representation) video streams. Includes a transcoder for casting framed video and event camera video into an ADΔER representation in a manner
+which preserves the temporal synchronicity of the source, but enables long-term intensity averaging on a per-pixel
 basis and extremely high dynamic range.
 
 ![blender_output2_30_mid](https://github.com/ac-freeman/adder-codec-rs/assets/19912588/4d1d9fc2-6a9d-49ab-b4da-07c2bb88a839)
 
-## _adder-viz_
-The easiest way to get up and running with ADΔER is with the GUI program, _adder-viz_. This allows you to experiment in real time with the various transcoder settings described in our papers (below).
-
-First, you need to get the necessary dependencies installed. These instructions assume you're running a flavor of Debian Linux. It should also work within the Windows Subsystem for Linux, which now supports graphical display.
-
-If you don't want to install these dependencies, you can use the VirtualBox image provided [here](https://drive.google.com/drive/folders/1pCpvvyvwT3sb6fkV4uwePpP7mQN5o-sL?usp=sharing). The link provides instructions for running the virtual machine.
-
-### Install Rust
-
-Use the official instructions [here](https://www.rust-lang.org/tools/install) to install Rust.
-
-### Dependencies
-
-Audio/Video
-```
-sudo apt-get install -y --fix-missing libodbccr2 libodbc2 libssl-dev alsa-utils libasound2-dev portaudio19-dev build-essential libpulse-dev libdbus-1-dev libudev-dev libatk1.0-dev libgtk-3-dev libavfilter-dev libavdevice-dev ffmpeg
-```
-
-Clang
-```
-sudo bash -c "$(wget -O - https://apt.llvm.org/llvm.sh)"
-```
-
-Other
-```
-sudo apt-get install -y portaudio19-dev build-essential libpulse-dev libdbus-1-dev pkg-config libx11-dev libatk1.0-dev libgtk-3-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libwayland-dev libxkbcommon-dev libopencv-dev
-```
-
-### Install _adder-viz_
-
-To enable the use of _source-modeled lossy compression_ (the only such scheme for event-based video, as far as I'm
-aware), install with the `compression` feature enabled:
-
-```
-cargo install adder-viz -F "compression"
-```
-
-To transcode from an iniVation DVS/DAVIS camera (using an older method, not yet unified with the Prophesee transcoder),
-enable the `open-cv` feature:
-
-```
-cargo install adder-viz -F "compression open-cv"
-```
-
-### Running
-
-Simply enter `adder-viz` in your terminal.
-
 
 Source 8-bit image frame with shadows boosted ([source video](https://www.pexels.com/video/river-between-trees-2126081/))      |  Frame reconstructed from ADΔER events, generated from 48 input frames, with shadows boosted. Note the greater dynamic range and temporal denoising in the shadows.
 :-------------------------:|:-------------------------:
-![](adder-codec-rs/source_frame_0.jpg)  |  ![](adder-codec-rs/out_16bit_2_c10.jpg)                                               
+![](adder-codec-rs/source_frame_0.jpg)  |  ![](adder-codec-rs/out_16bit_2_c10.jpg)           
+
+## _adder-viz_
+The easiest way to get up and running with ADΔER is with the GUI program, _adder-viz_. Folow the instructions [here](https://github.com/ac-freeman/adder-codec-rs/tree/main/adder-viz).
+ 
+## System model
+
+Click the image to view the full system model conveyed by this software. I compare the ADΔER approach to traditional framed and event camera systems.
+
+![full_sys](https://github.com/user-attachments/assets/cce159c4-32a2-406a-8b77-244fb7af0b84)
+
 
 ## Included crates
 
