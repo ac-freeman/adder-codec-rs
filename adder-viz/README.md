@@ -9,6 +9,8 @@ A GUI project to make it easier to tune the parameters of ADΔER transcoding.
 
 First, you need to get the necessary dependencies installed. These instructions assume you're running a flavor of Debian Linux. It should also work within the Windows Subsystem for Linux, which now supports graphical display.
 
+If you don't want to install these dependencies, you can use the VirtualBox image provided [here](https://drive.google.com/drive/folders/1pCpvvyvwT3sb6fkV4uwePpP7mQN5o-sL?usp=sharing). The link provides instructions for running the virtual machine.
+
 ### Install Rust
 
 Use the official instructions [here](https://www.rust-lang.org/tools/install) to install Rust.
