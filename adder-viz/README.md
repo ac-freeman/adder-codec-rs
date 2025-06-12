@@ -6,30 +6,42 @@ A GUI project to make it easier to tune the parameters of ADΔER transcoding.
 
 ![](https://github.com/ac-freeman/adder-codec-rs/blob/main/adder-viz/examples/screenshot.png)
 
-# Dependencies
 
-You may need to install the Bevy dependencies
-described [here](https://bevyengine.org/learn/book/getting-started/setup/).
+First, you need to get the necessary dependencies installed. These instructions assume you're running a flavor of Debian Linux. It should also work within the Windows Subsystem for Linux, which now supports graphical display.
 
-If you want to transcode from DVS/DAVIS, we depend on [davis-EDI-rs](https://crates.io/crates/davis-edi-rs). For that (
-for now), you have to install OpenCV as described [here](https://github.com/twistedfall/opencv-rust).
+### Install Rust
 
-# Installation
+Use the official instructions [here](https://www.rust-lang.org/tools/install) to install Rust.
 
-`cargo install adder-viz`
+### Dependencies
 
-Install with DVS/DAVIS support:
+Audio/Video
+```
+sudo apt-get install -y --fix-missing libodbccr2 libodbc2 libssl-dev alsa-utils libasound2-dev portaudio19-dev build-essential libpulse-dev libdbus-1-dev libudev-dev libatk1.0-dev libgtk-3-dev libavfilter-dev libavdevice-dev ffmpeg
+```
 
-`cargo install adder-viz -F "open-cv"`
+Clang
+```
+sudo bash -c "$(wget -O - https://apt.llvm.org/llvm.sh)"
+```
 
-Install with source-modeled compression support:
+Other
+```
+sudo apt-get install -y portaudio19-dev build-essential libpulse-dev libdbus-1-dev pkg-config libx11-dev libatk1.0-dev libgtk-3-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libwayland-dev libxkbcommon-dev libopencv-dev
+```
 
-`cargo install adder-viz -F "compression"`
+### Install _adder-viz_
 
-# Usage
+To enable the use of _source-modeled lossy compression_ (the only such scheme for event-based video, as far as I'm
+aware), install with the `compression` feature enabled:
 
-Run `adder-viz` in the terminal and the above window will open. Drag and drop your video of choice from a file manager,
-and the ADΔER transcode process will begin automatically. Currently, it only supports .mp4 video sources, .aedat4 DAVIS
-346 camera sources, and DAVIS 346 camera sources connected via Unix sockets. Some parameter adjustments, such as the
-video scale, require the transcode process to be relaunched, which causes a noticeable slowdown in the UI for a moment.
-The program can also playback `.adder` files, which you can even generate on the Transcode tab.
+```
+cargo install adder-viz -F "compression"
+```
+
+To transcode from an iniVation DVS/DAVIS camera (using an older method, not yet unified with the Prophesee transcoder),
+enable the `open-cv` feature:
+
+```
+cargo install adder-viz -F "compression open-cv"
+```
