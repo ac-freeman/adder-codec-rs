@@ -18,6 +18,8 @@ The easiest way to get up and running with ADΔER is with the GUI program, _adde
 
 First, you need to get the necessary dependencies installed. These instructions assume you're running a flavor of Debian Linux. It should also work within the Windows Subsystem for Linux, which now supports graphical display.
 
+If you don't want to install these dependencies, you can use the VirtualBox image provided [here](https://drive.google.com/drive/folders/1pCpvvyvwT3sb6fkV4uwePpP7mQN5o-sL?usp=sharing). The link provides instructions for running the virtual machine.
+
 ### Install Rust
 
 Use the official instructions [here](https://www.rust-lang.org/tools/install) to install Rust.
@@ -54,6 +56,11 @@ enable the `open-cv` feature:
 ```
 cargo install adder-viz -F "compression open-cv"
 ```
+
+### Running
+
+Simply enter `adder-viz` in your terminal.
+
 
 Source 8-bit image frame with shadows boosted ([source video](https://www.pexels.com/video/river-between-trees-2126081/))      |  Frame reconstructed from ADΔER events, generated from 48 input frames, with shadows boosted. Note the greater dynamic range and temporal denoising in the shadows.
 :-------------------------:|:-------------------------:
