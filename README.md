@@ -102,8 +102,14 @@ concepts with better documentation.
 
 ## Cite this work
 
-If you write a paper which references this software, we ask that you reference the following papers on which it is
-based. Citations are given in the BibTeX format.
+<details>
+
+<summary>If you write a paper which references this software, we ask that you reference the following papers on which it is
+based. Citations are given in the BibTeX format.</summary>
+
+
+
+
 
 [An Open Software Suite for Event-Based Video](https://arxiv.org/abs/2401.17151)
 
@@ -222,3 +228,4 @@ location = {Seattle, WA, USA},
 series = {MM '20}
 }
 ```
+</details>
