@@ -244,8 +244,8 @@ pub enum CodecError {
     // #[error("Blocking error")]
     // BlockError(#[from] crate::codec::compressed::blocks::block::BlockError),
     #[cfg(feature = "compression")]
-    #[error("Arithmetic coding error")]
-    ArithmeticCodingError(#[from] arithmetic_coding_adder_dep::Error),
+    #[error("Arithmetic coding error: {0:?}")]
+    ArithmeticCodingError(arithmetic_coding::Error<crate::codec::compressed::fenwick::ValueError>),
 
     /// Vision application error
     #[error("Vision application error")]
@@ -253,6 +253,13 @@ pub enum CodecError {
 
     #[error("No more events to read")]
     NoMoreEvents,
+}
+
+#[cfg(feature = "compression")]
+impl From<arithmetic_coding::Error<crate::codec::compressed::fenwick::ValueError>> for CodecError {
+    fn from(err: arithmetic_coding::Error<crate::codec::compressed::fenwick::ValueError>) -> Self {
+        Self::ArithmeticCodingError(err)
+    }
 }
 
 /*

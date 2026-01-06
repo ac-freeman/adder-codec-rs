@@ -403,7 +403,7 @@ impl<R: Read + Seek> ReadCompression<R> for CompressedInput<R> {
                 let mut adu_stream = BitReader::endian(Cursor::new(adu_bytes), BigEndian);
 
                 // Decompress the Adu
-                adu.decompress(&mut adu_stream);
+                adu.decompress(adu_stream);
 
                 let duration = start.elapsed();
                 println!("Decompressed Adu in {:?} ns", duration.as_nanos());

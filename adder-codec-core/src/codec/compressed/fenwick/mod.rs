@@ -4,6 +4,7 @@
 use std::ops::Range;
 
 pub mod context_switching;
+pub mod facade;
 pub mod simple;
 
 /// A wrapper around a vector of fenwick counts, with one additional weight for
