@@ -832,7 +832,7 @@ impl<W: Write + 'static + std::marker::Send + std::marker::Sync> Source<W> for D
                 )
             };
 
-            ret = self.video.integrate_matrix(frame, mat_integration_time);
+            ret = self.video.integrate_matrix(&frame, mat_integration_time);
 
             #[allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
             for (idx, val) in self.integration.dvs_last_ln_val.iter_mut().enumerate() {

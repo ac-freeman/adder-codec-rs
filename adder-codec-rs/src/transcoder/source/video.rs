@@ -646,14 +646,13 @@ impl<W: Write + 'static + std::marker::Send + std::marker::Sync + 'static> Video
         Ok(tmp.close_writer()?)
     }
 
-    #[allow(clippy::needless_pass_by_value)]
     pub(crate) fn integrate_matrix(
         &mut self,
-        matrix: Frame,
+        matrix: &Frame,
         time_spanned: f32,
     ) -> Result<Vec<Vec<Event>>, SourceError> {
         if self.state.in_interval_count == 0 {
-            self.set_initial_d(&matrix);
+            self.set_initial_d(matrix);
         }
 
         let parameters = *self.encoder.options.crf.get_parameters();

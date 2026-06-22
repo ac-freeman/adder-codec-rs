@@ -8,7 +8,7 @@ use std::sync::{Arc, RwLock};
 use crate::codec::compressed::source_model::event_structure::event_adu::EventAdu;
 use crate::codec::compressed::source_model::HandleEvent;
 use crate::codec::header::{Magic, MAGIC_COMPRESSED};
-use crate::{DeltaT, Event};
+use crate::{AbsoluteT, DeltaT, Event};
 
 /// A message to send to the writer thread (that is, the main thread) to write out the compressed
 /// ADΔER data to the stream
@@ -201,7 +201,9 @@ impl<W: Write + std::marker::Send + std::marker::Sync + 'static + 'static + 'sta
             let mut temp_stream = BitWriter::endian(Vec::new(), BigEndian);
 
             let parameters = *self.options.crf.get_parameters();
-            let mut adu = self.adu.clone();
+            // `self` is being consumed and dropped right after this, so we can take ownership
+            // of the final partial ADU directly instead of deep-cloning it.
+            let mut adu = std::mem::take(&mut self.adu);
             let tx = self.written_bytes_tx.as_ref().unwrap().clone();
             // Spawn a thread to compress the ADU and write out the data
 
@@ -286,9 +288,19 @@ impl<W: Write + std::marker::Send + std::marker::Sync + 'static + 'static + 'sta
 
                 let parameters = *self.options.crf.get_parameters();
 
-                // Compress the Adu. This also writes the EOF symbol and flushes the encoder
-                // First, clone the ADU
-                let mut adu = self.adu.clone();
+                // Compress the Adu. This also writes the EOF symbol and flushes the encoder.
+                // Swap in a fresh, empty ADU for the next window and hand off the
+                // fully-populated one to the compressor thread, instead of deep-cloning all of
+                // its accumulated event data just to immediately clear it back out again.
+                let next_start_t =
+                    self.adu.start_t + self.adu.num_intervals as AbsoluteT * self.adu.dt_ref;
+                let next_adu = EventAdu::new(
+                    self.meta.plane,
+                    next_start_t,
+                    self.adu.dt_ref,
+                    self.adu.num_intervals,
+                );
+                let mut adu = std::mem::replace(&mut self.adu, next_adu);
                 let tx = self.written_bytes_tx.as_ref().unwrap().clone();
                 // Spawn a thread to compress the ADU and write out the data
 
@@ -305,8 +317,6 @@ impl<W: Write + std::marker::Send + std::marker::Sync + 'static + 'static + 'sta
                     })
                     .unwrap();
                 });
-
-                self.adu.clear_compression();
             }
         }
 

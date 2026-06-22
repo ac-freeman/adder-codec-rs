@@ -128,10 +128,9 @@ impl<W: Write + 'static + std::marker::Send + std::marker::Sync> Source<W> for F
         let (_, frame) = self.cap.decode()?;
         self.input_frame = handle_color(frame, self.color_input)?;
 
-        let res = self.video.integrate_matrix(
-            self.input_frame.clone(),
-            self.video.state.params.ref_time as f32,
-        );
+        let res = self
+            .video
+            .integrate_matrix(&self.input_frame, self.video.state.params.ref_time as f32);
         #[cfg(feature = "feature-logging")]
         {
             if let Some(handle) = &mut self.video.state.feature_log_handle {

@@ -116,13 +116,13 @@ impl<W: Write + std::marker::Send + std::marker::Sync + 'static> Source<W> for P
     fn consume(&mut self) -> Result<Vec<Vec<Event>>, SourceError> {
         if self.running_t == 0 {
             self.video.integrate_matrix(
-                self.video.state.running_intensities.clone(),
+                &self.video.state.running_intensities.clone(),
                 self.video.state.params.ref_time as f32,
             )?;
             let first_events: Vec<Event> = self
                 .video
                 .integrate_matrix(
-                    self.video.state.running_intensities.clone(),
+                    &self.video.state.running_intensities.clone(),
                     self.video.state.params.ref_time as f32,
                 )?
                 .into_iter()
