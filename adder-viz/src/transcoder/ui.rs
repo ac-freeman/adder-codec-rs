@@ -2,7 +2,6 @@ use crate::transcoder::adder::AdderTranscoder;
 use crate::transcoder::{AdaptiveParams, CoreParams, EventRateMsg, InfoParams, InfoUiState};
 use crate::utils::slider_pm;
 use crate::TabState;
-use adder_codec_rs::adder_codec_core;
 use adder_codec_rs::adder_codec_core::codec::rate_controller::{CRF, DEFAULT_CRF_QUALITY};
 use adder_codec_rs::adder_codec_core::codec::{EncoderType, EventDrop, EventOrder};
 use adder_codec_rs::adder_codec_core::{Coord, PixelMultiMode, PlaneSize, TimeMode};
@@ -363,7 +362,6 @@ impl TranscoderUi {
                         path = path.with_extension("adder");
                     };
                     self.transcoder_state.core_params.output_path = Some(path.clone());
-                    dbg!("saving selected");
                     self.info_ui_state.error_string = None;
                 }
             }

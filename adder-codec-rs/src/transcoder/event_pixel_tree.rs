@@ -121,7 +121,7 @@ impl PixelArena {
             event.delta_t += self.last_fired_t;
             self.last_fired_t = event.delta_t;
             if mode == FramePerfect {
-                self.last_fired_t = if self.last_fired_t as DeltaT % ref_time == 0 {
+                self.last_fired_t = if (self.last_fired_t as DeltaT).is_multiple_of(ref_time) {
                     (self.last_fired_t as DeltaT) as f32
                 } else {
                     (((self.last_fired_t as DeltaT / ref_time) + 1) * ref_time) as f32
@@ -450,13 +450,14 @@ impl PixelArena {
                 node.state.integration += intensity;
                 node.state.delta_t += time;
 
-                // TODO: this is slow and dumb
-                loop {
-                    d_usize += 1;
-                    if D_SHIFT[d_usize] > node.state.integration as UDshift {
-                        break;
-                    }
-                }
+                // Find the smallest d such that D_SHIFT[d] (== 2^d) exceeds the new integration,
+                // i.e. the bit length of the integration value.
+                let integration = node.state.integration as UDshift;
+                d_usize = if integration == 0 {
+                    0
+                } else {
+                    (UDshift::BITS - integration.leading_zeros()) as usize
+                };
                 node.state.d = d_usize as D;
             }
 

@@ -75,7 +75,7 @@ pub fn migrate_v2<W: Write + std::marker::Send + std::marker::Sync + 'static, R:
                     | SourceCamera::Atis
                     | SourceCamera::Asint => false,
                 }
-                && *t % input_stream.meta().ref_interval > 0
+                && !(*t).is_multiple_of(input_stream.meta().ref_interval)
             {
                 *t = ((*t / input_stream.meta().ref_interval) + 1)
                     * input_stream.meta().ref_interval;
@@ -496,7 +496,7 @@ mod tests {
             *last_t = event_t.t;
 
             // We already know it's a framed source
-            if *last_t % input_stream_dt.meta().ref_interval != 0 {
+            if !(*last_t).is_multiple_of(input_stream_dt.meta().ref_interval) {
                 *last_t = ((*last_t / input_stream_dt.meta().ref_interval) + 1)
                     * input_stream_dt.meta().ref_interval;
             }

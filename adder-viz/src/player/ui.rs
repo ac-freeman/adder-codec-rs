@@ -92,7 +92,7 @@ impl PlayerUi {
         msg_tx: mpsc::Sender<PlayerInfoMsg>,
         image_tx: Sender<ColorImage>,
     ) {
-        let adder_image_handle = self.adder_image_handle.clone();
+        let _adder_image_handle = self.adder_image_handle.clone();
         let rt = tokio::runtime::Runtime::new().expect("Unable to create Runtime");
 
         let _enter = rt.enter();
@@ -120,7 +120,7 @@ impl PlayerUi {
         // This should always be the very last thing we do in this function
         if old_params != self.player_state {
             eprintln!("Sending new transcoder state");
-            let res = self.player_state_tx.blocking_send(PlayerStateMsg::Set {
+            let _res = self.player_state_tx.blocking_send(PlayerStateMsg::Set {
                 player_state: self.player_state.clone(),
             });
         }
@@ -138,7 +138,7 @@ impl PlayerUi {
     fn handle_info_messages(&mut self) {
         loop {
             match self.msg_rx.try_recv() {
-                Ok(PlayerInfoMsg::Plane((plane, _))) => {
+                Ok(PlayerInfoMsg::Plane((_plane, _))) => {
                     // self.player_state.info_params.plane = plane;
                 }
                 Ok(PlayerInfoMsg::FrameLength(frame_length)) => {
@@ -253,7 +253,6 @@ impl VizUi for PlayerUi {
                         // Spawn a thread to mark the player as unpaused after 3 seconds
                         let paused = self.paused.clone();
                         std::thread::spawn(move || {
-                            dbg!("Sleeping 3 seconds...");
                             std::thread::sleep(Duration::from_secs(3));
                             paused.store(false, Ordering::Relaxed);
                         });
@@ -303,7 +302,7 @@ impl VizUi for PlayerUi {
             if ui.button("⏮").clicked() {
                 self.paused.store(false, Ordering::Relaxed);
                 // Send a Loop message
-                let res = self.player_state_tx.blocking_send(PlayerStateMsg::Loop {
+                let _res = self.player_state_tx.blocking_send(PlayerStateMsg::Loop {
                     player_state: player_state_copy,
                 });
                 while self.image_rx.try_recv().is_ok() {} // Drain the image channel

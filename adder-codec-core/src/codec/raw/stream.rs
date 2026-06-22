@@ -187,8 +187,10 @@ impl<R: Read + Seek> ReadCompression<R> for RawInput<R> {
             match self.bincode.deserialize_from::<_, Event>(&*buffer) {
                 Ok(ev) => ev,
                 Err(e) => {
-                    dbg!(self.meta.event_size);
-                    eprintln!("Error deserializing event: {e}");
+                    eprintln!(
+                        "Error deserializing event (event_size={}): {e}",
+                        self.meta.event_size
+                    );
                     return Err(CodecError::Deserialize);
                 }
             }
@@ -213,7 +215,7 @@ impl<R: Read + Seek> ReadCompression<R> for RawInput<R> {
         reader: &mut BitReader<R, BigEndian>,
         pos: u64,
     ) -> Result<(), CodecError> {
-        if (pos - self.meta.header_size as u64) % u64::from(self.meta.event_size) != 0 {
+        if !(pos - self.meta.header_size as u64).is_multiple_of(u64::from(self.meta.event_size)) {
             eprintln!("Attempted to seek to bad position in stream: {pos}");
             return Err(CodecError::Seek);
         }

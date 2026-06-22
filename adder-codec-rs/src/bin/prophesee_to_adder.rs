@@ -77,7 +77,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     //     .crf
     //     .override_feature_c_radius(2);
 
-    let pool = rayon::ThreadPoolBuilder::new()
+    let _pool = rayon::ThreadPoolBuilder::new()
         .num_threads(args.thread_count.into())
         .build()
         .unwrap();
@@ -93,6 +93,4 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         };
     }
-
-    Ok(())
 }

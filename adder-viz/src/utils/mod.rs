@@ -115,7 +115,7 @@ pub fn slider_pm<Num: egui::emath::Numeric + Pm>(
     notches: Vec<Num>,
     interval: Num,
 ) -> bool {
-    let start_value = *value;
+    let _start_value = *value;
     let mut button_down = false;
     ui.add_enabled_ui(enabled, |ui| {
         ui.horizontal(|ui| {

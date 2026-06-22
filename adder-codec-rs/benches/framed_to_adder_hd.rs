@@ -13,6 +13,7 @@ use std::path::PathBuf;
 
 use adder_codec_core::TimeMode::DeltaT;
 use adder_codec_rs::transcoder::source::framed::Framed;
+use adder_codec_rs::transcoder::source::video::VideoBuilder;
 use adder_codec_rs::utils::viz::download_file;
 use std::thread::sleep;
 use std::time::Duration;
@@ -30,22 +31,21 @@ fn simul_proc(video_path: &str, scale: f64, thread_count: u8, _chunk_rows: usize
         frame_idx_start: 0,
         show_display: false,
         input_filename: video_path.to_string(),
-        output_events_filename: "".parse().unwrap(),
+        output_events_filename: "".to_string(),
         output_raw_video_filename: manifest_path_str + "/benches/run/bench_out",
         scale,
-        c_thresh_pos: 0,
-        c_thresh_neg: 0,
+        crf: 0,
         thread_count, // Multithreading causes some issues in testing
         time_mode: "delta_t".to_string(),
+        integration_mode: "".to_string(),
     };
     let source: Framed<BufWriter<File>> =
-        Framed::new(args.input_filename, args.color_input, args.scale)
+        Framed::new(args.input_filename.into(), args.color_input, args.scale)
             .unwrap()
             // TODO: chunk_rows back
             .frame_start(args.frame_idx_start)
             .unwrap()
-            .contrast_thresholds(args.c_thresh_pos, args.c_thresh_neg)
-            .show_display(args.show_display)
+            .crf(args.crf)
             .auto_time_parameters(args.ref_time, args.delta_t_max, Some(DeltaT))
             .unwrap();
 
@@ -62,18 +62,11 @@ fn simul_proc(video_path: &str, scale: f64, thread_count: u8, _chunk_rows: usize
     )
     .unwrap();
 
-    simul_processor.run().unwrap();
+    simul_processor.run(args.frame_count_max).unwrap();
     sleep(Duration::from_secs(2));
 
     let output_path = "./benches/run/bench_out";
     fs::remove_file(output_path).unwrap();
-}
-
-fn bench_simul_proc_dark() {
-    let d = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let manifest_path_str = d.as_path().to_str().unwrap().to_owned();
-    let path_str = manifest_path_str + "/tests/samples/lake_scaled_hd_crop.mp4";
-    simul_proc(&path_str, 1.0, 1, 4);
 }
 
 fn bench_simul_proc_drop(scale: f64, chunk_rows: usize) {

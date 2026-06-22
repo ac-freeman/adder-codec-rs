@@ -57,11 +57,21 @@ impl EventCube {
         dt_ref: DeltaT,
         num_intervals: usize,
     ) -> Self {
-        let row: [Pixel; BLOCK_SIZE] = vec![Vec::with_capacity(num_intervals); BLOCK_SIZE]
-            .try_into()
-            .unwrap();
-        let square: [[Pixel; BLOCK_SIZE]; BLOCK_SIZE] = vec![row; BLOCK_SIZE].try_into().unwrap();
-        let lists = [square.clone(), square.clone(), square];
+        let new_row = || -> [Pixel; BLOCK_SIZE] {
+            (0..BLOCK_SIZE)
+                .map(|_| Vec::with_capacity(num_intervals))
+                .collect::<Vec<_>>()
+                .try_into()
+                .unwrap()
+        };
+        let new_square = || -> [[Pixel; BLOCK_SIZE]; BLOCK_SIZE] {
+            (0..BLOCK_SIZE)
+                .map(|_| new_row())
+                .collect::<Vec<_>>()
+                .try_into()
+                .unwrap()
+        };
+        let lists = [new_square(), new_square(), new_square()];
 
         Self {
             start_y,

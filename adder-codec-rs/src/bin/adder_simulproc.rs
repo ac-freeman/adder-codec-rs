@@ -99,7 +99,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
         num => num as usize,
     };
 
-    dbg!(args.frame_count_max);
     let mut simul_processor = SimulProcessor::new::<u8>(
         source,
         ref_time,

@@ -35,7 +35,6 @@ use tokio::sync::mpsc::error::TrySendError;
 use tokio::sync::mpsc::Receiver;
 
 pub struct AdderTranscoder {
-    pool: tokio::runtime::Runtime,
     transcoder_state: TranscoderState,
     source: Option<AdderSource<BufWriter<File>>>,
     rx: Receiver<TranscoderStateMsg>,
@@ -84,10 +83,7 @@ impl AdderTranscoder {
         input_image_handle: egui::TextureHandle,
         adder_image_handle: egui::TextureHandle,
     ) -> Self {
-        let threaded_rt = tokio::runtime::Builder::new_multi_thread().build().unwrap();
-
         AdderTranscoder {
-            pool: threaded_rt,
             transcoder_state: Default::default(),
             source: None,
             rx,
@@ -177,8 +173,7 @@ impl AdderTranscoder {
                     .msg_tx
                     .try_send(TranscoderInfoMsg::Error(e.to_string()))
                 {
-                    dbg!(e);
-                    eprintln!("Msg channel full");
+                    eprintln!("Msg channel full: {e}");
                 };
             }
         }
@@ -216,7 +211,7 @@ impl AdderTranscoder {
                 Err(TrySendError::Full(..)) => {
                     // eprintln!("Event rate channel full");
                 }
-                Err(e) => {
+                Err(_e) => {
                     // return Err(Box::new(e)); // TODO
                 }
             };
@@ -226,7 +221,9 @@ impl AdderTranscoder {
         // Display frame
         self.show_display_frame();
 
-        self.quality_metrics();
+        if let Err(e) = self.quality_metrics() {
+            eprintln!("Error computing quality metrics: {e}");
+        }
 
         self.last_consume_time = std::time::Instant::now();
 
@@ -285,7 +282,7 @@ impl AdderTranscoder {
                     Err(TrySendError::Full(..)) => {
                         eprintln!("Metrics channel full");
                     }
-                    Err(e) => {
+                    Err(_e) => {
                         panic!("todo");
                     }
                 };

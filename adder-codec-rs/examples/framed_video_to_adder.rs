@@ -39,7 +39,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         )?
         .auto_time_parameters(255, 255 * 30, None)?;
 
-    let pool = rayon::ThreadPoolBuilder::new()
+    let _pool = rayon::ThreadPoolBuilder::new()
         .num_threads(current_num_threads())
         .build()
         .unwrap();

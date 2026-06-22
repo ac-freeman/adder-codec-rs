@@ -1,9 +1,13 @@
-
 use adder_codec_core::{Event, PixelAddress};
-#[cfg(feature = "open-cv")]
-use {opencv::core::{Mat, MatTraitConst, MatTraitConstManual}, std::io::BufWriter, std::io::Write, std::error::Error};
 use std::fs::File;
 use std::io;
+#[cfg(feature = "open-cv")]
+use {
+    opencv::core::{Mat, MatTraitConst, MatTraitConstManual},
+    std::error::Error,
+    std::io::BufWriter,
+    std::io::Write,
+};
 
 use std::io::Cursor;
 use std::path::Path;

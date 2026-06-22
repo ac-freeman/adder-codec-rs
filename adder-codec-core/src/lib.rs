@@ -477,7 +477,6 @@ pub fn open_file_decoder(
         Err(CodecError::WrongMagic) => {
             #[cfg(feature = "compression")]
             {
-                dbg!("Opening as compressed");
                 bufreader = BufReader::new(File::open(file_path)?);
                 let compression = CompressedInput::new(0, 0, 0); // TODO: temporary args. Need to refactor.
                 bitreader = BitReader::endian(bufreader, BigEndian);
@@ -512,8 +511,8 @@ pub struct EventCoordlessRelative {
 }
 
 impl From<EventCoordless> for f64 {
-    fn from(val: EventCoordless) -> Self {
-        panic!("Not implemented")
+    fn from(_val: EventCoordless) -> Self {
+        unreachable!("From<EventCoordless> for f64 is never called; impl exists only to satisfy a trait bound")
     }
 }
 
@@ -538,7 +537,7 @@ impl Add<EventCoordless> for EventCoordless {
     type Output = EventCoordless;
 
     fn add(self, _rhs: EventCoordless) -> EventCoordless {
-        todo!()
+        unreachable!("Add<EventCoordless> for EventCoordless is never called; impl exists only to satisfy num_traits::Zero's Add supertrait bound")
     }
 }
 

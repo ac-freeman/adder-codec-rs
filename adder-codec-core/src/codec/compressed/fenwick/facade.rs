@@ -11,13 +11,22 @@ const D_RESIDUAL_BYTES: usize = size_of::<DResidual>();
 
 #[derive(Debug, Clone)]
 enum Phase {
-    Header { bytes_remaining: usize },
+    Header {
+        bytes_remaining: usize,
+    },
     IntraD,
     IntraBitshift,
-    IntraT { bytes_remaining: usize },
-    InterD { bytes_remaining: usize, d_buf: [u8; 2] },
+    IntraT {
+        bytes_remaining: usize,
+    },
+    InterD {
+        bytes_remaining: usize,
+        d_buf: [u8; 2],
+    },
     InterBitshift,
-    InterT { bytes_remaining: usize },
+    InterT {
+        bytes_remaining: usize,
+    },
     Eof,
 }
 
@@ -84,10 +93,10 @@ impl FacadeModel {
         let symbol = symbol.copied();
         let phase = std::mem::replace(&mut self.phase, Phase::Eof);
         let next_phase = match phase {
-            Phase::Header { mut bytes_remaining } => {
-                if bytes_remaining > 0 {
-                    bytes_remaining -= 1;
-                }
+            Phase::Header {
+                mut bytes_remaining,
+            } => {
+                bytes_remaining = bytes_remaining.saturating_sub(1);
                 Phase::Header { bytes_remaining }
             }
             Phase::IntraD => match symbol {
@@ -108,10 +117,10 @@ impl FacadeModel {
                 },
                 None => Phase::IntraBitshift,
             },
-            Phase::IntraT { mut bytes_remaining } => {
-                if bytes_remaining > 0 {
-                    bytes_remaining -= 1;
-                }
+            Phase::IntraT {
+                mut bytes_remaining,
+            } => {
+                bytes_remaining = bytes_remaining.saturating_sub(1);
                 if bytes_remaining == 0 {
                     Phase::IntraD
                 } else {
@@ -155,10 +164,10 @@ impl FacadeModel {
                 },
                 None => Phase::InterBitshift,
             },
-            Phase::InterT { mut bytes_remaining } => {
-                if bytes_remaining > 0 {
-                    bytes_remaining -= 1;
-                }
+            Phase::InterT {
+                mut bytes_remaining,
+            } => {
+                bytes_remaining = bytes_remaining.saturating_sub(1);
                 if bytes_remaining == 0 {
                     Phase::InterD {
                         bytes_remaining: D_RESIDUAL_BYTES,

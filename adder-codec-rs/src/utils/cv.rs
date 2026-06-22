@@ -1,18 +1,13 @@
 use crate::transcoder::source::video::SourceError;
-#[cfg(feature = "open-cv")]
-use {
-    adder_codec_core::PixelAddress,
-    opencv::prelude::KeyPointTraitConst,
-    std::collections::HashSet,
-};
 use adder_codec_core::{Coord, PlaneSize};
 use const_for::const_for;
 use ndarray::{Array3, ArrayView, Axis, Ix2};
-
+#[cfg(feature = "open-cv")]
+use {
+    adder_codec_core::PixelAddress, opencv::prelude::KeyPointTraitConst, std::collections::HashSet,
+};
 
 use serde::{Deserialize, Serialize};
-
-
 
 use std::error::Error;
 use video_rs_adder_dep::Frame;

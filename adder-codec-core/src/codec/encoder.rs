@@ -452,7 +452,7 @@ mod tests {
     fn compressed() {
         let output = Vec::new();
         let bufwriter = BufWriter::new(output);
-        let (written_bytes_tx, written_bytes_rx) = std::sync::mpsc::channel();
+        let (written_bytes_tx, _written_bytes_rx) = std::sync::mpsc::channel();
 
         let compression = CompressedOutput {
             meta: CodecMetadata {

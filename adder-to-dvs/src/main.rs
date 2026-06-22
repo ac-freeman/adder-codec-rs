@@ -107,7 +107,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
     // TODO: Need a different mechanism for compressed files
     let num_events = (eof_position_bytes - 1 - meta.header_size as u64) / meta.event_size as u64;
-    let divisor = num_events / 100;
+    let _divisor = num_events / 100;
 
     let stdout = io::stdout();
     let mut handle = io::BufWriter::new(stdout.lock());
@@ -163,28 +163,14 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         }
     }
 
-    let mut event_count: u64 = 0;
-
-    let mut pixels: Array3<Option<DvsPixel>> = {
-        let mut data: Vec<Option<DvsPixel>> = Vec::new();
-        for _ in 0..meta.plane.h() {
-            for _ in 0..meta.plane.w() {
-                for _ in 0..meta.plane.c() {
-                    let px = None;
-                    data.push(px);
-                }
-            }
-        }
-
-        Array3::from_shape_vec(
-            (
-                meta.plane.h().into(),
-                meta.plane.w().into(),
-                meta.plane.c().into(),
-            ),
-            data,
-        )?
-    };
+    let mut pixels: Array3<Option<DvsPixel>> = Array3::from_shape_simple_fn(
+        (
+            meta.plane.h().into(),
+            meta.plane.w().into(),
+            meta.plane.c().into(),
+        ),
+        || None,
+    );
 
     let mut event_counts: Array3<u16> = Array3::zeros((
         meta.plane.h().into(),
@@ -203,14 +189,6 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let mut max_px_event_count = 0;
 
     loop {
-        // if event_count % divisor == 0 {
-        //     write!(
-        //         handle,
-        //         "\rTranscoding ADΔER to DVS...{}%",
-        //         (event_count * 100) / num_events
-        //     )?;
-        //     handle.flush()?;
-        // }
         if current_t
             > (frame_count as u128 * frame_length) + (meta.tps as f32 * args.buffer_secs) as u128
         {
@@ -240,7 +218,6 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
         match stream.digest_event(&mut bitreader) {
             Ok(mut event) => {
-                event_count += 1;
                 let y = event.coord.y as usize;
                 let x = event.coord.x as usize;
                 let c = event.coord.c.unwrap_or(0) as usize;
@@ -285,7 +262,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
                         // Base the frame idx on the START of the ADDER event, so we just have the
                         // instantaneous moment that the intensity change happened
-                        let frame_idx = ((old_t + 1) / frame_length) as usize;
+                        let _frame_idx = ((old_t + 1) / frame_length) as usize;
 
                         match event.d {
                             255 => {
@@ -421,32 +398,6 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     Ok(())
 }
 
-fn set_instant_dvs_pixel(
-    event: Event,
-    meta: &CodecMetadata,
-    frames: &mut VecDeque<Array3<u8>>,
-    frame_idx: usize,
-    frame_count: usize,
-    value: u128,
-) -> Result<(), Box<dyn Error>> {
-    // Grow the deque if necessary
-    let grow_len = frame_idx as i32 - frame_count as i32 - frames.len() as i32 + 1;
-
-    for _ in 0..grow_len {
-        frames.push_back(create_blank_dvs_frame(meta)?);
-    }
-
-    if frame_idx >= frame_count {
-        frames[frame_idx - frame_count][[event.coord.y.into(), event.coord.x.into(), 0]] =
-            value as u8;
-        frames[frame_idx - frame_count][[event.coord.y.into(), event.coord.x.into(), 1]] =
-            value as u8;
-        frames[frame_idx - frame_count][[event.coord.y.into(), event.coord.x.into(), 2]] =
-            value as u8;
-    }
-    Ok(())
-}
-
 fn event_to_frame_intensity(event: &Event, frame_length: u128) -> f64 {
     if event.d == D_ZERO_INTEGRATION {
         return 0.0;
@@ -485,18 +436,8 @@ fn fire_dvs_event(
 ) -> io::Result<()> {
     match write_mode {
         WriteMode::Text => {
-            let polarity_string = if polarity { "1" } else { "0" };
-
-            let dvs_string = t.to_string()
-                + " "
-                + x.to_string().as_str()
-                + " "
-                + y.to_string().as_str()
-                + " "
-                + polarity_string
-                + "\n";
-            let amt = writer.write(dvs_string.as_ref()).expect("Could not write");
-            debug_assert_eq!(amt, dvs_string.len());
+            let polarity_char = if polarity { '1' } else { '0' };
+            writeln!(writer, "{t} {x} {y} {polarity_char}").expect("Could not write");
         }
         WriteMode::Binary => {
             let event = DvsEvent {
