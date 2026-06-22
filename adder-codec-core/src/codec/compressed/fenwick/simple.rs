@@ -2,7 +2,7 @@
 #![allow(missing_docs, unused)]
 //! simple adaptive model using a fenwick tree
 
-use arithmetic_coding_adder_dep::Model;
+use arithmetic_coding::Model;
 
 use super::Weights;
 use crate::codec::compressed::fenwick::ValueError;

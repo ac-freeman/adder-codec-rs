@@ -446,7 +446,6 @@ impl<W: Write + 'static + std::marker::Send + std::marker::Sync + 'static> Video
         for px in self.event_pixel_trees.iter_mut() {
             px.c_thresh = c_thresh_pos;
         }
-        dbg!("t");
         self.encoder
             .options
             .crf
@@ -471,7 +470,7 @@ impl<W: Write + 'static + std::marker::Send + std::marker::Sync + 'static> Video
     pub fn chunk_rows(mut self, chunk_rows: usize) -> Self {
         self.state.chunk_rows = chunk_rows;
         let mut num_chunks = self.state.plane.h_usize() / chunk_rows;
-        if self.state.plane.h_usize() % chunk_rows != 0 {
+        if !self.state.plane.h_usize().is_multiple_of(chunk_rows) {
             num_chunks += 1;
         }
         self.state.features = vec![HashSet::new(); num_chunks];
@@ -845,7 +844,6 @@ impl<W: Write + 'static + std::marker::Send + std::marker::Sync + 'static> Video
         for px in self.event_pixel_trees.iter_mut() {
             px.c_thresh = c;
         }
-        dbg!("t1");
         self.encoder.options.crf.override_c_thresh_baseline(c)
     }
 

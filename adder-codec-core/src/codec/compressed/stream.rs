@@ -198,7 +198,6 @@ impl<W: Write + std::marker::Send + std::marker::Sync + 'static + 'static + 'sta
             //         }
             //     }
 
-            dbg!("compressing partial last adu");
             let mut temp_stream = BitWriter::endian(Vec::new(), BigEndian);
 
             let parameters = *self.options.crf.get_parameters();
@@ -233,7 +232,6 @@ impl<W: Write + std::marker::Send + std::marker::Sync + 'static + 'static + 'sta
             std::thread::sleep(std::time::Duration::from_secs(1));
         }
 
-        dbg!("All ADUs written.");
         // Kill the written_bytes_tx, so that the Arc only has one reference
         self.written_bytes_tx = None; // This will cause the flush_bytes_queue_worker() thread to
                                       // error out from the receiver, because the communication channel is severed
@@ -400,10 +398,10 @@ impl<R: Read + Seek> ReadCompression<R> for CompressedInput<R> {
                 let adu_bytes = reader.read_to_vec(num_bytes as usize)?;
 
                 // Create a temporary u8 stream to read the arithmetic-coded data from
-                let mut adu_stream = BitReader::endian(Cursor::new(adu_bytes), BigEndian);
+                let adu_stream = BitReader::endian(Cursor::new(adu_bytes), BigEndian);
 
                 // Decompress the Adu
-                adu.decompress(&mut adu_stream);
+                adu.decompress(adu_stream);
 
                 let duration = start.elapsed();
                 println!("Decompressed Adu in {:?} ns", duration.as_nanos());
@@ -428,7 +426,10 @@ impl<R: Read + Seek> ReadCompression<R> for CompressedInput<R> {
         reader: &mut BitReader<R, BigEndian>,
         pos: u64,
     ) -> Result<(), CodecError> {
-        if pos.saturating_sub(self.meta.header_size as u64) % u64::from(self.meta.event_size) != 0 {
+        if !pos
+            .saturating_sub(self.meta.header_size as u64)
+            .is_multiple_of(u64::from(self.meta.event_size))
+        {
             eprintln!("Attempted to seek to bad position in stream: {pos}");
             return Err(CodecError::Seek);
         }
@@ -584,8 +585,6 @@ mod tests {
 
         let output = compressed_output.into_writer().unwrap().into_inner();
         assert!(!output.is_empty());
-        dbg!(counter);
-        dbg!(output.len());
         // Check that the size is less than the raw events
         assert!((output.len() as u32) < counter * 9);
 

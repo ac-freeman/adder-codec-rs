@@ -61,7 +61,7 @@ pub(crate) struct InfoParams {
 }
 
 #[derive(Debug, Clone, PartialEq, Default)]
-struct EventRateMsg {
+pub(crate) struct EventRateMsg {
     total_events: u64,
     events_per_sec: f64,
     events_ppc_total: f64,

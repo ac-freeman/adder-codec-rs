@@ -501,7 +501,7 @@ impl<
                             0
                         };
 
-                        if time % self.state.tpf == 0 && idx > 0 {
+                        if time.is_multiple_of(self.state.tpf) && idx > 0 {
                             idx -= 1;
                         }
                         // dbg!(time);
@@ -520,7 +520,7 @@ impl<
                                 });
                             }
 
-                            let new_end_ts = if time % self.state.tpf == 0 {
+                            let new_end_ts = if time.is_multiple_of(self.state.tpf) {
                                 time
                             } else {
                                 (time / self.state.tpf + 1) * self.state.tpf
@@ -956,7 +956,6 @@ impl<T: Clone + Default + FrameValue<Output = T> + Serialize> FrameSequence<T> {
             }
         }
         self.state.frames_written += 1;
-        dbg!(self.state.frames_written);
         Ok(())
     }
 
@@ -1107,7 +1106,7 @@ fn ingest_event_for_chunk<
             | SourceCamera::Asint => false,
             // TODO: switch statement on the transcode MODE (frame-perfect or continuous), not just the source
         }
-        && *running_ts_ref % u64::from(state.ref_interval) > 0
+        && !(*running_ts_ref).is_multiple_of(u64::from(state.ref_interval))
     {
         *running_ts_ref =
             ((*running_ts_ref / u64::from(state.ref_interval)) + 1) * u64::from(state.ref_interval);

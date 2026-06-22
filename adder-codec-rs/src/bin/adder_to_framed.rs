@@ -111,8 +111,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 eprintln!("Error flushing output stream");
                 break;
             }
-        } else {
-            dbg!(res);
+        } else if let Err(e) = res {
+            eprintln!("Error reading event: {e}");
             break;
         }
     }
@@ -142,8 +142,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
     }
-    dbg!(frame_count);
-
     // Use ffmpeg to encode the raw frame data as an mp4
     let color_str = if meta.plane.c() != 1 { "rgb24" } else { "gray" };
 

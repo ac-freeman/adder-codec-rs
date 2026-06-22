@@ -97,7 +97,7 @@ impl<W: Write + 'static + std::marker::Send + std::marker::Sync> Framed<W> {
         delta_t_max: DeltaT,
         time_mode: Option<TimeMode>,
     ) -> Result<Self, SourceError> {
-        if delta_t_max % ref_time == 0 {
+        if delta_t_max.is_multiple_of(ref_time) {
             let tps = (ref_time as f32 * self.source_fps) as DeltaT;
             self.video = self
                 .video
@@ -220,7 +220,7 @@ impl<W: Write + 'static + std::marker::Send + std::marker::Sync> VideoBuilder<W>
         delta_t_max: DeltaT,
         time_mode: Option<TimeMode>,
     ) -> Result<Self, SourceError> {
-        if delta_t_max % ref_time == 0 {
+        if delta_t_max.is_multiple_of(ref_time) {
             self.video = self
                 .video
                 .time_parameters(tps, ref_time, delta_t_max, time_mode)?;

@@ -16,7 +16,7 @@ use std::io::BufReader;
 use std::time::Duration;
 use thiserror::Error;
 use tokio::sync::mpsc;
-use tokio::sync::mpsc::error::TrySendError;
+use tokio::sync::mpsc::error::{TryRecvError, TrySendError};
 use tokio::sync::mpsc::{Receiver, Sender};
 use video_rs_adder_dep::Frame;
 
@@ -43,7 +43,6 @@ pub enum AdderPlayerError {
 }
 
 pub struct AdderPlayer {
-    pool: tokio::runtime::Runtime,
     player_state: PlayerState,
     framer: Option<FrameSequence<u8>>,
     // source: Option<dyn Framer<Output=()>>,
@@ -52,7 +51,6 @@ pub struct AdderPlayer {
     // pub(crate) adder_image_handle: egui::TextureHandle,
     // adder_image_tx: Sender<ColorImage>,
     total_events: u64,
-    last_consume_time: std::time::Instant,
     input_stream: Option<InputStream>,
     running_frame: Frame,
     pub image_tx: Sender<ColorImage>,
@@ -65,14 +63,10 @@ impl AdderPlayer {
         msg_tx: mpsc::Sender<PlayerInfoMsg>,
         image_tx: Sender<ColorImage>,
     ) -> Self {
-        let threaded_rt = tokio::runtime::Runtime::new().unwrap();
-
         AdderPlayer {
-            pool: threaded_rt,
             player_state: Default::default(),
             image_tx,
             total_events: 0,
-            last_consume_time: std::time::Instant::now(),
             framer: None,
             rx,
             msg_tx,
@@ -84,24 +78,38 @@ impl AdderPlayer {
 
     pub(crate) async fn run(&mut self) {
         loop {
-            match self.rx.try_recv() {
-                Ok(msg) => match msg {
-                    PlayerStateMsg::Terminate => {
-                        eprintln!("Resetting video");
-                        todo!();
-                    }
-                    PlayerStateMsg::Loop { player_state } => {
-                        eprintln!("Looping video");
-                        let result = self.state_update(player_state, true);
-                        self.handle_error(result);
-                    }
-                    PlayerStateMsg::Set { player_state } => {
-                        eprintln!("Received player state");
-                        let result = self.state_update(player_state, false);
-                        self.handle_error(result);
-                    }
-                },
-                Err(_) => {
+            // While there's an active source to consume, poll for new state without blocking
+            // (so we keep making progress on the video), otherwise block until a message
+            // arrives instead of busy-spinning the thread at 100% CPU while idle.
+            let msg = if self.framer.is_some() {
+                match self.rx.try_recv() {
+                    Ok(msg) => Some(msg),
+                    Err(TryRecvError::Empty) => None,
+                    Err(TryRecvError::Disconnected) => return,
+                }
+            } else {
+                match self.rx.recv().await {
+                    Some(msg) => Some(msg),
+                    None => return,
+                }
+            };
+
+            match msg {
+                Some(PlayerStateMsg::Terminate) => {
+                    eprintln!("Resetting video");
+                    todo!();
+                }
+                Some(PlayerStateMsg::Loop { player_state }) => {
+                    eprintln!("Looping video");
+                    let result = self.state_update(player_state, true);
+                    self.handle_error(result);
+                }
+                Some(PlayerStateMsg::Set { player_state }) => {
+                    eprintln!("Received player state");
+                    let result = self.state_update(player_state, false);
+                    self.handle_error(result);
+                }
+                None => {
                     // Received no data, so consume the transcoder source if it exists
                     if self.framer.is_some() {
                         let result = self.consume().await;
@@ -144,8 +152,7 @@ impl AdderPlayer {
                 if let Err(TrySendError::Full(..)) =
                     self.msg_tx.try_send(PlayerInfoMsg::Error(e.to_string()))
                 {
-                    dbg!(e);
-                    eprintln!("Msg channel full");
+                    eprintln!("Msg channel full: {e}");
                 };
             }
         }
@@ -155,8 +162,6 @@ impl AdderPlayer {
         player_state: PlayerState,
         force_new: bool,
     ) -> Result<(), AdderPlayerError> {
-        dbg!(player_state.core_params.clone());
-        dbg!(self.player_state.core_params.clone());
         if force_new || player_state.core_params != self.player_state.core_params {
             // eprintln!("Create new player");
 
@@ -178,7 +183,7 @@ impl AdderPlayer {
                     Err(TrySendError::Full(..)) => {
                         eprintln!("Metrics channel full");
                     }
-                    Err(e) => {
+                    Err(_e) => {
                         panic!("todo");
                     }
                 };
@@ -324,8 +329,6 @@ impl AdderPlayer {
         let stream = self.input_stream.as_mut().ok_or(Uninitialized)?;
         let frame_sequence = self.framer.as_mut().ok_or(Uninitialized)?;
 
-        let mut event_count = 0;
-
         // let image_mat = frame_sequence.get_frame();
         // let color = image_mat.shape()[2] == 3;
         // let width = image_mat.shape()[1];
@@ -342,11 +345,11 @@ impl AdderPlayer {
                 let db = self.running_frame.as_slice_mut().unwrap();
                 let new_frame = frame_sequence.pop_next_frame().unwrap();
                 // Flatten the frame
-                for chunk in 0..new_frame.len() {
-                    for y in 0..new_frame[chunk].shape()[0] {
-                        for x in 0..new_frame[chunk].shape()[1] {
-                            for c in 0..new_frame[chunk].shape()[2] {
-                                if let Some(val) = new_frame[chunk].uget((y, x, c)) {
+                for chunk_frame in &new_frame {
+                    for y in 0..chunk_frame.shape()[0] {
+                        for x in 0..chunk_frame.shape()[1] {
+                            for c in 0..chunk_frame.shape()[2] {
+                                if let Some(val) = chunk_frame.uget((y, x, c)) {
                                     db[idx] = *val;
                                 }
                                 idx += 1;
@@ -404,14 +407,13 @@ impl AdderPlayer {
 
             // return Ok(());
         }
-        let meta = *stream.decoder.meta();
+        let _meta = *stream.decoder.meta();
 
         let mut last_event: Option<Event> = None;
         loop {
             // eprintln!("Consume");
             match stream.decoder.digest_event(&mut stream.bitreader) {
                 Ok(mut event) => {
-                    event_count += 1;
                     let filled = frame_sequence.ingest_event(&mut event, last_event);
 
                     last_event = Some(event);

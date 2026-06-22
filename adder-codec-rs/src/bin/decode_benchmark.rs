@@ -23,7 +23,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     stream.set_input_stream_position(&mut bitreader, first_event_position)?;
 
     // Setup time tracker for AbsoluteT mode
-    let data = vec![0_u32; meta.plane.volume()];
+    let _data = vec![0_u32; meta.plane.volume()];
 
     let start_time = std::time::Instant::now();
     while stream.digest_event(&mut bitreader).is_ok() {}

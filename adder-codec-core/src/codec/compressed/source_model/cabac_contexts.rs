@@ -1,9 +1,8 @@
 use crate::codec::compressed::fenwick::context_switching::FenwickModel;
 use crate::codec::compressed::fenwick::Weights;
 use crate::{AbsoluteT, DeltaT, EventCoordless, Intensity, D, D_SHIFT};
-use arithmetic_coding_adder_dep::Encoder;
-use bitstream_io::{BigEndian, BitWrite, BitWriter};
 
+#[derive(Clone, Debug)]
 pub struct Contexts {
     /// Decimation factor residuals context
     pub(crate) d_context: usize,
@@ -224,16 +223,4 @@ pub fn d_residual_default_weights() -> Weights {
     Weights::new_with_counts(counts.len(), &Vec::from(counts))
 }
 
-pub fn eof_context(
-    contexts: &Contexts,
-    encoder: &mut Encoder<FenwickModel, BitWriter<Vec<u8>, BigEndian>>,
-    stream: &mut BitWriter<Vec<u8>, BigEndian>,
-) {
-    // THIS IS CRUCIAL FOR TESTING
-    let eof_context = contexts.eof_context;
-    encoder.model.set_context(eof_context);
-    encoder.encode(None, stream).unwrap();
-    encoder.flush(stream).unwrap();
-    stream.byte_align().unwrap();
-    stream.flush().unwrap();
-}
+// EOF handling is done by the facade model and top-level encoder flow.

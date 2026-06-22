@@ -327,50 +327,6 @@ mod tests {
         writer.into_inner().unwrap()
     }
 
-    fn setup_encoded_raw_interleaved(codec_version: u8) -> Vec<u8> {
-        let output = Vec::new();
-
-        let bufwriter = BufWriter::new(output);
-        let compression = RawOutput::new(
-            CodecMetadata {
-                codec_version,
-                header_size: 0,
-                time_mode: Default::default(),
-                plane: Default::default(),
-                tps: 0,
-                ref_interval: 255,
-                delta_t_max: 255,
-                event_size: 0,
-                source_camera: Default::default(),
-                adu_interval: 1,
-            },
-            bufwriter,
-        );
-        let mut encoder: Encoder<BufWriter<Vec<u8>>> = Encoder::new_raw(
-            compression,
-            EncoderOptions {
-                event_drop: Default::default(),
-                event_order: EventOrder::Interleaved,
-                crf: Crf::new(
-                    None,
-                    PlaneSize {
-                        width: 100,
-                        height: 100,
-                        channels: 1,
-                    },
-                ),
-            },
-        );
-
-        let event = stock_event();
-        encoder.ingest_event(event).unwrap();
-        let mut writer = encoder.close_writer().unwrap().unwrap();
-
-        writer.flush().unwrap();
-
-        writer.into_inner().unwrap()
-    }
-
     #[cfg(feature = "compression")]
     fn setup_encoded_compressed(codec_version: u8) -> Vec<u8> {
         use crate::codec::CompressedOutput;

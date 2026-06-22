@@ -31,11 +31,10 @@ use adder_codec_rs::transcoder::source::AdderSource;
 use adder_codec_rs::utils::cv::{calculate_quality_metrics, QualityMetrics};
 use thiserror::Error;
 use tokio::sync::mpsc;
-use tokio::sync::mpsc::error::TrySendError;
+use tokio::sync::mpsc::error::{TryRecvError, TrySendError};
 use tokio::sync::mpsc::Receiver;
 
 pub struct AdderTranscoder {
-    pool: tokio::runtime::Runtime,
     transcoder_state: TranscoderState,
     source: Option<AdderSource<BufWriter<File>>>,
     rx: Receiver<TranscoderStateMsg>,
@@ -84,10 +83,7 @@ impl AdderTranscoder {
         input_image_handle: egui::TextureHandle,
         adder_image_handle: egui::TextureHandle,
     ) -> Self {
-        let threaded_rt = tokio::runtime::Builder::new_multi_thread().build().unwrap();
-
         AdderTranscoder {
-            pool: threaded_rt,
             transcoder_state: Default::default(),
             source: None,
             rx,
@@ -102,35 +98,46 @@ impl AdderTranscoder {
     /// The unbounded loop. Continually processes messages or consumes the source
     pub(crate) async fn run(&mut self) {
         loop {
-            match self.rx.try_recv() {
-                Ok(msg) => match msg {
-                    TranscoderStateMsg::Terminate => {
-                        eprintln!("Resetting video");
+            let msg = if self.source.is_some() {
+                match self.rx.try_recv() {
+                    Ok(msg) => Some(msg),
+                    Err(TryRecvError::Empty) => None,
+                    Err(TryRecvError::Disconnected) => return,
+                }
+            } else {
+                match self.rx.recv().await {
+                    Some(msg) => Some(msg),
+                    None => return,
+                }
+            };
 
-                        if let Some(source) = &mut self.source {
-                            // Get the current source and close the writer
-                            source.get_video_mut().end_write_stream().unwrap();
-                        }
-                        self.source = None;
-                        self.total_events = 0;
+            match msg {
+                Some(TranscoderStateMsg::Terminate) => {
+                    eprintln!("Resetting video");
 
-                        self.transcoder_state.core_params.input_path_buf_0 = None;
-                        self.transcoder_state.core_params.output_path = None;
-
-                        // Clear the images
-                        self.adder_image_handle
-                            .set(ColorImage::default(), Default::default());
-                        self.input_image_handle
-                            .set(ColorImage::default(), Default::default());
+                    if let Some(source) = &mut self.source {
+                        // Get the current source and close the writer
+                        source.get_video_mut().end_write_stream().unwrap();
                     }
+                    self.source = None;
+                    self.total_events = 0;
 
-                    TranscoderStateMsg::Set { transcoder_state } => {
-                        // eprintln!("Received transcoder state");
-                        let result = self.state_update(transcoder_state, false).await;
-                        self.handle_error(result).await;
-                    }
-                },
-                Err(_) => {
+                    self.transcoder_state.core_params.input_path_buf_0 = None;
+                    self.transcoder_state.core_params.output_path = None;
+
+                    // Clear the images
+                    self.adder_image_handle
+                        .set(ColorImage::default(), Default::default());
+                    self.input_image_handle
+                        .set(ColorImage::default(), Default::default());
+                }
+
+                Some(TranscoderStateMsg::Set { transcoder_state }) => {
+                    // eprintln!("Received transcoder state");
+                    let result = self.state_update(transcoder_state, false).await;
+                    self.handle_error(result).await;
+                }
+                None => {
                     // Received no data, so consume the transcoder source if it exists
                     if self.source.is_some() {
                         let result = self.consume();
@@ -177,8 +184,7 @@ impl AdderTranscoder {
                     .msg_tx
                     .try_send(TranscoderInfoMsg::Error(e.to_string()))
                 {
-                    dbg!(e);
-                    eprintln!("Msg channel full");
+                    eprintln!("Msg channel full: {e}");
                 };
             }
         }
@@ -216,7 +222,7 @@ impl AdderTranscoder {
                 Err(TrySendError::Full(..)) => {
                     // eprintln!("Event rate channel full");
                 }
-                Err(e) => {
+                Err(_e) => {
                     // return Err(Box::new(e)); // TODO
                 }
             };
@@ -226,7 +232,9 @@ impl AdderTranscoder {
         // Display frame
         self.show_display_frame();
 
-        self.quality_metrics();
+        if let Err(e) = self.quality_metrics() {
+            eprintln!("Error computing quality metrics: {e}");
+        }
 
         self.last_consume_time = std::time::Instant::now();
 
@@ -285,7 +293,7 @@ impl AdderTranscoder {
                     Err(TrySendError::Full(..)) => {
                         eprintln!("Metrics channel full");
                     }
-                    Err(e) => {
+                    Err(_e) => {
                         panic!("todo");
                     }
                 };

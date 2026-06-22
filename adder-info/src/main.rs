@@ -121,7 +121,7 @@ fn adder_info(args: MyArgs, out: impl Write) -> Result<(), Box<dyn error::Error>
             }
 
             event_count += 1;
-            if event_count % divisor == 0 {
+            if event_count.is_multiple_of(divisor) {
                 write!(
                     handle,
                     "\rCalculating dynamic range...{}%",

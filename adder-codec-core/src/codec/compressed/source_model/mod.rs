@@ -1,9 +1,9 @@
-use crate::codec::compressed::fenwick::context_switching::FenwickModel;
+use crate::codec::compressed::fenwick::facade::FacadeModel;
 use crate::codec::compressed::source_model::cabac_contexts::Contexts;
 use crate::codec::CodecError;
 use crate::{AbsoluteT, Event};
-use arithmetic_coding_adder_dep::{Decoder, Encoder};
-use bitstream_io::{BitWriter, BigEndian, BitReader};
+use arithmetic_coding::{Decoder, Encoder};
+use bitstream_io::{BigEndian, BitReader, BitWriter};
 use std::io::Cursor;
 
 pub trait HandleEvent {
@@ -18,29 +18,25 @@ pub trait HandleEvent {
 trait ComponentCompression {
     fn compress_intra(
         &mut self,
-        encoder: &mut Encoder<FenwickModel, BitWriter<Vec<u8>, BigEndian>>,
+        encoder: &mut Encoder<'_, FacadeModel, BitWriter<Vec<u8>, BigEndian>>,
         contexts: &Contexts,
-        stream: &mut BitWriter<Vec<u8>, BigEndian>,
         threshold_option: Option<u8>,
     ) -> Result<(), CodecError>;
     fn decompress_intra(
         &mut self,
-        decoder: &mut Decoder<FenwickModel, BitReader<Cursor<Vec<u8>>, BigEndian>>,
+        decoder: &mut Decoder<FacadeModel, BitReader<Cursor<Vec<u8>>, BigEndian>>,
         contexts: &Contexts,
-        stream: &mut BitReader<Cursor<Vec<u8>>, BigEndian>,
         start_t: AbsoluteT,
     );
     fn decompress_inter(
         &mut self,
-        decoder: &mut Decoder<FenwickModel, BitReader<Cursor<Vec<u8>>, BigEndian>>,
+        decoder: &mut Decoder<FacadeModel, BitReader<Cursor<Vec<u8>>, BigEndian>>,
         contexts: &Contexts,
-        stream: &mut BitReader<Cursor<Vec<u8>>, BigEndian>,
     );
     fn compress_inter(
         &mut self,
-        encoder: &mut Encoder<FenwickModel, BitWriter<Vec<u8>, BigEndian>>,
+        encoder: &mut Encoder<'_, FacadeModel, BitWriter<Vec<u8>, BigEndian>>,
         contexts: &Contexts,
-        stream: &mut BitWriter<Vec<u8>, BigEndian>,
         c_thresh_max: Option<u8>,
     ) -> Result<(), CodecError>;
 }

@@ -1,12 +1,11 @@
-use crate::codec::compressed::fenwick::context_switching::FenwickModel;
-use crate::codec::compressed::source_model::cabac_contexts::{eof_context, Contexts};
+use crate::codec::compressed::fenwick::facade::FacadeModel;
 use crate::codec::compressed::source_model::event_structure::event_cube::EventCube;
 use crate::codec::compressed::source_model::event_structure::BLOCK_SIZE;
 use crate::codec::compressed::source_model::{ComponentCompression, HandleEvent};
 use crate::codec::CodecError;
 use crate::{AbsoluteT, DeltaT, Event, PlaneSize};
-use arithmetic_coding_adder_dep::{Decoder, Encoder};
-use bitstream_io::{BigEndian, BitReader, BitWriter};
+use arithmetic_coding::{Decoder, Encoder};
+use bitstream_io::{BigEndian, BitReader, BitWrite, BitWriter};
 use ndarray::Array2;
 use nestify::nest;
 use std::io::Cursor;
@@ -86,59 +85,76 @@ impl EventAdu {
         c_thresh_max: u8,
     ) -> Result<(), CodecError> {
         // Create a new source model instance
-        let mut source_model = FenwickModel::with_symbols(u16::MAX as usize, 1 << 30);
-        let contexts = Contexts::new(&mut source_model, self.dt_ref);
-
-        let mut encoder = Encoder::new(source_model);
+        let source_model = FacadeModel::new(self.dt_ref, 1 << 30);
+        let contexts = source_model.contexts().clone();
+        let mut encoder = Encoder::new(source_model, stream);
 
         // Write out the starting timestamp of the Adu
-        encoder.model.set_context(contexts.t_context);
         for byte in self.start_t.to_be_bytes().iter() {
-            encoder.encode(Some(&(*byte as usize)), stream).unwrap();
+            encoder.encode(Some(&(*byte as usize))).unwrap();
         }
+
+        let (mut source_model, state) = encoder.into_inner();
+        source_model.begin_intra();
+        let mut encoder = Encoder::with_state(state, source_model);
 
         for cube in self.event_cubes.iter_mut() {
             debug_assert_eq!(cube.start_t, self.start_t);
-            cube.compress_intra(&mut encoder, &contexts, stream, Some(c_thresh_max))?;
+            cube.compress_intra(&mut encoder, &contexts, Some(c_thresh_max))?;
         }
+
+        let (mut source_model, state) = encoder.into_inner();
+        source_model.begin_inter();
+        let mut encoder = Encoder::with_state(state, source_model);
 
         for cube in self.event_cubes.iter_mut() {
             debug_assert_eq!(cube.start_t, self.start_t);
-            cube.compress_inter(&mut encoder, &contexts, stream, Some(c_thresh_max))?;
+            cube.compress_inter(&mut encoder, &contexts, Some(c_thresh_max))?;
         }
 
         // Flush the encoder
-        eof_context(&contexts, &mut encoder, stream);
+        {
+            let (mut source_model, state) = encoder.into_inner();
+            source_model.begin_eof();
+            let mut encoder = Encoder::with_state(state, source_model);
+            encoder.encode(None).unwrap();
+            encoder.flush().unwrap();
+            let (_model, _state) = encoder.into_inner();
+        }
+        stream.byte_align().unwrap();
+        stream.flush().unwrap();
 
         self.clear_compression();
 
         Ok(())
     }
 
-    pub fn decompress(&mut self, stream: &mut BitReader<Cursor<Vec<u8>>, BigEndian>) {
+    pub fn decompress(&mut self, stream: BitReader<Cursor<Vec<u8>>, BigEndian>) {
         self.clear_decompression();
 
         // let mut adu = Self::new(plane, start_t, dt_ref, num_intervals);
 
         // Create a new source model instance
-        let mut source_model = FenwickModel::with_symbols(u16::MAX as usize, 1 << 30);
-        let contexts = Contexts::new(&mut source_model, self.dt_ref);
-        let mut decoder = Decoder::new(source_model);
+        let source_model = FacadeModel::new(self.dt_ref, 1 << 30);
+        let contexts = source_model.contexts().clone();
+        let mut decoder = Decoder::new(source_model, stream);
 
         // Read the starting timestamp of the Adu
-        decoder.model.set_context(contexts.t_context);
         let mut start_t = [0u8; size_of::<AbsoluteT>()];
 
         for byte in start_t.iter_mut() {
-            *byte = decoder.decode(stream).unwrap().unwrap() as u8;
+            *byte = decoder.decode().unwrap().unwrap() as u8;
         }
+
+        let (mut source_model, state) = decoder.into_inner();
+        source_model.begin_intra();
+        let mut decoder = Decoder::with_state(state, source_model);
 
         for block_idx_y in 0..self.event_cubes.nrows() {
             for block_idx_x in 0..self.event_cubes.ncols() {
                 self.event_cubes[[block_idx_y, block_idx_x]].decompress_intra(
                     &mut decoder,
                     &contexts,
-                    stream,
                     self.start_t,
                 );
                 debug_assert_eq!(
@@ -148,13 +164,14 @@ impl EventAdu {
             }
         }
 
+        let (mut source_model, state) = decoder.into_inner();
+        source_model.begin_inter();
+        let mut decoder = Decoder::with_state(state, source_model);
+
         for block_idx_y in 0..self.event_cubes.nrows() {
             for block_idx_x in 0..self.event_cubes.ncols() {
-                self.event_cubes[[block_idx_y, block_idx_x]].decompress_inter(
-                    &mut decoder,
-                    &contexts,
-                    stream,
-                );
+                self.event_cubes[[block_idx_y, block_idx_x]]
+                    .decompress_inter(&mut decoder, &contexts);
                 debug_assert_eq!(
                     self.event_cubes[[block_idx_y, block_idx_x]].start_t,
                     self.start_t
@@ -239,14 +256,13 @@ impl HandleEvent for EventAdu {
 
 #[cfg(test)]
 mod tests {
-    use crate::codec::compressed::fenwick::context_switching::FenwickModel;
-    use crate::codec::compressed::source_model::cabac_contexts::{eof_context, Contexts};
+    use crate::codec::compressed::fenwick::facade::FacadeModel;
     use crate::codec::compressed::source_model::event_structure::event_adu::EventAdu;
     use crate::codec::compressed::source_model::{ComponentCompression, HandleEvent};
     use crate::codec::CodecError;
     use crate::{Coord, Event, PlaneSize};
-    use arithmetic_coding_adder_dep::Encoder;
-    use bitstream_io::{BigEndian, BitReader, BitWriter};
+    use arithmetic_coding::Encoder;
+    use bitstream_io::{BigEndian, BitReader, BitWrite, BitWriter};
     use std::cmp::min;
     use std::io::Cursor;
 
@@ -311,9 +327,9 @@ mod tests {
 
         compress_test(&mut adu, &mut stream, 0)?;
 
-        let mut stream = BitReader::endian(Cursor::new(stream.into_writer()), BigEndian);
+        let stream = BitReader::endian(Cursor::new(stream.into_writer()), BigEndian);
         let mut adu2 = EventAdu::new(plane, start_t, dt_ref, num_intervals);
-        adu2.decompress(&mut stream);
+        adu2.decompress(stream);
 
         assert_eq!(adu.event_cubes.shape(), adu2.event_cubes.shape());
         for (cube1, cube2) in adu.event_cubes.iter().zip(adu2.event_cubes.iter()) {
@@ -346,29 +362,44 @@ mod tests {
         c_thresh_max: u8,
     ) -> Result<(), CodecError> {
         // Create a new source model instance
-        let mut source_model = FenwickModel::with_symbols(u16::MAX as usize, 1 << 30);
-        let contexts = Contexts::new(&mut source_model, adu.dt_ref);
-
-        let mut encoder = Encoder::new(source_model);
+        let source_model = FacadeModel::new(adu.dt_ref, 1 << 30);
+        let contexts = source_model.contexts().clone();
+        let mut encoder = Encoder::new(source_model, stream);
 
         // Write out the starting timestamp of the Adu
-        encoder.model.set_context(contexts.t_context);
         for byte in adu.start_t.to_be_bytes().iter() {
-            encoder.encode(Some(&(*byte as usize)), stream).unwrap();
+            encoder.encode(Some(&(*byte as usize))).unwrap();
         }
+
+        let (mut source_model, state) = encoder.into_inner();
+        source_model.begin_intra();
+        let mut encoder = Encoder::with_state(state, source_model);
 
         for cube in adu.event_cubes.iter_mut() {
             debug_assert_eq!(cube.start_t, adu.start_t);
-            cube.compress_intra(&mut encoder, &contexts, stream, Some(c_thresh_max))?;
+            cube.compress_intra(&mut encoder, &contexts, Some(c_thresh_max))?;
         }
+
+        let (mut source_model, state) = encoder.into_inner();
+        source_model.begin_inter();
+        let mut encoder = Encoder::with_state(state, source_model);
 
         for cube in adu.event_cubes.iter_mut() {
             debug_assert_eq!(cube.start_t, adu.start_t);
-            cube.compress_inter(&mut encoder, &contexts, stream, Some(c_thresh_max))?;
+            cube.compress_inter(&mut encoder, &contexts, Some(c_thresh_max))?;
         }
 
         // Flush the encoder
-        eof_context(&contexts, &mut encoder, stream);
+        {
+            let (mut source_model, state) = encoder.into_inner();
+            source_model.begin_eof();
+            let mut encoder = Encoder::with_state(state, source_model);
+            encoder.encode(None).unwrap();
+            encoder.flush().unwrap();
+            let (_model, _state) = encoder.into_inner();
+        }
+        stream.byte_align().unwrap();
+        stream.flush().unwrap();
 
         Ok(())
     }
@@ -412,9 +443,9 @@ mod tests {
         compress_test(&mut adu, &mut stream, 0)?;
 
         let encoded_data = stream.into_writer();
-        let mut stream = BitReader::endian(Cursor::new(encoded_data.clone()), BigEndian);
+        let stream = BitReader::endian(Cursor::new(encoded_data.clone()), BigEndian);
         let mut adu2 = EventAdu::new(plane, start_t, dt_ref, num_intervals);
-        adu2.decompress(&mut stream);
+        adu2.decompress(stream);
 
         assert_eq!(adu.event_cubes.shape(), adu2.event_cubes.shape());
         let mut pixel_count = 0;
