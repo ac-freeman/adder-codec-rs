@@ -273,8 +273,7 @@ mod tests {
     use crate::codec::encoder::Encoder;
     use crate::codec::raw::stream::{RawInput, RawOutput};
 
-    use crate::codec::rate_controller::Crf;
-    use crate::codec::{EncoderOptions, EventOrder};
+    use crate::codec::EncoderOptions;
     use crate::Coord;
     use std::io::{BufReader, BufWriter, Cursor, Write};
 

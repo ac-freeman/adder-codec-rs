@@ -31,7 +31,6 @@ use crate::framer::scale_intensity::{FrameValue, SaeTime};
 use crate::transcoder::event_pixel_tree::Intensity32;
 use crate::utils::cv::clamp_u8;
 use crate::utils::viz::ShowFeatureMode;
-use tokio::runtime::Runtime;
 use video_rs_adder_dep::Frame;
 
 /// The EDI reconstruction mode, determining how intensities are integrated for the ADΔER model
@@ -729,16 +728,21 @@ impl<W: Write + 'static + std::marker::Send + std::marker::Sync> Source<W> for D
                         *ts = start_of_frame_timestamp;
                     });
                 } else {
-                    let dvs_events_before = match &self.integration.dvs_events_before {
-                        Some(events) => events.clone(),
+                    // Temporarily take ownership of these (potentially large) DVS event lists
+                    // out of `self.integration` instead of cloning them, since they're only
+                    // needed here as plain references alongside a `&mut self.video` borrow.
+                    // They're restored below before any early return, since they remain valid
+                    // for reuse on subsequent frames.
+                    let dvs_events_before = match self.integration.dvs_events_before.take() {
+                        Some(events) => events,
                         None => return Err(SourceError::UninitializedData),
                     };
 
-                    if let (Some(events), Some(end_of_last_timestamp)) = (
-                        self.integration.dvs_events_last_after.clone(),
+                    let last_after_result = if let (Some(events), Some(end_of_last_timestamp)) = (
+                        self.integration.dvs_events_last_after.take(),
                         self.integration.end_of_last_frame_timestamp,
                     ) {
-                        self.integration.integrate_dvs_events(
+                        let result = self.integration.integrate_dvs_events(
                             &mut self.video,
                             &events,
                             start_of_frame_timestamp,
@@ -749,34 +753,26 @@ impl<W: Write + 'static + std::marker::Send + std::marker::Sync> Source<W> for D
                                 Some(end_of_last_timestamp)
                             },
                             check_dvs_after,
-                        )?;
-                    }
+                        );
+                        self.integration.dvs_events_last_after = Some(events);
+                        result
+                    } else {
+                        Ok(())
+                    };
+                    last_after_result?;
 
-                    self.integration.integrate_dvs_events(
+                    let before_result = self.integration.integrate_dvs_events(
                         &mut self.video,
                         &dvs_events_before,
                         start_of_frame_timestamp,
                         check_dvs_before,
                         None,
                         check_dvs_before,
-                    )?;
-
-                    for px in &self.video.event_pixel_trees {
-                        let a = px.running_t as i64;
-                        let b = start_of_frame_timestamp
-                            - self.integration.temp_first_frame_start_timestamp;
-                        // debug_assert!(a <= b);
-                        // debug_assert!(a <= start_of_frame_timestamp);
-                    }
+                    );
+                    self.integration.dvs_events_before = Some(dvs_events_before);
+                    before_result?;
 
                     self.integration.integrate_frame_gaps(&mut self.video)?;
-                    for px in &self.video.event_pixel_trees {
-                        let a = px.running_t as i64;
-                        let b = start_of_frame_timestamp
-                            - self.integration.temp_first_frame_start_timestamp;
-                        // debug_assert!(a <= b);
-                        // debug_assert!(a > b - 1000);
-                    }
                 }
             }
 
@@ -858,11 +854,9 @@ impl<W: Write + 'static + std::marker::Send + std::marker::Sync> Source<W> for D
             }
 
             if with_events {
-                // let dvs_events_after = match &self.integration.dvs_events_after {
-                //     Some(events) => events.clone(),
-                //     None => return Err(SourceError::UninitializedData),
-                // };
-                self.integration.dvs_events_last_after = self.integration.dvs_events_after.clone();
+                // `dvs_events_after` is never read again until the next chunk reload overwrites
+                // it wholesale, so take ownership directly instead of cloning it.
+                self.integration.dvs_events_last_after = self.integration.dvs_events_after.take();
                 self.integration.end_of_last_frame_timestamp =
                     self.integration.end_of_frame_timestamp;
 

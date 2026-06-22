@@ -2,7 +2,7 @@ use adder_codec_core::Mode::{Continuous, FramePerfect};
 use adder_codec_core::{
     AbsoluteT, Coord, DeltaT, Event, Mode, PixelMultiMode, TimeMode, D, D_SHIFT_F32,
 };
-use adder_codec_core::{UDshift, D_EMPTY, D_MAX, D_SHIFT, D_ZERO_INTEGRATION};
+use adder_codec_core::{UDshift, D_EMPTY, D_MAX, D_ZERO_INTEGRATION};
 use smallvec::{smallvec, SmallVec};
 use std::cmp::min;
 
@@ -436,7 +436,6 @@ impl PixelArena {
                 prop = 1.0;
             }
             node.state.d = new_d;
-            d_usize = new_d as usize;
 
             debug_assert!(prop > 0.0);
             node.best_event = Some(Event32 {
