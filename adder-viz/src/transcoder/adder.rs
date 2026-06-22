@@ -98,9 +98,6 @@ impl AdderTranscoder {
     /// The unbounded loop. Continually processes messages or consumes the source
     pub(crate) async fn run(&mut self) {
         loop {
-            // While there's an active source to consume, poll for new state without blocking
-            // (so we keep making progress transcoding), otherwise block until a message
-            // arrives instead of busy-spinning the thread at 100% CPU while idle.
             let msg = if self.source.is_some() {
                 match self.rx.try_recv() {
                     Ok(msg) => Some(msg),
