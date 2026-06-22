@@ -16,7 +16,7 @@ use std::io::BufReader;
 use std::time::Duration;
 use thiserror::Error;
 use tokio::sync::mpsc;
-use tokio::sync::mpsc::error::TrySendError;
+use tokio::sync::mpsc::error::{TryRecvError, TrySendError};
 use tokio::sync::mpsc::{Receiver, Sender};
 use video_rs_adder_dep::Frame;
 
@@ -78,24 +78,38 @@ impl AdderPlayer {
 
     pub(crate) async fn run(&mut self) {
         loop {
-            match self.rx.try_recv() {
-                Ok(msg) => match msg {
-                    PlayerStateMsg::Terminate => {
-                        eprintln!("Resetting video");
-                        todo!();
-                    }
-                    PlayerStateMsg::Loop { player_state } => {
-                        eprintln!("Looping video");
-                        let result = self.state_update(player_state, true);
-                        self.handle_error(result);
-                    }
-                    PlayerStateMsg::Set { player_state } => {
-                        eprintln!("Received player state");
-                        let result = self.state_update(player_state, false);
-                        self.handle_error(result);
-                    }
-                },
-                Err(_) => {
+            // While there's an active source to consume, poll for new state without blocking
+            // (so we keep making progress on the video), otherwise block until a message
+            // arrives instead of busy-spinning the thread at 100% CPU while idle.
+            let msg = if self.framer.is_some() {
+                match self.rx.try_recv() {
+                    Ok(msg) => Some(msg),
+                    Err(TryRecvError::Empty) => None,
+                    Err(TryRecvError::Disconnected) => return,
+                }
+            } else {
+                match self.rx.recv().await {
+                    Some(msg) => Some(msg),
+                    None => return,
+                }
+            };
+
+            match msg {
+                Some(PlayerStateMsg::Terminate) => {
+                    eprintln!("Resetting video");
+                    todo!();
+                }
+                Some(PlayerStateMsg::Loop { player_state }) => {
+                    eprintln!("Looping video");
+                    let result = self.state_update(player_state, true);
+                    self.handle_error(result);
+                }
+                Some(PlayerStateMsg::Set { player_state }) => {
+                    eprintln!("Received player state");
+                    let result = self.state_update(player_state, false);
+                    self.handle_error(result);
+                }
+                None => {
                     // Received no data, so consume the transcoder source if it exists
                     if self.framer.is_some() {
                         let result = self.consume().await;
